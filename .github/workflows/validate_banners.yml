@@ -1,0 +1,68 @@
+name: Validate Banners before Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-and-build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Validate JPEG Banners
+      run: |
+        python - <<'PY'
+        from pathlib import Path
+
+        files = [
+            "theme_red.jpg",
+            "theme_gold.jpg",
+            "theme_green.jpg",
+            "theme_blue.jpg",
+            "theme_orange.jpg",
+        ]
+
+        base = Path("app/src/main/assets/themes")
+
+        for name in files:
+            path = base / name
+            if not path.exists():
+                raise SystemExit(f"Arquivo ausente: {path}")
+
+            data = path.read_bytes()
+
+            if len(data) == 0:
+                raise SystemExit(f"Arquivo vazio: {path}")
+
+            if not data.startswith(b"\xFF\xD8\xFF"):
+                raise SystemExit(f"JPEG inválido/corrompido: {path}")
+
+            print(f"OK: {path} ({len(data)} bytes)")
+        PY
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Grant execute permission for gradlew
+      run: |
+        rm -f gradle/wrapper/gradle-wrapper.jar && gradle wrapper
+        chmod +x gradlew
+    - name: Build Release APK
+      run: ./gradlew assembleRelease
+
+    - name: Validate APK Contents
+      run: |
+        unzip -l app/build/outputs/apk/release/app-release-unsigned.apk | grep "assets/themes/"
+        for theme in theme_red.jpg theme_gold.jpg theme_green.jpg theme_blue.jpg theme_orange.jpg; do
+            if ! unzip -l app/build/outputs/apk/release/app-release-unsigned.apk | grep -q "assets/themes/$theme"; then
+                echo "Missing $theme in APK!"
+                exit 1
+            fi
+        done
+        echo "All themes present in APK."

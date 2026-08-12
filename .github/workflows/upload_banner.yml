@@ -1,0 +1,89 @@
+name: Upload Default Banner
+on:
+  push:
+    paths:
+      - 'app/src/main/res/drawable-nodpi/hero_banner.png'
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    - name: Install dependencies
+      run: pip install requests
+    - name: Upload and Update Firestore
+      env:
+        FIREBASE_API_KEY: "AIzaSyA6oHEJzOH3m4j8CuMWoXlceQKSy8Viqmw"
+        FIREBASE_PROJECT_ID: "appcodigo-7f245"
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      run: |
+        cat << 'PY_EOF' > upload_banner.py
+        import os
+        import requests
+        
+        api_key = os.environ.get('FIREBASE_API_KEY')
+        project_id = os.environ.get('FIREBASE_PROJECT_ID')
+        supabase_url = os.environ.get('SUPABASE_URL')
+        supabase_anon_key = os.environ.get('SUPABASE_ANON_KEY')
+        
+        if not supabase_url:
+            print("No Supabase URL provided.")
+            exit(1)
+        
+        print("Logging in to Firebase...")
+        login_url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
+        login_data = {
+            "email": "mestre@nrdlojas.com",
+            "password": "nrdlojas",
+            "returnSecureToken": True
+        }
+        res = requests.post(login_url, json=login_data)
+        res.raise_for_status()
+        id_token = res.json().get('idToken')
+        
+        print("Uploading to Supabase...")
+        upload_url = f"{supabase_url}/functions/v1/upload-image"
+        image_path = "app/src/main/res/drawable-nodpi/hero_banner.png"
+        
+        with open(image_path, "rb") as f:
+            files = {
+                'file': ('home_banner.png', f, 'image/png')
+            }
+            data = {
+                'path': 'banners/home_banner.png'
+            }
+            headers = {
+                'Authorization': f'Bearer {supabase_anon_key}',
+                'x-firebase-token': id_token
+            }
+            res_upload = requests.post(upload_url, headers=headers, files=files, data=data)
+            res_upload.raise_for_status()
+            public_url = res_upload.json().get('url')
+            print(f"Public URL: {public_url}")
+        
+        print("Updating Firestore...")
+        firestore_url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents/config/appSettings"
+        
+        patch_url = f"{firestore_url}?updateMask.fieldPaths=bannerUrl"
+        patch_data = {
+            "fields": {
+                "bannerUrl": {
+                    "stringValue": public_url
+                }
+            }
+        }
+        patch_headers = {
+            'Authorization': f'Bearer {id_token}',
+            'Content-Type': 'application/json'
+        }
+        res_fs = requests.patch(patch_url, headers=patch_headers, json=patch_data)
+        res_fs.raise_for_status()
+        print("Firestore updated successfully.")
+        PY_EOF
+        python upload_banner.py

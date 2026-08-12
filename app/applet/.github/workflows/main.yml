@@ -1,0 +1,65 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Generate Debug Keystore (if missing)
+      run: |
+        if [ ! -f "debug.keystore" ]; then
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
+        fi
+
+    - name: Setup Gradle Wrapper
+      run: gradle wrapper --gradle-version 9.3.1
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Create google-services.json
+      env:
+        GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      run: |
+        mkdir -p app
+        printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+        test -s app/google-services.json
+
+    - name: Validate google-services.json
+      run: |
+        python -c '
+        import json, sys
+        try:
+            with open("app/google-services.json") as f:
+                data = json.load(f)
+            assert data["project_info"]["project_id"] == "appcodigo-7f245", "Invalid project_id"
+            assert data["project_info"]["project_number"] == "146947124596", "Invalid project_number"
+            packages = [c["client_info"]["android_client_info"]["package_name"] for c in data.get("client", [])]
+            assert "com.aistudio.codigomercado.xzbkql" in packages, "Invalid package_name"
+            print("google-services.json is valid.")
+        except Exception as e:
+            print("Validation failed:", e)
+            sys.exit(1)
+        '
+
+    - name: Build with Gradle
+      run: ./gradlew assembleDebug --stacktrace
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
