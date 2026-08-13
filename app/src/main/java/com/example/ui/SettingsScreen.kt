@@ -137,8 +137,10 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 coroutineScope.launch {
                                     viewModel.userPreferences.setAppIcon(iconKey)
                                 }
-                                changeAppIcon(context, iconKey)
-                                android.widget.Toast.makeText(context, "Ícone alterado. A tela inicial pode levar alguns segundos para atualizar.", android.widget.Toast.LENGTH_LONG).show()
+                                android.widget.Toast.makeText(context, "Aplicando ícone... O aplicativo será reiniciado em instantes.", android.widget.Toast.LENGTH_LONG).show()
+                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                    changeAppIcon(context, iconKey)
+                                }, 2000)
                             },
                         colors = androidx.compose.material3.CardDefaults.cardColors(
                             containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
@@ -150,30 +152,12 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            val bitmap = remember(iconResId) {
-                                try {
-                                    android.graphics.BitmapFactory.decodeResource(context.resources, iconResId)?.let {
-                                        it.asImageBitmap()
-                                    }
-                                } catch (e: Exception) {
-                                    null
-                                }
-                            }
-                            if (bitmap != null) {
-                                androidx.compose.material3.Icon(
-                                    bitmap = bitmap,
-                                    contentDescription = iconLabel,
-                                    modifier = Modifier.size(64.dp),
-                                    tint = androidx.compose.ui.graphics.Color.Unspecified
-                                )
-                            } else {
-                                androidx.compose.material3.Icon(
-                                    imageVector = androidx.compose.material.icons.Icons.Default.Apps,
-                                    contentDescription = iconLabel,
-                                    modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
+                            coil.compose.AsyncImage(
+                                model = iconResId,
+                                contentDescription = iconLabel,
+                                modifier = Modifier.size(64.dp),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                            )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(iconLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
