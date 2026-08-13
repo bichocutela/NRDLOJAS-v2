@@ -150,11 +150,11 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            androidx.compose.foundation.Image(
-                                painter = androidx.compose.ui.res.painterResource(id = iconResId),
+                            androidx.compose.material3.Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Default.Apps,
                                 contentDescription = iconLabel,
-                                modifier = Modifier.size(64.dp),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(iconLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
