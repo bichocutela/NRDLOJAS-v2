@@ -19,13 +19,13 @@ import java.net.URL
 
 object UpdateChecker {
     /**
-     * Verifica a última versão lançada no repositório bichocutela/NRDLOJAS
+     * Verifica a última versão lançada no repositório bichocutela/NRDLOJAS-v2
      * Retorna um Pair com o nome da tag (ex: v1.0.1) e a URL de download, ou null em caso de erro.
      */
     suspend fun checkLatestRelease(): Pair<String, String>? {
         return withContext(Dispatchers.IO) {
             try {
-                val url = URL("https://api.github.com/repos/bichocutela/NRDLOJAS/releases/latest")
+                val url = URL("https://api.github.com/repos/bichocutela/NRDLOJAS-v2/releases/latest")
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"
                 connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
