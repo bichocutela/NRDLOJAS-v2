@@ -160,12 +160,12 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             verticalArrangement = Arrangement.Center
                         ) {
                             val previewResource = when (iconKey) {
-                                "red" -> R.mipmap.ic_launcher_red
-                                "green" -> R.mipmap.ic_launcher_green
-                                "blue" -> R.mipmap.ic_launcher_blue
-                                "orange" -> R.mipmap.ic_launcher_orange
-                                "gold" -> R.mipmap.ic_launcher_gold
-                                else -> R.mipmap.ic_launcher_multicolor
+                                "red" -> R.drawable.preview_launcher_red
+                                "green" -> R.drawable.preview_launcher_green
+                                "blue" -> R.drawable.preview_launcher_blue
+                                "orange" -> R.drawable.preview_launcher_orange
+                                "gold" -> R.drawable.preview_launcher_gold
+                                else -> R.drawable.preview_launcher_multicolor
                             }
                             Image(
                                 painter = painterResource(previewResource),
