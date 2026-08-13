@@ -1,36 +1,21 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+import re
 
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+with open("app/src/main/AndroidManifest.xml", "r", encoding="utf-8") as f:
+    content = f.read()
 
-    <application
-        android:name=".MyApplication"
-        android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.MyApplication">
-        
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/provider_paths" />
-        </provider>
+# The block to replace
+old_activity = """        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.MyApplication">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>"""
 
-        <activity
+new_activities = """        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
@@ -113,14 +98,24 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity-alias>
+        </activity-alias>"""
 
-        <service
-            android:name=".util.MyFirebaseMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-    </application>
-</manifest>
+if old_activity in content:
+    content = content.replace(old_activity, new_activities)
+    with open("app/src/main/AndroidManifest.xml", "w", encoding="utf-8") as f:
+        f.write(content)
+    print("Success")
+else:
+    print("Could not find the exact block. Searching with regex...")
+    
+    # regex approach
+    pattern = re.compile(r'<activity\s+android:name="\.MainActivity"[^>]*>.*?<intent-filter>.*?<action android:name="android\.intent\.action\.MAIN"\s*/>.*?<category android:name="android\.intent\.category\.LAUNCHER"\s*/>.*?</intent-filter>.*?</activity>', re.DOTALL)
+    
+    if pattern.search(content):
+        content = pattern.sub(new_activities, content)
+        with open("app/src/main/AndroidManifest.xml", "w", encoding="utf-8") as f:
+            f.write(content)
+        print("Success regex")
+    else:
+        print("Failed to replace!")
+
