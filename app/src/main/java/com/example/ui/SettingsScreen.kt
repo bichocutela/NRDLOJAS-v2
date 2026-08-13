@@ -2,6 +2,7 @@ package com.example.ui
 
 import com.example.util.NotificationHelper
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -27,6 +28,8 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val fontScale by viewModel.userPreferences.fontScale.collectAsState(initial = 1.0f)
     val boldOutline by viewModel.userPreferences.boldOutline.collectAsState(initial = false)
     val uppercaseBold by viewModel.userPreferences.uppercaseBold.collectAsState(initial = false)
+    val appTheme by viewModel.userPreferences.appTheme.collectAsState(initial = "multicolor")
+    val appIcon by viewModel.userPreferences.appIcon.collectAsState(initial = "multicolor")
     
     val notificationsEnabled by viewModel.userPreferences.notificationsEnabled.collectAsState(initial = true)
     val notificationsProductAddedEnabled by viewModel.userPreferences.notificationsProductAddedEnabled.collectAsState(initial = true)
@@ -98,6 +101,66 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             
             HorizontalDivider()
             
+            
+            Text("Ícone do aplicativo", style = MaterialTheme.typography.titleMedium, color = getDynamicThemeColor(1, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first)
+            Text("Escolha como o NRD Códigos aparecerá na tela inicial do seu celular.", style = MaterialTheme.typography.bodySmall)
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            val iconOptions = listOf(
+                "multicolor" to Pair("Multicolorido", com.example.R.drawable.icon_multicolor),
+                "red" to Pair("Vermelho", com.example.R.drawable.icon_red),
+                "green" to Pair("Verde", com.example.R.drawable.icon_green),
+                "blue" to Pair("Azul", com.example.R.drawable.icon_blue),
+                "orange" to Pair("Laranja", com.example.R.drawable.icon_orange),
+                "gold" to Pair("Dourado", com.example.R.drawable.icon_gold)
+            )
+            
+            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
+                modifier = Modifier.fillMaxWidth().height(260.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(iconOptions.size) { index ->
+                    val (iconKey, pair) = iconOptions[index]
+                    val (iconLabel, iconResId) = pair
+                    val isSelected = appIcon == iconKey
+                    
+                    androidx.compose.material3.Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(110.dp)
+                            .clickable {
+                                coroutineScope.launch {
+                                    viewModel.userPreferences.setAppIcon(iconKey)
+                                }
+                                changeAppIcon(context, iconKey)
+                                android.widget.Toast.makeText(context, "Ícone alterado. A tela inicial pode levar alguns segundos para atualizar.", android.widget.Toast.LENGTH_LONG).show()
+                            },
+                        colors = androidx.compose.material3.CardDefaults.cardColors(
+                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            androidx.compose.foundation.Image(
+                                painter = androidx.compose.ui.res.painterResource(id = iconResId),
+                                contentDescription = iconLabel,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(iconLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                        }
+                    }
+                }
+            }
+            
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             
             Text("Tema do Aplicativo", style = MaterialTheme.typography.titleMedium, color = getDynamicThemeColor(1, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first)
             
@@ -217,5 +280,39 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 }
             }
         )
+    }
+}
+
+fun changeAppIcon(context: android.content.Context, iconName: String) {
+    val pm = context.packageManager
+    val packageName = context.packageName
+
+    val aliases = mapOf(
+        "multicolor" to "com.example.MainActivityMulticolor",
+        "red" to "com.example.MainActivityRed",
+        "green" to "com.example.MainActivityGreen",
+        "blue" to "com.example.MainActivityBlue",
+        "orange" to "com.example.MainActivityOrange",
+        "gold" to "com.example.MainActivityGold"
+    )
+
+    val targetAlias = aliases[iconName] ?: aliases["multicolor"]!!
+
+    // Enable the new one first
+    pm.setComponentEnabledSetting(
+        android.content.ComponentName(packageName, targetAlias),
+        android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+        android.content.pm.PackageManager.DONT_KILL_APP
+    )
+
+    // Disable the others
+    aliases.values.forEach { alias ->
+        if (alias != targetAlias) {
+            pm.setComponentEnabledSetting(
+                android.content.ComponentName(packageName, alias),
+                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                android.content.pm.PackageManager.DONT_KILL_APP
+            )
+        }
     }
 }
