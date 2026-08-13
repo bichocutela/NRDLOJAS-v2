@@ -35,6 +35,10 @@
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.MyApplication">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
         </activity>
 
         <activity-alias android:icon="@mipmap/ic_launcher_multicolor"
@@ -43,7 +47,7 @@
            
            
             android:exported="true"
-            android:enabled="true" android:name=".MainActivityMulticolor">
+            android:enabled="false" android:name=".MainActivityMulticolor">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
