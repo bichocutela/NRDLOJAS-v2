@@ -29,6 +29,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.delay
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+
+
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import android.widget.Toast
@@ -115,6 +120,11 @@ class MainActivity : ComponentActivity() {
         
 
         
+                lifecycleScope.launch {
+            val savedIcon = userPreferences.appIcon.first()
+            com.example.util.AppIconManager.ensureValidIconState(this@MainActivity, savedIcon)
+        }
+
         NotificationHelper.createNotificationChannel(this)
         
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {

@@ -110,12 +110,12 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
             
             val iconOptions = listOf(
-                "multicolor" to Pair("Multicolorido", com.example.R.mipmap.ic_launcher_multicolor),
-                "red" to Pair("Vermelho", com.example.R.mipmap.ic_launcher_red),
-                "green" to Pair("Verde", com.example.R.mipmap.ic_launcher_green),
-                "blue" to Pair("Azul", com.example.R.mipmap.ic_launcher_blue),
-                "orange" to Pair("Laranja", com.example.R.mipmap.ic_launcher_orange),
-                "gold" to Pair("Dourado", com.example.R.mipmap.ic_launcher_gold)
+                "multicolor" to "Multicolorido",
+                "red" to "Vermelho",
+                "green" to "Verde",
+                "blue" to "Azul",
+                "orange" to "Laranja",
+                "gold" to "Dourado"
             )
             
             androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
@@ -125,8 +125,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(iconOptions.size) { index ->
-                    val (iconKey, pair) = iconOptions[index]
-                    val (iconLabel, iconResId) = pair
+                    val (iconKey, iconLabel) = iconOptions[index]
                     val isSelected = appIcon == iconKey
                     
                     androidx.compose.material3.Card(
@@ -134,13 +133,15 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             .fillMaxWidth()
                             .height(110.dp)
                             .clickable {
-                                coroutineScope.launch {
-                                    viewModel.userPreferences.setAppIcon(iconKey)
+                                coroutineScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                                    val success = com.example.util.AppIconManager.applyIcon(context, iconKey)
+                                    if (success) {
+                                        viewModel.userPreferences.setAppIcon(iconKey)
+                                        android.widget.Toast.makeText(context, "Ícone alterado. A tela inicial pode levar alguns segundos para atualizar.", android.widget.Toast.LENGTH_LONG).show()
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Não foi possível alterar o ícone.", android.widget.Toast.LENGTH_LONG).show()
+                                    }
                                 }
-                                android.widget.Toast.makeText(context, "Aplicando ícone... O aplicativo será reiniciado em instantes.", android.widget.Toast.LENGTH_LONG).show()
-                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                    changeAppIcon(context, iconKey)
-                                }, 2000)
                             },
                         colors = androidx.compose.material3.CardDefaults.cardColors(
                             containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
@@ -152,11 +153,19 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            coil.compose.AsyncImage(
-                                model = iconResId,
+                            val iconColor = when (iconKey) {
+                                "red" -> androidx.compose.ui.graphics.Color(0xFFE53935)
+                                "green" -> androidx.compose.ui.graphics.Color(0xFF43A047)
+                                "blue" -> androidx.compose.ui.graphics.Color(0xFF1E88E5)
+                                "orange" -> androidx.compose.ui.graphics.Color(0xFFFB8C00)
+                                "gold" -> androidx.compose.ui.graphics.Color(0xFFFFB300)
+                                else -> MaterialTheme.colorScheme.primary
+                            }
+                            androidx.compose.material3.Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Default.Apps,
                                 contentDescription = iconLabel,
-                                modifier = Modifier.size(64.dp),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                                modifier = Modifier.size(48.dp),
+                                tint = iconColor
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(iconLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
@@ -288,36 +297,3 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     }
 }
 
-fun changeAppIcon(context: android.content.Context, iconName: String) {
-    val pm = context.packageManager
-    val packageName = context.packageName
-
-    val aliases = mapOf(
-        "multicolor" to "com.example.MainActivityMulticolor",
-        "red" to "com.example.MainActivityRed",
-        "green" to "com.example.MainActivityGreen",
-        "blue" to "com.example.MainActivityBlue",
-        "orange" to "com.example.MainActivityOrange",
-        "gold" to "com.example.MainActivityGold"
-    )
-
-    val targetAlias = aliases[iconName] ?: aliases["multicolor"]!!
-
-    // Enable the new one first
-    pm.setComponentEnabledSetting(
-        android.content.ComponentName(packageName, targetAlias),
-        android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-        android.content.pm.PackageManager.DONT_KILL_APP
-    )
-
-    // Disable the others
-    aliases.values.forEach { alias ->
-        if (alias != targetAlias) {
-            pm.setComponentEnabledSetting(
-                android.content.ComponentName(packageName, alias),
-                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                android.content.pm.PackageManager.DONT_KILL_APP
-            )
-        }
-    }
-}

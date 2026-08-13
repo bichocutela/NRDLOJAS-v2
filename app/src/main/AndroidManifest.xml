@@ -37,7 +37,7 @@
             android:theme="@style/Theme.MyApplication">
         </activity>
 
-        <activity-alias android:icon="@mipmap/ic_launcher_multicolor" android:roundIcon="@mipmap/ic_launcher_multicolor_round" 
+        <activity-alias android:icon="@mipmap/ic_launcher_multicolor" 
             
             android:targetActivity=".MainActivity"
            
@@ -50,7 +50,7 @@
             </intent-filter>
         </activity-alias>
 
-        <activity-alias android:icon="@mipmap/ic_launcher_red" android:roundIcon="@mipmap/ic_launcher_red_round" 
+        <activity-alias android:icon="@mipmap/ic_launcher_red" 
             
             android:targetActivity=".MainActivity"
            
@@ -63,7 +63,7 @@
             </intent-filter>
         </activity-alias>
 
-        <activity-alias android:icon="@mipmap/ic_launcher_green" android:roundIcon="@mipmap/ic_launcher_green_round" 
+        <activity-alias android:icon="@mipmap/ic_launcher_green" 
             
             android:targetActivity=".MainActivity"
            
@@ -76,7 +76,7 @@
             </intent-filter>
         </activity-alias>
 
-        <activity-alias android:icon="@mipmap/ic_launcher_blue" android:roundIcon="@mipmap/ic_launcher_blue_round" 
+        <activity-alias android:icon="@mipmap/ic_launcher_blue" 
             
             android:targetActivity=".MainActivity"
            
@@ -89,7 +89,7 @@
             </intent-filter>
         </activity-alias>
 
-        <activity-alias android:icon="@mipmap/ic_launcher_orange" android:roundIcon="@mipmap/ic_launcher_orange_round" 
+        <activity-alias android:icon="@mipmap/ic_launcher_orange" 
             
             android:targetActivity=".MainActivity"
            
@@ -102,7 +102,7 @@
             </intent-filter>
         </activity-alias>
 
-        <activity-alias android:icon="@mipmap/ic_launcher_gold" android:roundIcon="@mipmap/ic_launcher_gold_round" 
+        <activity-alias android:icon="@mipmap/ic_launcher_gold" 
             
             android:targetActivity=".MainActivity"
            
