@@ -149,6 +149,7 @@ class MainActivity : ComponentActivity() {
 
             val fontScale by userPreferences.fontScale.collectAsState(initial = 1.0f)
             val appTheme by userPreferences.appTheme.collectAsState(initial = "multicolor")
+            val appearanceMode by userPreferences.appearanceMode.collectAsState(initial = "system")
             val latestFirebase by viewModel.latestProduct.collectAsState(null)
             val latestLocal by viewModel.latestProductLocal.collectAsState(null)
             val lastNotifiedCode by userPreferences.lastNotifiedProductCode.collectAsState("___LOADING___")
@@ -170,7 +171,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                MyApplicationTheme(appTheme = appTheme) {
+                MyApplicationTheme(appTheme = appTheme, appearanceMode = appearanceMode) {
 
                 var showSplash by remember { mutableStateOf(true) }
                 
