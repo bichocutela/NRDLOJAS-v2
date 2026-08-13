@@ -43,38 +43,85 @@ jobs:
         printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
         test -s app/google-services.json
 
-    - name: Decode Release Keystore
+    - name: Decode Keystore
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
       run: |
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > release.keystore
+        echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
+
+    - name: Validate Keystore
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      run: |
+        if [ ! -s release.keystore ]; then
+          echo "Error: release.keystore is empty or missing."
+          exit 1
+        fi
+        if ! keytool -list -v -keystore release.keystore -storepass "$KEYSTORE_PASSWORD" 2>/dev/null | grep -qi "Alias name: $KEY_ALIAS"; then
+          echo "Error: Keystore validation failed or alias not found."
+          exit 1
+        fi
+        echo "Keystore validation successful."
 
     - name: Calculate Next Version
       id: calc_version
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        LATEST_TAG=$(gh api repos/${{ github.repository }}/releases/latest --jq .tag_name 2>/dev/null || echo "v1.0.59")
+        LATEST_TAG=$(gh api repos/${{ github.repository }}/releases/latest --jq .tag_name 2>/dev/null || echo "v1.0.130")
         
         if [[ "$LATEST_TAG" =~ ^v1\.0\.([0-9]+)$ ]]; then
           PATCH="${BASH_REMATCH[1]}"
         else
-          PATCH=59
+          PATCH=130
+        fi
+        
+        if [ "$PATCH" -lt 130 ]; then
+          PATCH=130
         fi
         
         NEXT_PATCH=$((PATCH + 1))
+        NEXT_TAG="v1.0.$NEXT_PATCH"
         
+        echo "Calculated next tag: $NEXT_TAG"
         echo "APP_VERSION_CODE=$NEXT_PATCH" >> "$GITHUB_ENV"
         echo "APP_VERSION_NAME=1.0.$NEXT_PATCH" >> "$GITHUB_ENV"
-        echo "NEXT_TAG=v1.0.$NEXT_PATCH" >> "$GITHUB_ENV"
+        echo "NEXT_TAG=$NEXT_TAG" >> "$GITHUB_ENV"
+        echo "TAG=$NEXT_TAG" >> $GITHUB_OUTPUT
 
     - name: Build with Gradle
       env:
-        KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-      run: ./gradlew assembleRelease
+      run: |
+        ./gradlew assembleRelease \
+          -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.keystore \
+          -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
+          -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+          -Pandroid.injected.signing.key.password=$KEY_PASSWORD \
+          --stacktrace
+
+    - name: Verify APK Signature
+      run: |
+        APK_PATH="app/build/outputs/apk/release/app-release.apk"
+        if [ ! -f "$APK_PATH" ]; then
+          echo "Error: APK not found at $APK_PATH"
+          exit 1
+        fi
+        APKSIGNER=$(find $ANDROID_SDK_ROOT/build-tools -name apksigner | sort -r | head -n 1)
+        if [ -z "$APKSIGNER" ]; then
+          echo "Error: apksigner not found."
+          exit 1
+        fi
+        if ! $APKSIGNER verify --verbose "$APK_PATH"; then
+          echo "Error: APK is not signed properly."
+          exit 1
+        fi
+        echo "APK signature verified."
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
@@ -83,11 +130,11 @@ jobs:
         path: app/build/outputs/apk/release/app-release.apk
 
     - name: Create GitHub Release
-      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+      if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ env.NEXT_TAG }}
-        name: Release ${{ env.NEXT_TAG }}
+        name: NRDCodigos ${{ env.NEXT_TAG }}
         files: app/build/outputs/apk/release/app-release.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
