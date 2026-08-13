@@ -150,12 +150,30 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            androidx.compose.material3.Icon(
-                                imageVector = androidx.compose.material.icons.Icons.Default.Apps,
-                                contentDescription = iconLabel,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
+                            val bitmap = remember(iconResId) {
+                                try {
+                                    android.graphics.BitmapFactory.decodeResource(context.resources, iconResId)?.let {
+                                        it.asImageBitmap()
+                                    }
+                                } catch (e: Exception) {
+                                    null
+                                }
+                            }
+                            if (bitmap != null) {
+                                androidx.compose.material3.Icon(
+                                    bitmap = bitmap,
+                                    contentDescription = iconLabel,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = androidx.compose.ui.graphics.Color.Unspecified
+                                )
+                            } else {
+                                androidx.compose.material3.Icon(
+                                    imageVector = androidx.compose.material.icons.Icons.Default.Apps,
+                                    contentDescription = iconLabel,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(iconLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
