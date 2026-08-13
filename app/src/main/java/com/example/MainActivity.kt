@@ -122,7 +122,10 @@ class MainActivity : ComponentActivity() {
         
                 lifecycleScope.launch {
             val savedIcon = userPreferences.appIcon.first()
-            com.example.util.AppIconManager.ensureValidIconState(this@MainActivity, savedIcon)
+            val reconciledIcon = com.example.util.AppIconManager.ensureValidIconState(this@MainActivity, savedIcon)
+            if (reconciledIcon != null && reconciledIcon != savedIcon) {
+                userPreferences.setAppIcon(reconciledIcon)
+            }
         }
 
         NotificationHelper.createNotificationChannel(this)

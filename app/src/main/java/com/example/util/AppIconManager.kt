@@ -19,66 +19,97 @@ object AppIconManager {
     )
 
     /**
-     * Mantém exatamente um activity-alias de launcher habilitado.
-     * Os aliases são todos desabilitados antes de o alvo ser habilitado para
-     * eliminar estados antigos que poderiam manter vários ícones no launcher.
+     * Troca o ícone mantendo exatamente um activity-alias de launcher habilitado.
+     * Em caso de falha na confirmação, restaura o alias que estava consistente
+     * antes da tentativa — ou Multicolorido quando não houver estado recuperável.
      */
     fun applyIcon(context: Context, iconName: String): Boolean {
-        val packageManager = context.packageManager
-        val selectedIcon = iconName.takeIf { it in aliases } ?: DEFAULT_ICON
-        val targetAlias = aliases.getValue(selectedIcon)
+        val selectedIcon = normalizeIcon(iconName)
+        val selectedAlias = aliases.getValue(selectedIcon)
+        val recoveryAlias = currentSingleEnabledAlias(context) ?: aliases.getValue(DEFAULT_ICON)
 
         return try {
-            aliases.values.forEach { aliasName ->
-                packageManager.setComponentEnabledSetting(
-                    ComponentName(context.packageName, aliasName),
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP
-                )
+            setOnlyAliasEnabled(context, selectedAlias)
+            if (verifyIconState(context, selectedAlias)) {
+                true
+            } else {
+                Log.e(TAG, "A troca para $selectedIcon não produziu um único alias habilitado.")
+                restoreSingleAlias(context, recoveryAlias)
+                false
             }
-
-            packageManager.setComponentEnabledSetting(
-                ComponentName(context.packageName, targetAlias),
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                PackageManager.DONT_KILL_APP
-            )
-
-            verifyIconState(context, targetAlias)
         } catch (exception: Exception) {
             Log.e(TAG, "Não foi possível aplicar o ícone $selectedIcon", exception)
+            restoreSingleAlias(context, recoveryAlias)
             false
         }
     }
 
     /**
-     * Considera o estado padrão apenas para Multicolorido, pois ele é o único
-     * alias declarado como habilitado no manifesto de uma instalação nova.
+     * Reconcilia o estado na abertura do aplicativo. Retorna a chave válida que
+     * pode ser persistida; retorna null se não foi possível garantir um único alias.
      */
-    private fun verifyIconState(context: Context, expectedAlias: String): Boolean {
-        val packageManager = context.packageManager
-        val enabledAliases = aliases.values.filter { aliasName ->
-            val state = packageManager.getComponentEnabledSetting(
-                ComponentName(context.packageName, aliasName)
-            )
-            state == PackageManager.COMPONENT_ENABLED_STATE_ENABLED ||
-                (state == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT &&
-                    aliasName == aliases.getValue(DEFAULT_ICON))
-        }
-
-        return enabledAliases.size == 1 && enabledAliases.singleOrNull() == expectedAlias
-    }
-
-    /**
-     * Restaura o estado consistente na abertura do aplicativo. Valores salvos
-     * inválidos ou ausentes voltam para o ícone Multicolorido.
-     */
-    fun ensureValidIconState(context: Context, savedIcon: String?) {
-        val selectedIcon = savedIcon?.takeIf { it in aliases } ?: DEFAULT_ICON
+    fun ensureValidIconState(context: Context, savedIcon: String?): String? {
+        val selectedIcon = normalizeIcon(savedIcon)
         val expectedAlias = aliases.getValue(selectedIcon)
 
-        if (!verifyIconState(context, expectedAlias)) {
-            Log.w(TAG, "Estado de aliases inválido. Restaurando $selectedIcon")
-            applyIcon(context, selectedIcon)
+        if (verifyIconState(context, expectedAlias)) {
+            return selectedIcon
+        }
+
+        Log.w(TAG, "Estado de aliases inválido. Restaurando $selectedIcon")
+        return if (applyIcon(context, selectedIcon)) selectedIcon else null
+    }
+
+    private fun normalizeIcon(iconName: String?): String =
+        iconName?.takeIf { it in aliases } ?: DEFAULT_ICON
+
+    private fun setOnlyAliasEnabled(context: Context, enabledAlias: String) {
+        val packageManager = context.packageManager
+
+        aliases.values.forEach { aliasName ->
+            packageManager.setComponentEnabledSetting(
+                componentName(context, aliasName),
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                PackageManager.DONT_KILL_APP
+            )
+        }
+
+        packageManager.setComponentEnabledSetting(
+            componentName(context, enabledAlias),
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+            PackageManager.DONT_KILL_APP
+        )
+    }
+
+    private fun restoreSingleAlias(context: Context, preferredAlias: String) {
+        runCatching {
+            setOnlyAliasEnabled(context, preferredAlias)
+        }.onFailure { exception ->
+            Log.e(TAG, "Não foi possível restaurar um único alias de launcher", exception)
         }
     }
+
+    private fun currentSingleEnabledAlias(context: Context): String? =
+        enabledAliases(context).singleOrNull()
+
+    private fun verifyIconState(context: Context, expectedAlias: String): Boolean {
+        val enabledAliases = enabledAliases(context)
+        return enabledAliases.size == 1 && enabledAliases.single() == expectedAlias
+    }
+
+    private fun enabledAliases(context: Context): List<String> {
+        val packageManager = context.packageManager
+        val defaultAlias = aliases.getValue(DEFAULT_ICON)
+
+        return aliases.values.filter { aliasName ->
+            when (packageManager.getComponentEnabledSetting(componentName(context, aliasName))) {
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED -> true
+                PackageManager.COMPONENT_ENABLED_STATE_DEFAULT -> aliasName == defaultAlias
+                else -> false
+            }
+        }
+    }
+
+    private fun componentName(context: Context, aliasName: String) =
+        ComponentName(context.packageName, aliasName)
 }

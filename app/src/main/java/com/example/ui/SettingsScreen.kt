@@ -1,8 +1,10 @@
 package com.example.ui
 
+import com.example.R
 import com.example.util.NotificationHelper
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -12,6 +14,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.filled.Apps
 import com.example.ui.theme.getDynamicThemeColor
 import androidx.compose.ui.platform.LocalContext
@@ -153,19 +157,19 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            val iconColor = when (iconKey) {
-                                "red" -> androidx.compose.ui.graphics.Color(0xFFE53935)
-                                "green" -> androidx.compose.ui.graphics.Color(0xFF43A047)
-                                "blue" -> androidx.compose.ui.graphics.Color(0xFF1E88E5)
-                                "orange" -> androidx.compose.ui.graphics.Color(0xFFFB8C00)
-                                "gold" -> androidx.compose.ui.graphics.Color(0xFFFFB300)
-                                else -> MaterialTheme.colorScheme.primary
+                            val previewResource = when (iconKey) {
+                                "red" -> R.mipmap.ic_launcher_red
+                                "green" -> R.mipmap.ic_launcher_green
+                                "blue" -> R.mipmap.ic_launcher_blue
+                                "orange" -> R.mipmap.ic_launcher_orange
+                                "gold" -> R.mipmap.ic_launcher_gold
+                                else -> R.mipmap.ic_launcher_multicolor
                             }
-                            androidx.compose.material3.Icon(
-                                imageVector = androidx.compose.material.icons.Icons.Default.Apps,
+                            Image(
+                                painter = painterResource(previewResource),
                                 contentDescription = iconLabel,
-                                modifier = Modifier.size(48.dp),
-                                tint = iconColor
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.size(48.dp)
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(iconLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
