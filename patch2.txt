@@ -1,2 +1,0 @@
-        val allProductsToForceAdd = imageProductsToForceAdd + importedProducts
-        val missingProducts = allProductsToForceAdd.filter { p -> 

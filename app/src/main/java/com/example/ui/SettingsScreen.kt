@@ -151,7 +151,10 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             verticalArrangement = Arrangement.Center
                         ) {
                             coil.compose.AsyncImage(
-                                model = iconResId,
+                                model = coil.request.ImageRequest.Builder(context)
+                                    .data(iconResId)
+                                    .crossfade(false)
+                                    .build(),
                                 contentDescription = iconLabel,
                                 modifier = Modifier.size(64.dp),
                                 contentScale = androidx.compose.ui.layout.ContentScale.Fit,

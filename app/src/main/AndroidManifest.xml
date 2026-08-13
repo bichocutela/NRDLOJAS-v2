@@ -37,78 +37,78 @@
             android:theme="@style/Theme.MyApplication">
         </activity>
 
-        <activity-alias
-            android:name=".MainActivityMulticolor"
+        <activity-alias android:icon="@mipmap/ic_launcher_multicolor" android:roundIcon="@mipmap/ic_launcher_multicolor_round" 
+            
             android:targetActivity=".MainActivity"
-            android:icon="@drawable/icon_multicolor"
-            android:roundIcon="@drawable/icon_multicolor"
+           
+           
             android:exported="true"
-            android:enabled="true">
+            android:enabled="true" android:name=".MainActivityMulticolor">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
 
-        <activity-alias
-            android:name=".MainActivityRed"
+        <activity-alias android:icon="@mipmap/ic_launcher_red" android:roundIcon="@mipmap/ic_launcher_red_round" 
+            
             android:targetActivity=".MainActivity"
-            android:icon="@drawable/icon_red"
-            android:roundIcon="@drawable/icon_red"
+           
+           
             android:exported="true"
-            android:enabled="false">
+            android:enabled="false" android:name=".MainActivityRed">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
 
-        <activity-alias
-            android:name=".MainActivityGreen"
+        <activity-alias android:icon="@mipmap/ic_launcher_green" android:roundIcon="@mipmap/ic_launcher_green_round" 
+            
             android:targetActivity=".MainActivity"
-            android:icon="@drawable/icon_green"
-            android:roundIcon="@drawable/icon_green"
+           
+           
             android:exported="true"
-            android:enabled="false">
+            android:enabled="false" android:name=".MainActivityGreen">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
 
-        <activity-alias
-            android:name=".MainActivityBlue"
+        <activity-alias android:icon="@mipmap/ic_launcher_blue" android:roundIcon="@mipmap/ic_launcher_blue_round" 
+            
             android:targetActivity=".MainActivity"
-            android:icon="@drawable/icon_blue"
-            android:roundIcon="@drawable/icon_blue"
+           
+           
             android:exported="true"
-            android:enabled="false">
+            android:enabled="false" android:name=".MainActivityBlue">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
 
-        <activity-alias
-            android:name=".MainActivityOrange"
+        <activity-alias android:icon="@mipmap/ic_launcher_orange" android:roundIcon="@mipmap/ic_launcher_orange_round" 
+            
             android:targetActivity=".MainActivity"
-            android:icon="@drawable/icon_orange"
-            android:roundIcon="@drawable/icon_orange"
+           
+           
             android:exported="true"
-            android:enabled="false">
+            android:enabled="false" android:name=".MainActivityOrange">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
 
-        <activity-alias
-            android:name=".MainActivityGold"
+        <activity-alias android:icon="@mipmap/ic_launcher_gold" android:roundIcon="@mipmap/ic_launcher_gold_round" 
+            
             android:targetActivity=".MainActivity"
-            android:icon="@drawable/icon_gold"
-            android:roundIcon="@drawable/icon_gold"
+           
+           
             android:exported="true"
-            android:enabled="false">
+            android:enabled="false" android:name=".MainActivityGold">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
