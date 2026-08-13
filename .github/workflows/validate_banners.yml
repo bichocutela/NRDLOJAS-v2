@@ -53,14 +53,14 @@ jobs:
       run: |
         rm -f gradle/wrapper/gradle-wrapper.jar && gradle wrapper
         chmod +x gradlew
-    - name: Build Release APK
-      run: ./gradlew assembleRelease
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug
 
     - name: Validate APK Contents
       run: |
-        unzip -l app/build/outputs/apk/release/app-release-unsigned.apk | grep "assets/themes/"
+        unzip -l app/build/outputs/apk/debug/app-debug.apk | grep "assets/themes/"
         for theme in theme_red.jpg theme_gold.jpg theme_green.jpg theme_blue.jpg theme_orange.jpg; do
-            if ! unzip -l app/build/outputs/apk/release/app-release-unsigned.apk | grep -q "assets/themes/$theme"; then
+            if ! unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -q "assets/themes/$theme"; then
                 echo "Missing $theme in APK!"
                 exit 1
             fi
