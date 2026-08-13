@@ -111,12 +111,12 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
             
             val iconOptions = listOf(
-                "multicolor" to Pair("Multicolorido", com.example.R.drawable.icon_multicolor),
-                "red" to Pair("Vermelho", com.example.R.drawable.icon_red),
-                "green" to Pair("Verde", com.example.R.drawable.icon_green),
-                "blue" to Pair("Azul", com.example.R.drawable.icon_blue),
-                "orange" to Pair("Laranja", com.example.R.drawable.icon_orange),
-                "gold" to Pair("Dourado", com.example.R.drawable.icon_gold)
+                "multicolor" to Pair("Multicolorido", com.example.R.drawable.preview_icon_multicolor),
+                "red" to Pair("Vermelho", com.example.R.drawable.preview_icon_red),
+                "green" to Pair("Verde", com.example.R.drawable.preview_icon_green),
+                "blue" to Pair("Azul", com.example.R.drawable.preview_icon_blue),
+                "orange" to Pair("Laranja", com.example.R.drawable.preview_icon_orange),
+                "gold" to Pair("Dourado", com.example.R.drawable.preview_icon_gold)
             )
             
             androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
