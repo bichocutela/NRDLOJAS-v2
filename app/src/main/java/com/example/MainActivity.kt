@@ -122,7 +122,7 @@ class MainActivity : ComponentActivity() {
         
                 lifecycleScope.launch {
             val savedIcon = userPreferences.appIcon.first()
-            // com.example.util.AppIconManager.ensureValidIconState(this@MainActivity, savedIcon)
+            com.example.util.AppIconManager.ensureValidIconState(this@MainActivity, savedIcon)
         }
 
         NotificationHelper.createNotificationChannel(this)
