@@ -11,6 +11,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.material.icons.filled.Apps
+import android.graphics.BitmapFactory
 import com.example.ui.theme.getDynamicThemeColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -148,11 +151,27 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            androidx.compose.foundation.Image(
-                                painter = androidx.compose.ui.res.painterResource(id = iconResId),
-                                contentDescription = iconLabel,
-                                modifier = Modifier.size(48.dp)
-                            )
+                            val bitmap = remember(iconResId) {
+                                try {
+                                    BitmapFactory.decodeResource(context.resources, iconResId)
+                                } catch (e: Exception) {
+                                    null
+                                }
+                            }
+                            if (bitmap != null) {
+                                androidx.compose.foundation.Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = iconLabel,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Apps,
+                                    contentDescription = iconLabel,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(iconLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
