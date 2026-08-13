@@ -110,12 +110,12 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
             
             val iconOptions = listOf(
-                "multicolor" to Pair("Multicolorido", com.example.R.drawable.preview_icon_multicolor),
-                "red" to Pair("Vermelho", com.example.R.drawable.preview_icon_red),
-                "green" to Pair("Verde", com.example.R.drawable.preview_icon_green),
-                "blue" to Pair("Azul", com.example.R.drawable.preview_icon_blue),
-                "orange" to Pair("Laranja", com.example.R.drawable.preview_icon_orange),
-                "gold" to Pair("Dourado", com.example.R.drawable.preview_icon_gold)
+                "multicolor" to Pair("Multicolorido", com.example.R.mipmap.ic_launcher_multicolor),
+                "red" to Pair("Vermelho", com.example.R.mipmap.ic_launcher_red),
+                "green" to Pair("Verde", com.example.R.mipmap.ic_launcher_green),
+                "blue" to Pair("Azul", com.example.R.mipmap.ic_launcher_blue),
+                "orange" to Pair("Laranja", com.example.R.mipmap.ic_launcher_orange),
+                "gold" to Pair("Dourado", com.example.R.mipmap.ic_launcher_gold)
             )
             
             androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
@@ -150,16 +150,11 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            coil.compose.AsyncImage(
-                                model = coil.request.ImageRequest.Builder(context)
-                                    .data(iconResId)
-                                    .crossfade(false)
-                                    .build(),
+                            androidx.compose.foundation.Image(
+                                painter = androidx.compose.ui.res.painterResource(id = iconResId),
                                 contentDescription = iconLabel,
                                 modifier = Modifier.size(64.dp),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                                error = androidx.compose.ui.graphics.vector.rememberVectorPainter(androidx.compose.material.icons.Icons.Default.Apps),
-                                fallback = androidx.compose.ui.graphics.vector.rememberVectorPainter(androidx.compose.material.icons.Icons.Default.Apps)
+                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(iconLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
