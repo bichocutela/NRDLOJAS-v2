@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -14,12 +13,11 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@drawable/nrd_launcher_multicolor"
+        android:icon="@mipmap/ic_launcher_multicolor"
         android:label="@string/app_name"
-        android:roundIcon="@drawable/nrd_launcher_multicolor"
+        android:roundIcon="@mipmap/ic_launcher_multicolor_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
-        
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -33,86 +31,15 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:icon="@mipmap/ic_launcher_multicolor"
             android:label="@string/app_name"
-            android:theme="@style/Theme.MyApplication" />
-
-        <activity-alias android:icon="@mipmap/ic_launcher_multicolor"
             android:roundIcon="@mipmap/ic_launcher_multicolor_round"
-            android:targetActivity=".MainActivity"
-           
-           
-            android:exported="true"
-            android:enabled="true" android:name=".MainActivityMulticolor">
+            android:theme="@style/Theme.MyApplication">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity-alias>
-
-        <activity-alias android:icon="@mipmap/ic_launcher_red"
-            android:roundIcon="@mipmap/ic_launcher_red_round"
-            android:targetActivity=".MainActivity"
-           
-           
-            android:exported="true"
-            android:enabled="false" android:name=".MainActivityRed">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias android:icon="@mipmap/ic_launcher_green"
-            android:roundIcon="@mipmap/ic_launcher_green_round"
-            android:targetActivity=".MainActivity"
-           
-           
-            android:exported="true"
-            android:enabled="false" android:name=".MainActivityGreen">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias android:icon="@mipmap/ic_launcher_blue"
-            android:roundIcon="@mipmap/ic_launcher_blue_round"
-            android:targetActivity=".MainActivity"
-           
-           
-            android:exported="true"
-            android:enabled="false" android:name=".MainActivityBlue">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias android:icon="@mipmap/ic_launcher_orange"
-            android:roundIcon="@mipmap/ic_launcher_orange_round"
-            android:targetActivity=".MainActivity"
-           
-           
-            android:exported="true"
-            android:enabled="false" android:name=".MainActivityOrange">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias android:icon="@mipmap/ic_launcher_gold"
-            android:roundIcon="@mipmap/ic_launcher_gold_round"
-            android:targetActivity=".MainActivity"
-           
-           
-            android:exported="true"
-            android:enabled="false" android:name=".MainActivityGold">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
+        </activity>
 
         <service
             android:name=".util.MyFirebaseMessagingService"

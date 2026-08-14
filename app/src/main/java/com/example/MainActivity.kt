@@ -29,9 +29,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.delay
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.first
 
 
 import androidx.compose.ui.unit.dp
@@ -117,16 +114,6 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        
-
-        
-                lifecycleScope.launch {
-            val savedIcon = userPreferences.appIcon.first()
-            val reconciledIcon = com.example.util.AppIconManager.ensureValidIconState(this@MainActivity, savedIcon)
-            if (reconciledIcon != null && reconciledIcon != savedIcon) {
-                userPreferences.setAppIcon(reconciledIcon)
-            }
-        }
 
         NotificationHelper.createNotificationChannel(this)
         

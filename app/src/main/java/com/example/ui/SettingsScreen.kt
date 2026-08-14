@@ -1,10 +1,8 @@
 package com.example.ui
 
-import com.example.R
 import com.example.util.NotificationHelper
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -14,10 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import androidx.compose.material.icons.filled.Apps
 import com.example.ui.theme.getDynamicThemeColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -37,7 +31,6 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val uppercaseBold by viewModel.userPreferences.uppercaseBold.collectAsState(initial = false)
     val appTheme by viewModel.userPreferences.appTheme.collectAsState(initial = "multicolor")
     val appearanceMode by viewModel.userPreferences.appearanceMode.collectAsState(initial = "system")
-    val appIcon by viewModel.userPreferences.appIcon.collectAsState(initial = "multicolor")
     
     val notificationsEnabled by viewModel.userPreferences.notificationsEnabled.collectAsState(initial = true)
     val notificationsProductAddedEnabled by viewModel.userPreferences.notificationsProductAddedEnabled.collectAsState(initial = true)
@@ -105,79 +98,6 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Todas letras maiúsculas em negrito")
                 Switch(checked = uppercaseBold, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setUppercaseBold(it) } })
-            }
-            
-            HorizontalDivider()
-            
-            
-            Text("Ícone do aplicativo", style = MaterialTheme.typography.titleMedium, color = getDynamicThemeColor(1, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first)
-            Text("Escolha como o NRD Códigos aparecerá na tela inicial do seu celular.", style = MaterialTheme.typography.bodySmall)
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            val iconOptions = listOf(
-                "multicolor" to "Multicolorido",
-                "red" to "Vermelho",
-                "green" to "Verde",
-                "blue" to "Azul",
-                "orange" to "Laranja",
-                "gold" to "Dourado"
-            )
-            
-            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-                columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
-                modifier = Modifier.fillMaxWidth().height(260.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(iconOptions.size) { index ->
-                    val (iconKey, iconLabel) = iconOptions[index]
-                    val isSelected = appIcon == iconKey
-                    
-                    androidx.compose.material3.Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(110.dp)
-                            .clickable {
-                                coroutineScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                                    val success = com.example.util.AppIconManager.applyIcon(context, iconKey)
-                                    if (success) {
-                                        viewModel.userPreferences.setAppIcon(iconKey)
-                                        android.widget.Toast.makeText(context, "Ícone alterado. A tela inicial pode levar alguns segundos para atualizar.", android.widget.Toast.LENGTH_LONG).show()
-                                    } else {
-                                        android.widget.Toast.makeText(context, "Não foi possível alterar o ícone.", android.widget.Toast.LENGTH_LONG).show()
-                                    }
-                                }
-                            },
-                        colors = androidx.compose.material3.CardDefaults.cardColors(
-                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-                        ),
-                        border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize().padding(8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            val previewResource = when (iconKey) {
-                                "red" -> R.drawable.preview_launcher_red
-                                "green" -> R.drawable.preview_launcher_green
-                                "blue" -> R.drawable.preview_launcher_blue
-                                "orange" -> R.drawable.preview_launcher_orange
-                                "gold" -> R.drawable.preview_launcher_gold
-                                else -> R.drawable.preview_launcher_multicolor
-                            }
-                            Image(
-                                painter = painterResource(previewResource),
-                                contentDescription = iconLabel,
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(iconLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                        }
-                    }
-                }
             }
             
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

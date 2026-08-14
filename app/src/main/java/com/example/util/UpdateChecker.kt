@@ -34,12 +34,28 @@ sealed interface ReleaseCheckResult {
 object UpdateChecker {
     private const val TAG = "UpdateChecker"
     private const val LATEST_RELEASE_URL = "https://api.github.com/repos/bichocutela/NRDLOJAS-v2/releases/latest"
+    private const val LATEST_RELEASE_PAGE_URL = "https://github.com/bichocutela/NRDLOJAS-v2/releases/latest"
+    private const val LATEST_RELEASE_APK_URL = "https://github.com/bichocutela/NRDLOJAS-v2/releases/latest/download/app-release.apk"
 
     /**
-     * Consulta a última release sem autenticação. O token do GitHub nunca é
-     * incluído no aplicativo; limites públicos são tratados pelos headers HTTP.
+     * Consulta a última release sem autenticação. A API REST é a fonte primária;
+     * em 403/429, usa o redirecionamento público da última release, sem token no APK.
      */
     suspend fun checkLatestRelease(): ReleaseCheckResult {
+        val apiResult = checkLatestReleaseFromApi()
+        if (apiResult is ReleaseCheckResult.HttpError &&
+            (apiResult.responseCode == HttpURLConnection.HTTP_FORBIDDEN || apiResult.responseCode == 429)
+        ) {
+            Log.w(TAG, "API do GitHub limitada; tentando o fallback público da release mais recente")
+            val fallbackResult = checkLatestReleaseFromPublicRedirect()
+            if (fallbackResult != null) {
+                return fallbackResult
+            }
+        }
+        return apiResult
+    }
+
+    private suspend fun checkLatestReleaseFromApi(): ReleaseCheckResult {
         return withContext(Dispatchers.IO) {
             var connection: HttpURLConnection? = null
             try {
@@ -123,6 +139,47 @@ object UpdateChecker {
             } catch (exception: Exception) {
                 Log.e(TAG, "Resposta inválida do GitHub", exception)
                 ReleaseCheckResult.InvalidResponse("Resposta inválida do GitHub: ${exception.message ?: "erro desconhecido"}")
+            } finally {
+                connection?.disconnect()
+            }
+        }
+    }
+
+    /**
+     * O GitHub mantém uma URL pública estável para a última release e para assets
+     * anexados. Este caminho não consulta a API REST e só é usado se ela estiver
+     * temporariamente limitada.
+     */
+    private suspend fun checkLatestReleaseFromPublicRedirect(): ReleaseCheckResult? {
+        return withContext(Dispatchers.IO) {
+            var connection: HttpURLConnection? = null
+            try {
+                connection = (URL(LATEST_RELEASE_PAGE_URL).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    instanceFollowRedirects = true
+                    connectTimeout = 15_000
+                    readTimeout = 15_000
+                    setRequestProperty("User-Agent", "NRDLOJAS-Update-Checker")
+                }
+
+                val responseCode = connection.responseCode
+                val finalUrl = connection.url.toString()
+                if (responseCode !in 200..299 || !finalUrl.contains("/releases/tag/")) {
+                    Log.e(TAG, "Fallback público da release falhou: HTTP $responseCode, URL=$finalUrl")
+                    return@withContext null
+                }
+
+                connection.inputStream.close()
+                val tagName = Uri.parse(finalUrl).lastPathSegment?.takeIf { it.isNotBlank() }
+                if (tagName == null) {
+                    Log.e(TAG, "Fallback público não retornou uma tag de release: $finalUrl")
+                    return@withContext null
+                }
+
+                ReleaseCheckResult.Success(tagName, LATEST_RELEASE_APK_URL)
+            } catch (exception: Exception) {
+                Log.e(TAG, "Fallback público da release indisponível", exception)
+                null
             } finally {
                 connection?.disconnect()
             }
