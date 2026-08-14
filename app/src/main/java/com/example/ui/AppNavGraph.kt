@@ -281,26 +281,6 @@ fun LoginDrawerContent(
         HorizontalDivider()
         Spacer(modifier = Modifier.height(16.dp))
         
-        Button(
-            onClick = onGoToSettings,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Configurações")
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Button(
-            onClick = onGoToAbout,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Sobre")
-        }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        HorizontalDivider()
-        Spacer(modifier = Modifier.height(16.dp))
-        
         val dynamicTabs by viewModel.dynamicTabs.collectAsState()
         if (dynamicTabs.isNotEmpty()) {
             Text(
@@ -348,6 +328,26 @@ fun LoginDrawerContent(
                     }
                 }
             )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = onGoToSettings,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Configurações")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = onGoToAbout,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Sobre")
         }
     }
 }
