@@ -25,8 +25,12 @@ object FirebaseService {
     var lastError: String? = null
     private var appContext: android.content.Context? = null
     suspend fun publishProductEvent(type: String, productName: String, oldName: String? = null, productCode: String) {
-        if (!isFirebaseConfigured()) return
+        if (!isFirebaseConfigured()) {
+            Log.w("FirebaseService", "Evento FCM ignorado: Firebase não configurado; type=$type")
+            return
+        }
         try {
+            Log.d("FirebaseService", "Iniciando publicação do evento FCM: type=$type, productCode=$productCode")
             val supabaseUrl = BuildConfig.SUPABASE_URL
             val supabaseKey = BuildConfig.SUPABASE_ANON_KEY
             if (supabaseUrl.isEmpty() || supabaseKey.isEmpty()) {
@@ -36,8 +40,7 @@ object FirebaseService {
 
             
             if (type != "NEW_PRODUCT" && type != "CODE_CHANGED") {
-                // As per instructions: "Alterações somente de nome, categoria, foto ou outros campos NÃO devem disparar "Código alterado"."
-                // We'll skip sending push for those to respect "Implemente SOMENTE o sistema de notificações de produtos."
+                Log.d("FirebaseService", "Evento FCM ignorado: tipo não suportado ($type)")
                 return
             }
 
@@ -65,18 +68,20 @@ object FirebaseService {
                 .addHeader("x-firebase-token", firebaseToken)
                 .build()
 
-            Log.d("FirebaseService", "Chamada send-fcm iniciada")
-            okHttpClient.newCall(request).execute().use { response ->
-                val responseBody = response.body?.string().orEmpty()
-                Log.d("FirebaseService", "send-fcm HTTP status: ${response.code}")
-                if (!response.isSuccessful) {
-                    Log.e("FirebaseService", "send-fcm falhou: HTTP ${response.code} ${response.message}; corpo: $responseBody")
-                } else {
-                    Log.d("FirebaseService", "FCM enviado com sucesso")
+            Log.d("FirebaseService", "Chamada send-fcm iniciada: type=$type")
+            withContext(Dispatchers.IO) {
+                okHttpClient.newCall(request).execute().use { response ->
+                    val responseBody = response.body?.string().orEmpty()
+                    Log.d("FirebaseService", "send-fcm HTTP status: ${response.code}; type=$type")
+                    if (!response.isSuccessful) {
+                        Log.e("FirebaseService", "send-fcm falhou: HTTP ${response.code} ${response.message}; corpo: $responseBody")
+                    } else {
+                        Log.d("FirebaseService", "FCM enviado com sucesso: type=$type")
+                    }
                 }
             }
         } catch (e: Exception) {
-            Log.e("FirebaseService", "Error publishing product event via FCM", e)
+            Log.e("FirebaseService", "Erro ao publicar evento FCM: type=$type", e)
         }
     }
 
