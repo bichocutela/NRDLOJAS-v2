@@ -1,16 +1,11 @@
 package com.example.ui
 
-import android.content.Intent
-import android.util.Log
-import androidx.compose.material.icons.filled.Sync
-import android.graphics.Bitmap
-import android.graphics.ImageDecoder
-import android.net.Uri
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
-import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -39,49 +34,42 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.ui.theme.getDynamicThemeColor
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.BuildConfig
-import com.example.api.*
-import kotlinx.coroutines.Dispatchers
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
-import retrofit2.HttpException
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.barcode.BarcodeScannerOptions
-import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.common.InputImage
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.putJsonObject
-import kotlinx.serialization.json.put
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     var showManualForm by remember { mutableStateOf(false) }
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
-    var selectedBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var isProcessing by remember { mutableStateOf(false) }
-    
     var productName by remember { mutableStateOf("") }
     var productCode by remember { mutableStateOf("") }
     var productCategory by remember { mutableStateOf("") }
     var productImageUrl by remember { mutableStateOf("") }
-    var statusMessage by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    
     val allProducts by viewModel.allProducts.collectAsStateWithLifecycle()
+    val exportProducts: () -> Unit = {
+        scope.launch {
+            val path = com.example.util.PdfExporter.exportProductsToPdf(context, allProducts)
+            snackbarHostState.showSnackbar(
+                if (path != null) "PDF salvo na pasta Downloads."
+                else "Não foi possível exportar o PDF."
+            )
+        }
+    }
+    val legacyStoragePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) exportProducts()
+        else scope.launch { snackbarHostState.showSnackbar("Não foi possível exportar o PDF.") }
+    }
+
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
     val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
 
@@ -91,71 +79,6 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             snackbarHostState.showSnackbar(message)
         }
     }
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        uri?.let {
-            selectedImageUri = it
-            showManualForm = true // Show form to verify
-            productName = ""
-            productCode = ""
-            productCategory = ""
-                        productImageUrl = ""
-            
-            // Convert URI to Bitmap
-            try {
-                selectedBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    val source = ImageDecoder.createSource(context.contentResolver, it)
-                    ImageDecoder.decodeBitmap(source)
-                } else {
-                    MediaStore.Images.Media.getBitmap(context.contentResolver, it)
-                }
-                
-                // Process image with Gemini
-                scope.launch {
-                    isProcessing = true
-                    statusMessage = "A IA está analisando a imagem..."
-                    
-                    try {
-                        val detectedCode = detectBarcodeFromBitmap(selectedBitmap!!)
-                        if (!detectedCode.isNullOrBlank()) {
-                            productCode = detectedCode
-                            statusMessage = "Código detectado pelo leitor local."
-                        }
-
-                        val apiKey = BuildConfig.GEMINI_API_KEY.trim()
-                        if (apiKey.isEmpty() || apiKey.equals("dummy", ignoreCase = true)) {
-                            statusMessage = "IA não configurada nesta versão."
-                            return@launch
-                        }
-
-                        val result = analyzeImage(selectedBitmap!!, detectedCode)
-                        if (result != null) {
-                            productName = result.name
-                            if (detectedCode.isNullOrBlank()) productCode = result.code
-                            productCategory = ProductStandards.categoryFromSuggestion(result.category).orEmpty()
-                            statusMessage = "Análise concluída. Verifique as informações."
-                        } else {
-                            statusMessage = "Não foi possível identificar todos os dados com IA. Complete manualmente."
-                        }
-                    } catch (e: HttpException) {
-                        statusMessage = when (e.code()) {
-                            429 -> "Limite gratuito da IA atingido. Complete manualmente."
-                            401, 403 -> "Serviço de IA não autorizado. Complete manualmente."
-                            else -> "Não foi possível identificar todos os dados com IA. Complete manualmente."
-                        }
-                    } catch (_: Exception) {
-                        statusMessage = "Não foi possível identificar todos os dados com IA. Complete manualmente."
-                    } finally {
-                        isProcessing = false
-                    }
-                }
-            } catch (e: Exception) {
-                statusMessage = "Erro ao carregar a imagem."
-            }
-        }
-    }
-
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -198,13 +121,12 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         contentColor = getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second
                     ),
                     onClick = {
-                        scope.launch {
-                            val path = com.example.util.PdfExporter.exportProductsToPdf(context, allProducts)
-                            if (path != null) {
-                                snackbarHostState.showSnackbar("Inventário exportado para PDF: $path")
-                            } else {
-                                snackbarHostState.showSnackbar("Erro ao exportar PDF.")
-                            }
+                        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            legacyStoragePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                        } else {
+                            exportProducts()
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -212,7 +134,7 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 ) {
                     Icon(Icons.Default.Save, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Exportar PDF")
+                    Text("Exportar Produtos em PDF")
                 }
                 Spacer(modifier = Modifier.height(24.dp))
             
@@ -224,9 +146,9 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            Row(
+            Box(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                contentAlignment = Alignment.Center
             ) {
                 Button(
                     colors = ButtonDefaults.buttonColors(
@@ -234,35 +156,17 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         contentColor = getDynamicThemeColor(1, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second
                     ),
                     onClick = {
-                        launcher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    },
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Icon(Icons.Default.AddAPhoto, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Por Foto (IA)")
-                }
-                
-                Button(
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = getDynamicThemeColor(2, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first,
-                        contentColor = getDynamicThemeColor(2, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second
-                    ),
-                    onClick = {
-                        selectedImageUri = null
-                        selectedBitmap = null
                         productName = ""
                         productCode = ""
                         productCategory = ""
                         productImageUrl = ""
                         showManualForm = true
-                        statusMessage = null
                     },
                     shape = RoundedCornerShape(14.dp)
                 ) {
                     Icon(Icons.Default.Edit, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Manualmente")
+                    Text("Adicionar Produto")
                 }
             }
             
@@ -280,22 +184,6 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     ) {
                         Text("Novo produto", style = MaterialTheme.typography.titleLarge)
                         Spacer(modifier = Modifier.height(12.dp))
-                        if (selectedBitmap != null) {
-                            Image(
-                                bitmap = selectedBitmap!!.asImageBitmap(),
-                                contentDescription = "Imagem do produto",
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(200.dp)
-                                    .padding(bottom = 16.dp)
-                            )
-                        }
-                        
-                        if (isProcessing) {
-                            CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
-                        
                         OutlinedTextField(
                             value = productName,
                             onValueChange = { productName = it },
@@ -396,15 +284,6 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 }
             }
             
-            if (statusMessage != null) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = statusMessage!!,
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-            
             Spacer(modifier = Modifier.height(32.dp))
             HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
@@ -412,83 +291,6 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
 
         }
     }
-}
-
-data class ProductAnalysisResult(val name: String, val code: String, val category: String)
-
-suspend fun analyzeImage(bitmap: Bitmap, detectedCode: String? = null): ProductAnalysisResult? = withContext(Dispatchers.IO) {
-    val apiKey = BuildConfig.GEMINI_API_KEY.trim()
-    if (apiKey.isEmpty() || apiKey.equals("dummy", ignoreCase = true)) return@withContext null
-    try {
-        val codeContext = detectedCode?.let { " O código de barras detectado com confiança pelo ML Kit é $it; não o substitua." }.orEmpty()
-        val prompt = "Analise a imagem deste produto. Identifique principalmente o nome e escolha somente uma categoria entre: Açougue, Cafeteria, Frios, Hortifruti, Mercearia ou Padaria. O código deve ser informado apenas como apoio quando não houver código detectado localmente.$codeContext Retorne apenas um JSON com as chaves: 'nome', 'codigo', 'categoria'."
-        
-        val requestBody = GenerateContentRequest(
-            contents = listOf(Content(
-                parts = listOf(
-                    Part(text = prompt),
-                    Part(inlineData = InlineData(mimeType = "image/jpeg", data = bitmap.toBase64()))
-                )
-            )),
-            generationConfig = GenerationConfig(
-                responseFormat = ResponseFormat(
-                    text = ResponseFormatText(
-                        mimeType = "application/json",
-                        schema = buildJsonObject {
-                            put("type", "OBJECT")
-                            putJsonObject("properties") {
-                                putJsonObject("nome") {
-                                    put("type", "STRING")
-                                    put("description", "O nome do produto.")
-                                }
-                                putJsonObject("codigo") {
-                                    put("type", "STRING")
-                                    put("description", "O código EAN ou numérico do produto.")
-                                }
-                                putJsonObject("categoria") {
-                                    put("type", "STRING")
-                                    put("description", "A categoria do produto.")
-                                }
-                            }
-                        }
-                    )
-                )
-            )
-        )
-        
-        val response = RetrofitClient.service.generateContent(apiKey, requestBody)
-        val responseText = response.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text
-        
-        if (responseText != null) {
-            val jsonResponse = Json.parseToJsonElement(responseText).jsonObject
-            val name = jsonResponse["nome"]?.jsonPrimitive?.content ?: ""
-            val code = jsonResponse["codigo"]?.jsonPrimitive?.content ?: ""
-            val category = jsonResponse["categoria"]?.jsonPrimitive?.content ?: ""
-            return@withContext ProductAnalysisResult(name, code, category)
-        }
-        null
-    } catch (e: HttpException) {
-        throw e
-    } catch (e: Exception) {
-        Log.e("AdminScreen", "Falha na análise da imagem", e)
-        null
-    }
-}
-
-private suspend fun detectBarcodeFromBitmap(bitmap: Bitmap): String? = suspendCancellableCoroutine { continuation ->
-    val options = BarcodeScannerOptions.Builder()
-        .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
-        .build()
-    val scanner = BarcodeScanning.getClient(options)
-    scanner.process(InputImage.fromBitmap(bitmap, 0))
-        .addOnSuccessListener { barcodes ->
-            continuation.resume(barcodes.firstNotNullOfOrNull { it.rawValue })
-        }
-        .addOnFailureListener { error ->
-            Log.w("AdminScreen", "ML Kit não detectou código na imagem", error)
-            continuation.resume(null)
-        }
-        .addOnCompleteListener { scanner.close() }
 }
 
 @Composable

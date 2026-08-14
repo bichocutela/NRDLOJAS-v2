@@ -138,8 +138,8 @@ fun MestreScreen(
                     Icon(Icons.Default.Build, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
-                        Text("Adicionar Novos Produtos (IA)", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        Text("Adicionar usando Gemini ou manualmente.", style = MaterialTheme.typography.bodySmall)
+                        Text("Adicionar Produtos", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        Text("Cadastrar produtos manualmente.", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }

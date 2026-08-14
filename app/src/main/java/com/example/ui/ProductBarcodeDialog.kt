@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.Product
-import com.example.data.askGeminiAboutProduct
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 

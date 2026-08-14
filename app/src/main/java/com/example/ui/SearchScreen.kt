@@ -33,10 +33,6 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.BakeryDining
@@ -55,8 +51,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -196,36 +190,6 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
         return // Return early so we don't show the rest of the screen
     }
 
-
-    val aiProductDetails by viewModel.aiProductDetails.collectAsStateWithLifecycle()
-    val isAiLoading by viewModel.isAiLoading.collectAsStateWithLifecycle()
-
-    if (isAiLoading || aiProductDetails != null) {
-        AlertDialog(
-            onDismissRequest = { viewModel.clearAiProductDetails() },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Detalhes com IA")
-                }
-            },
-            text = {
-                if (isAiLoading) {
-                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                } else {
-                    Text(aiProductDetails ?: "")
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.clearAiProductDetails() }) {
-                    Text("Fechar")
-                }
-            }
-        )
-    }
 
 
     val context = LocalContext.current
@@ -632,13 +596,6 @@ fun ProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, appT
             }
         }
 
-        Spacer(modifier = Modifier.width(8.dp))
-        androidx.compose.material3.IconButton(
-            onClick = { viewModel.consultProductInfoAi(product) },
-            modifier = Modifier.background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape)
-        ) {
-            Icon(Icons.Default.AutoAwesome, contentDescription = "IA Info", tint = MaterialTheme.colorScheme.onTertiaryContainer)
-        }
     }
 }
 
