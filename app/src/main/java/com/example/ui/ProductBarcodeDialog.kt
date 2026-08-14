@@ -116,6 +116,13 @@ fun ProductBarcodeDialog(product: Product, onDismiss: () -> Unit) {
                             modifier = Modifier.fillMaxWidth(),
                             textAlign = TextAlign.Center
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = product.category.uppercase(),
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.secondary,
+                            textAlign = TextAlign.Center
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
 
                         val barcodeBitmap = generateBarcodeBitmap(product.code, scannerProfile)

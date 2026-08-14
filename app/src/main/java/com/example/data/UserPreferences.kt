@@ -5,13 +5,25 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
+import org.json.JSONObject
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+
+data class AppNotification(
+    val id: Long,
+    val type: String,
+    val title: String,
+    val body: String,
+    val read: Boolean,
+    val timestamp: Long
+)
 
 class UserPreferences(private val context: Context) {
     val vibrateOnClick: Flow<Boolean> = context.dataStore.data.map { preferences ->
@@ -37,6 +49,15 @@ class UserPreferences(private val context: Context) {
     }
     val barcodeTitleScale: Flow<Float> = context.dataStore.data.map { preferences ->
         preferences[BARCODE_TITLE_SCALE] ?: 1.0f
+    }
+    val mostUsedLimit: Flow<Int> = context.dataStore.data.map { preferences ->
+        preferences[MOST_USED_LIMIT] ?: 8
+    }
+    val carouselIntervalSeconds: Flow<Int> = context.dataStore.data.map { preferences ->
+        preferences[CAROUSEL_INTERVAL_SECONDS] ?: 5
+    }
+    val notificationHistory: Flow<List<AppNotification>> = context.dataStore.data.map { preferences ->
+        decodeNotifications(preferences[NOTIFICATION_HISTORY_JSON].orEmpty())
     }
     val bannerImageUri: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[BANNER_IMAGE_URI]
@@ -94,6 +115,32 @@ class UserPreferences(private val context: Context) {
     suspend fun setBarcodeTitleScale(scale: Float) {
         context.dataStore.edit { it[BARCODE_TITLE_SCALE] = scale.coerceIn(0.8f, 1.5f) }
     }
+    suspend fun setMostUsedLimit(limit: Int) {
+        context.dataStore.edit { it[MOST_USED_LIMIT] = limit.coerceIn(1, 50) }
+    }
+    suspend fun setCarouselIntervalSeconds(seconds: Int) {
+        context.dataStore.edit { it[CAROUSEL_INTERVAL_SECONDS] = seconds.coerceIn(3, 30) }
+    }
+    suspend fun addNotification(notification: AppNotification) {
+        context.dataStore.edit { preferences ->
+            val current = decodeNotifications(preferences[NOTIFICATION_HISTORY_JSON].orEmpty())
+            val updated = (listOf(notification) + current).distinctBy { it.id }.take(50)
+            preferences[NOTIFICATION_HISTORY_JSON] = encodeNotifications(updated)
+        }
+    }
+    suspend fun markNotificationRead(id: Long) {
+        context.dataStore.edit { preferences ->
+            val updated = decodeNotifications(preferences[NOTIFICATION_HISTORY_JSON].orEmpty())
+                .map { if (it.id == id) it.copy(read = true) else it }
+            preferences[NOTIFICATION_HISTORY_JSON] = encodeNotifications(updated)
+        }
+    }
+    suspend fun markAllNotificationsRead() {
+        context.dataStore.edit { preferences ->
+            val updated = decodeNotifications(preferences[NOTIFICATION_HISTORY_JSON].orEmpty()).map { it.copy(read = true) }
+            preferences[NOTIFICATION_HISTORY_JSON] = encodeNotifications(updated)
+        }
+    }
     suspend fun setBannerImageUri(uri: String?) {
         context.dataStore.edit { if (uri == null) it.remove(BANNER_IMAGE_URI) else it[BANNER_IMAGE_URI] = uri }
     }
@@ -140,11 +187,46 @@ class UserPreferences(private val context: Context) {
         val FONT_SCALE = floatPreferencesKey("font_scale")
         val BARCODE_NUMBER_SCALE = floatPreferencesKey("barcode_number_scale")
         val BARCODE_TITLE_SCALE = floatPreferencesKey("barcode_title_scale")
+        val MOST_USED_LIMIT = intPreferencesKey("most_used_limit")
+        val CAROUSEL_INTERVAL_SECONDS = intPreferencesKey("carousel_interval_seconds")
+        val NOTIFICATION_HISTORY_JSON = stringPreferencesKey("notification_history_json")
         val BANNER_IMAGE_URI = stringPreferencesKey("banner_image_uri")
         val LAST_NOTIFIED_PRODUCT_CODE = stringPreferencesKey("last_notified_product_code")
         val APP_THEME = stringPreferencesKey("app_theme")
         val APP_ICON = stringPreferencesKey("app_icon")
         val APPEARANCE_MODE = stringPreferencesKey("appearance_mode")
         val ONBOARDING_SHOWN = booleanPreferencesKey("onboarding_shown")
+    }
+
+    private fun encodeNotifications(items: List<AppNotification>): String {
+        val array = JSONArray()
+        items.forEach { item ->
+            array.put(JSONObject().apply {
+                put("id", item.id)
+                put("type", item.type)
+                put("title", item.title)
+                put("body", item.body)
+                put("read", item.read)
+                put("timestamp", item.timestamp)
+            })
+        }
+        return array.toString()
+    }
+
+    private fun decodeNotifications(json: String): List<AppNotification> = try {
+        val array = JSONArray(json)
+        (0 until array.length()).mapNotNull { index ->
+            val item = array.optJSONObject(index) ?: return@mapNotNull null
+            AppNotification(
+                id = item.optLong("id"),
+                type = item.optString("type"),
+                title = item.optString("title"),
+                body = item.optString("body"),
+                read = item.optBoolean("read", false),
+                timestamp = item.optLong("timestamp")
+            )
+        }
+    } catch (_: Exception) {
+        emptyList()
     }
 }

@@ -36,11 +36,14 @@ interface ProductDao {
     @Query("SELECT * FROM products WHERE isFavorite = 1 ORDER BY name ASC")
     fun getFavorites(): Flow<List<Product>>
 
-    @Query("SELECT * FROM products ORDER BY searchCount DESC LIMIT 8")
-    fun getMostUsed(): Flow<List<Product>>
+    @Query("SELECT * FROM products ORDER BY searchCount DESC LIMIT :limit")
+    fun getMostUsed(limit: Int): Flow<List<Product>>
 
     @Query("SELECT * FROM products WHERE lastSearchedAt > 0 ORDER BY lastSearchedAt DESC LIMIT 10")
     fun getHistory(): Flow<List<Product>>
+
+    @Query("UPDATE products SET lastSearchedAt = 0")
+    suspend fun clearHistory()
 
     @Query("SELECT * FROM products WHERE category = :category ORDER BY name ASC")
     fun getProductsByCategory(category: String): Flow<List<Product>>

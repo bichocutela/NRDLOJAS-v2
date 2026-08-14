@@ -52,8 +52,12 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     val newProductsCount: StateFlow<Int> = _newProductsCount.asStateFlow()
 
     val favorites = repository.favorites.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val mostUsed = repository.mostUsed.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val mostUsed = userPreferences.mostUsedLimit
+        .flatMapLatest { repository.mostUsed(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val history = repository.history.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val notificationHistory = userPreferences.notificationHistory
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val allProducts = repository.allProducts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val productsCountByCategory = repository.productsCountByCategory.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val latestProductLocal = repository.latestProductLocal.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -140,6 +144,18 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         }
     }
 
+    fun clearHistory() {
+        viewModelScope.launch { repository.clearHistory() }
+    }
+
+    fun markNotificationRead(id: Long) {
+        viewModelScope.launch { userPreferences.markNotificationRead(id) }
+    }
+
+    fun markAllNotificationsRead() {
+        viewModelScope.launch { userPreferences.markAllNotificationsRead() }
+    }
+
     fun toggleFavorite(product: Product) {
         viewModelScope.launch {
             repository.toggleFavorite(product)
@@ -199,6 +215,8 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     }
 
     fun getProductsByCategory(category: String) = repository.getProductsByCategory(category)
+    fun searchProducts(query: String) = repository.searchProducts(query)
+    fun searchProductsByCategory(category: String, query: String) = repository.searchProductsByCategory(category, query)
 
     suspend fun checkDuplicateCode(code: String, currentId: Int? = null): Product? {
         val normalizedCode = code.trim()
@@ -411,16 +429,32 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             try {
                 repository.cleanDuplicates()
                 val remoteProducts = FirebaseService.getAllProducts()
+                val officialCategories = ProductStandards.officialCategories.toSet()
+                val legacyProducts = remoteProducts.filter { it.category !in officialCategories }
+                val legacyCounts = legacyProducts.groupingBy { it.category.ifBlank { "(vazia)" } }.eachCount()
+                if (legacyProducts.isNotEmpty()) {
+                    android.util.Log.i("ProductMigration", "Categorias antes: $legacyCounts; total=${remoteProducts.size}")
+                    legacyProducts.forEach { product ->
+                        FirebaseService.saveProduct(product.copy(category = "Mercearia"))
+                    }
+                }
+                val migratedProducts = remoteProducts.map { product ->
+                    if (product.category !in officialCategories) product.copy(category = "Mercearia") else product
+                }
+                android.util.Log.i(
+                    "ProductMigration",
+                    "Categorias depois: ${migratedProducts.groupingBy { it.category }.eachCount()}; total=${migratedProducts.size}; migrados=${legacyProducts.size}"
+                )
                 
                     val localProducts = repository.getAllProductsSync()
-                    val remoteIds = remoteProducts.map { it.code }.toSet()
+                    val remoteIds = migratedProducts.map { it.code }.toSet()
                     val toDelete = localProducts.filter { it.code !in remoteIds }
                     
                     if (toDelete.isNotEmpty()) {
                         repository.deleteProducts(toDelete)
                     }
                     
-                    val missingOrUpdated = remoteProducts.mapNotNull { remote ->
+                    val missingOrUpdated = migratedProducts.mapNotNull { remote ->
                         val local = localProducts.find { it.code == remote.code }
                         if (local == null) {
                             remote

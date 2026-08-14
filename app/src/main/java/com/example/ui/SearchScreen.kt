@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.Restaurant
@@ -39,7 +41,13 @@ import androidx.compose.material.icons.filled.BakeryDining
 import androidx.compose.material.icons.filled.Sanitizer
 import androidx.compose.material.icons.filled.LocalLaundryService
 import androidx.compose.material.icons.filled.SetMeal
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -51,6 +59,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -85,6 +95,9 @@ import android.os.Vibrator
 import android.content.Context
 import android.os.VibrationEffect
 import android.os.Build
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
 
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -94,6 +107,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import com.example.data.Product
+import com.example.data.AppNotification
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.FilterQuality
 import com.google.zxing.EncodeHintType
@@ -178,6 +192,26 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
     val newProductsCount by viewModel.newProductsCount.collectAsStateWithLifecycle()
 
     var isScannerOpen by remember { mutableStateOf(false) }
+    var showProductSearchSheet by remember { mutableStateOf(false) }
+    var showMostUsedSheet by remember { mutableStateOf(false) }
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
+    var showNotificationsSheet by remember { mutableStateOf(false) }
+    var selectedNotificationProduct by remember { mutableStateOf<Product?>(null) }
+    var showClearHistoryDialog by remember { mutableStateOf(false) }
+    var sheetQuery by remember { mutableStateOf("") }
+    val notificationHistory by viewModel.notificationHistory.collectAsStateWithLifecycle()
+    val unreadNotifications = notificationHistory.count { !it.read }
+    val mostUsedLimit by viewModel.userPreferences.mostUsedLimit.collectAsStateWithLifecycle(initialValue = 8)
+    val carouselIntervalSeconds by viewModel.userPreferences.carouselIntervalSeconds.collectAsStateWithLifecycle(initialValue = 5)
+    val mostUsedListState = rememberLazyListState()
+    val voiceLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spokenText = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            if (!spokenText.isNullOrBlank()) viewModel.updateSearchQuery(spokenText)
+        }
+    }
 
     if (isScannerOpen) {
         BarcodeScannerScreen(
@@ -193,6 +227,17 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
 
 
     val context = LocalContext.current
+
+    LaunchedEffect(mostUsed, carouselIntervalSeconds) {
+        if (mostUsed.isEmpty()) return@LaunchedEffect
+        while (true) {
+            delay(carouselIntervalSeconds * 1000L)
+            if (!mostUsedListState.isScrollInProgress) {
+                val nextIndex = (mostUsedListState.firstVisibleItemIndex + 1) % mostUsed.size
+                mostUsedListState.animateScrollToItem(nextIndex)
+            }
+        }
+    }
 
     Column(
             modifier = Modifier.fillMaxSize()
@@ -264,6 +309,16 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                     )
                 }
             }
+            IconButton(
+                onClick = { showNotificationsSheet = true },
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 48.dp, end = 8.dp)
+            ) {
+                BadgedBox(
+                    badge = { if (unreadNotifications > 0) Badge { Text(unreadNotifications.toString()) } }
+                ) {
+                    Icon(Icons.Default.Notifications, contentDescription = "Notificações", tint = Color.White)
+                }
+            }
         }
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -291,8 +346,15 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                             IconButton(onClick = { isScannerOpen = true }) {
                                 Icon(Icons.Default.CameraAlt, contentDescription = "Scanner QR", tint = MaterialTheme.colorScheme.primary)
                             }
-                            IconButton(onClick = { /* TODO Voice Search */ }) {
-                                Icon(Icons.Default.Mic, contentDescription = "Voz", tint = MaterialTheme.colorScheme.primary)
+                            IconButton(onClick = {
+                                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
+                                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Diga o nome ou código do produto")
+                                }
+                                voiceLauncher.launch(intent)
+                            }) {
+                                Icon(Icons.Default.Mic, contentDescription = "Pesquisar por voz", tint = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
@@ -310,7 +372,10 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
             Spacer(modifier = Modifier.height(16.dp))
             
             Button(
-                onClick = { /* Do search */ },
+                onClick = {
+                    sheetQuery = searchQuery
+                    showProductSearchSheet = true
+                },
                 shape = RoundedCornerShape(32.dp), // Estilo balão gigante
                 modifier = Modifier.fillMaxWidth().height(64.dp),
                 colors = ButtonDefaults.buttonColors(
@@ -340,13 +405,14 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 item {
-                    CategorySection(viewModel, appTheme)
+                    CategorySection(viewModel, appTheme, onCategoryClick = { selectedCategory = it })
                 }
 
                 if (mostUsed.isNotEmpty()) {
                     item {
-                        SectionHeader("Mais Utilizados")
+                        SectionHeader("Mais Utilizados", actionLabel = "VER TODOS", onAction = { showMostUsedSheet = true })
                         LazyRow(
+                            state = mostUsedListState,
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
@@ -359,7 +425,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
 
                 if (history.isNotEmpty()) {
                     item {
-                        SectionHeader("Histórico Recente")
+                        SectionHeader("Histórico Recente", actionLabel = "Limpar Histórico", onAction = { showClearHistoryDialog = true })
                         Column(
                             modifier = Modifier.padding(horizontal = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -441,10 +507,126 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
             }
         }
 
+        if (showProductSearchSheet) {
+            val sheetResultsFlow = remember(sheetQuery) { viewModel.searchProducts(sheetQuery) }
+            val sheetResults by sheetResultsFlow.collectAsState(initial = emptyList())
+            ModalBottomSheet(onDismissRequest = { showProductSearchSheet = false }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Pesquisar Produtos", style = MaterialTheme.typography.headlineSmall)
+                    OutlinedTextField(
+                        value = sheetQuery,
+                        onValueChange = { sheetQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Pesquisar") }
+                    )
+                    val products = if (sheetQuery.isBlank()) {
+                        viewModel.allProducts.value.sortedByDescending { it.id }.take(10)
+                    } else sheetResults
+                    Text(
+                        if (sheetQuery.isBlank()) "Adicionados recentemente" else "Resultados",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(products, key = { _, item -> item.code }) { index, product ->
+                            ProductCard(product, viewModel, index, appTheme)
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showMostUsedSheet) {
+            ModalBottomSheet(onDismissRequest = { showMostUsedSheet = false }) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text("Mais Utilizados", style = MaterialTheme.typography.headlineSmall)
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(mostUsed, key = { _, item -> item.code }) { index, product ->
+                            ProductCard(product, viewModel, index, appTheme)
+                        }
+                    }
+                }
+            }
+        }
+
+        selectedCategory?.let { category ->
+            CategoryProductsSheet(
+                category = category,
+                viewModel = viewModel,
+                appTheme = appTheme,
+                onDismiss = { selectedCategory = null }
+            )
+        }
+
+        if (showNotificationsSheet) {
+            ModalBottomSheet(onDismissRequest = { showNotificationsSheet = false }) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Notificações", style = MaterialTheme.typography.headlineSmall)
+                        TextButton(onClick = { viewModel.markAllNotificationsRead() }) { Text("Marcar todas como lidas") }
+                    }
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(notificationHistory, key = { _, item -> item.id }) { _, notification ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    viewModel.markNotificationRead(notification.id)
+                                    selectedNotificationProduct = viewModel.allProducts.value.firstOrNull {
+                                        it.name.equals(notification.body, ignoreCase = true) || it.name.contains(notification.body, ignoreCase = true)
+                                    }
+                                    showNotificationsSheet = false
+                                },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (notification.read) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primaryContainer
+                                )
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(notification.title, fontWeight = FontWeight.Bold)
+                                    Text(notification.body, style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        if (notification.type == "CODE_CHANGED") "CÓDIGO ALTERADO" else "NOVO PRODUTO",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        selectedNotificationProduct?.let { product ->
+            ProductBarcodeDialog(product = product, onDismiss = { selectedNotificationProduct = null })
+        }
+
+        if (showClearHistoryDialog) {
+            AlertDialog(
+                onDismissRequest = { showClearHistoryDialog = false },
+                title = { Text("Limpar Histórico") },
+                text = { Text("Deseja limpar somente o histórico recente de produtos?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.clearHistory()
+                        showClearHistoryDialog = false
+                    }) { Text("Limpar") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearHistoryDialog = false }) { Text("Cancelar") }
+                }
+            )
+        }
+
     }
 
 @Composable
-fun SectionHeader(title: String) {
+fun SectionHeader(title: String, actionLabel: String? = null, onAction: (() -> Unit)? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -457,21 +639,16 @@ fun SectionHeader(title: String) {
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        if (title == "Mais Utilizados") {
-            Text(
-                text = "IA ATIVA",
-                style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp),
-                color = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier
-                    .background(MaterialTheme.colorScheme.primary, CircleShape)
-                    .padding(horizontal = 8.dp, vertical = 2.dp)
-            )
+        if (actionLabel != null && onAction != null) {
+            TextButton(onClick = onAction) {
+                Text(actionLabel, style = MaterialTheme.typography.labelSmall)
+            }
         }
     }
 }
 
 @Composable
-fun CategorySection(viewModel: MainViewModel, appTheme: String) {
+fun CategorySection(viewModel: MainViewModel, appTheme: String, onCategoryClick: (String) -> Unit = {}) {
     val categories = listOf(
         Pair("Açougue", MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer),
         Pair("Cafeteria", MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer),
@@ -492,7 +669,7 @@ fun CategorySection(viewModel: MainViewModel, appTheme: String) {
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
                     .background(dynamicColors.first)
-                    .clickable { viewModel.updateSearchQuery(category) }
+                    .clickable { onCategoryClick(category) }
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -501,6 +678,38 @@ fun CategorySection(viewModel: MainViewModel, appTheme: String) {
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     color = dynamicColors.second
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun CategoryProductsSheet(
+    category: String,
+    viewModel: MainViewModel,
+    appTheme: String,
+    onDismiss: () -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+    val productsFlow = remember(category, query) { viewModel.searchProductsByCategory(category, query) }
+    val products by productsFlow.collectAsState(initial = emptyList())
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(category.uppercase(), style = MaterialTheme.typography.headlineSmall)
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Pesquisar em $category") }
+            )
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                itemsIndexed(products, key = { _, item -> item.code }) { index, product ->
+                    ProductCard(product, viewModel, index, appTheme)
+                }
             }
         }
     }

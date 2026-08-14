@@ -31,6 +31,9 @@ fun MestreScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val mostUsedLimit by viewModel.userPreferences.mostUsedLimit.collectAsStateWithLifecycle(initialValue = 8)
+    val carouselIntervalSeconds by viewModel.userPreferences.carouselIntervalSeconds.collectAsStateWithLifecycle(initialValue = 5)
+    val coroutineScope = rememberCoroutineScope()
     
     LaunchedEffect(Unit) {
         viewModel.syncMessage.collect { message ->
@@ -89,6 +92,27 @@ fun MestreScreen(
                     Icon(Icons.Default.Sync, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Sincronizar Banco de Dados")
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Mais Utilizados", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    Text("Quantidade de produtos: $mostUsedLimit", style = MaterialTheme.typography.bodyMedium)
+                    Slider(
+                        value = mostUsedLimit.toFloat(),
+                        onValueChange = { coroutineScope.launch { viewModel.userPreferences.setMostUsedLimit(it.toInt()) } },
+                        valueRange = 1f..50f,
+                        steps = 48
+                    )
+                    Text("Tempo do carrossel: ${carouselIntervalSeconds}s", style = MaterialTheme.typography.bodyMedium)
+                    Slider(
+                        value = carouselIntervalSeconds.toFloat(),
+                        onValueChange = { coroutineScope.launch { viewModel.userPreferences.setCarouselIntervalSeconds(it.toInt()) } },
+                        valueRange = 3f..30f,
+                        steps = 26
+                    )
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))

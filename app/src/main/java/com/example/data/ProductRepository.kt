@@ -16,7 +16,7 @@ class ProductRepository(
 
     val allProducts: Flow<List<Product>> = dao.getAllProducts()
     val favorites: Flow<List<Product>> = dao.getFavorites()
-    val mostUsed: Flow<List<Product>> = dao.getMostUsed()
+    fun mostUsed(limit: Int): Flow<List<Product>> = dao.getMostUsed(limit)
     val history: Flow<List<Product>> = dao.getHistory()
     val productsCountByCategory: Flow<List<CategoryCount>> = dao.getProductsCountByCategory()
     val latestProductLocal = dao.getLatestProduct()
@@ -29,6 +29,7 @@ class ProductRepository(
     suspend fun getAllProductsSync() = dao.getAllProductsSync()
     suspend fun getProductByCodeSync(code: String) = dao.getProductByCodeSync(code)
     suspend fun cleanDuplicates() = dao.deleteDuplicates()
+    suspend fun clearHistory() = dao.clearHistory()
 
     suspend fun searchProductsSync(query: String): List<Product> {
         val products = dao.getAllProductsSync()
@@ -39,6 +40,11 @@ class ProductRepository(
     fun getProductsByCategory(category: String): Flow<List<Product>> {
         return dao.getProductsByCategory(category)
     }
+
+    fun searchProductsByCategory(category: String, query: String): Flow<List<Product>> =
+        dao.getProductsByCategory(category).map { products ->
+            if (query.isBlank()) products else rankProductsByRelevance(products, query)
+        }
 
     suspend fun toggleFavorite(product: Product) {
         dao.updateProduct(product.copy(isFavorite = !product.isFavorite))

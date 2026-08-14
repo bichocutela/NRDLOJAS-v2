@@ -58,7 +58,17 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 return@runBlocking
             }
 
-            Log.d(TAG, "Exibindo notificação local: type=$type, canal=$channelId")
+            preferences.addNotification(
+                com.example.data.AppNotification(
+                    id = System.currentTimeMillis(),
+                    type = type,
+                    title = title,
+                    body = body,
+                    read = false,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+            Log.d("MyFirebaseMessaging", "Exibindo notificação local: type=$type, canal=$channelId")
             NotificationHelper.showNotification(applicationContext, type, title, body)
         }
     }
