@@ -48,8 +48,11 @@ import com.example.ui.MainViewModel
 import com.example.ui.MainViewModelFactory
 import com.example.ui.theme.MyApplicationTheme
 
-import com.google.firebase.messaging.FirebaseMessaging
+import com.example.util.FcmTopicSubscription
 import com.example.util.NotificationHelper
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 
 class MainActivity : ComponentActivity() {
@@ -76,18 +79,12 @@ class MainActivity : ComponentActivity() {
 
         super.onCreate(savedInstanceState)
         
-        try {
-            FirebaseMessaging.getInstance().subscribeToTopic("products")
-                .addOnCompleteListener { task ->
-                    if (!task.isSuccessful) {
-                        android.util.Log.e("FCM", "Failed to subscribe to topic")
-                    }
-                }
-        } catch(e: Exception) {
-            android.util.Log.e("FCM", "Firebase not configured")
-        }
-
         com.example.data.FirebaseService.initialize(this)
+
+        lifecycleScope.launch {
+            val notificationsEnabled = userPreferences.notificationsEnabled.first()
+            FcmTopicSubscription.reconcile(notificationsEnabled)
+        }
 
         val crashLog = CrashReporter.getCrashLog(this)
         if (crashLog != null) {

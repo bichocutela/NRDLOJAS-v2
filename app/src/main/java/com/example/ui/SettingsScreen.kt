@@ -1,5 +1,6 @@
 package com.example.ui
 
+import com.example.util.FcmTopicSubscription
 import com.example.util.NotificationHelper
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
@@ -232,7 +233,15 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Notificações Gerais")
-                Switch(checked = notificationsEnabled, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setNotificationsEnabled(it) } })
+                Switch(
+                    checked = notificationsEnabled,
+                    onCheckedChange = { enabled ->
+                        coroutineScope.launch {
+                            viewModel.userPreferences.setNotificationsEnabled(enabled)
+                            FcmTopicSubscription.reconcile(enabled)
+                        }
+                    }
+                )
             }
             if (notificationsEnabled) {
                 Text("Preferências de notificações", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.secondary)
