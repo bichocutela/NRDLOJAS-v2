@@ -683,6 +683,7 @@ fun CategorySection(viewModel: MainViewModel, appTheme: String, onCategoryClick:
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoryProductsSheet(
     category: String,
