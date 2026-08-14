@@ -51,7 +51,13 @@ object FirebaseService {
             json.put("topic", "products")
 
             val requestBody = okhttp3.RequestBody.create("application/json".toMediaType(), json.toString())
-            val firebaseToken = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token ?: ""
+            val firebaseToken = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
+            if (firebaseToken.isNullOrBlank()) {
+                Log.w("FirebaseService", "FCM não enviado: usuário Firebase não autenticado ou Firebase ID Token indisponível")
+                return
+            }
+
+            Log.d("FirebaseService", "Firebase ID Token obtido para enviar FCM")
             val request = okhttp3.Request.Builder()
                 .url("$supabaseUrl/functions/v1/send-fcm")
                 .post(requestBody)
@@ -59,11 +65,15 @@ object FirebaseService {
                 .addHeader("x-firebase-token", firebaseToken)
                 .build()
 
-            val response = okHttpClient.newCall(request).execute()
-            if (!response.isSuccessful) {
-                Log.e("FirebaseService", "Error calling send-fcm: ${response.code} ${response.message} ${response.body?.string()}")
-            } else {
-                Log.d("FirebaseService", "FCM sent successfully")
+            Log.d("FirebaseService", "Chamada send-fcm iniciada")
+            okHttpClient.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string().orEmpty()
+                Log.d("FirebaseService", "send-fcm HTTP status: ${response.code}")
+                if (!response.isSuccessful) {
+                    Log.e("FirebaseService", "send-fcm falhou: HTTP ${response.code} ${response.message}; corpo: $responseBody")
+                } else {
+                    Log.d("FirebaseService", "FCM enviado com sucesso")
+                }
             }
         } catch (e: Exception) {
             Log.e("FirebaseService", "Error publishing product event via FCM", e)
