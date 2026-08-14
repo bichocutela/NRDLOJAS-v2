@@ -152,10 +152,6 @@ serve(async (req) => {
       throw new Error("Unsupported notification type")
     }
 
-    const channelId = title === "Código alterado"
-      ? "product_code_changed"
-      : "product_added"
-
     const accessToken = await getAccessToken(serviceAccount)
     const projectId = serviceAccount.project_id || FIREBASE_PROJECT_ID
 
@@ -170,10 +166,6 @@ serve(async (req) => {
         body: JSON.stringify({
           message: {
             topic,
-            notification: {
-              title,
-              body,
-            },
             data: {
               title,
               body,
@@ -181,10 +173,6 @@ serve(async (req) => {
             },
             android: {
               priority: "high",
-              notification: {
-                channel_id: channelId,
-                sound: "default",
-              },
             },
           },
         }),
@@ -200,10 +188,9 @@ serve(async (req) => {
       throw new Error(`FCM error ${fcmResponse.status}: ${resultText}`)
     }
 
-    console.info("[send-fcm] FCM enviado com sucesso", {
+    console.info("[send-fcm] FCM data-only enviado com sucesso", {
       topic,
       title,
-      channelId,
       result: resultText,
     })
 

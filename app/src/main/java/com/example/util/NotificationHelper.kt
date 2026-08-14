@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.R
 
+import android.util.Log
 import android.widget.Toast
 
 object NotificationHelper {
@@ -79,19 +80,27 @@ object NotificationHelper {
     }
 
     
-    fun showNotification(context: Context, title: String, body: String) {
+    fun channelIdForType(type: String): String? = when (type) {
+        "NEW_PRODUCT" -> "product_added"
+        "CODE_CHANGED" -> "product_code_changed"
+        else -> null
+    }
+
+    fun showNotification(context: Context, type: String, title: String, body: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                Log.w("NotificationHelper", "Notificação local ignorada: permissão POST_NOTIFICATIONS ausente; type=$type")
                 return
             }
         }
-        
-        val targetChannelId = when (title) {
-            "Produto adicionado" -> "product_added"
-            "Código alterado" -> "product_code_changed"
-            else -> CHANNEL_ID
+
+        val targetChannelId = channelIdForType(type)
+        if (targetChannelId == null) {
+            Log.w("NotificationHelper", "Notificação local ignorada: type inválido ($type)")
+            return
         }
 
+        Log.d("NotificationHelper", "Exibindo notificação local: type=$type, canal=$targetChannelId")
         val builder = NotificationCompat.Builder(context, targetChannelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
