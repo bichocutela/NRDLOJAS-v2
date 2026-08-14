@@ -3,6 +3,7 @@ package com.example.data
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.text.Normalizer
+import java.util.Locale
 import kotlin.math.min
 
 class ProductRepository(
@@ -21,49 +22,19 @@ class ProductRepository(
     val productsCountByCategory: Flow<List<CategoryCount>> = dao.getProductsCountByCategory()
     val latestProductLocal = dao.getLatestProduct()
 
-    fun searchProducts(query: String): Flow<List<Product>> {
-        val normalizedQuery = query.unaccent().lowercase().trim()
-        val tokens = normalizedQuery.split("\\s+".toRegex()).filter { it.isNotEmpty() }
-        
-        return dao.getAllProducts().map { products ->
-            if (tokens.isEmpty()) return@map emptyList()
-            
-            products.filter { product ->
-                val searchName = product.searchName
-                val code = product.code
-                val category = product.category.unaccent().lowercase()
-                
-                if (code.contains(normalizedQuery)) return@filter true
-                
-                tokens.all { token ->
-                    searchName.contains(token) || isTypoMatch(token, searchName) || category.contains(token)
-                }
-            }.sortedWith(compareByDescending<Product> { it.searchCount }.thenBy { it.name })
+    fun searchProducts(query: String): Flow<List<Product>> =
+        dao.getAllProducts().map { products ->
+            if (query.isBlank()) emptyList() else rankProductsByRelevance(products, query)
         }
-    }
 
     suspend fun getAllProductsSync() = dao.getAllProductsSync()
     suspend fun getProductByCodeSync(code: String) = dao.getProductByCodeSync(code)
     suspend fun cleanDuplicates() = dao.deleteDuplicates()
 
     suspend fun searchProductsSync(query: String): List<Product> {
-        val normalizedQuery = query.unaccent().lowercase().trim()
-        val tokens = normalizedQuery.split("\\s+".toRegex()).filter { it.isNotEmpty() }
-        
         val products = dao.getAllProductsSync()
-        if (tokens.isEmpty()) return products
-        
-        return products.filter { product ->
-            val searchName = product.searchName
-            val code = product.code
-            val category = product.category.unaccent().lowercase()
-            
-            if (code.contains(normalizedQuery)) return@filter true
-            
-            tokens.all { token ->
-                searchName.contains(token) || isTypoMatch(token, searchName) || category.contains(token)
-            }
-        }.sortedWith(compareByDescending<Product> { it.searchCount }.thenBy { it.name })
+        // The chat assistant uses searchProductsSync("") to build its full context.
+        return if (query.isBlank()) products else rankProductsByRelevance(products, query)
     }
     
     fun getProductsByCategory(category: String): Flow<List<Product>> {
@@ -122,6 +93,53 @@ class ProductRepository(
     }
 }
 
+private data class SearchMatch(
+    val product: Product,
+    val relevance: Int,
+    val normalizedName: String,
+    val normalizedCode: String
+)
+
+internal fun rankProductsByRelevance(products: List<Product>, query: String): List<Product> {
+    val normalizedQuery = query.unaccent().lowercase(Locale.ROOT).trim()
+    if (normalizedQuery.isEmpty()) return emptyList()
+
+    val tokens = normalizedQuery.split("\\s+".toRegex()).filter { it.isNotEmpty() }
+    val ranked = products.mapNotNull { product ->
+        val normalizedName = product.name.unaccent().lowercase(Locale.ROOT).trim()
+        val searchName = product.searchName.unaccent().lowercase(Locale.ROOT).trim()
+            .ifBlank { normalizedName }
+        val normalizedCode = product.code.trim().lowercase(Locale.ROOT)
+        val category = product.category.unaccent().lowercase(Locale.ROOT).trim()
+        val nameWords = normalizedName.split("\\s+".toRegex()).filter { it.isNotEmpty() }
+
+        val relevance = when {
+            normalizedCode == normalizedQuery -> 0
+            normalizedCode.startsWith(normalizedQuery) -> 1
+            normalizedCode.contains(normalizedQuery) -> 2
+            normalizedName == normalizedQuery -> 3
+            normalizedName.startsWith(normalizedQuery) -> 4
+            nameWords.any { it.startsWith(normalizedQuery) } -> 5
+            normalizedName.contains(normalizedQuery) -> 6
+            tokens.all { token -> searchName.contains(token) } -> 7
+            tokens.all { token -> isTypoMatch(token, searchName) } -> 8
+            tokens.all { token -> category.contains(token) } -> 9
+            tokens.all { token -> searchName.contains(token) || category.contains(token) } -> 7
+            else -> null
+        } ?: return@mapNotNull null
+
+        SearchMatch(product, relevance, normalizedName, normalizedCode)
+    }
+
+    return ranked.sortedWith(
+        compareBy<SearchMatch> { it.relevance }
+            .thenBy { it.normalizedName }
+            .thenBy { it.product.name }
+            .thenBy { it.normalizedCode }
+            .thenByDescending { it.product.searchCount }
+    ).map { it.product }
+}
+
 fun String.unaccent(): String {
     val regex = "\\p{InCombiningDiacriticalMarks}+".toRegex()
     val temp = Normalizer.normalize(this, Normalizer.Form.NFD)
@@ -138,8 +156,18 @@ fun isTypoMatch(token: String, target: String): Boolean {
         // Allow up to 1 typo for words of length 3-4, and 2 typos for longer words
         val allowedTypos = if (token.length <= 4) 1 else 2
         val distance = levenshtein(token, word)
-        distance <= allowedTypos
+        distance <= allowedTypos || hasAdjacentTransposition(token, word)
     }
+}
+
+private fun hasAdjacentTransposition(lhs: String, rhs: String): Boolean {
+    if (lhs.length != rhs.length || lhs.length < 2) return false
+    for (index in 0 until lhs.lastIndex) {
+        if (lhs[index] != rhs[index] || lhs[index + 1] != rhs[index + 1]) {
+            return lhs[index] == rhs[index + 1] && lhs[index + 1] == rhs[index]
+        }
+    }
+    return false
 }
 
 fun levenshtein(lhs: CharSequence, rhs: CharSequence): Int {
