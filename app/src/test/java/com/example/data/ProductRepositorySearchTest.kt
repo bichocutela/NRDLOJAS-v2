@@ -18,26 +18,54 @@ class ProductRepositorySearchTest {
     )
 
     @Test
-    fun `pao encontra Pao e variantes de acento retornam os mesmos resultados`() {
+    fun `pao retorna somente nomes que contem pao ignorando acentos e caixa`() {
         val products = listOf(
-            product("1", "Pão Francês"),
-            product("2", "Pao de Açúcar"),
-            product("3", "Leite")
+            product("1", "Pão Italiano"),
+            product("2", "Pão de Chocolate"),
+            product("3", "Minhoca de Pão"),
+            product("4", "Rolo de Bolo com Pão"),
+            product("5", "Pão Tomate Seco"),
+            product("6", "Abacaxi"),
+            product("7", "Cará"),
+            product("8", "Coco"),
+            product("9", "Arroz"),
+            product("10", "Pato"),
+            product("11", "Poa"),
+            product("12", "Café", category = "Padaria")
         )
 
-        val pao = rankProductsByRelevance(products, "pao").map { it.code }
-        val uppercase = rankProductsByRelevance(products, "PÃO").map { it.code }
-
-        assertEquals(listOf("2", "1"), pao)
-        assertEquals(pao, uppercase)
+        assertEquals(
+            listOf("2", "1", "5", "3", "4"),
+            rankProductsByRelevance(products, "pao").map { it.code }
+        )
+        assertEquals(
+            listOf("2", "1", "5", "3", "4"),
+            rankProductsByRelevance(products, "PÃO").map { it.code }
+        )
     }
 
     @Test
-    fun `consulta de duas palavras prioriza nome que começa com a consulta`() {
+    fun `pao encontra a palavra em qualquer posicao do nome`() {
+        val products = listOf(
+            product("1", "Minhoca de Pão"),
+            product("2", "Rolo de Bolo com Pão"),
+            product("3", "Pão Tomate Seco"),
+            product("4", "Bolo de Chocolate")
+        )
+
+        assertEquals(
+            listOf("3", "1", "2"),
+            rankProductsByRelevance(products, "pao").map { it.code }
+        )
+    }
+
+    @Test
+    fun `consulta de varias palavras exige todos os termos no nome`() {
         val products = listOf(
             product("1", "Pão Francês"),
             product("2", "Biscoito sabor Pão Francês"),
-            product("3", "Pão de Forma Frances")
+            product("3", "Pão de Forma Frances"),
+            product("4", "Pão de Forma")
         )
 
         assertEquals(
@@ -47,7 +75,7 @@ class ProductRepositorySearchTest {
     }
 
     @Test
-    fun `frances encontra Pao Frances por inicio de palavra`() {
+    fun `frances encontra nome que contem a palavra ignorando acento`() {
         val products = listOf(
             product("1", "Pão Francês"),
             product("2", "Biscoito Integral")
@@ -57,18 +85,19 @@ class ProductRepositorySearchTest {
     }
 
     @Test
-    fun `typo fica abaixo de correspondencia textual real`() {
+    fun `nao existe fuzzy matching para poa ou outros nomes parecidos`() {
         val products = listOf(
-            product("1", "Poa Teste"),
-            product("2", "Pão"),
-            product("3", "Pato")
+            product("1", "Pão"),
+            product("2", "Poa"),
+            product("3", "Pato"),
+            product("4", "Abacaxi")
         )
 
-        assertEquals(listOf("1", "2"), rankProductsByRelevance(products, "poa").map { it.code })
+        assertEquals(emptyList<String>(), rankProductsByRelevance(products, "poa").map { it.code })
     }
 
     @Test
-    fun `codigo exato fica acima de correspondencias textuais`() {
+    fun `codigo exato continua acima de resultados textuais`() {
         val products = listOf(
             product("789123", "Arroz"),
             product("123", "Produto 789 especial"),
@@ -90,12 +119,12 @@ class ProductRepositorySearchTest {
     }
 
     @Test
-    fun `categoria correspondente permanece depois de correspondencia textual`() {
+    fun `categoria nao inclui produto cujo nome nao corresponde`() {
         val products = listOf(
             product("1", "Café", category = "Cafeteria"),
             product("2", "Bolo", category = "Cafeteria")
         )
 
-        assertEquals(listOf("1", "2"), rankProductsByRelevance(products, "cafe").map { it.code })
+        assertEquals(listOf("1"), rankProductsByRelevance(products, "cafe").map { it.code })
     }
 }
