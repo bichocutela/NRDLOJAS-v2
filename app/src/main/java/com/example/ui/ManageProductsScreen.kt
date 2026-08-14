@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.ui.theme.getDynamicThemeColor
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.data.Product
 import com.example.data.ProductStandards
 import kotlinx.coroutines.launch
@@ -41,7 +42,12 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Gerenciar Produtos") },
+                title = {
+                    Column {
+                        Text("Gerenciar produtos", style = MaterialTheme.typography.titleLarge)
+                        Text("Gerencie produtos e inventário", style = MaterialTheme.typography.labelMedium)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
@@ -51,13 +57,18 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
         }
     ) { innerPadding ->
         LazyColumn(
-            modifier = Modifier.padding(innerPadding).fillMaxSize()
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             itemsIndexed(products) { index, product ->
                 val dynColors = getDynamicThemeColor(index, appTheme, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, dynColors.first)
+                    border = androidx.compose.foundation.BorderStroke(1.dp, dynColors.first),
+                    shape = RoundedCornerShape(18.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp).fillMaxWidth(),
@@ -65,7 +76,11 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(product.name, style = MaterialTheme.typography.titleMedium)
-                            Text("Código: ${product.code} | Categoria: ${product.category}", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                            "Código ${product.code} • ${product.category}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         }
                         IconButton(onClick = {
                             name = product.name
@@ -159,7 +174,7 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             }
                         }
                     }) {
-                        Text("Salvar")
+                        Text("Salvar alterações")
                     }
                 },
                 dismissButton = {

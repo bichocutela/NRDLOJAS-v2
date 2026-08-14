@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -132,7 +134,17 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Painel Administrativo") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
+                    }
+                },
+                title = {
+                    Column {
+                        Text("Painel Administrativo", style = MaterialTheme.typography.titleLarge)
+                        Text("Gerencie produtos e inventário", style = MaterialTheme.typography.labelMedium)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -144,10 +156,16 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 20.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+                Text(
+                    "Ações rápidas",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(12.dp))
                 Button(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first,
@@ -163,17 +181,19 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             }
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Icon(Icons.Default.Save, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Exportar Inventário (PDF)")
+                    Text("Exportar PDF")
                 }
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             
             Text(
-                text = "Adicionar Novo Produto",
-                style = MaterialTheme.typography.titleLarge
+                text = "Adicionar produto",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.fillMaxWidth()
             )
             
             Spacer(modifier = Modifier.height(24.dp))
@@ -189,7 +209,8 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     ),
                     onClick = {
                         launcher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    }
+                    },
+                    shape = RoundedCornerShape(14.dp)
                 ) {
                     Icon(Icons.Default.AddAPhoto, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -210,7 +231,8 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         productImageUrl = ""
                         showManualForm = true
                         statusMessage = null
-                    }
+                    },
+                    shape = RoundedCornerShape(14.dp)
                 ) {
                     Icon(Icons.Default.Edit, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -223,11 +245,15 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             if (showManualForm) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp)
+                        modifier = Modifier.padding(20.dp)
                     ) {
+                        Text("Novo produto", style = MaterialTheme.typography.titleLarge)
+                        Spacer(modifier = Modifier.height(12.dp))
                         if (selectedBitmap != null) {
                             Image(
                                 bitmap = selectedBitmap!!.asImageBitmap(),
@@ -423,17 +449,43 @@ suspend fun analyzeImage(bitmap: Bitmap): ProductAnalysisResult? = withContext(D
 fun AdminProductList(products: List<Product>, viewModel: MainViewModel) {
     var searchQuery by remember { mutableStateOf("") }
     
-    Text("Gerenciar Produtos", style = MaterialTheme.typography.titleLarge)
-    Spacer(modifier = Modifier.height(16.dp))
+    Text("Gerenciar produtos", style = MaterialTheme.typography.headlineSmall)
+    Text(
+        "Pesquise e edite o inventário",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(12.dp))
     
     OutlinedTextField(
         value = searchQuery,
         onValueChange = { searchQuery = it },
         label = { Text("Pesquisar produto ou categoria") },
         modifier = Modifier.fillMaxWidth(),
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Pesquisar") }
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Pesquisar") },
+        placeholder = { Text("Pesquisar por nome, código ou categoria") },
+        shape = RoundedCornerShape(16.dp)
     )
-    
+    Spacer(modifier = Modifier.height(12.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = searchQuery.isBlank(),
+            onClick = { searchQuery = "" },
+            label = { Text("Todos") }
+        )
+        ProductStandards.officialCategories.forEach { category ->
+            FilterChip(
+                selected = searchQuery == category,
+                onClick = { searchQuery = category },
+                label = { Text(category) }
+            )
+        }
+    }
     Spacer(modifier = Modifier.height(16.dp))
     
     val filteredProducts = products.filter {
@@ -486,6 +538,8 @@ fun AdminProductItem(product: Product, viewModel: MainViewModel) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
+        shape = RoundedCornerShape(18.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -519,7 +573,15 @@ fun AdminProductItem(product: Product, viewModel: MainViewModel) {
                     }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
-                Text(text = product.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = product.name, style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Código ${product.code} • ${product.category}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 IconButton(onClick = { isEditing = !isEditing }) {
                     Icon(if (isEditing) Icons.Default.Close else Icons.Default.Edit, contentDescription = "Editar")
                 }
