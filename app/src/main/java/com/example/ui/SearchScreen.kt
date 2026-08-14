@@ -18,8 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -295,7 +293,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                 },
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp, start = 8.dp)
+                    .padding(top = 48.dp, start = 8.dp)
                     .background(Color.Transparent) // Transparent background
             ) {
                 BadgedBox(
@@ -314,7 +312,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
             }
             IconButton(
                 onClick = { showNotificationsSheet = true },
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp, end = 8.dp)
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 48.dp, end = 8.dp)
             ) {
                 BadgedBox(
                     badge = { if (unreadNotifications > 0) Badge { Text(unreadNotifications.toString()) } }
