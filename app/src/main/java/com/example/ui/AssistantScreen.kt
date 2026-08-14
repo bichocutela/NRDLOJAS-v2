@@ -27,7 +27,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -80,7 +79,7 @@ fun AssistantScreen(viewModel: MainViewModel) {
                 onValueChange = viewModel::updateChatInput,
                 modifier = Modifier
                     .weight(1f)
-                    .background(Color.White, RoundedCornerShape(24.dp)),
+                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(24.dp)),
                 placeholder = { Text("Qual o código do pão francês?") },
                 shape = RoundedCornerShape(24.dp),
                 colors = OutlinedTextFieldDefaults.colors(

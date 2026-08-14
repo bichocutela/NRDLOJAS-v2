@@ -38,13 +38,17 @@ private val DefaultDarkColorScheme = darkColorScheme(
     onSecondaryContainer = Color(0xFFFFE9BE),
     tertiary = Color(0xFF82B1FF),
     onTertiary = Color(0xFF00315C),
-    background = Color(0xFF101313),
-    onBackground = Color(0xFFE7EDEC),
-    surface = Color(0xFF151A1A),
-    onSurface = Color(0xFFE7EDEC),
-    surfaceVariant = Color(0xFF252B2B),
-    onSurfaceVariant = Color(0xFFC0C8C7),
-    outline = Color(0xFF899391)
+    background = Color(0xFF121212),
+    onBackground = Color(0xFFF5F5F5),
+    surface = Color(0xFF1E1E1E),
+    onSurface = Color(0xFFF5F5F5),
+    surfaceVariant = Color(0xFF242424),
+    onSurfaceVariant = Color(0xFFBDBDBD),
+    outline = Color(0xFF5A5A5A),
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6)
 )
 
 private fun getThemeColorScheme(themeName: String, darkTheme: Boolean) = when (themeName) {

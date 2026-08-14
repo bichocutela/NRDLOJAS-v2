@@ -299,11 +299,11 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.White, RoundedCornerShape(32.dp))
-                    .border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(32.dp)),
+                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(32.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(32.dp)),
                 colors = SearchBarDefaults.colors(
-                    containerColor = Color.Transparent,
-                    dividerColor = Color.Transparent,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    dividerColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
                 )
             ) {}
             
@@ -517,8 +517,8 @@ fun ProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, appT
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(Color.White)
-            .border(1.dp, MaterialTheme.colorScheme.surface, RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f), RoundedCornerShape(24.dp))
             .vibrateClickable(viewModel) { viewModel.onProductSearched(product); showDialog = true }
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -611,8 +611,8 @@ fun MiniProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, 
             .width(160.dp)
             .height(100.dp)
             .clip(RoundedCornerShape(24.dp))
-            .background(Color.White)
-            .border(1.dp, MaterialTheme.colorScheme.surface, RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f), RoundedCornerShape(24.dp))
             .vibrateClickable(viewModel) { viewModel.onProductSearched(product); showDialog = true }
             .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween
