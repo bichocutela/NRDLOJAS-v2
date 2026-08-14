@@ -292,6 +292,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                     onOpenDrawer()
                 },
                 modifier = Modifier
+                    .align(Alignment.TopStart)
                     .padding(top = 48.dp, start = 8.dp)
                     .background(Color.Transparent) // Transparent background
             ) {
@@ -305,7 +306,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                     Icon(
                         imageVector = Icons.Default.Menu, 
                         contentDescription = "Menu",
-                        tint = Color.White // White icon for visibility over the banner
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
@@ -316,7 +317,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                 BadgedBox(
                     badge = { if (unreadNotifications > 0) Badge { Text(unreadNotifications.toString()) } }
                 ) {
-                    Icon(Icons.Default.Notifications, contentDescription = "Notificações", tint = Color.White)
+                    Icon(Icons.Default.Notifications, contentDescription = "Notificações", tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }
