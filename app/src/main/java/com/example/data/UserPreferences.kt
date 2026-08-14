@@ -32,6 +32,12 @@ class UserPreferences(private val context: Context) {
     val fontScale: Flow<Float> = context.dataStore.data.map { preferences ->
         preferences[FONT_SCALE] ?: 1.0f
     }
+    val barcodeNumberScale: Flow<Float> = context.dataStore.data.map { preferences ->
+        preferences[BARCODE_NUMBER_SCALE] ?: 1.0f
+    }
+    val barcodeTitleScale: Flow<Float> = context.dataStore.data.map { preferences ->
+        preferences[BARCODE_TITLE_SCALE] ?: 1.0f
+    }
     val bannerImageUri: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[BANNER_IMAGE_URI]
     }
@@ -82,6 +88,12 @@ class UserPreferences(private val context: Context) {
     suspend fun setFontScale(scale: Float) {
         context.dataStore.edit { it[FONT_SCALE] = scale }
     }
+    suspend fun setBarcodeNumberScale(scale: Float) {
+        context.dataStore.edit { it[BARCODE_NUMBER_SCALE] = scale.coerceIn(0.8f, 1.6f) }
+    }
+    suspend fun setBarcodeTitleScale(scale: Float) {
+        context.dataStore.edit { it[BARCODE_TITLE_SCALE] = scale.coerceIn(0.8f, 1.5f) }
+    }
     suspend fun setBannerImageUri(uri: String?) {
         context.dataStore.edit { if (uri == null) it.remove(BANNER_IMAGE_URI) else it[BANNER_IMAGE_URI] = uri }
     }
@@ -126,6 +138,8 @@ class UserPreferences(private val context: Context) {
         val NOTIFICATIONS_PRODUCT_ADDED_ENABLED = booleanPreferencesKey("notifications_product_added_enabled")
         val NOTIFICATIONS_CODE_CHANGED_ENABLED = booleanPreferencesKey("notifications_code_changed_enabled")
         val FONT_SCALE = floatPreferencesKey("font_scale")
+        val BARCODE_NUMBER_SCALE = floatPreferencesKey("barcode_number_scale")
+        val BARCODE_TITLE_SCALE = floatPreferencesKey("barcode_title_scale")
         val BANNER_IMAGE_URI = stringPreferencesKey("banner_image_uri")
         val LAST_NOTIFIED_PRODUCT_CODE = stringPreferencesKey("last_notified_product_code")
         val APP_THEME = stringPreferencesKey("app_theme")

@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
+import coil.compose.AsyncImage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -29,11 +30,14 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.Product
+import com.example.data.UserPreferences
+import com.example.util.ImageUrlHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -42,6 +46,18 @@ fun ProductBarcodeDialog(product: Product, onDismiss: () -> Unit) {
     val showDialog = remember { mutableStateOf(true) }
     val animateIn = remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val userPreferences = remember { UserPreferences(context) }
+    val barcodeNumberScale by userPreferences.barcodeNumberScale.collectAsState(initial = 1.0f)
+    val barcodeTitleScale by userPreferences.barcodeTitleScale.collectAsState(initial = 1.0f)
+    val photoUrl = remember(product.imageUrl) {
+        product.imageUrl
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let(ImageUrlHelper::normalizeUrl)
+            ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+    }
+    var showPhotoDialog by remember { mutableStateOf(false) }
     
     var scannerProfile by remember { mutableStateOf("Padrão") }
     var zoomPercent by remember { mutableIntStateOf(100) }
@@ -82,13 +98,23 @@ fun ProductBarcodeDialog(product: Product, onDismiss: () -> Unit) {
                     ) {
                         Text(
                             text = product.name,
-                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.Black,
+                                fontSize = 28.sp * barcodeTitleScale
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = product.code,
-                            style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                            style = MaterialTheme.typography.displayMedium.copy(
+                                fontWeight = FontWeight.Black,
+                                fontSize = 42.sp * barcodeNumberScale,
+                                color = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(16.dp))
 
@@ -128,7 +154,10 @@ fun ProductBarcodeDialog(product: Product, onDismiss: () -> Unit) {
                         Divider(color = MaterialTheme.colorScheme.outlineVariant)
                         Spacer(modifier = Modifier.height(16.dp))
                         
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.QrCodeScanner,
                                 contentDescription = "Scanner",
@@ -140,6 +169,15 @@ fun ProductBarcodeDialog(product: Product, onDismiss: () -> Unit) {
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
+                            if (photoUrl != null) {
+                                Spacer(modifier = Modifier.weight(1f))
+                                TextButton(
+                                    onClick = { showPhotoDialog = true },
+                                    contentPadding = PaddingValues(horizontal = 4.dp)
+                                ) {
+                                    Text("Ver Foto do Produto", maxLines = 2, textAlign = TextAlign.End)
+                                }
+                            }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         
@@ -210,6 +248,55 @@ fun ProductBarcodeDialog(product: Product, onDismiss: () -> Unit) {
                     }
                 }
             }
+        }
+
+        if (showPhotoDialog && photoUrl != null) {
+            var isPhotoLoading by remember(photoUrl) { mutableStateOf(true) }
+            var photoLoadFailed by remember(photoUrl) { mutableStateOf(false) }
+            AlertDialog(
+                onDismissRequest = { showPhotoDialog = false },
+                title = { Text("Foto do Produto") },
+                text = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 180.dp, max = 360.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = photoUrl,
+                            contentDescription = product.name,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize(),
+                            onLoading = {
+                                isPhotoLoading = true
+                                photoLoadFailed = false
+                            },
+                            onSuccess = { isPhotoLoading = false },
+                            onError = {
+                                isPhotoLoading = false
+                                photoLoadFailed = true
+                            }
+                        )
+                        if (isPhotoLoading) {
+                            CircularProgressIndicator()
+                        }
+                        if (photoLoadFailed) {
+                            Text(
+                                "Não foi possível carregar a foto do produto.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showPhotoDialog = false }) {
+                        Text("Fechar")
+                    }
+                }
+            )
         }
     }
 }

@@ -28,6 +28,8 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val vibrateOnFound by viewModel.userPreferences.vibrateOnFound.collectAsState(initial = true)
     val largeText by viewModel.userPreferences.largeText.collectAsState(initial = false)
     val fontScale by viewModel.userPreferences.fontScale.collectAsState(initial = 1.0f)
+    val barcodeNumberScale by viewModel.userPreferences.barcodeNumberScale.collectAsState(initial = 1.0f)
+    val barcodeTitleScale by viewModel.userPreferences.barcodeTitleScale.collectAsState(initial = 1.0f)
     val boldOutline by viewModel.userPreferences.boldOutline.collectAsState(initial = false)
     val uppercaseBold by viewModel.userPreferences.uppercaseBold.collectAsState(initial = false)
     val appTheme by viewModel.userPreferences.appTheme.collectAsState(initial = "multicolor")
@@ -51,9 +53,9 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
+                    containerColor = getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first,
+                    titleContentColor = getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second,
+                    navigationIconContentColor = getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second
                 )
             )
         }
@@ -85,7 +87,40 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 Text("Restaurar Padrão")
             }
 
-            
+            Text("Tamanho do número do código", style = MaterialTheme.typography.titleSmall)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Slider(
+                    value = barcodeNumberScale,
+                    onValueChange = { coroutineScope.launch { viewModel.userPreferences.setBarcodeNumberScale(it) } },
+                    valueRange = 0.8f..1.6f,
+                    steps = 7,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(String.format("%.1fx", barcodeNumberScale), style = MaterialTheme.typography.labelLarge)
+            }
+            Text("Controla o número exibido acima do código de barras.", style = MaterialTheme.typography.bodySmall)
+
+            Text("Tamanho do título do produto", style = MaterialTheme.typography.titleSmall)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Slider(
+                    value = barcodeTitleScale,
+                    onValueChange = { coroutineScope.launch { viewModel.userPreferences.setBarcodeTitleScale(it) } },
+                    valueRange = 0.8f..1.5f,
+                    steps = 6,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(String.format("%.1fx", barcodeTitleScale), style = MaterialTheme.typography.labelLarge)
+            }
+            Text("Controla somente o título no diálogo do código de barras.", style = MaterialTheme.typography.bodySmall)
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Aumentar letras da tela inicial")
                 Switch(checked = largeText, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setLargeText(it) } })
@@ -260,9 +295,14 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             
             Text("Feedback", style = MaterialTheme.typography.titleMedium, color = getDynamicThemeColor(4, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first)
             
+            val feedbackColors = getDynamicThemeColor(4, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary)
             Button(
                 onClick = { showSuggestionDialog = true },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = feedbackColors.first,
+                    contentColor = feedbackColors.second
+                )
             ) {
                 Text("Enviar Sugestão de Melhoria")
             }
