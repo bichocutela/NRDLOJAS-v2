@@ -613,7 +613,11 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
         }
 
         selectedNotificationProduct?.let { product ->
-            ProductBarcodeDialog(product = product, onDismiss = { selectedNotificationProduct = null })
+            ProductBarcodeDialog(
+                product = product,
+                onDismiss = { selectedNotificationProduct = null },
+                highlightedFromNotification = true
+            )
         }
 
         if (showClearHistoryDialog) {

@@ -11,6 +11,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
 import coil.compose.AsyncImage
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,7 +43,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-fun ProductBarcodeDialog(product: Product, onDismiss: () -> Unit) {
+fun ProductBarcodeDialog(
+    product: Product,
+    onDismiss: () -> Unit,
+    highlightedFromNotification: Boolean = false
+) {
     val showDialog = remember { mutableStateOf(true) }
     val animateIn = remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
@@ -86,7 +91,16 @@ fun ProductBarcodeDialog(product: Product, onDismiss: () -> Unit) {
             ) {
                 Surface(
                     shape = RoundedCornerShape(32.dp),
-                    color = MaterialTheme.colorScheme.surface,
+                    color = if (highlightedFromNotification) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
+                    border = if (highlightedFromNotification) {
+                        BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
+                    } else {
+                        null
+                    },
                     modifier = Modifier.fillMaxWidth(0.9f).padding(vertical = 24.dp)
                 ) {
                     Column(
@@ -96,6 +110,16 @@ fun ProductBarcodeDialog(product: Product, onDismiss: () -> Unit) {
                             .verticalScroll(rememberScrollState())
                             .padding(24.dp)
                     ) {
+                        if (highlightedFromNotification) {
+                            Text(
+                                text = "ABERTO PELA NOTIFICAÇÃO",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                         Text(
                             text = product.name,
                             style = MaterialTheme.typography.headlineMedium.copy(
