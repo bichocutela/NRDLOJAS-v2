@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 class MainViewModel(private val repository: ProductRepository, val userPreferences: UserPreferences) : ViewModel() {
     val authRepository = com.example.data.AuthRepository()
@@ -161,15 +162,29 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         viewModelScope.launch {
             _isAiLoading.value = true
             _aiProductDetails.value = null
+            val apiKey = BuildConfig.GEMINI_API_KEY.trim()
+            if (apiKey.isEmpty() || apiKey.equals("dummy", ignoreCase = true)) {
+                _aiProductDetails.value = "IA não configurada nesta versão."
+                _isAiLoading.value = false
+                return@launch
+            }
             try {
                 val prompt = "Forneça informações detalhadas sobre o produto de supermercado: ${product.name} (Categoria: ${product.category}). Inclua dicas de uso, armazenamento ou curiosidades. Seja breve e informativo."
                 val request = GenerateContentRequest(
                     contents = listOf(Content(parts = listOf(Part(text = prompt))))
                 )
-                val response = RetrofitClient.service.generateContent(BuildConfig.GEMINI_API_KEY, request)
-                _aiProductDetails.value = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: "Informações não disponíveis."
-            } catch (e: Throwable) {
-                _aiProductDetails.value = "Erro ao buscar informações: ${e.message}"
+                val response = RetrofitClient.service.generateContent(apiKey, request)
+                _aiProductDetails.value = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                    ?: "Não foi possível consultar a IA."
+            } catch (e: HttpException) {
+                _aiProductDetails.value = when (e.code()) {
+                    429 -> "Limite gratuito da IA atingido. Tente novamente mais tarde."
+                    401, 403 -> "Serviço de IA não autorizado."
+                    400 -> "Não foi possível consultar a IA."
+                    else -> "Não foi possível consultar a IA."
+                }
+            } catch (_: Throwable) {
+                _aiProductDetails.value = "Não foi possível consultar a IA."
             } finally {
                 _isAiLoading.value = false
             }

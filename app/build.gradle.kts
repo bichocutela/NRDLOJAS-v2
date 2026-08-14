@@ -22,6 +22,7 @@ android {
         val supabaseUrl = System.getenv("SUPABASE_URL") ?: "https://kkayksyzksexoarpfxyj.supabase.co"
     buildConfigField("String", "SUPABASE_URL", "\"${supabaseUrl}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${System.getenv("SUPABASE_ANON_KEY") ?: ""}\"")
+        buildConfigField("String", "GEMINI_API_KEY", "\"${System.getenv("GEMINI_API_KEY") ?: "dummy"}\"")
 
   }
   signingConfigs {

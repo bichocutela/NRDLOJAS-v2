@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.content.Intent
+import android.util.Log
 import androidx.compose.material.icons.filled.Sync
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
@@ -48,6 +49,13 @@ import com.example.api.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import retrofit2.HttpException
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.common.InputImage
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -109,17 +117,35 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     statusMessage = "A IA está analisando a imagem..."
                     
                     try {
-                        val result = analyzeImage(selectedBitmap!!)
+                        val detectedCode = detectBarcodeFromBitmap(selectedBitmap!!)
+                        if (!detectedCode.isNullOrBlank()) {
+                            productCode = detectedCode
+                            statusMessage = "Código detectado pelo leitor local."
+                        }
+
+                        val apiKey = BuildConfig.GEMINI_API_KEY.trim()
+                        if (apiKey.isEmpty() || apiKey.equals("dummy", ignoreCase = true)) {
+                            statusMessage = "IA não configurada nesta versão."
+                            return@launch
+                        }
+
+                        val result = analyzeImage(selectedBitmap!!, detectedCode)
                         if (result != null) {
                             productName = result.name
-                            productCode = result.code
+                            if (detectedCode.isNullOrBlank()) productCode = result.code
                             productCategory = ProductStandards.categoryFromSuggestion(result.category).orEmpty()
                             statusMessage = "Análise concluída. Verifique as informações."
                         } else {
-                            statusMessage = "Erro na análise. Preencha manualmente."
+                            statusMessage = "Não foi possível identificar todos os dados com IA. Complete manualmente."
                         }
-                    } catch (e: Exception) {
-                        statusMessage = "Erro: ${e.message}"
+                    } catch (e: HttpException) {
+                        statusMessage = when (e.code()) {
+                            429 -> "Limite gratuito da IA atingido. Complete manualmente."
+                            401, 403 -> "Serviço de IA não autorizado. Complete manualmente."
+                            else -> "Não foi possível identificar todos os dados com IA. Complete manualmente."
+                        }
+                    } catch (_: Exception) {
+                        statusMessage = "Não foi possível identificar todos os dados com IA. Complete manualmente."
                     } finally {
                         isProcessing = false
                     }
@@ -390,10 +416,12 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
 
 data class ProductAnalysisResult(val name: String, val code: String, val category: String)
 
-suspend fun analyzeImage(bitmap: Bitmap): ProductAnalysisResult? = withContext(Dispatchers.IO) {
+suspend fun analyzeImage(bitmap: Bitmap, detectedCode: String? = null): ProductAnalysisResult? = withContext(Dispatchers.IO) {
+    val apiKey = BuildConfig.GEMINI_API_KEY.trim()
+    if (apiKey.isEmpty() || apiKey.equals("dummy", ignoreCase = true)) return@withContext null
     try {
-        val apiKey = BuildConfig.GEMINI_API_KEY
-        val prompt = "Analise a imagem deste produto. Identifique o nome, o código (EAN ou número em destaque) e escolha somente uma categoria entre: Açougue, Cafeteria, Frios, Hortifruti, Mercearia ou Padaria. Retorne apenas um JSON com as chaves: 'nome', 'codigo', 'categoria'."
+        val codeContext = detectedCode?.let { " O código de barras detectado com confiança pelo ML Kit é $it; não o substitua." }.orEmpty()
+        val prompt = "Analise a imagem deste produto. Identifique principalmente o nome e escolha somente uma categoria entre: Açougue, Cafeteria, Frios, Hortifruti, Mercearia ou Padaria. O código deve ser informado apenas como apoio quando não houver código detectado localmente.$codeContext Retorne apenas um JSON com as chaves: 'nome', 'codigo', 'categoria'."
         
         val requestBody = GenerateContentRequest(
             contents = listOf(Content(
@@ -439,10 +467,28 @@ suspend fun analyzeImage(bitmap: Bitmap): ProductAnalysisResult? = withContext(D
             return@withContext ProductAnalysisResult(name, code, category)
         }
         null
+    } catch (e: HttpException) {
+        throw e
     } catch (e: Exception) {
-        e.printStackTrace()
+        Log.e("AdminScreen", "Falha na análise da imagem", e)
         null
     }
+}
+
+private suspend fun detectBarcodeFromBitmap(bitmap: Bitmap): String? = suspendCancellableCoroutine { continuation ->
+    val options = BarcodeScannerOptions.Builder()
+        .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
+        .build()
+    val scanner = BarcodeScanning.getClient(options)
+    scanner.process(InputImage.fromBitmap(bitmap, 0))
+        .addOnSuccessListener { barcodes ->
+            continuation.resume(barcodes.firstNotNullOfOrNull { it.rawValue })
+        }
+        .addOnFailureListener { error ->
+            Log.w("AdminScreen", "ML Kit não detectou código na imagem", error)
+            continuation.resume(null)
+        }
+        .addOnCompleteListener { scanner.close() }
 }
 
 @Composable
