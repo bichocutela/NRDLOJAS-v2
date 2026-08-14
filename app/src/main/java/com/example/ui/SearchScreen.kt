@@ -98,6 +98,7 @@ import android.os.Build
 import android.app.Activity
 import android.content.Intent
 import android.speech.RecognizerIntent
+import java.text.Normalizer
 
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -578,9 +579,17 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                             Card(
                                 modifier = Modifier.fillMaxWidth().clickable {
                                     viewModel.markNotificationRead(notification.id)
-                                    selectedNotificationProduct = viewModel.allProducts.value.firstOrNull {
-                                        it.name.equals(notification.body, ignoreCase = true) || it.name.contains(notification.body, ignoreCase = true)
-                                    }
+                                    val notificationTarget = notification.body.trim()
+                                    val normalizedTarget = normalizeNotificationText(notificationTarget)
+                                    val resolvedProduct = viewModel.allProducts.value.firstOrNull { it.code == notificationTarget }
+                                        ?: viewModel.allProducts.value.firstOrNull {
+                                            normalizeNotificationText(it.name) == normalizedTarget
+                                        }
+                                        ?: viewModel.allProducts.value.firstOrNull {
+                                            normalizeNotificationText(it.name).contains(normalizedTarget)
+                                        }
+                                    selectedNotificationProduct = resolvedProduct
+                                    resolvedProduct?.let(viewModel::onProductSearched)
                                     showNotificationsSheet = false
                                 },
                                 colors = CardDefaults.cardColors(
@@ -716,6 +725,12 @@ fun CategoryProductsSheet(
         }
     }
 }
+
+private fun normalizeNotificationText(value: String): String =
+    Normalizer.normalize(value, Normalizer.Form.NFD)
+        .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+        .lowercase()
+        .trim()
 
 @Composable
 fun ProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, appTheme: String = "multicolor") {
