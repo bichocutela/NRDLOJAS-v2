@@ -110,6 +110,7 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
             var qrReleaseTag by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
             var qrReleaseUrl by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
             var showQrErrorDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+            var qrErrorMessage by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("Verifique sua conexão e tente novamente.") }
 
             
             if (showQrDialog && qrBitmap != null) {
@@ -155,36 +156,42 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                 AlertDialog(
                     onDismissRequest = { showQrErrorDialog = false },
                     title = { Text("Não foi possível gerar o QR Code no momento.") },
-                    text = { Text("Verifique sua conexão e tente novamente.") },
+                    text = { Text(qrErrorMessage) },
                     confirmButton = {
                         TextButton(onClick = {
                             showQrErrorDialog = false
                             isGeneratingQr = true
                             coroutineScope.launch {
-                                val release = com.example.util.UpdateChecker.checkLatestRelease()
+                                val releaseResult = com.example.util.UpdateChecker.checkLatestRelease()
                                 isGeneratingQr = false
-                                if (release != null) {
-                                    val (tag, url) = release
-                                    qrReleaseTag = tag
-                                    qrReleaseUrl = url
-                                    try {
-                                        val writer = MultiFormatWriter()
-                                        val bitMatrix = writer.encode(url, BarcodeFormat.QR_CODE, 512, 512)
-                                        val width = bitMatrix.width
-                                        val height = bitMatrix.height
-                                        val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
-                                        for (x in 0 until width) {
-                                            for (y in 0 until height) {
-                                                bmp.setPixel(x, y, if (bitMatrix.get(x, y)) Color.BLACK else Color.WHITE)
+                                when (releaseResult) {
+                                    is com.example.util.ReleaseCheckResult.Success -> {
+                                        val tag = releaseResult.tagName
+                                        val url = releaseResult.downloadUrl
+                                        qrReleaseTag = tag
+                                        qrReleaseUrl = url
+                                        try {
+                                            val writer = MultiFormatWriter()
+                                            val bitMatrix = writer.encode(url, BarcodeFormat.QR_CODE, 512, 512)
+                                            val width = bitMatrix.width
+                                            val height = bitMatrix.height
+                                            val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+                                            for (x in 0 until width) {
+                                                for (y in 0 until height) {
+                                                    bmp.setPixel(x, y, if (bitMatrix.get(x, y)) Color.BLACK else Color.WHITE)
+                                                }
                                             }
+                                            qrBitmap = bmp
+                                            showQrDialog = true
+                                        } catch (e: Exception) {
+                                            qrErrorMessage = "A resposta foi obtida, mas não foi possível gerar o QR Code."
+                                            showQrErrorDialog = true
                                         }
-                                        qrBitmap = bmp
-                                        showQrDialog = true
-                                    } catch (e: Exception) {
+                                    }
+                                    else -> {
+                                        qrErrorMessage = releaseFailureMessage(releaseResult)
                                         showQrErrorDialog = true
                                     }
-                                } else {
-                                    showQrErrorDialog = true
                                 }
                             }
                         }) {
@@ -224,10 +231,11 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                 onClick = {
                     isChecking = true
                     coroutineScope.launch {
-                        val release = com.example.util.UpdateChecker.checkLatestRelease()
+                        val releaseResult = com.example.util.UpdateChecker.checkLatestRelease()
                         isChecking = false
-                        if (release != null) {
-                            val (tag, url) = release
+                        if (releaseResult is com.example.util.ReleaseCheckResult.Success) {
+                            val tag = releaseResult.tagName
+                            val url = releaseResult.downloadUrl
                             val currentVersion = com.example.BuildConfig.VERSION_NAME
                             
                             // Numeric version check
@@ -256,7 +264,11 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                                 android.widget.Toast.makeText(context, "Você já possui a última versão.", android.widget.Toast.LENGTH_SHORT).show()
                             }
                         } else {
-                            android.widget.Toast.makeText(context, "Erro ao verificar atualizações.", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(
+                                context,
+                                releaseFailureMessage(releaseResult),
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
                         }
                     }
                 },
@@ -280,30 +292,36 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                 onClick = {
                     isGeneratingQr = true
                     coroutineScope.launch {
-                        val release = com.example.util.UpdateChecker.checkLatestRelease()
+                        val releaseResult = com.example.util.UpdateChecker.checkLatestRelease()
                         isGeneratingQr = false
-                        if (release != null) {
-                            val (tag, url) = release
-                            qrReleaseTag = tag
-                            qrReleaseUrl = url
-                            try {
-                                val writer = MultiFormatWriter()
-                                val bitMatrix = writer.encode(url, BarcodeFormat.QR_CODE, 512, 512)
-                                val width = bitMatrix.width
-                                val height = bitMatrix.height
-                                val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
-                                for (x in 0 until width) {
-                                    for (y in 0 until height) {
-                                        bmp.setPixel(x, y, if (bitMatrix.get(x, y)) Color.BLACK else Color.WHITE)
+                        when (releaseResult) {
+                            is com.example.util.ReleaseCheckResult.Success -> {
+                                val tag = releaseResult.tagName
+                                val url = releaseResult.downloadUrl
+                                qrReleaseTag = tag
+                                qrReleaseUrl = url
+                                try {
+                                    val writer = MultiFormatWriter()
+                                    val bitMatrix = writer.encode(url, BarcodeFormat.QR_CODE, 512, 512)
+                                    val width = bitMatrix.width
+                                    val height = bitMatrix.height
+                                    val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+                                    for (x in 0 until width) {
+                                        for (y in 0 until height) {
+                                            bmp.setPixel(x, y, if (bitMatrix.get(x, y)) Color.BLACK else Color.WHITE)
+                                        }
                                     }
+                                    qrBitmap = bmp
+                                    showQrDialog = true
+                                } catch (e: Exception) {
+                                    qrErrorMessage = "A resposta foi obtida, mas não foi possível gerar o QR Code."
+                                    showQrErrorDialog = true
                                 }
-                                qrBitmap = bmp
-                                showQrDialog = true
-                            } catch (e: Exception) {
+                            }
+                            else -> {
+                                qrErrorMessage = releaseFailureMessage(releaseResult)
                                 showQrErrorDialog = true
                             }
-                        } else {
-                            showQrErrorDialog = true
                         }
                     }
                 },
@@ -323,6 +341,26 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
 
         }
     }
+}
+
+private fun releaseFailureMessage(result: com.example.util.ReleaseCheckResult): String = when (result) {
+    is com.example.util.ReleaseCheckResult.NetworkError -> "Sem internet: ${result.message}."
+    is com.example.util.ReleaseCheckResult.InvalidResponse -> "Resposta inválida do GitHub: ${result.message}."
+    is com.example.util.ReleaseCheckResult.HttpError -> {
+        val rateLimitDetails = listOfNotNull(
+            result.rateLimitRemaining?.let { "restante: $it" },
+            result.rateLimitReset?.let { "reset: $it" },
+            result.retryAfter?.let { "tente novamente após: $it" }
+        ).joinToString(", ")
+        if (result.responseCode == 403 || result.responseCode == 429) {
+            "Limite da API do GitHub atingido (HTTP ${result.responseCode}). " +
+                "${result.message}" +
+                if (rateLimitDetails.isNotBlank()) " [$rateLimitDetails]" else ""
+        } else {
+            "Erro HTTP ${result.responseCode} no GitHub: ${result.message}"
+        }
+    }
+    is com.example.util.ReleaseCheckResult.Success -> ""
 }
 
 @Composable

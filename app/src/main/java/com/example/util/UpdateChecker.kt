@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.widget.Toast
+import android.util.Log
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,47 +18,126 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
+sealed interface ReleaseCheckResult {
+    data class Success(val tagName: String, val downloadUrl: String) : ReleaseCheckResult
+    data class HttpError(
+        val responseCode: Int,
+        val message: String,
+        val rateLimitRemaining: String?,
+        val rateLimitReset: String?,
+        val retryAfter: String?
+    ) : ReleaseCheckResult
+    data class NetworkError(val message: String) : ReleaseCheckResult
+    data class InvalidResponse(val message: String) : ReleaseCheckResult
+}
+
 object UpdateChecker {
+    private const val TAG = "UpdateChecker"
+    private const val LATEST_RELEASE_URL = "https://api.github.com/repos/bichocutela/NRDLOJAS-v2/releases/latest"
+
     /**
-     * Verifica a última versão lançada no repositório bichocutela/NRDLOJAS-v2
-     * Retorna um Pair com o nome da tag (ex: v1.0.1) e a URL de download, ou null em caso de erro.
+     * Consulta a última release sem autenticação. O token do GitHub nunca é
+     * incluído no aplicativo; limites públicos são tratados pelos headers HTTP.
      */
-    suspend fun checkLatestRelease(): Pair<String, String>? {
+    suspend fun checkLatestRelease(): ReleaseCheckResult {
         return withContext(Dispatchers.IO) {
+            var connection: HttpURLConnection? = null
             try {
-                val url = URL("https://api.github.com/repos/bichocutela/NRDLOJAS-v2/releases/latest")
-                val connection = url.openConnection() as HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
-                connection.setRequestProperty("User-Agent", "NRDLOJAS-Update-Checker")
-                
-                if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                    val response = connection.inputStream.bufferedReader().use { it.readText() }
-                    val json = JSONObject(response)
-                    val tagName = json.getString("tag_name")
-                    val assets = json.optJSONArray("assets")
-                    var downloadUrl = ""
-                    
-                    if (assets != null) {
-                        for (i in 0 until assets.length()) {
-                            val asset = assets.getJSONObject(i)
-                            val name = asset.getString("name")
-                            if (name.endsWith(".apk")) {
-                                downloadUrl = asset.getString("browser_download_url")
-                                break
-                            }
+                connection = (URL(LATEST_RELEASE_URL).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 15_000
+                    readTimeout = 15_000
+                    setRequestProperty("Accept", "application/vnd.github.v3+json")
+                    setRequestProperty("User-Agent", "NRDLOJAS-Update-Checker")
+                }
+
+                val responseCode = connection.responseCode
+                val responseBody = readResponseBody(connection, responseCode)
+
+                if (responseCode != HttpURLConnection.HTTP_OK) {
+                    val message = extractGitHubMessage(responseBody)
+                        ?: connection.responseMessage
+                        ?: "Resposta HTTP sem mensagem"
+                    val rateLimitRemaining = connection.getHeaderField("X-RateLimit-Remaining")
+                    val rateLimitReset = connection.getHeaderField("X-RateLimit-Reset")
+                    val retryAfter = connection.getHeaderField("Retry-After")
+                    Log.e(
+                        TAG,
+                        "GitHub releases HTTP $responseCode: $message; " +
+                            "X-RateLimit-Remaining=$rateLimitRemaining, " +
+                            "X-RateLimit-Reset=$rateLimitReset, Retry-After=$retryAfter"
+                    )
+                    return@withContext ReleaseCheckResult.HttpError(
+                        responseCode,
+                        message,
+                        rateLimitRemaining,
+                        rateLimitReset,
+                        retryAfter
+                    )
+                }
+
+                if (responseBody.isBlank()) {
+                    Log.e(TAG, "GitHub releases HTTP 200 retornou corpo vazio")
+                    return@withContext ReleaseCheckResult.InvalidResponse("Corpo da resposta vazio")
+                }
+
+                val json = JSONObject(responseBody)
+                val tagName = json.optString("tag_name").takeIf { it.isNotBlank() }
+                    ?: return@withContext ReleaseCheckResult.InvalidResponse("tag_name ausente na release")
+                val assets = json.optJSONArray("assets")
+                var downloadUrl: String? = null
+
+                if (assets != null) {
+                    for (i in 0 until assets.length()) {
+                        val asset = assets.optJSONObject(i) ?: continue
+                        if (asset.optString("name") == "app-release.apk") {
+                            downloadUrl = asset.optString("browser_download_url")
+                                .takeIf { it.isNotBlank() }
+                            break
                         }
                     }
-                    if (downloadUrl.isEmpty()) {
-                        downloadUrl = json.getString("html_url") // fallback
-                    }
-                    return@withContext Pair(tagName, downloadUrl)
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
+
+                if (downloadUrl == null) {
+                    downloadUrl = json.optString("html_url").takeIf { it.isNotBlank() }
+                    Log.w(TAG, "app-release.apk não encontrado; usando html_url da release como fallback")
+                }
+
+                if (downloadUrl == null) {
+                    Log.e(TAG, "Resposta válida, mas sem app-release.apk e sem html_url")
+                    return@withContext ReleaseCheckResult.InvalidResponse(
+                        "Release sem app-release.apk e sem página de fallback"
+                    )
+                }
+
+                ReleaseCheckResult.Success(tagName, downloadUrl)
+            } catch (exception: java.net.SocketTimeoutException) {
+                Log.e(TAG, "Sem resposta do GitHub dentro do timeout", exception)
+                ReleaseCheckResult.NetworkError("Tempo limite de conexão com o GitHub excedido")
+            } catch (exception: java.net.UnknownHostException) {
+                Log.e(TAG, "Sem internet ou host do GitHub indisponível", exception)
+                ReleaseCheckResult.NetworkError("Sem internet ou GitHub indisponível")
+            } catch (exception: java.io.IOException) {
+                Log.e(TAG, "Erro de rede ao consultar o GitHub", exception)
+                ReleaseCheckResult.NetworkError("Erro de rede ao consultar o GitHub")
+            } catch (exception: Exception) {
+                Log.e(TAG, "Resposta inválida do GitHub", exception)
+                ReleaseCheckResult.InvalidResponse("Resposta inválida do GitHub: ${exception.message ?: "erro desconhecido"}")
+            } finally {
+                connection?.disconnect()
             }
-            null
         }
+    }
+
+    private fun readResponseBody(connection: HttpURLConnection, responseCode: Int): String {
+        val stream = if (responseCode in 200..299) connection.inputStream else connection.errorStream
+        return stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+    }
+
+    private fun extractGitHubMessage(responseBody: String): String? {
+        if (responseBody.isBlank()) return null
+        return runCatching { JSONObject(responseBody).optString("message").takeIf { it.isNotBlank() } }
+            .getOrNull()
     }
 
     fun downloadAndInstallApk(context: Context, url: String, versionTag: String) {
