@@ -10,12 +10,12 @@ object AppIconManager {
     private const val DEFAULT_ICON = "multicolor"
 
     private val aliases = linkedMapOf(
-        "multicolor" to "com.example.MainActivityMulticolor",
-        "red" to "com.example.MainActivityRed",
-        "green" to "com.example.MainActivityGreen",
-        "blue" to "com.example.MainActivityBlue",
-        "orange" to "com.example.MainActivityOrange",
-        "gold" to "com.example.MainActivityGold"
+        "multicolor" to "MainActivityMulticolor",
+        "red" to "MainActivityRed",
+        "green" to "MainActivityGreen",
+        "blue" to "MainActivityBlue",
+        "orange" to "MainActivityOrange",
+        "gold" to "MainActivityGold"
     )
 
     /**
@@ -111,5 +111,5 @@ object AppIconManager {
     }
 
     private fun componentName(context: Context, aliasName: String) =
-        ComponentName(context.packageName, aliasName)
+        ComponentName(context.packageName, "${context.packageName}.$aliasName")
 }
