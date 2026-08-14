@@ -333,11 +333,7 @@ fun LoginDrawerContent(
         )
         Spacer(modifier = Modifier.height(16.dp))
         
-        val allCategoriesList = remember(categories) {
-            val defaultCategories = listOf("Hortifruti", "Açougue", "Padaria", "Frios", "Bebidas", "Mercearia", "Limpeza", "Higiene", "Laticínios", "Congelados", "Bazar", "Pet Shop")
-            val dbCategories = categories.map { it.category }
-            (dbCategories + defaultCategories).distinct().sorted()
-        }
+        val allCategoriesList = remember { com.example.data.ProductStandards.officialCategories }
 
         allCategoriesList.forEach { categoryName ->
             CategoryItem(

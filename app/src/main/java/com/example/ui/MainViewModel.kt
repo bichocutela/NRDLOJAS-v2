@@ -10,6 +10,7 @@ import com.example.api.RetrofitClient
 import com.example.data.Product
 import com.example.data.FirebaseService
 import com.example.data.ProductRepository
+import com.example.data.ProductStandards
 import com.example.data.UserPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -238,11 +239,21 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     }
 
     suspend fun updateProductSuspend(oldProduct: Product, newProduct: Product): Boolean {
-        var finalProduct = newProduct
-        finalProduct = finalProduct.copy(id = oldProduct.id)
-        
         val normalizedCode = newProduct.code.trim()
-        finalProduct = finalProduct.copy(code = normalizedCode)
+        val requestedCategory = newProduct.category.trim()
+        if (requestedCategory != oldProduct.category && !ProductStandards.isOfficialCategory(requestedCategory)) {
+            _syncMessage.emit("Selecione uma das categorias oficiais para alterar a categoria do produto.")
+            return false
+        }
+        val normalizedName = ProductStandards.normalizeProductName(newProduct.name)
+        val finalProductCategory = if (requestedCategory == oldProduct.category) oldProduct.category else requestedCategory
+        var finalProduct = newProduct.copy(
+            id = oldProduct.id,
+            code = normalizedCode,
+            name = normalizedName,
+            searchName = ProductStandards.searchNameFrom(normalizedName),
+            category = finalProductCategory
+        )
         if (oldProduct.code != normalizedCode) {
             android.util.Log.d("ProductSync", "Verificando se o novo código já existe: $normalizedCode")
             val existingProduct = repository.getProductByCodeSync(normalizedCode)
@@ -352,6 +363,12 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
 
         suspend fun addProductSuspend(name: String, code: String, category: String, unit: String, imageUrl: String? = null): Boolean {
         val normalizedCode = code.trim()
+        val normalizedCategory = category.trim()
+        if (!ProductStandards.isOfficialCategory(normalizedCategory)) {
+            _syncMessage.emit("Selecione uma das categorias oficiais para adicionar o produto.")
+            return false
+        }
+        val normalizedName = ProductStandards.normalizeProductName(name)
         val existingProduct = repository.getProductByCodeSync(normalizedCode)
         if (existingProduct != null) {
             _syncMessage.emit("Código já cadastrado\n\nJá existe um produto utilizando o código $normalizedCode:\n${existingProduct.name}")
@@ -373,9 +390,9 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         }
         val product = Product(
             code = normalizedCode,
-            name = name,
-            searchName = name.lowercase().replace(Regex("[áàâã]"), "a").replace(Regex("[éèê]"), "e").replace(Regex("[íìî]"), "i").replace(Regex("[óòôõ]"), "o").replace(Regex("[úùû]"), "u").replace(Regex("[ç]"), "c"),
-            category = category,
+            name = normalizedName,
+            searchName = ProductStandards.searchNameFrom(normalizedName),
+            category = normalizedCategory,
             unit = unit,
             imageUrl = finalImageUrl
         )

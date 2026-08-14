@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import com.example.ui.theme.getDynamicThemeColor
 import androidx.compose.ui.unit.dp
 import com.example.data.Product
+import com.example.data.ProductStandards
 import kotlinx.coroutines.launch
 
 
@@ -69,7 +70,7 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         IconButton(onClick = {
                             name = product.name
                             code = product.code
-                            category = product.category
+                            category = product.category.takeIf { ProductStandards.isOfficialCategory(it) }.orEmpty()
                             imageUrl = product.imageUrl ?: ""
                             editingProduct = product
                             showDialog = true
@@ -114,11 +115,19 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = category,
-                            onValueChange = { category = it },
-                            label = { Text("Categoria") },
-                            modifier = Modifier.fillMaxWidth()
+                        if (category.isBlank() && !ProductStandards.isOfficialCategory(editingProduct!!.category)) {
+                            Text(
+                                text = "Categoria atual (legado): ${editingProduct!!.category}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                        OfficialCategoryDropdown(
+                            selectedCategory = category,
+                            onCategorySelected = { category = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = if (category.isBlank()) "Nova categoria (opcional)" else "Categoria"
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
@@ -141,7 +150,7 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                     val newProduct = editingProduct!!.copy(
                                         name = name,
                                         code = code,
-                                        category = category,
+                                        category = category.ifBlank { editingProduct!!.category },
                                         imageUrl = imageUrl.takeIf { it.isNotBlank() }
                                     )
                                     viewModel.updateProduct(editingProduct!!, newProduct)

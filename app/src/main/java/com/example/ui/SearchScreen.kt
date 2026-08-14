@@ -509,12 +509,12 @@ fun SectionHeader(title: String) {
 @Composable
 fun CategorySection(viewModel: MainViewModel, appTheme: String) {
     val categories = listOf(
-        Pair("Padaria", MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer),
-        Pair("Hortifruti", MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer),
         Pair("Açougue", MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer),
+        Pair("Cafeteria", MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer),
         Pair("Frios", MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer),
-        Pair("Confeitaria", MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer),
-        Pair("Rotisserie", MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer)
+        Pair("Hortifruti", MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer),
+        Pair("Mercearia", MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer),
+        Pair("Padaria", MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer)
     )
     
     LazyRow(
@@ -859,9 +859,8 @@ fun getCategoryIcon(category: String): String {
         "açougue" -> "🥩"
         "hortifruti" -> "🥬"
         "frios" -> "🧀"
-        "confeitaria" -> "🍰"
-        "rotisserie" -> "🍗"
-        "bebidas" -> "🥤"
+        "cafeteria" -> "☕"
+        "mercearia" -> "🛒"
         else -> "🏷️"
     }
 }

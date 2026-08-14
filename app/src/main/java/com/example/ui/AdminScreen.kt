@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import com.example.data.Product
+import com.example.data.ProductStandards
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
@@ -110,7 +111,7 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         if (result != null) {
                             productName = result.name
                             productCode = result.code
-                            productCategory = result.category
+                            productCategory = ProductStandards.categoryFromSuggestion(result.category).orEmpty()
                             statusMessage = "Análise concluída. Verifique as informações."
                         } else {
                             statusMessage = "Erro na análise. Preencha manualmente."
@@ -260,10 +261,9 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         
-                        OutlinedTextField(
-                            value = productCategory,
-                            onValueChange = { productCategory = it },
-                            label = { Text("Categoria") },
+                        OfficialCategoryDropdown(
+                            selectedCategory = productCategory,
+                            onCategorySelected = { productCategory = it },
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(8.dp))
@@ -301,13 +301,13 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         var isAdding by remember { mutableStateOf(false) }
                 Button(
                     onClick = {
-                        if (productName.isNotBlank() && productCode.isNotBlank()) {
+                        if (productName.isNotBlank() && productCode.isNotBlank() && ProductStandards.isOfficialCategory(productCategory)) {
                             scope.launch {
                                 isAdding = true
                                 val success = viewModel.addProductSuspend(
                                     name = productName,
                                     code = productCode,
-                                    category = if (productCategory.isNotBlank()) productCategory else "Geral",
+                                    category = productCategory,
                                     unit = "un",
                                     imageUrl = productImageUrl.ifBlank { null }?.let { com.example.util.ImageUrlHelper.normalizeUrl(it) }
                                 )
@@ -319,7 +319,7 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             }
                         } else {
                             scope.launch {
-                                snackbarHostState.showSnackbar("Preencha o nome e código.")
+                                snackbarHostState.showSnackbar("Preencha nome, código e selecione uma categoria oficial.")
                             }
                         }
                     },
@@ -367,7 +367,7 @@ data class ProductAnalysisResult(val name: String, val code: String, val categor
 suspend fun analyzeImage(bitmap: Bitmap): ProductAnalysisResult? = withContext(Dispatchers.IO) {
     try {
         val apiKey = BuildConfig.GEMINI_API_KEY
-        val prompt = "Analise a imagem deste produto. Identifique o nome do produto, seu código (EAN ou número em destaque) e a categoria mais provável (ex: Açougue, Padaria, Hortifruti, Bebidas, etc). Retorne apenas um JSON com as chaves: 'nome', 'codigo', 'categoria'."
+        val prompt = "Analise a imagem deste produto. Identifique o nome, o código (EAN ou número em destaque) e escolha somente uma categoria entre: Açougue, Cafeteria, Frios, Hortifruti, Mercearia ou Padaria. Retorne apenas um JSON com as chaves: 'nome', 'codigo', 'categoria'."
         
         val requestBody = GenerateContentRequest(
             contents = listOf(Content(
@@ -462,7 +462,9 @@ fun AdminProductItem(product: Product, viewModel: MainViewModel) {
     var isEditing by remember { mutableStateOf(false) }
     var editCode by remember(product.code) { mutableStateOf(product.code) }
     var editName by remember(product.name) { mutableStateOf(product.name) }
-    var editCategory by remember(product.category) { mutableStateOf(product.category) }
+    var editCategory by remember(product.category) {
+        mutableStateOf(product.category.takeIf { ProductStandards.isOfficialCategory(it) }.orEmpty())
+    }
     var editImageUrl by remember(product.imageUrl) { mutableStateOf(product.imageUrl ?: "") }
     val context = LocalContext.current
     
@@ -541,11 +543,19 @@ fun AdminProductItem(product: Product, viewModel: MainViewModel) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = editCategory,
-                    onValueChange = { editCategory = it },
-                    label = { Text("Categoria") },
-                    modifier = Modifier.fillMaxWidth()
+                if (editCategory.isBlank() && !ProductStandards.isOfficialCategory(product.category)) {
+                    Text(
+                        text = "Categoria atual (legado): ${product.category}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+                OfficialCategoryDropdown(
+                    selectedCategory = editCategory,
+                    onCategorySelected = { editCategory = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = if (editCategory.isBlank()) "Nova categoria (opcional)" else "Categoria"
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
@@ -623,7 +633,7 @@ fun AdminProductItem(product: Product, viewModel: MainViewModel) {
                             val newProduct = product.copy(
                                 code = editCode, 
                                 name = editName, 
-                                category = editCategory.ifBlank { "Geral" },
+                                category = editCategory.ifBlank { product.category },
                                 searchName = searchName,
                                 imageUrl = editImageUrl.ifBlank { null }?.let { com.example.util.ImageUrlHelper.normalizeUrl(it) }
                             )
