@@ -83,6 +83,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.Image
 import com.example.R
 import androidx.compose.ui.draw.clip
@@ -126,40 +127,52 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.ImageBitmap
 
 
+data class HomeTextPreferences(
+    val boldOutline: Boolean = false,
+    val uppercaseBold: Boolean = false
+)
+
+@Composable
+fun rememberHomeTextPreferences(userPreferences: com.example.data.UserPreferences): HomeTextPreferences {
+    val boldOutline by userPreferences.boldOutline.collectAsStateWithLifecycle(initialValue = false)
+    val uppercaseBold by userPreferences.uppercaseBold.collectAsStateWithLifecycle(initialValue = false)
+    return HomeTextPreferences(boldOutline = boldOutline, uppercaseBold = uppercaseBold)
+}
+
 @Composable
 fun StylizedText(
     text: String,
     baseStyle: TextStyle,
-    largeText: Boolean,
     boldOutline: Boolean,
     uppercaseBold: Boolean,
     color: Color = Color.Unspecified,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip
 ) {
     val finalText = if (uppercaseBold) text.uppercase() else text
     val weight = if (uppercaseBold || boldOutline) FontWeight.Bold else baseStyle.fontWeight
-    val fontSize = if (largeText) baseStyle.fontSize * 1.3f else baseStyle.fontSize
-    
     val styleWithMods = baseStyle.copy(
         fontWeight = weight,
-        fontSize = fontSize,
         color = if (boldOutline) Color.Transparent else color
     )
-    
+
     Box(modifier = modifier) {
         if (boldOutline) {
             androidx.compose.material3.Text(
                 text = finalText,
-                style = styleWithMods.copy(
-                    drawStyle = Stroke(width = 2f)
-                ),
-                color = color
+                style = styleWithMods.copy(drawStyle = Stroke(width = 2f)),
+                color = color,
+                maxLines = maxLines,
+                overflow = overflow
             )
         }
         androidx.compose.material3.Text(
             text = finalText,
             style = styleWithMods,
-            color = if (boldOutline) Color.White else color
+            color = if (boldOutline) Color.White else color,
+            maxLines = maxLines,
+            overflow = overflow
         )
     }
 }
@@ -185,6 +198,8 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
 
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+    val textPreferences = rememberHomeTextPreferences(viewModel.userPreferences)
+    val vibrateOnFound by viewModel.userPreferences.vibrateOnFound.collectAsStateWithLifecycle(initialValue = true)
     val mostUsed by viewModel.mostUsed.collectAsStateWithLifecycle()
     val history by viewModel.history.collectAsStateWithLifecycle()
     val latestProductLocal by viewModel.latestProductLocal.collectAsStateWithLifecycle()
@@ -205,6 +220,9 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
     val mostUsedLimit by viewModel.userPreferences.mostUsedLimit.collectAsStateWithLifecycle(initialValue = 8)
     val carouselIntervalSeconds by viewModel.userPreferences.carouselIntervalSeconds.collectAsStateWithLifecycle(initialValue = 5)
     val mostUsedListState = rememberLazyListState()
+    val context = LocalContext.current
+    val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
+    var hadSearchResults by remember { mutableStateOf(false) }
     val voiceLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -227,7 +245,18 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
 
 
 
-    val context = LocalContext.current
+    LaunchedEffect(searchQuery, searchResults, vibrateOnFound) {
+        val hasSearchResults = searchQuery.isNotBlank() && searchResults.isNotEmpty()
+        if (hasSearchResults && !hadSearchResults && vibrateOnFound) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(50)
+            }
+        }
+        hadSearchResults = hasSearchResults
+    }
 
     LaunchedEffect(mostUsed, carouselIntervalSeconds) {
         if (mostUsed.isEmpty()) return@LaunchedEffect
@@ -397,7 +426,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 itemsIndexed(searchResults, key = { _, it -> it.code }) { index, product ->
-                    ProductCard(product, viewModel, index, appTheme)
+                    ProductCard(product, viewModel, index, appTheme, textPreferences)
                 }
             }
         } else {
@@ -407,19 +436,19 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 item {
-                    CategorySection(viewModel, appTheme, onCategoryClick = { selectedCategory = it })
+                    CategorySection(viewModel, appTheme, textPreferences, onCategoryClick = { selectedCategory = it })
                 }
 
                 if (mostUsed.isNotEmpty()) {
                     item {
-                        SectionHeader("Mais Utilizados", actionLabel = "VER TODOS", onAction = { showMostUsedSheet = true })
+                        SectionHeader("Mais Utilizados", textPreferences, actionLabel = "VER TODOS", onAction = { showMostUsedSheet = true })
                         LazyRow(
                             state = mostUsedListState,
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             itemsIndexed(mostUsed, key = { _, it -> it.code }) { index, product ->
-                                MiniProductCard(product, viewModel, index, appTheme)
+                                MiniProductCard(product, viewModel, index, appTheme, textPreferences)
                             }
                         }
                     }
@@ -427,13 +456,13 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
 
                 if (history.isNotEmpty()) {
                     item {
-                        SectionHeader("Histórico Recente", actionLabel = "Limpar Histórico", onAction = { showClearHistoryDialog = true })
+                        SectionHeader("Histórico Recente", textPreferences, actionLabel = "Limpar Histórico", onAction = { showClearHistoryDialog = true })
                         Column(
                             modifier = Modifier.padding(horizontal = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             history.take(5).forEachIndexed { index, product ->
-                                HistoryItem(product, viewModel, index, appTheme)
+                                HistoryItem(product, viewModel, index, appTheme, textPreferences)
                             }
                         }
                     }
@@ -442,13 +471,13 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
 
                 if (favorites.isNotEmpty()) {
                     item {
-                        SectionHeader("Meus Favoritos")
+                        SectionHeader("Meus Favoritos", textPreferences)
                         Column(
                             modifier = Modifier.padding(horizontal = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             favorites.forEachIndexed { index, product ->
-                                ProductCard(product, viewModel, index, appTheme)
+                                ProductCard(product, viewModel, index, appTheme, textPreferences)
                             }
                         }
                     }
@@ -534,7 +563,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                     )
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(products, key = { _, item -> item.code }) { index, product ->
-                            ProductCard(product, viewModel, index, appTheme)
+                            ProductCard(product, viewModel, index, appTheme, textPreferences)
                         }
                     }
                 }
@@ -547,7 +576,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                     Text("Mais Utilizados", style = MaterialTheme.typography.headlineSmall)
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(mostUsed, key = { _, item -> item.code }) { index, product ->
-                            ProductCard(product, viewModel, index, appTheme)
+                            ProductCard(product, viewModel, index, appTheme, textPreferences)
                         }
                     }
                 }
@@ -555,10 +584,11 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
         }
 
         selectedCategory?.let { category ->
-            CategoryProductsSheet(
+                CategoryProductsSheet(
                 category = category,
                 viewModel = viewModel,
                 appTheme = appTheme,
+                textPreferences = textPreferences,
                 onDismiss = { selectedCategory = null }
             )
         }
@@ -640,7 +670,12 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
     }
 
 @Composable
-fun SectionHeader(title: String, actionLabel: String? = null, onAction: (() -> Unit)? = null) {
+fun SectionHeader(
+    title: String,
+    textPreferences: HomeTextPreferences = HomeTextPreferences(),
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -648,21 +683,34 @@ fun SectionHeader(title: String, actionLabel: String? = null, onAction: (() -> U
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
+        StylizedText(
             text = title,
-            style = MaterialTheme.typography.labelMedium,
+            baseStyle = MaterialTheme.typography.labelMedium,
+            boldOutline = textPreferences.boldOutline,
+            uppercaseBold = textPreferences.uppercaseBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         if (actionLabel != null && onAction != null) {
             TextButton(onClick = onAction) {
-                Text(actionLabel, style = MaterialTheme.typography.labelSmall)
+                StylizedText(
+                    text = actionLabel,
+                    baseStyle = MaterialTheme.typography.labelSmall,
+                    boldOutline = textPreferences.boldOutline,
+                    uppercaseBold = textPreferences.uppercaseBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
         }
     }
 }
 
 @Composable
-fun CategorySection(viewModel: MainViewModel, appTheme: String, onCategoryClick: (String) -> Unit = {}) {
+fun CategorySection(
+    viewModel: MainViewModel,
+    appTheme: String,
+    textPreferences: HomeTextPreferences = HomeTextPreferences(),
+    onCategoryClick: (String) -> Unit = {}
+) {
     val categories = listOf(
         Pair("Açougue", MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer),
         Pair("Cafeteria", MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer),
@@ -687,9 +735,11 @@ fun CategorySection(viewModel: MainViewModel, appTheme: String, onCategoryClick:
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = category.uppercase(),
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                StylizedText(
+                    text = category,
+                    baseStyle = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    boldOutline = textPreferences.boldOutline,
+                    uppercaseBold = true,
                     color = dynamicColors.second
                 )
             }
@@ -703,6 +753,7 @@ fun CategoryProductsSheet(
     category: String,
     viewModel: MainViewModel,
     appTheme: String,
+    textPreferences: HomeTextPreferences = HomeTextPreferences(),
     onDismiss: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
@@ -713,7 +764,13 @@ fun CategoryProductsSheet(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(category.uppercase(), style = MaterialTheme.typography.headlineSmall)
+            StylizedText(
+                text = category,
+                baseStyle = MaterialTheme.typography.headlineSmall,
+                boldOutline = textPreferences.boldOutline,
+                uppercaseBold = true,
+                color = MaterialTheme.colorScheme.onSurface
+            )
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -723,7 +780,7 @@ fun CategoryProductsSheet(
             )
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed(products, key = { _, item -> item.code }) { index, product ->
-                    ProductCard(product, viewModel, index, appTheme)
+                    ProductCard(product, viewModel, index, appTheme, textPreferences)
                 }
             }
         }
@@ -737,7 +794,13 @@ private fun normalizeNotificationText(value: String): String =
         .trim()
 
 @Composable
-fun ProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, appTheme: String = "multicolor") {
+fun ProductCard(
+    product: Product,
+    viewModel: MainViewModel,
+    index: Int = 0,
+    appTheme: String = "multicolor",
+    textPreferences: HomeTextPreferences = HomeTextPreferences()
+) {
     var showDialog by remember { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(product = product, onDismiss = { showDialog = false })
@@ -772,9 +835,11 @@ fun ProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, appT
                     .background(dynColors.first),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = product.name.take(1).uppercase(),
-                    style = MaterialTheme.typography.titleMedium,
+                StylizedText(
+                    text = product.name.take(1),
+                    baseStyle = MaterialTheme.typography.titleMedium,
+                    boldOutline = textPreferences.boldOutline,
+                    uppercaseBold = true,
                     color = dynColors.second
                 )
             }
@@ -783,9 +848,12 @@ fun ProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, appT
         Spacer(modifier = Modifier.width(16.dp))
 
         Column(modifier = Modifier.weight(1f)) {
-            Text(
+            StylizedText(
                 text = product.name,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground)
+                baseStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                boldOutline = textPreferences.boldOutline,
+                uppercaseBold = textPreferences.uppercaseBold,
+                color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(modifier = Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -794,9 +862,11 @@ fun ProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, appT
                     style = MaterialTheme.typography.bodySmall
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = product.category.uppercase(),
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
+                StylizedText(
+                    text = product.category,
+                    baseStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
+                    boldOutline = textPreferences.boldOutline,
+                    uppercaseBold = true,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -831,7 +901,13 @@ fun ProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, appT
 
 
 @Composable
-fun MiniProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, appTheme: String = "multicolor") {
+fun MiniProductCard(
+    product: Product,
+    viewModel: MainViewModel,
+    index: Int = 0,
+    appTheme: String = "multicolor",
+    textPreferences: HomeTextPreferences = HomeTextPreferences()
+) {
     var showDialog by remember { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(product = product, onDismiss = { showDialog = false })
@@ -873,9 +949,11 @@ fun MiniProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, 
                         .background(dynColors.first),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = product.name.take(1).uppercase(),
-                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
+                    StylizedText(
+                        text = product.name.take(1),
+                        baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
+                        boldOutline = textPreferences.boldOutline,
+                        uppercaseBold = true,
                         color = dynColors.second
                     )
                 }
@@ -899,12 +977,14 @@ fun MiniProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, 
         }
         
         Column {
-            Text(
+            StylizedText(
                 text = product.name,
-                style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
+                baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
+                boldOutline = textPreferences.boldOutline,
+                uppercaseBold = textPreferences.uppercaseBold,
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 2,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -912,12 +992,14 @@ fun MiniProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, 
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = product.category.uppercase(),
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
+                StylizedText(
+                    text = product.category,
+                    baseStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
+                    boldOutline = textPreferences.boldOutline,
+                    uppercaseBold = true,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Text(
@@ -932,7 +1014,13 @@ fun MiniProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, 
 }
 
 @Composable
-fun HistoryItem(product: Product, viewModel: MainViewModel, index: Int = 0, appTheme: String = "multicolor") {
+fun HistoryItem(
+    product: Product,
+    viewModel: MainViewModel,
+    index: Int = 0,
+    appTheme: String = "multicolor",
+    textPreferences: HomeTextPreferences = HomeTextPreferences()
+) {
     var showDialog by remember { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(product = product, onDismiss = { showDialog = false })
@@ -958,9 +1046,11 @@ fun HistoryItem(product: Product, viewModel: MainViewModel, index: Int = 0, appT
             )
             Spacer(modifier = Modifier.width(16.dp))
             Column {
-                Text(
+                StylizedText(
                     text = product.name,
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
+                    baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
+                    boldOutline = textPreferences.boldOutline,
+                    uppercaseBold = textPreferences.uppercaseBold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -969,9 +1059,11 @@ fun HistoryItem(product: Product, viewModel: MainViewModel, index: Int = 0, appT
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = product.category.uppercase(),
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
+                    StylizedText(
+                        text = product.category,
+                        baseStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
+                        boldOutline = textPreferences.boldOutline,
+                        uppercaseBold = true,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

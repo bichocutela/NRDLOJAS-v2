@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,6 +56,8 @@ fun ProductBarcodeDialog(
     val userPreferences = remember { UserPreferences(context) }
     val barcodeNumberScale by userPreferences.barcodeNumberScale.collectAsState(initial = 1.0f)
     val barcodeTitleScale by userPreferences.barcodeTitleScale.collectAsState(initial = 1.0f)
+    val boldOutline by userPreferences.boldOutline.collectAsState(initial = false)
+    val uppercaseBold by userPreferences.uppercaseBold.collectAsState(initial = false)
     val photoUrl = remember(product.imageUrl) {
         product.imageUrl
             ?.trim()
@@ -120,14 +123,18 @@ fun ProductBarcodeDialog(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                         }
-                        Text(
+                        StylizedText(
                             text = product.name,
-                            style = MaterialTheme.typography.headlineMedium.copy(
+                            baseStyle = MaterialTheme.typography.headlineMedium.copy(
                                 fontWeight = FontWeight.Black,
                                 fontSize = 28.sp * barcodeTitleScale
                             ),
+                            boldOutline = boldOutline,
+                            uppercaseBold = uppercaseBold,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
@@ -141,11 +148,13 @@ fun ProductBarcodeDialog(
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = product.category.uppercase(),
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        StylizedText(
+                            text = product.category,
+                            baseStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            boldOutline = boldOutline,
+                            uppercaseBold = true,
                             color = MaterialTheme.colorScheme.secondary,
-                            textAlign = TextAlign.Center
+                            modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(16.dp))
 

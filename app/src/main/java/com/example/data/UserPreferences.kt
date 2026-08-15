@@ -81,10 +81,6 @@ class UserPreferences(private val context: Context) {
         preferences[APP_THEME] ?: "multicolor"
     }
 
-    val appIcon: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[APP_ICON] ?: "multicolor"
-    }
-
     val appearanceMode: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[APPEARANCE_MODE] ?: "system"
     }
@@ -165,10 +161,6 @@ class UserPreferences(private val context: Context) {
         context.dataStore.edit { it[APP_THEME] = theme }
     }
 
-    suspend fun setAppIcon(icon: String) {
-        context.dataStore.edit { it[APP_ICON] = icon }
-    }
-
     suspend fun setAppearanceMode(mode: String) {
         context.dataStore.edit { it[APPEARANCE_MODE] = mode }
     }
@@ -203,7 +195,6 @@ class UserPreferences(private val context: Context) {
         val BANNER_IMAGE_URI = stringPreferencesKey("banner_image_uri")
         val LAST_NOTIFIED_PRODUCT_CODE = stringPreferencesKey("last_notified_product_code")
         val APP_THEME = stringPreferencesKey("app_theme")
-        val APP_ICON = stringPreferencesKey("app_icon")
         val APPEARANCE_MODE = stringPreferencesKey("appearance_mode")
         val ONBOARDING_SHOWN = booleanPreferencesKey("onboarding_shown")
         val INSTALLATION_ID = stringPreferencesKey("installation_id")

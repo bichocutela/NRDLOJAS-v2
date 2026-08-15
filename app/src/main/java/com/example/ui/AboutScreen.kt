@@ -304,7 +304,7 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Text("Gerar versão em QR Code")
+                    Text("Compartilhar via QR Code")
                 }
             }
 
