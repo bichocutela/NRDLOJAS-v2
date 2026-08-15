@@ -147,7 +147,7 @@ serve(async (req) => {
       throw new Error("Missing title or body")
     }
 
-    const allowedTitles = ["Produto adicionado", "Código alterado"]
+    const allowedTitles = ["Produto adicionado", "Código alterado", "Sugestão corrigida"]
     if (!allowedTitles.includes(title)) {
       throw new Error("Unsupported notification type")
     }
@@ -169,7 +169,11 @@ serve(async (req) => {
             data: {
               title,
               body,
-              type: title === "Código alterado" ? "CODE_CHANGED" : "NEW_PRODUCT",
+              type: title === "Código alterado"
+                ? "CODE_CHANGED"
+                : title === "Sugestão corrigida"
+                ? "SUGGESTION_FIXED"
+                : "NEW_PRODUCT",
             },
             android: {
               priority: "high",

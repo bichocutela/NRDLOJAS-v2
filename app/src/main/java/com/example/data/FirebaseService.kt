@@ -85,6 +85,43 @@ object FirebaseService {
         }
     }
 
+    private suspend fun publishSuggestionFixedEvent(topic: String, suggestionText: String) {
+        if (topic.isBlank() || !isFirebaseConfigured()) return
+        try {
+            val supabaseUrl = BuildConfig.SUPABASE_URL
+            val supabaseKey = BuildConfig.SUPABASE_ANON_KEY
+            val firebaseToken = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                ?.getIdToken(false)?.await()?.token
+            if (supabaseUrl.isBlank() || supabaseKey.isBlank() || firebaseToken.isNullOrBlank()) {
+                Log.w("FirebaseService", "Push de sugestão não enviado: configuração ou token ausente")
+                return
+            }
+            val payload = org.json.JSONObject().apply {
+                put("title", "Sugestão corrigida")
+                put("body", "Sua sugestão foi corrigida: $suggestionText")
+                put("topic", topic)
+            }
+            val request = okhttp3.Request.Builder()
+                .url("$supabaseUrl/functions/v1/send-fcm")
+                .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                .addHeader("Authorization", "Bearer $supabaseKey")
+                .addHeader("x-firebase-token", firebaseToken)
+                .build()
+            withContext(Dispatchers.IO) {
+                okHttpClient.newCall(request).execute().use { response ->
+                    val responseBody = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        Log.e("FirebaseService", "Push de sugestão falhou: HTTP ${response.code}; corpo=$responseBody")
+                    } else {
+                        Log.d("FirebaseService", "Push de sugestão corrigida enviado ao tópico privado")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FirebaseService", "Erro ao enviar push de sugestão corrigida", e)
+        }
+    }
+
     suspend fun productExists(code: String): Boolean {
         if (!isFirebaseConfigured()) return false
         return try {
@@ -616,8 +653,15 @@ object FirebaseService {
     suspend fun updateSuggestionStatus(id: String, status: String): Boolean {
         if (id.isBlank() || status !in setOf(ProductSuggestion.STATUS_PENDING, ProductSuggestion.STATUS_FIXED) || !isFirebaseConfigured()) return false
         return try {
-            FirebaseFirestore.getInstance().collection("suggestions").document(id)
-                .update("status", status).await()
+            val suggestionRef = FirebaseFirestore.getInstance().collection("suggestions").document(id)
+            val previous = suggestionRef.get().await()
+            val previousStatus = previous.getString("status") ?: ProductSuggestion.STATUS_PENDING
+            suggestionRef.update("status", status).await()
+            if (status == ProductSuggestion.STATUS_FIXED && previousStatus != ProductSuggestion.STATUS_FIXED) {
+                val installationId = previous.getString("installationId").orEmpty()
+                val topic = com.example.util.FcmTopicSubscription.suggestionTopicForInstallation(installationId)
+                publishSuggestionFixedEvent(topic, previous.getString("text").orEmpty())
+            }
             true
         } catch (e: Exception) {
             Log.e("FirebaseService", "Erro ao atualizar status da sugestão: $id", e)

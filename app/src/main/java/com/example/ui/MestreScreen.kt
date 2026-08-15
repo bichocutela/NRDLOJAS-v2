@@ -11,6 +11,8 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Pending
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +21,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import com.example.data.FirebaseService
+import com.example.data.ProductSuggestion
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,6 +40,7 @@ fun MestreScreen(
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
     val mostUsedLimit by viewModel.userPreferences.mostUsedLimit.collectAsStateWithLifecycle(initialValue = 8)
     val carouselIntervalSeconds by viewModel.userPreferences.carouselIntervalSeconds.collectAsStateWithLifecycle(initialValue = 5)
+    val suggestions by FirebaseService.observeSuggestions().collectAsStateWithLifecycle(initialValue = emptyList())
     val coroutineScope = rememberCoroutineScope()
     
     LaunchedEffect(Unit) {
@@ -92,6 +100,40 @@ fun MestreScreen(
                     Icon(Icons.Default.Sync, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Sincronizar Banco de Dados")
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Sugestões dos usuários", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        Text(
+                            suggestions.count { it.status == ProductSuggestion.STATUS_PENDING }.toString(),
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (suggestions.isEmpty()) {
+                        Text("Nenhuma sugestão recebida.", style = MaterialTheme.typography.bodyMedium)
+                    } else {
+                        suggestions.forEach { suggestion ->
+                            SuggestionManagementItem(suggestion) { status ->
+                                coroutineScope.launch {
+                                    val updated = FirebaseService.updateSuggestionStatus(suggestion.id, status)
+                                    snackbarHostState.showSnackbar(
+                                        if (updated) "Sugestão marcada como $status." else "Não foi possível atualizar a sugestão."
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -328,6 +370,61 @@ fun InfoCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: Strin
             Column {
                 Text(title, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun SuggestionManagementItem(
+    suggestion: ProductSuggestion,
+    onStatusChange: (String) -> Unit
+) {
+    val dateText = if (suggestion.createdAt > 0L) {
+        SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(suggestion.createdAt))
+    } else {
+        "Data não informada"
+    }
+    val isFixed = suggestion.status == ProductSuggestion.STATUS_FIXED
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(suggestion.text, style = MaterialTheme.typography.bodyLarge)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("Enviada por: ${suggestion.submittedBy}", style = MaterialTheme.typography.bodySmall)
+            Text(dateText, style = MaterialTheme.typography.bodySmall)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = { onStatusChange(ProductSuggestion.STATUS_PENDING) },
+                    enabled = isFixed,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) {
+                    Icon(Icons.Default.Pending, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Pendente", maxLines = 1)
+                }
+                Button(
+                    onClick = { onStatusChange(ProductSuggestion.STATUS_FIXED) },
+                    enabled = !isFixed,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                ) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Corrigido", maxLines = 1)
+                }
             }
         }
     }

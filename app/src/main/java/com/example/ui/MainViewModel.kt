@@ -12,6 +12,7 @@ import com.example.data.FirebaseService
 import com.example.data.ProductRepository
 import com.example.data.ProductStandards
 import com.example.data.UserPreferences
+import com.example.util.FcmTopicSubscription
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -62,6 +63,10 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     val productsCountByCategory = repository.productsCountByCategory.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val latestProductLocal = repository.latestProductLocal.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     init {
+        viewModelScope.launch {
+            val installationId = userPreferences.getOrCreateInstallationId()
+            FcmTopicSubscription.subscribeToSuggestionTopic(installationId)
+        }
         viewModelScope.launch {
             FirebaseService.observeDynamicTabs().collect { remoteTabs ->
                 val localTabs = repository.getAllTabs().first()

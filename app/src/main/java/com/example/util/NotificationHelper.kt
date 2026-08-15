@@ -39,6 +39,11 @@ object NotificationHelper {
                 description = "Notificações quando o código de um produto é alterado"
             }
             notificationManager.createNotificationChannel(channelCodeChanged)
+
+            val channelSuggestionFixed = NotificationChannel("suggestion_fixed", "Sugestão corrigida", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Notificações quando uma sugestão do usuário é corrigida"
+            }
+            notificationManager.createNotificationChannel(channelSuggestionFixed)
             
             // Legacy channel just in case
             val legacy = NotificationChannel(CHANNEL_ID, "Atualizações de Produtos", NotificationManager.IMPORTANCE_DEFAULT)
@@ -83,6 +88,7 @@ object NotificationHelper {
     fun channelIdForType(type: String): String? = when (type) {
         "NEW_PRODUCT" -> "product_added"
         "CODE_CHANGED" -> "product_code_changed"
+        "SUGGESTION_FIXED" -> "suggestion_fixed"
         else -> null
     }
 
