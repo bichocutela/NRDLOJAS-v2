@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import com.example.data.Product
 import com.example.data.ProductStandards
 import androidx.compose.material.icons.filled.Edit
@@ -54,6 +55,7 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val adminScrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
     val allProducts by viewModel.allProducts.collectAsStateWithLifecycle()
     val exportProducts: () -> Unit = {
@@ -108,7 +110,7 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 16.dp, vertical = 20.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(adminScrollState),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
                 Text(
@@ -289,14 +291,24 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             Spacer(modifier = Modifier.height(32.dp))
             HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
-            AdminProductList(allProducts, viewModel)
+            AdminProductList(
+                products = allProducts,
+                viewModel = viewModel,
+                onScrollToTop = {
+                    scope.launch { adminScrollState.animateScrollTo(0) }
+                }
+            )
 
         }
     }
 }
 
 @Composable
-fun AdminProductList(products: List<Product>, viewModel: MainViewModel) {
+fun AdminProductList(
+    products: List<Product>,
+    viewModel: MainViewModel,
+    onScrollToTop: () -> Unit
+) {
     var searchQuery by remember { mutableStateOf("") }
     var pageIndex by remember { mutableStateOf(0) }
     val pageSize = 50
@@ -428,6 +440,22 @@ fun AdminProductList(products: List<Product>, viewModel: MainViewModel) {
                     ) {
                         Text("Próxima", maxLines = 1)
                     }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onScrollToTop,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                        contentColor = MaterialTheme.colorScheme.onSecondary
+                    ),
+                    modifier = Modifier.width(220.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Voltar pro Topo", maxLines = 1)
                 }
             }
         }
