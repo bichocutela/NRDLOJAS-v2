@@ -114,6 +114,20 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
             var qrReleaseUrl by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
             var showQrErrorDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
             var qrErrorMessage by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("Verifique sua conexão e tente novamente.") }
+            var updateAvailable by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                when (val releaseResult = com.example.util.UpdateChecker.checkLatestRelease()) {
+                    is com.example.util.ReleaseCheckResult.Success -> {
+                        if (isRemoteVersionNewer(com.example.BuildConfig.VERSION_NAME, releaseResult.tagName)) {
+                            updateTag = releaseResult.tagName
+                            updateUrl = releaseResult.downloadUrl
+                            updateAvailable = true
+                        }
+                    }
+                    else -> Unit
+                }
+            }
 
             
             if (showQrDialog && qrBitmap != null) {
@@ -230,6 +244,35 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                 )
             }
 
+            if (updateAvailable) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "Atualização disponível",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "A versão $updateTag está disponível. Toque abaixo para ver as opções de atualização.",
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { showUpdateDialog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Ver atualização")
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             Button(
                 onClick = {
                     isChecking = true
@@ -241,29 +284,14 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                             val url = releaseResult.downloadUrl
                             val currentVersion = com.example.BuildConfig.VERSION_NAME
                             
-                            // Numeric version check
-                            val remoteTag = tag.removePrefix("v")
-                            val currentParts = currentVersion.split(".").map { it.toIntOrNull() ?: 0 }
-                            val remoteParts = remoteTag.split(".").map { it.toIntOrNull() ?: 0 }
-                            
-                            var isNewer = false
-                            val maxLength = maxOf(currentParts.size, remoteParts.size)
-                            for (i in 0 until maxLength) {
-                                val c = currentParts.getOrElse(i) { 0 }
-                                val r = remoteParts.getOrElse(i) { 0 }
-                                if (r > c) {
-                                    isNewer = true
-                                    break
-                                } else if (r < c) {
-                                    break
-                                }
-                            }
+                            val isNewer = isRemoteVersionNewer(currentVersion, tag)
                             
                             if (isNewer) {
                                 updateTag = tag
                                 updateUrl = url
                                 showUpdateDialog = true
                             } else {
+                                updateAvailable = false
                                 android.widget.Toast.makeText(context, "Você já possui a última versão.", android.widget.Toast.LENGTH_SHORT).show()
                             }
                         } else {
@@ -344,6 +372,19 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
 
         }
     }
+}
+
+private fun isRemoteVersionNewer(currentVersion: String, remoteTag: String): Boolean {
+    val currentParts = currentVersion.split(".").map { it.toIntOrNull() ?: 0 }
+    val remoteParts = remoteTag.removePrefix("v").split(".").map { it.toIntOrNull() ?: 0 }
+    val maxLength = maxOf(currentParts.size, remoteParts.size)
+    for (index in 0 until maxLength) {
+        val current = currentParts.getOrElse(index) { 0 }
+        val remote = remoteParts.getOrElse(index) { 0 }
+        if (remote > current) return true
+        if (remote < current) return false
+    }
+    return false
 }
 
 private fun releaseFailureMessage(result: com.example.util.ReleaseCheckResult): String = when (result) {
