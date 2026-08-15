@@ -326,15 +326,6 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     onClick = { selectedCorrectedSuggestion = suggestion }
                 )
             }
-            if (userSuggestions.none { it.status == com.example.data.ProductSuggestion.STATUS_FIXED }) {
-                OutlinedButton(
-                    onClick = { showSuggestionDialog = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Enviar outra sugestão?!")
-                }
-            }
-
             Text(
                 "Histórico de sugestões",
                 style = MaterialTheme.typography.titleMedium,
@@ -371,12 +362,8 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 }
             },
             confirmButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = {
-                        selectedCorrectedSuggestion = null
-                        showSuggestionDialog = true
-                    }) { Text("Enviar outra sugestão?!") }
-                    TextButton(onClick = { selectedCorrectedSuggestion = null }) { Text("Fechar") }
+                TextButton(onClick = { selectedCorrectedSuggestion = null }) {
+                    Text("Fechar")
                 }
             },
             dismissButton = {
