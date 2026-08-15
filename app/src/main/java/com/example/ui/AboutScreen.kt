@@ -273,7 +273,7 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                             modifier = Modifier.fillMaxWidth(),
                             enabled = updateUrl.isNotBlank()
                         ) {
-                            Text("Baixar e instalar")
+                            Text("Baixar agora")
                         }
                     }
                 }
