@@ -388,28 +388,46 @@ fun AdminProductList(products: List<Product>, viewModel: MainViewModel) {
             }
         }
         if (pageCount > 0) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                OutlinedButton(
-                    onClick = { pageIndex = (currentPage - 1).coerceAtLeast(0) },
-                    enabled = currentPage > 0
-                ) {
-                    Text("Anterior")
-                }
                 Text(
                     text = "Página atual: ${currentPage + 1} | Total de páginas: $pageCount",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(bottom = 12.dp)
                 )
-                OutlinedButton(
-                    onClick = { pageIndex = (currentPage + 1).coerceAtMost(pageCount - 1) },
-                    enabled = currentPage < pageCount - 1
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Próxima")
+                    Button(
+                        onClick = { pageIndex = (currentPage - 1).coerceAtLeast(0) },
+                        enabled = currentPage > 0,
+                        modifier = Modifier.width(140.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    ) {
+                        Text("Anterior", maxLines = 1)
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Button(
+                        onClick = { pageIndex = (currentPage + 1).coerceAtMost(pageCount - 1) },
+                        enabled = currentPage < pageCount - 1,
+                        modifier = Modifier.width(140.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    ) {
+                        Text("Próxima", maxLines = 1)
+                    }
                 }
             }
         }
