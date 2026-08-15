@@ -838,14 +838,14 @@ fun MiniProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, 
     }
     Column(
         modifier = Modifier
-            .width(160.dp)
-            .height(100.dp)
+            .width(180.dp)
+            .height(150.dp)
             .clip(RoundedCornerShape(24.dp))
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f), RoundedCornerShape(24.dp))
             .vibrateClickable(viewModel) { viewModel.onProductSearched(product); showDialog = true }
-            .padding(16.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -903,7 +903,8 @@ fun MiniProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, 
                 text = product.name,
                 style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
                 color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -914,13 +915,17 @@ fun MiniProductCard(product: Product, viewModel: MainViewModel, index: Int = 0, 
                 Text(
                     text = product.category.uppercase(),
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
             Text(
                 text = product.code,
                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
     }
