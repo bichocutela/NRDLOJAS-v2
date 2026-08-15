@@ -258,15 +258,22 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "A versão $updateTag está disponível. Toque abaixo para ver as opções de atualização.",
+                            "A versão $updateTag está disponível. Toque abaixo para baixar e instalar a atualização.",
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(
-                            onClick = { showUpdateDialog = true },
-                            modifier = Modifier.fillMaxWidth()
+                            onClick = {
+                                com.example.util.UpdateChecker.downloadAndInstallApk(
+                                    context,
+                                    updateUrl,
+                                    updateTag
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = updateUrl.isNotBlank()
                         ) {
-                            Text("Ver atualização")
+                            Text("Baixar e instalar")
                         }
                     }
                 }

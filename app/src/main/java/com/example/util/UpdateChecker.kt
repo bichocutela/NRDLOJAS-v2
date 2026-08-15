@@ -206,10 +206,7 @@ object UpdateChecker {
         try {
             val fileName = "update_$versionTag.apk"
             val downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-            val existingFile = File(downloadDir, fileName)
-            if (existingFile.exists()) {
-                existingFile.delete()
-            }
+            cleanupOldUpdateApks(downloadDir)
 
             val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             val uri = Uri.parse(url)
@@ -282,6 +279,16 @@ object UpdateChecker {
         } catch (e: Exception) {
             e.printStackTrace()
             Toast.makeText(context, "Erro ao iniciar download", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun cleanupOldUpdateApks(downloadDir: File?) {
+        downloadDir?.listFiles { file ->
+            file.isFile && file.name.startsWith("update_") && file.name.endsWith(".apk", ignoreCase = true)
+        }?.forEach { apkFile ->
+            if (!apkFile.delete()) {
+                Log.w(TAG, "Não foi possível remover APK antigo: ${apkFile.name}")
+            }
         }
     }
 
