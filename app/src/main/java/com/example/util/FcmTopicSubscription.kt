@@ -12,15 +12,24 @@ object FcmTopicSubscription {
     fun suggestionTopicForInstallation(installationId: String): String =
         "$SUGGESTION_TOPIC_PREFIX${installationId.replace("-", "")}".take(900)
 
-    suspend fun subscribeToSuggestionTopic(installationId: String) {
+    suspend fun reconcileSuggestionTopic(enabled: Boolean, installationId: String) {
         if (installationId.isBlank()) return
         val topic = suggestionTopicForInstallation(installationId)
+        val operation = if (enabled) "subscribe" else "unsubscribe"
         try {
-            FirebaseMessaging.getInstance().subscribeToTopic(topic).await()
-            Log.d(TAG, "Inscrição concluída no tópico privado de sugestões")
+            if (enabled) {
+                FirebaseMessaging.getInstance().subscribeToTopic(topic).await()
+            } else {
+                FirebaseMessaging.getInstance().unsubscribeFromTopic(topic).await()
+            }
+            Log.d(TAG, "Operação concluída: $operation no tópico privado de sugestões")
         } catch (error: Exception) {
-            Log.e(TAG, "Falha ao inscrever no tópico privado de sugestões", error)
+            Log.e(TAG, "Falha na operação $operation no tópico privado de sugestões", error)
         }
+    }
+
+    suspend fun subscribeToSuggestionTopic(installationId: String) {
+        reconcileSuggestionTopic(enabled = true, installationId = installationId)
     }
 
     suspend fun reconcile(notificationsEnabled: Boolean) {

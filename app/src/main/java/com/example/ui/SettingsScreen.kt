@@ -285,6 +285,8 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         coroutineScope.launch {
                             viewModel.userPreferences.setNotificationsEnabled(enabled)
                             FcmTopicSubscription.reconcile(enabled)
+                            val installationId = viewModel.userPreferences.getOrCreateInstallationId()
+                            FcmTopicSubscription.reconcileSuggestionTopic(enabled, installationId)
                         }
                     }
                 )

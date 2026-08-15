@@ -154,6 +154,11 @@ serve(async (req) => {
 
     const accessToken = await getAccessToken(serviceAccount)
     const projectId = serviceAccount.project_id || FIREBASE_PROJECT_ID
+    const notificationChannelId = title === "Código alterado"
+      ? "product_code_changed"
+      : title === "Sugestão corrigida"
+      ? "suggestion_fixed"
+      : "product_added"
 
     const fcmResponse = await fetch(
       `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
@@ -166,6 +171,10 @@ serve(async (req) => {
         body: JSON.stringify({
           message: {
             topic,
+            notification: {
+              title,
+              body,
+            },
             data: {
               title,
               body,
@@ -177,6 +186,10 @@ serve(async (req) => {
             },
             android: {
               priority: "high",
+              notification: {
+                channel_id: notificationChannelId,
+                icon: "ic_launcher_multicolor",
+              },
             },
           },
         }),

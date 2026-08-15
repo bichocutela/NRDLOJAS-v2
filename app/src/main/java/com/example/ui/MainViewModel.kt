@@ -65,7 +65,8 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     init {
         viewModelScope.launch {
             val installationId = userPreferences.getOrCreateInstallationId()
-            FcmTopicSubscription.subscribeToSuggestionTopic(installationId)
+            val notificationsEnabled = userPreferences.notificationsEnabled.first()
+            FcmTopicSubscription.reconcileSuggestionTopic(notificationsEnabled, installationId)
         }
         viewModelScope.launch {
             FirebaseService.observeDynamicTabs().collect { remoteTabs ->

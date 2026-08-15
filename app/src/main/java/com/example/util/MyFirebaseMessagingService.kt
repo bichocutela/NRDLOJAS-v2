@@ -2,6 +2,7 @@ package com.example.util
 
 import android.util.Log
 import com.example.data.UserPreferences
+import com.example.util.FcmTopicSubscription
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.flow.first
@@ -76,6 +77,14 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
+        Log.d(TAG, "Token FCM renovado; reconciliando inscrições sem registrar o token")
+        val preferences = UserPreferences(applicationContext)
+        runBlocking {
+            val notificationsEnabled = preferences.notificationsEnabled.first()
+            FcmTopicSubscription.reconcile(notificationsEnabled)
+            val installationId = preferences.getOrCreateInstallationId()
+            FcmTopicSubscription.reconcileSuggestionTopic(notificationsEnabled, installationId)
+        }
     }
 
     private companion object {
