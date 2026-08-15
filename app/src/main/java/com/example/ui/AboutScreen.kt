@@ -101,8 +101,6 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
 
             val context = androidx.compose.ui.platform.LocalContext.current
             val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
-            var isChecking by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-            var showUpdateDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
             var updateTag by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
             var updateUrl by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
 
@@ -223,27 +221,6 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                 )
             }
 
-            if (showUpdateDialog) {
-                AlertDialog(
-                    onDismissRequest = { showUpdateDialog = false },
-                    title = { Text("Atualização Disponível") },
-                    text = { Text("Uma nova versão ($updateTag) está disponível. Deseja baixar e instalar agora?") },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            showUpdateDialog = false
-                            com.example.util.UpdateChecker.downloadAndInstallApk(context, updateUrl, updateTag)
-                        }) {
-                            Text("Sim")
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showUpdateDialog = false }) {
-                            Text("Não")
-                        }
-                    }
-                )
-            }
-
             if (updateAvailable) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -279,52 +256,6 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                 }
                 Spacer(modifier = Modifier.height(12.dp))
             }
-
-            Button(
-                onClick = {
-                    isChecking = true
-                    coroutineScope.launch {
-                        val releaseResult = com.example.util.UpdateChecker.checkLatestRelease()
-                        isChecking = false
-                        if (releaseResult is com.example.util.ReleaseCheckResult.Success) {
-                            val tag = releaseResult.tagName
-                            val url = releaseResult.downloadUrl
-                            val currentVersion = com.example.BuildConfig.VERSION_NAME
-                            
-                            val isNewer = isRemoteVersionNewer(currentVersion, tag)
-                            
-                            if (isNewer) {
-                                updateTag = tag
-                                updateUrl = url
-                                showUpdateDialog = true
-                            } else {
-                                updateAvailable = false
-                                android.widget.Toast.makeText(context, "Você já possui a última versão.", android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        } else {
-                            android.widget.Toast.makeText(
-                                context,
-                                releaseFailureMessage(releaseResult),
-                                android.widget.Toast.LENGTH_LONG
-                            ).show()
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isChecking
-            ) {
-                if (isChecking) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text("Verificar Atualizações")
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
 
             Button(
                 onClick = {
