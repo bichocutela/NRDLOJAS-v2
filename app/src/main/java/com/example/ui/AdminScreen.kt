@@ -298,6 +298,11 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
 @Composable
 fun AdminProductList(products: List<Product>, viewModel: MainViewModel) {
     var searchQuery by remember { mutableStateOf("") }
+    var pageIndex by remember { mutableStateOf(0) }
+    val pageSize = 50
+    LaunchedEffect(searchQuery, products.size) {
+        pageIndex = 0
+    }
     
     Text("Gerenciar produtos", style = MaterialTheme.typography.headlineSmall)
     Text(
@@ -343,18 +348,70 @@ fun AdminProductList(products: List<Product>, viewModel: MainViewModel) {
         it.category.contains(searchQuery, ignoreCase = true) ||
         it.code.contains(searchQuery, ignoreCase = true)
     }
-    
-    val groupedProducts = filteredProducts.groupBy { it.category }
-    
-    groupedProducts.forEach { (category, categoryProducts) ->
+    val pageCount = if (filteredProducts.isEmpty()) {
+        0
+    } else {
+        (filteredProducts.size + pageSize - 1) / pageSize
+    }
+    val currentPage = pageIndex.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
+    val productsToRender = if (searchQuery.isBlank()) {
+        emptyList()
+    } else {
+        filteredProducts
+            .drop(currentPage * pageSize)
+            .take(pageSize)
+    }
+
+    if (searchQuery.isBlank()) {
         Text(
-            text = category,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(vertical = 8.dp)
+            text = "Digite o nome, código ou selecione uma categoria para carregar os produtos.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 16.dp)
         )
-        categoryProducts.forEach { product ->
-            AdminProductItem(product, viewModel)
+    } else if (filteredProducts.isEmpty()) {
+        Text(
+            text = "Nenhum produto encontrado.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 16.dp)
+        )
+    } else {
+        val groupedProducts = productsToRender.groupBy { it.category }
+        groupedProducts.forEach { (category, categoryProducts) ->
+            Text(
+                text = category,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+            categoryProducts.forEach { product ->
+                AdminProductItem(product, viewModel)
+            }
+        }
+        if (pageCount > 1) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = { pageIndex = (currentPage - 1).coerceAtLeast(0) },
+                    enabled = currentPage > 0
+                ) {
+                    Text("Anterior")
+                }
+                Text(
+                    text = "Página ${currentPage + 1} de $pageCount",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedButton(
+                    onClick = { pageIndex = (currentPage + 1).coerceAtMost(pageCount - 1) },
+                    enabled = currentPage < pageCount - 1
+                ) {
+                    Text("Próxima")
+                }
+            }
         }
     }
 }
