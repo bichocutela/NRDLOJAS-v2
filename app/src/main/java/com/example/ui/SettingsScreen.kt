@@ -42,6 +42,17 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
 
     var showSuggestionDialog by remember { mutableStateOf(false) }
     var suggestionText by remember { mutableStateOf("") }
+    var suggestionSending by remember { mutableStateOf(false) }
+    var selectedCorrectedSuggestion by remember { mutableStateOf<com.example.data.ProductSuggestion?>(null) }
+    var suggestionPendingDeletion by remember { mutableStateOf<com.example.data.ProductSuggestion?>(null) }
+    var deletingSuggestion by remember { mutableStateOf(false) }
+    val installationId by produceState(initialValue = "") {
+        value = viewModel.userPreferences.getOrCreateInstallationId()
+    }
+    val userSuggestions by remember(installationId) {
+        com.example.data.FirebaseService.observeUserSuggestions(installationId)
+    }.collectAsState(initial = emptyList())
+    val publicSuggestions by com.example.data.FirebaseService.observePublicSuggestions().collectAsState(initial = emptyList())
 
     Scaffold(
         topBar = {
@@ -306,7 +317,107 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             ) {
                 Text("Enviar Sugestão de Melhoria")
             }
+
+            userSuggestions.filter { it.status == com.example.data.ProductSuggestion.STATUS_FIXED }.forEach { suggestion ->
+                SuggestionResolvedCard(
+                    suggestion = suggestion,
+                    onClick = { selectedCorrectedSuggestion = suggestion }
+                )
+            }
+            if (userSuggestions.none { it.status == com.example.data.ProductSuggestion.STATUS_FIXED }) {
+                OutlinedButton(
+                    onClick = { showSuggestionDialog = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Enviar outra sugestão?!")
+                }
+            }
+
+            Text(
+                "Histórico de sugestões",
+                style = MaterialTheme.typography.titleMedium,
+                color = feedbackColors.first
+            )
+            Text(
+                "Consulte antes de enviar uma nova sugestão para evitar pedidos repetidos.",
+                style = MaterialTheme.typography.bodySmall
+            )
+            if (publicSuggestions.isEmpty()) {
+                Text("Nenhuma sugestão registrada.", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                publicSuggestions.forEach { suggestion ->
+                    PublicSuggestionCard(suggestion = suggestion)
+                }
+            }
         }
+    }
+
+    selectedCorrectedSuggestion?.let { suggestion ->
+        val message = if (suggestion.appVersion.isBlank() || suggestion.appVersion == com.example.BuildConfig.VERSION_NAME) {
+            "Atualize o aplicativo pra verificar as correções solicitadas"
+        } else {
+            "Verifique as correções solicitadas"
+        }
+        AlertDialog(
+            onDismissRequest = { selectedCorrectedSuggestion = null },
+            title = { Text("Solução Corrigida") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Sua sugestão:", style = MaterialTheme.typography.labelLarge)
+                    Text(suggestion.text, style = MaterialTheme.typography.bodyLarge)
+                    Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = {
+                        selectedCorrectedSuggestion = null
+                        showSuggestionDialog = true
+                    }) { Text("Enviar outra sugestão?!") }
+                    TextButton(onClick = { selectedCorrectedSuggestion = null }) { Text("Fechar") }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        suggestionPendingDeletion = suggestion
+                        selectedCorrectedSuggestion = null
+                    },
+                    enabled = !deletingSuggestion
+                ) {
+                    Text("Excluir sugestão", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        )
+    }
+
+    suggestionPendingDeletion?.let { suggestion ->
+        AlertDialog(
+            onDismissRequest = { if (!deletingSuggestion) suggestionPendingDeletion = null },
+            title = { Text("Excluir sugestão?") },
+            text = { Text("A sugestão já foi marcada como corrigida. Deseja removê-la da sua caixa de sugestões?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deletingSuggestion = true
+                        coroutineScope.launch {
+                            val deleted = com.example.data.FirebaseService.deleteSuggestion(suggestion.id, installationId)
+                            deletingSuggestion = false
+                            suggestionPendingDeletion = null
+                            NotificationHelper.showToast(
+                                context,
+                                if (deleted) "Sugestão excluída." else "Não foi possível excluir a sugestão.",
+                                android.widget.Toast.LENGTH_LONG
+                            )
+                        }
+                    },
+                    enabled = !deletingSuggestion
+                ) { Text(if (deletingSuggestion) "Excluindo..." else "Excluir") }
+            },
+            dismissButton = {
+                TextButton(onClick = { suggestionPendingDeletion = null }, enabled = !deletingSuggestion) { Text("Cancelar") }
+            }
+        )
     }
 
     if (showSuggestionDialog) {
@@ -323,12 +434,33 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 )
             },
             confirmButton = {
-                Button(onClick = { 
-                    showSuggestionDialog = false
-                    suggestionText = ""
-                    NotificationHelper.showToast(context, "Agradecemos pela sua sugestão! Ela será visível para o ADM.", android.widget.Toast.LENGTH_LONG)
-                }) {
-                    Text("Enviar")
+                Button(
+                    onClick = {
+                        val cleanSuggestion = suggestionText.trim()
+                        if (cleanSuggestion.isBlank()) {
+                            NotificationHelper.showToast(context, "Digite uma sugestão antes de enviar.", android.widget.Toast.LENGTH_SHORT)
+                            return@Button
+                        }
+                        suggestionSending = true
+                        coroutineScope.launch {
+                            val sent = com.example.data.FirebaseService.submitSuggestion(cleanSuggestion, installationId)
+                            suggestionSending = false
+                            if (sent) {
+                                showSuggestionDialog = false
+                                suggestionText = ""
+                                NotificationHelper.showToast(context, "Sugestão enviada ao painel do Mestre.", android.widget.Toast.LENGTH_LONG)
+                            } else {
+                                NotificationHelper.showToast(context, "Não foi possível enviar a sugestão. Tente novamente.", android.widget.Toast.LENGTH_LONG)
+                            }
+                        }
+                    },
+                    enabled = !suggestionSending && suggestionText.isNotBlank()
+                ) {
+                    if (suggestionSending) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Enviar")
+                    }
                 }
             },
             dismissButton = {
@@ -340,3 +472,65 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     }
 }
 
+
+
+@Composable
+private fun SuggestionResolvedCard(
+    suggestion: com.example.data.ProductSuggestion,
+    onClick: () -> Unit
+) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Solução Corrigida",
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "Toque para ver sua sugestão e as orientações.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Text(
+                "Ver",
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+            )
+        }
+    }
+}
+
+
+@Composable
+private fun PublicSuggestionCard(suggestion: com.example.data.ProductSuggestion) {
+    val isFixed = suggestion.status == com.example.data.ProductSuggestion.STATUS_FIXED
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(suggestion.text, style = MaterialTheme.typography.bodyLarge)
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = if (isFixed) "Corrigido" else "Pendente",
+                style = MaterialTheme.typography.labelLarge,
+                color = if (isFixed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+            )
+            if (isFixed) {
+                Text(
+                    "A correção solicitada foi concluída.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}

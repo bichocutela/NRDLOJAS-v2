@@ -469,6 +469,162 @@ object FirebaseService {
         }
     }
 
+    suspend fun submitSuggestion(text: String, installationId: String): Boolean {
+        val cleanText = text.trim()
+        if (cleanText.isBlank() || !isFirebaseConfigured()) return false
+        return try {
+            val authUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            val submittedBy = authUser?.email ?: "Usuário do aplicativo"
+            val submittedByUid = authUser?.uid.orEmpty()
+            val suggestionRef = FirebaseFirestore.getInstance().collection("suggestions").document()
+            suggestionRef.set(mapOf(
+                "text" to cleanText,
+                "submittedBy" to submittedBy,
+                "submittedByUid" to submittedByUid,
+                "installationId" to installationId,
+                "appVersion" to BuildConfig.VERSION_NAME,
+                "createdAt" to System.currentTimeMillis(),
+                "status" to ProductSuggestion.STATUS_PENDING
+            )).await()
+            Log.d("FirebaseService", "Sugestão enviada: ${suggestionRef.id}")
+            true
+        } catch (e: Exception) {
+            Log.e("FirebaseService", "Erro ao enviar sugestão", e)
+            false
+        }
+    }
+
+    fun observeSuggestions(): Flow<List<ProductSuggestion>> = callbackFlow {
+        if (!isFirebaseConfigured()) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+        val registration = FirebaseFirestore.getInstance()
+            .collection("suggestions")
+            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("FirebaseService", "Erro ao observar sugestões", error)
+                    return@addSnapshotListener
+                }
+                val suggestions = snapshot?.documents?.map { doc ->
+                    ProductSuggestion(
+                        id = doc.id,
+                        text = doc.getString("text") ?: "",
+                        submittedBy = doc.getString("submittedBy") ?: "Usuário do aplicativo",
+                        submittedByUid = doc.getString("submittedByUid") ?: "",
+                        appVersion = doc.getString("appVersion") ?: "",
+                        createdAt = doc.getLong("createdAt") ?: 0L,
+                        status = doc.getString("status") ?: ProductSuggestion.STATUS_PENDING
+                    )
+                }.orEmpty()
+                trySend(suggestions)
+            }
+        awaitClose { registration.remove() }
+    }
+
+    fun observePublicSuggestions(): Flow<List<ProductSuggestion>> = callbackFlow {
+        if (!isFirebaseConfigured()) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+        val registration = FirebaseFirestore.getInstance()
+            .collection("suggestions")
+            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(100)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("FirebaseService", "Erro ao observar histórico público de sugestões", error)
+                    return@addSnapshotListener
+                }
+                val suggestions = snapshot?.documents?.map { doc ->
+                    ProductSuggestion(
+                        id = doc.id,
+                        text = doc.getString("text") ?: "",
+                        createdAt = doc.getLong("createdAt") ?: 0L,
+                        status = doc.getString("status") ?: ProductSuggestion.STATUS_PENDING
+                    )
+                }.orEmpty()
+                trySend(suggestions)
+            }
+        awaitClose { registration.remove() }
+    }
+
+    fun observeUserSuggestions(installationId: String): Flow<List<ProductSuggestion>> = callbackFlow {
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        if (!isFirebaseConfigured() || (uid.isNullOrBlank() && installationId.isBlank())) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+        val suggestionsQuery = FirebaseFirestore.getInstance()
+            .collection("suggestions")
+            .let { collection ->
+                if (!uid.isNullOrBlank()) {
+                    collection.whereEqualTo("submittedByUid", uid)
+                } else {
+                    collection.whereEqualTo("installationId", installationId)
+                }
+            }
+        val registration = suggestionsQuery.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.e("FirebaseService", "Erro ao observar sugestões do usuário", error)
+                return@addSnapshotListener
+            }
+            val suggestions = snapshot?.documents?.map { doc ->
+                ProductSuggestion(
+                    id = doc.id,
+                    text = doc.getString("text") ?: "",
+                    submittedBy = doc.getString("submittedBy") ?: "Usuário do aplicativo",
+                    submittedByUid = doc.getString("submittedByUid") ?: "",
+                    installationId = doc.getString("installationId") ?: "",
+                    appVersion = doc.getString("appVersion") ?: "",
+                    createdAt = doc.getLong("createdAt") ?: 0L,
+                    status = doc.getString("status") ?: ProductSuggestion.STATUS_PENDING
+                )
+            }.orEmpty().sortedByDescending { it.createdAt }
+            trySend(suggestions)
+        }
+        awaitClose { registration.remove() }
+    }
+
+    suspend fun deleteSuggestion(id: String, installationId: String): Boolean {
+        if (id.isBlank() || !isFirebaseConfigured()) return false
+        return try {
+            val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            val ref = FirebaseFirestore.getInstance().collection("suggestions").document(id)
+            val snapshot = ref.get().await()
+            val ownerMatches = if (!uid.isNullOrBlank()) {
+                snapshot.getString("submittedByUid") == uid
+            } else {
+                snapshot.getString("installationId") == installationId
+            }
+            if (!snapshot.exists() || !ownerMatches || snapshot.getString("status") != ProductSuggestion.STATUS_FIXED) {
+                Log.w("FirebaseService", "Exclusão de sugestão rejeitada: $id")
+                return false
+            }
+            ref.delete().await()
+            true
+        } catch (e: Exception) {
+            Log.e("FirebaseService", "Erro ao excluir sugestão: $id", e)
+            false
+        }
+    }
+
+    suspend fun updateSuggestionStatus(id: String, status: String): Boolean {
+        if (id.isBlank() || status !in setOf(ProductSuggestion.STATUS_PENDING, ProductSuggestion.STATUS_FIXED) || !isFirebaseConfigured()) return false
+        return try {
+            FirebaseFirestore.getInstance().collection("suggestions").document(id)
+                .update("status", status).await()
+            true
+        } catch (e: Exception) {
+            Log.e("FirebaseService", "Erro ao atualizar status da sugestão: $id", e)
+            false
+        }
+    }
+
     fun observeDynamicTabs(): Flow<List<com.example.data.DynamicTab>> = callbackFlow {
         if (!isFirebaseConfigured()) {
             close()

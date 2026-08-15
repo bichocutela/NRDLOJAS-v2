@@ -11,7 +11,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import org.json.JSONArray
+import java.util.UUID
 import org.json.JSONObject
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -175,6 +177,14 @@ class UserPreferences(private val context: Context) {
         context.dataStore.edit { it[ONBOARDING_SHOWN] = shown }
     }
 
+    suspend fun getOrCreateInstallationId(): String {
+        val existing = context.dataStore.data.first()[INSTALLATION_ID]
+        if (!existing.isNullOrBlank()) return existing
+        val generated = UUID.randomUUID().toString()
+        context.dataStore.edit { it[INSTALLATION_ID] = generated }
+        return generated
+    }
+
     companion object {
         val VIBRATE_ON_CLICK = booleanPreferencesKey("vibrate_on_click")
         val VIBRATE_ON_FOUND = booleanPreferencesKey("vibrate_on_found")
@@ -196,6 +206,7 @@ class UserPreferences(private val context: Context) {
         val APP_ICON = stringPreferencesKey("app_icon")
         val APPEARANCE_MODE = stringPreferencesKey("appearance_mode")
         val ONBOARDING_SHOWN = booleanPreferencesKey("onboarding_shown")
+        val INSTALLATION_ID = stringPreferencesKey("installation_id")
     }
 
     private fun encodeNotifications(items: List<AppNotification>): String {
