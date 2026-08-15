@@ -387,7 +387,7 @@ fun AdminProductList(products: List<Product>, viewModel: MainViewModel) {
                 AdminProductItem(product, viewModel)
             }
         }
-        if (pageCount > 1) {
+        if (pageCount > 0) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -402,7 +402,7 @@ fun AdminProductList(products: List<Product>, viewModel: MainViewModel) {
                     Text("Anterior")
                 }
                 Text(
-                    text = "Página ${currentPage + 1} de $pageCount",
+                    text = "Página atual: ${currentPage + 1} | Total de páginas: $pageCount",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 OutlinedButton(
