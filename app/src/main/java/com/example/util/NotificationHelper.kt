@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
@@ -52,6 +53,16 @@ object NotificationHelper {
     }
 
 
+    private fun smallIconForType(type: String): Int = when (type) {
+        "NEW_PRODUCT" -> R.drawable.ic_notification_product_added
+        "CODE_CHANGED" -> R.drawable.ic_notification_code_changed
+        "SUGGESTION_FIXED" -> R.drawable.ic_notification_suggestion_fixed
+        else -> R.drawable.ic_notification_default
+    }
+
+    private fun largeIconForNotification(context: Context) =
+        BitmapFactory.decodeResource(context.resources, R.drawable.icon_multicolor_original)
+
     fun showProductEventNotification(context: Context, type: String, productName: String, oldName: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ActivityCompat.checkSelfPermission(
@@ -73,7 +84,8 @@ object NotificationHelper {
         }
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(smallIconForType(type))
+            .setLargeIcon(largeIconForNotification(context))
             .setContentTitle(title)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -108,7 +120,8 @@ object NotificationHelper {
 
         Log.d("NotificationHelper", "Exibindo notificação local: type=$type, canal=$targetChannelId")
         val builder = NotificationCompat.Builder(context, targetChannelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(smallIconForType(type))
+            .setLargeIcon(largeIconForNotification(context))
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

@@ -159,6 +159,13 @@ serve(async (req) => {
       : title === "Sugestão corrigida"
       ? "suggestion_fixed"
       : "product_added"
+    const notificationIconName = title === "Código alterado"
+      ? "ic_notification_code_changed"
+      : title === "Sugestão corrigida"
+      ? "ic_notification_suggestion_fixed"
+      : title === "Produto adicionado"
+      ? "ic_notification_product_added"
+      : "ic_notification_default"
 
     const fcmResponse = await fetch(
       `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
@@ -188,7 +195,7 @@ serve(async (req) => {
               priority: "high",
               notification: {
                 channel_id: notificationChannelId,
-                icon: "ic_launcher_multicolor",
+                icon: notificationIconName,
               },
             },
           },
