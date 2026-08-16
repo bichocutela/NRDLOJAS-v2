@@ -41,6 +41,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 TYPE_NEW_PRODUCT -> preferences.notificationsProductAddedEnabled.first()
                 TYPE_CODE_CHANGED -> preferences.notificationsCodeChangedEnabled.first()
                 TYPE_SUGGESTION_FIXED -> true
+                TYPE_APP_UPDATE -> true
                 else -> false
             }
 
@@ -92,6 +93,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         const val TYPE_NEW_PRODUCT = "NEW_PRODUCT"
         const val TYPE_CODE_CHANGED = "CODE_CHANGED"
         const val TYPE_SUGGESTION_FIXED = "SUGGESTION_FIXED"
-        val SUPPORTED_TYPES = setOf(TYPE_NEW_PRODUCT, TYPE_CODE_CHANGED, TYPE_SUGGESTION_FIXED)
+        const val TYPE_APP_UPDATE = "APP_UPDATE"
+        val SUPPORTED_TYPES = setOf(TYPE_NEW_PRODUCT, TYPE_CODE_CHANGED, TYPE_SUGGESTION_FIXED, TYPE_APP_UPDATE)
     }
 }

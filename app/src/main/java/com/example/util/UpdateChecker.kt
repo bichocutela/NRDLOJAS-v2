@@ -41,6 +41,18 @@ object UpdateChecker {
      * Consulta a última release sem autenticação. A API REST é a fonte primária;
      * em 403/429, usa o redirecionamento público da última release, sem token no APK.
      */
+    fun isRemoteVersionNewer(currentVersion: String, remoteTag: String): Boolean {
+        val currentParts = currentVersion.removePrefix("v").split(".").map { it.toIntOrNull() ?: 0 }
+        val remoteParts = remoteTag.removePrefix("v").split(".").map { it.toIntOrNull() ?: 0 }
+        val maxLength = maxOf(currentParts.size, remoteParts.size)
+        for (index in 0 until maxLength) {
+            val current = currentParts.getOrElse(index) { 0 }
+            val remote = remoteParts.getOrElse(index) { 0 }
+            if (remote != current) return remote > current
+        }
+        return false
+    }
+
     suspend fun checkLatestRelease(): ReleaseCheckResult {
         val apiResult = checkLatestReleaseFromApi()
         if (apiResult is ReleaseCheckResult.HttpError &&

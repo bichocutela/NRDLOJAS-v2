@@ -1,8 +1,10 @@
 package com.example.util
 
 import android.app.NotificationChannel
+import android.app.PendingIntent
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.os.Build
@@ -10,6 +12,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.R
+import com.example.MainActivity
 
 import android.util.Log
 import android.widget.Toast
@@ -45,6 +48,11 @@ object NotificationHelper {
                 description = "Notificações quando uma sugestão do usuário é corrigida"
             }
             notificationManager.createNotificationChannel(channelSuggestionFixed)
+
+            val channelAppUpdate = NotificationChannel("app_update", "Atualizações do aplicativo", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Notificações quando uma nova versão do aplicativo está disponível"
+            }
+            notificationManager.createNotificationChannel(channelAppUpdate)
             
             // Legacy channel just in case
             val legacy = NotificationChannel(CHANNEL_ID, "Atualizações de Produtos", NotificationManager.IMPORTANCE_DEFAULT)
@@ -101,7 +109,44 @@ object NotificationHelper {
         "NEW_PRODUCT" -> "product_added"
         "CODE_CHANGED" -> "product_code_changed"
         "SUGGESTION_FIXED" -> "suggestion_fixed"
+        "APP_UPDATE" -> "app_update"
         else -> null
+    }
+
+    fun showUpdateNotification(context: Context, versionTag: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ActivityCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w("NotificationHelper", "Notificação de atualização ignorada: permissão ausente")
+            return
+        }
+
+        val pendingIntent = appUpdatePendingIntent(context, versionTag)
+
+        val builder = NotificationCompat.Builder(context, "app_update")
+            .setSmallIcon(R.drawable.ic_notification_default)
+            .setLargeIcon(largeIconForNotification(context))
+            .setContentTitle("Atualização disponível")
+            .setContentText("A versão $versionTag está disponível. Toque para baixar agora.")
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+
+        NotificationManagerCompat.from(context).notify(2001, builder.build())
+    }
+
+    private fun appUpdatePendingIntent(context: Context, versionTag: String? = null): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_OPEN_ABOUT, true)
+            if (!versionTag.isNullOrBlank()) putExtra(MainActivity.EXTRA_UPDATE_TAG, versionTag)
+        }
+        return PendingIntent.getActivity(
+            context,
+            2001,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 
     fun showNotification(context: Context, type: String, title: String, body: String) {
@@ -126,6 +171,10 @@ object NotificationHelper {
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
+
+        if (type == "APP_UPDATE") {
+            builder.setContentIntent(appUpdatePendingIntent(context))
+        }
 
         with(NotificationManagerCompat.from(context)) {
             notify(System.currentTimeMillis().toInt(), builder.build())

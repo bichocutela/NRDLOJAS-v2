@@ -13,6 +13,12 @@ class MyApplication : Application() {
         } catch (e: Exception) {
             Log.e("MyApplication", "Firebase initialization failed", e)
         }
+        try {
+            com.example.util.UpdateNotificationWorker.schedule(this)
+            Log.d("MyApplication", "Periodic update check scheduled")
+        } catch (e: IllegalStateException) {
+            Log.w("MyApplication", "Periodic update check not scheduled in this process", e)
+        }
         Log.d("MyApplication", "Application started and CrashReporter setup")
     }
 }

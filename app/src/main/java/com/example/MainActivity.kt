@@ -1,6 +1,7 @@
 package com.example
 
 import android.os.Bundle
+import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -75,9 +76,12 @@ class MainActivity : ComponentActivity() {
         MainViewModelFactory(repository, userPreferences)
     }
 
+    private var openAboutFromNotification by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
 
         super.onCreate(savedInstanceState)
+        openAboutFromNotification = shouldOpenAbout(intent)
         
         com.example.data.FirebaseService.initialize(this)
 
@@ -169,7 +173,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        AppNavGraph(viewModel)
+                        AppNavGraph(viewModel, openAboutFromNotification)
                         
                         androidx.compose.material3.SnackbarHost(
                             hostState = snackbarHostState,
@@ -199,5 +203,23 @@ class MainActivity : ComponentActivity() {
             }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (shouldOpenAbout(intent)) {
+            openAboutFromNotification = true
+        }
+    }
+
+    private fun shouldOpenAbout(intent: Intent?): Boolean {
+        return intent?.getBooleanExtra(EXTRA_OPEN_ABOUT, false) == true ||
+            intent?.getStringExtra("type") == "APP_UPDATE"
+    }
+
+    companion object {
+        const val EXTRA_OPEN_ABOUT = "open_about"
+        const val EXTRA_UPDATE_TAG = "update_tag"
     }
 }

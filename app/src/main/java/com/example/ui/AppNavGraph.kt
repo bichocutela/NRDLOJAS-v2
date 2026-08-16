@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 @Composable
-fun AppNavGraph(viewModel: MainViewModel) {
+fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = false) {
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -39,6 +39,14 @@ fun AppNavGraph(viewModel: MainViewModel) {
     val sharedPref = remember { context.getSharedPreferences("admin_prefs", Context.MODE_PRIVATE) }
     var isLoggedIn by remember { mutableStateOf(sharedPref.getBoolean("is_logged_in", false)) }
     var userRole by remember { mutableStateOf(sharedPref.getString("user_role", "admin") ?: "admin") }
+
+    LaunchedEffect(openAboutFromNotification) {
+        if (openAboutFromNotification) {
+            navController.navigate("about") {
+                launchSingleTop = true
+            }
+        }
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,

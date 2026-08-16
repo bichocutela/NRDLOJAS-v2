@@ -147,7 +147,7 @@ serve(async (req) => {
       throw new Error("Missing title or body")
     }
 
-    const allowedTitles = ["Produto adicionado", "Código alterado", "Sugestão corrigida"]
+    const allowedTitles = ["Produto adicionado", "Código alterado", "Sugestão corrigida", "Atualização disponível"]
     if (!allowedTitles.includes(title)) {
       throw new Error("Unsupported notification type")
     }
@@ -158,6 +158,8 @@ serve(async (req) => {
       ? "product_code_changed"
       : title === "Sugestão corrigida"
       ? "suggestion_fixed"
+      : title === "Atualização disponível"
+      ? "app_update"
       : "product_added"
     const notificationIconName = title === "Código alterado"
       ? "ic_notification_code_changed"
@@ -189,6 +191,8 @@ serve(async (req) => {
                 ? "CODE_CHANGED"
                 : title === "Sugestão corrigida"
                 ? "SUGGESTION_FIXED"
+                : title === "Atualização disponível"
+                ? "APP_UPDATE"
                 : "NEW_PRODUCT",
             },
             android: {
