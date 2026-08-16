@@ -9,6 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,6 +48,9 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     var selectedCorrectedSuggestion by remember { mutableStateOf<com.example.data.ProductSuggestion?>(null) }
     var suggestionPendingDeletion by remember { mutableStateOf<com.example.data.ProductSuggestion?>(null) }
     var deletingSuggestion by remember { mutableStateOf(false) }
+    var appearanceExpanded by remember { mutableStateOf(true) }
+    var notificationsExpanded by remember { mutableStateOf(false) }
+    var feedbackExpanded by remember { mutableStateOf(false) }
     val installationId by produceState(initialValue = "") {
         value = viewModel.userPreferences.getOrCreateInstallationId()
     }
@@ -80,9 +85,14 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             
-            val appTheme by viewModel.userPreferences.appTheme.collectAsState(initial = "multicolor")
-            Text("Preferências de Interface", style = MaterialTheme.typography.titleMedium, color = getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first)
-
+            SettingsSectionHeader(
+                title = "Aparência",
+                summary = "Fonte, temas, modo de aparência e vibração",
+                expanded = appearanceExpanded,
+                onToggle = { appearanceExpanded = !appearanceExpanded }
+            )
+            if (appearanceExpanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Tamanho da Fonte", modifier = Modifier.weight(1f))
                 Slider(
@@ -272,10 +282,18 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 Switch(checked = vibrateOnFound, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setVibrateOnFound(it) } })
             }
             
-            HorizontalDivider()
-            
-            
-            Text("Notificações", style = MaterialTheme.typography.titleMedium, color = getDynamicThemeColor(3, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first)
+                            }
+            }
+
+            SettingsSectionHeader(
+                title = "Notificações",
+                summary = if (notificationsEnabled) "Ativadas" else "Desativadas",
+                expanded = notificationsExpanded,
+                onToggle = { notificationsExpanded = !notificationsExpanded }
+            )
+            if (notificationsExpanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Notificações Gerais")
@@ -301,14 +319,20 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     Text("Produto adicionado")
                     Switch(checked = notificationsProductAddedEnabled, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setNotificationsProductAddedEnabled(it) } })
                 }
+                        }
+                }
             }
-            
-            HorizontalDivider()
 
-            
-            Text("Feedback", style = MaterialTheme.typography.titleMedium, color = getDynamicThemeColor(4, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first)
-            
             val feedbackColors = getDynamicThemeColor(4, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary)
+            SettingsSectionHeader(
+                title = "Ajuda e feedback",
+                summary = "Enviar sugestões e consultar o histórico",
+                expanded = feedbackExpanded,
+                onToggle = { feedbackExpanded = !feedbackExpanded }
+            )
+            if (feedbackExpanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
             Button(
                 onClick = { showSuggestionDialog = true },
                 modifier = Modifier.fillMaxWidth(),
@@ -341,11 +365,13 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 publicSuggestions.forEach { suggestion ->
                     PublicSuggestionCard(suggestion = suggestion)
                 }
+                        }
+                }
             }
         }
     }
-
     selectedCorrectedSuggestion?.let { suggestion ->
+
         val message = if (suggestion.appVersion.isBlank() || suggestion.appVersion == com.example.BuildConfig.VERSION_NAME) {
             "Atualize o aplicativo pra verificar as correções solicitadas"
         } else {
@@ -462,6 +488,39 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
 }
 
 
+
+@Composable
+private fun SettingsSectionHeader(
+    title: String,
+    summary: String,
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = if (expanded) "Recolher $title" else "Expandir $title"
+            )
+        }
+    }
+}
 
 @Composable
 private fun SuggestionResolvedCard(
