@@ -51,38 +51,48 @@ private val DefaultDarkColorScheme = darkColorScheme(
     onErrorContainer = Color(0xFFFFDAD6)
 )
 
+private val SessionMulticolorPalette: List<Pair<Color, Color>> by lazy {
+    MulticolorPalette.shuffled()
+}
+
 private fun getThemeColorScheme(themeName: String, darkTheme: Boolean) = when (themeName) {
-    "multicolor" -> if (darkTheme) {
-        DefaultDarkColorScheme.copy(
-            primary = Color(0xFF6DCE70),
-            onPrimary = Color(0xFF003910),
-            primaryContainer = Color(0xFF0F5B22),
-            onPrimaryContainer = Color(0xFFB5F5B2),
-            secondary = Color(0xFFF0C553),
-            secondaryContainer = Color(0xFF604800),
-            onSecondary = Color(0xFF3B2E00),
-            tertiary = Color(0xFF82B1FF),
-            tertiaryContainer = Color(0xFF0B4F92),
-            onTertiary = Color(0xFF002C58),
-            onTertiaryContainer = Color(0xFFD7E5FF),
-            error = Color(0xFFFF6B6B)
-        )
-    } else {
-        DefaultLightColorScheme.copy(
-            primary = Color(0xFF388E3C),
-            primaryContainer = Color(0xFF2E7D32),
-            onPrimary = Color.White,
-            onPrimaryContainer = Color.White,
-            secondary = Color(0xFFD4AF37),
-            secondaryContainer = Color(0xFFF5E3A9),
-            onSecondary = Color(0xFF212121),
-            onSecondaryContainer = Color(0xFF212121),
-            tertiary = Color(0xFF1976D2),
-            tertiaryContainer = Color(0xFFBBDEFB),
-            onTertiary = Color.White,
-            onTertiaryContainer = Color(0xFF212121),
-            error = Color(0xFFE62325)
-        )
+    "multicolor" -> {
+        val primary = SessionMulticolorPalette[0]
+        val secondary = SessionMulticolorPalette[1]
+        val tertiary = SessionMulticolorPalette[2]
+        if (darkTheme) {
+            DefaultDarkColorScheme.copy(
+                primary = primary.first,
+                onPrimary = primary.second,
+                primaryContainer = primary.first,
+                onPrimaryContainer = primary.second,
+                secondary = secondary.first,
+                onSecondary = secondary.second,
+                secondaryContainer = secondary.first,
+                onSecondaryContainer = secondary.second,
+                tertiary = tertiary.first,
+                onTertiary = tertiary.second,
+                tertiaryContainer = tertiary.first,
+                onTertiaryContainer = tertiary.second,
+                error = Color(0xFFFF6B6B)
+            )
+        } else {
+            DefaultLightColorScheme.copy(
+                primary = primary.first,
+                onPrimary = primary.second,
+                primaryContainer = primary.first,
+                onPrimaryContainer = primary.second,
+                secondary = secondary.first,
+                onSecondary = secondary.second,
+                secondaryContainer = secondary.first,
+                onSecondaryContainer = secondary.second,
+                tertiary = tertiary.first,
+                onTertiary = tertiary.second,
+                tertiaryContainer = tertiary.first,
+                onTertiaryContainer = tertiary.second,
+                error = Color(0xFFE62325)
+            )
+        }
     }
     "gold" -> if (darkTheme) {
         DefaultDarkColorScheme.copy(
@@ -166,13 +176,13 @@ val MulticolorPalette = listOf(
     Pair(Color(0xFFE62325), Color.White),
     Pair(Color(0xFF388E3C), Color.White),
     Pair(Color(0xFF1976D2), Color.White),
-    Pair(Color(0xFFFF9800), Color.White),
-    Pair(Color(0xFFD4AF37), Color(0xFF212121))
+    Pair(Color(0xFFF57C00), Color.White),
+    Pair(Color(0xFFB8860B), Color.White)
 )
 
 fun getDynamicThemeColor(index: Int, appTheme: String, defaultColor: Color, defaultOnColor: Color): Pair<Color, Color> {
     if (appTheme == "multicolor") {
-        return MulticolorPalette[index % MulticolorPalette.size]
+        return SessionMulticolorPalette[index % SessionMulticolorPalette.size]
     }
     return Pair(defaultColor, defaultOnColor)
 }
