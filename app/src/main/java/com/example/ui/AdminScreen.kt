@@ -113,10 +113,9 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 .verticalScroll(adminScrollState),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-                Text(
-                    "Ações rápidas",
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.fillMaxWidth()
+                AdminPanelSectionHeader(
+                    title = "Ações rápidas",
+                    description = "Exportações e ferramentas de administração"
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
@@ -142,10 +141,9 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 }
                 Spacer(modifier = Modifier.height(24.dp))
             
-            Text(
-                text = "Adicionar produto",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.fillMaxWidth()
+            AdminPanelSectionHeader(
+                title = "Produtos",
+                description = "Cadastre um novo produto ou edite o catálogo existente"
             )
             
             Spacer(modifier = Modifier.height(24.dp))
@@ -291,6 +289,11 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             Spacer(modifier = Modifier.height(32.dp))
             HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
+            AdminPanelSectionHeader(
+                title = "Catálogo de produtos",
+                description = "Pesquise, edite ou remova itens do inventário"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             AdminProductList(
                 products = allProducts,
                 viewModel = viewModel,
@@ -300,6 +303,25 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             )
 
         }
+    }
+}
+
+@Composable
+private fun AdminPanelSectionHeader(
+    title: String,
+    description: String
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Text(title, style = MaterialTheme.typography.headlineSmall)
+        Text(
+            description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
