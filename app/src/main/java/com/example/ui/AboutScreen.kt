@@ -17,10 +17,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Android
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +34,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import com.example.R
+
+private const val IPHONE_PWA_URL = "https://nrdpwa-i6x25cjv.manus.space/"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -110,6 +115,7 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
             var qrBitmap by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Bitmap?>(null) }
             var qrReleaseTag by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
             var qrReleaseUrl by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+            var qrPlatform by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("android") }
             var showQrErrorDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
             var qrErrorMessage by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("Verifique sua conexão e tente novamente.") }
             var updateAvailable by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -131,22 +137,32 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
             if (showQrDialog && qrBitmap != null) {
                 AlertDialog(
                     onDismissRequest = { showQrDialog = false },
-                    title = { Text("Compartilhar NRD Códigos") },
+                    title = { Text(if (qrPlatform == "iphone") "Compartilhar pra iPhone" else "Compartilhar pra Android") },
                     text = {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Versão disponível: $qrReleaseTag", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                if (qrPlatform == "iphone") "NRD Códigos para iPhone" else "Versão disponível: $qrReleaseTag",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
                             Spacer(modifier = Modifier.height(16.dp))
                             Image(
                                 bitmap = qrBitmap!!.asImageBitmap(),
-                                contentDescription = "QR Code para download",
+                                contentDescription = if (qrPlatform == "iphone") "QR Code para instalar NRD Códigos no iPhone" else "QR Code para baixar a versão Android",
                                 modifier = Modifier.size(200.dp),
                                 contentScale = ContentScale.Fit
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text("Escaneie para baixar esta versão", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                if (qrPlatform == "iphone") {
+                                    "Escaneie no iPhone, abra no Safari, toque em Compartilhar e depois em Adicionar à Tela de Início."
+                                } else {
+                                    "Escaneie para baixar a versão Android mais recente."
+                                },
+                                style = MaterialTheme.typography.bodySmall
+                            )
                         }
                     },
                     confirmButton = {
@@ -197,6 +213,7 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                                                 }
                                             }
                                             qrBitmap = bmp
+                                            qrPlatform = "android"
                                             showQrDialog = true
                                         } catch (e: Exception) {
                                             qrErrorMessage = "A resposta foi obtida, mas não foi possível gerar o QR Code."
@@ -257,6 +274,13 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
+            Text(
+                text = "Escolhe e Compartilhe",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
             Button(
                 onClick = {
                     isGeneratingQr = true
@@ -281,6 +305,7 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                                         }
                                     }
                                     qrBitmap = bmp
+                                    qrPlatform = "android"
                                     showQrDialog = true
                                 } catch (e: Exception) {
                                     qrErrorMessage = "A resposta foi obtida, mas não foi possível gerar o QR Code."
@@ -304,8 +329,43 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Text("Compartilhar via QR Code")
+                    Icon(Icons.Default.Android, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Compartilhar pra Android")
                 }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OutlinedButton(
+                onClick = {
+                    try {
+                        val writer = MultiFormatWriter()
+                        val bitMatrix = writer.encode(IPHONE_PWA_URL, BarcodeFormat.QR_CODE, 512, 512)
+                        val bmp = Bitmap.createBitmap(bitMatrix.width, bitMatrix.height, Bitmap.Config.RGB_565)
+                        for (x in 0 until bitMatrix.width) {
+                            for (y in 0 until bitMatrix.height) {
+                                bmp.setPixel(x, y, if (bitMatrix.get(x, y)) Color.BLACK else Color.WHITE)
+                            }
+                        }
+                        qrReleaseTag = "PWA NRD Códigos"
+                        qrReleaseUrl = IPHONE_PWA_URL
+                        qrPlatform = "iphone"
+                        qrBitmap = bmp
+                        showQrDialog = true
+                    } catch (e: Exception) {
+                        qrErrorMessage = "Não foi possível gerar o QR Code para iPhone."
+                        showQrErrorDialog = true
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_apple_logo),
+                    contentDescription = null
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Compartilhar pra iPhone")
             }
 
         }
