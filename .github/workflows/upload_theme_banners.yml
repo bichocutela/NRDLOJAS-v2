@@ -82,8 +82,11 @@ jobs:
                     'x-firebase-token': id_token
                 }
                 res_upload = requests.post(upload_url, headers=headers, files=files, data=data)
-                
-                res_upload.raise_for_status()
+
+                if not res_upload.ok:
+                    detail = res_upload.text.strip().replace("\n", " ")[:1000]
+                    print(f"ERROR: Upload of {image_name} returned HTTP {res_upload.status_code}: {detail or 'empty response'}")
+                    raise SystemExit(1)
                 public_url = res_upload.json().get('url')
                 if not public_url:
                     print(f"ERROR: No public URL returned for {theme} theme.")
