@@ -1,4 +1,4 @@
-name: Upload Theme Banners
+name: Validate Android Theme Banners
 
 on:
   push:
@@ -8,93 +8,48 @@ on:
       - 'app/src/main/assets/themes/theme_green.jpg'
       - 'app/src/main/assets/themes/theme_blue.jpg'
       - 'app/src/main/assets/themes/theme_orange.jpg'
+      - 'app/src/main/java/com/example/ui/SearchScreen.kt'
+      - '.github/workflows/upload_theme_banners.yml'
   workflow_dispatch:
 
 jobs:
-  upload:
+  validate:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    - name: Install dependencies
-      run: pip install requests
+      - name: Install image validation dependency
+        run: pip install Pillow
 
-    - name: Upload Theme Banners to Supabase
-      env:
-        FIREBASE_API_KEY: "AIzaSyA6oHEJzOH3m4j8CuMWoXlceQKSy8Viqmw"
-        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-        SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-      run: |
-        cat << 'PY_EOF' > upload_themes.py
-        import os
-        import requests
+      - name: Validate local Android theme banners
+        run: |
+          python - << 'PY_EOF'
+          from pathlib import Path
+          from PIL import Image
 
-        api_key = os.environ.get('FIREBASE_API_KEY')
-        supabase_url = os.environ.get('SUPABASE_URL')
-        supabase_anon_key = os.environ.get('SUPABASE_ANON_KEY')
+          themes = ("red", "gold", "green", "blue", "orange")
+          assets = Path("app/src/main/assets/themes")
+          max_bytes = 512 * 1024
 
-        if not supabase_url:
-            print("No Supabase URL provided.")
-            exit(1)
+          for theme in themes:
+              image_path = assets / f"theme_{theme}.jpg"
+              if not image_path.is_file():
+                  raise SystemExit(f"Missing banner: {image_path}")
 
-        print("Logging in to Firebase...")
-        login_url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
-        login_data = {
-            "email": "mestre@nrdlojas.com",
-            "password": "nrdlojas",
-            "returnSecureToken": True
-        }
-        res = requests.post(login_url, json=login_data)
-        res.raise_for_status()
-        id_token = res.json().get('idToken')
+              with Image.open(image_path) as image:
+                  width, height = image.size
+                  if image.format != "JPEG":
+                      raise SystemExit(f"{image_path} must be a JPEG, found {image.format}")
+                  if width < 2000 or height < 600:
+                      raise SystemExit(f"{image_path} is below the high-resolution minimum: {width}x{height}")
 
-        print("Uploading theme banners to Supabase...")
-        upload_url = f"{supabase_url}/functions/v1/upload-image"
-        
-        themes = ['red', 'gold', 'green', 'blue', 'orange']
-        
-        for theme in themes:
-            image_name = f"theme_{theme}.jpg"
-            image_path = f"app/src/main/assets/themes/{image_name}"
-            remote_path = f"banners/themes/{image_name}"
-            
-            if not os.path.exists(image_path):
-                print(f"ERROR: {image_path} not found.")
-                raise SystemExit(1)
-                
-            print(f"Uploading {image_name}...")
-            with open(image_path, "rb") as f:
-                files = {
-                    'file': (image_name, f, 'image/jpeg')
-                }
-                # Using upsert=true allows overwriting existing images with the same path without changing URL
-                data = {
-                    'path': remote_path,
-                    'upsert': 'true'
-                }
-                headers = {
-                    'Authorization': f'Bearer {supabase_anon_key}',
-                    'x-firebase-token': id_token
-                }
-                res_upload = requests.post(upload_url, headers=headers, files=files, data=data)
-
-                if not res_upload.ok:
-                    detail = res_upload.text.strip().replace("\n", " ")[:1000]
-                    print(f"ERROR: Upload of {image_name} returned HTTP {res_upload.status_code}: {detail or 'empty response'}")
-                    raise SystemExit(1)
-                public_url = res_upload.json().get('url')
-                if not public_url:
-                    print(f"ERROR: No public URL returned for {theme} theme.")
-                    print(res_upload.text)
-                    raise SystemExit(1)
-                print(f"Success: {theme.capitalize()} theme uploaded.")
-                print(f"Public URL: {public_url}")
-
-        print("Finished uploading theme banners.")
-        PY_EOF
-        python upload_themes.py
+              size = image_path.stat().st_size
+              if size > max_bytes:
+                  raise SystemExit(f"{image_path} exceeds the upload-safe size limit: {size} bytes")
+              print(f"OK {image_path}: {width}x{height}, {size} bytes")
+          PY_EOF

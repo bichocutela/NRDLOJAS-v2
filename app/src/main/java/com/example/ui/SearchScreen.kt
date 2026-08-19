@@ -1206,7 +1206,11 @@ fun ThemeBanner(appTheme: String) {
         else -> "red"
     }
 
-    val imageUrl = "https://kkayksyzksexoarpfxyj.supabase.co/storage/v1/object/public/nrdlojas-images/banners/themes/theme_${normalizedTheme}.jpg"
+    val imageUrl = if (normalizedTheme == "multicolor") {
+        "https://kkayksyzksexoarpfxyj.supabase.co/storage/v1/object/public/nrdlojas-images/banners/themes/theme_multicolor.jpg"
+    } else {
+        "file:///android_asset/themes/theme_${normalizedTheme}.jpg"
+    }
 
     AsyncImage(
         model = imageUrl,
