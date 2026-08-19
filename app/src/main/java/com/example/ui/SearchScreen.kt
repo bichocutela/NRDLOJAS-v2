@@ -272,11 +272,17 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
     Column(
             modifier = Modifier.fillMaxSize()
         ) {
+        val heroAspectRatio = if (normalizedTheme == "multicolor") {
+            1536f / 630f
+        } else {
+            2688f / 1152f
+        }
+
         // App Bar / Header (Hero Image)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(1536f / 630f)
+                .aspectRatio(heroAspectRatio)
         ) {
             Box(
                 modifier = Modifier.fillMaxSize()
@@ -1212,11 +1218,18 @@ fun ThemeBanner(appTheme: String) {
         "file:///android_asset/themes/theme_${normalizedTheme}.jpg"
     }
 
+    val bannerScale = if (normalizedTheme == "multicolor") {
+        ContentScale.FillWidth
+    } else {
+        ContentScale.Fit
+    }
+
     AsyncImage(
         model = imageUrl,
         contentDescription = "Banner do tema $normalizedTheme",
         modifier = Modifier.fillMaxSize(),
-        contentScale = ContentScale.FillWidth
+        contentScale = bannerScale,
+        alignment = Alignment.TopCenter
     )
 }
 
