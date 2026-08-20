@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -283,13 +284,24 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
             "orange" -> R.drawable.nrd_logo_orange
             else -> R.drawable.nrd_logo_red
         }
+        val bannerAspectRatio = when (normalizedTheme) {
+            "multicolor" -> 2172f / 724f
+            "red" -> 2688f / 704f
+            "orange" -> 2688f / 665f
+            "gold" -> 2688f / 748f
+            "green" -> 2688f / 713f
+            "blue" -> 2688f / 651f
+            else -> 2688f / 704f
+        }
 
-        // App Bar / Header: the complete artwork is drawn above a white,
-        // rounded transition. The transparent logo grows from that transition
-        // and meets the character hands without clipping either element.
+        // App Bar / Header: reserve independent vertical space for the logo
+        // so the full native artwork, including the hands, is never cropped.
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val headerHeight = maxWidth / 3f
-            val logoWidth = maxWidth * 0.28f
+            val artworkHeight = maxWidth / bannerAspectRatio
+            val logoWidth = maxWidth * 0.56f
+            val logoHeight = logoWidth / 1.776f
+            val headerHeight = artworkHeight + (logoHeight * 0.85f)
+            val logoOffset = artworkHeight - (logoHeight * 0.15f)
 
             Box(
                 modifier = Modifier
@@ -305,7 +317,9 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
             ) {
                 ThemeBanner(
                     appTheme = normalizedTheme,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(artworkHeight)
                 )
 
                 Image(
@@ -313,10 +327,10 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                     contentDescription = "NRD Códigos Correlatos",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
+                        .align(Alignment.TopCenter)
+                        .offset(y = logoOffset)
                         .width(logoWidth)
                         .aspectRatio(1.776f)
-                        .padding(bottom = 7.dp)
                 )
 
                 // Hamburger Menu overlay
