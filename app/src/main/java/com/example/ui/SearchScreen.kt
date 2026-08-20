@@ -90,6 +90,7 @@ import androidx.compose.foundation.Image
 import com.example.R
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Brush
