@@ -276,32 +276,10 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
-        val logoResource = when (normalizedTheme) {
-            "multicolor" -> R.drawable.nrd_logo_multicolor
-            "gold" -> R.drawable.nrd_logo_gold
-            "green" -> R.drawable.nrd_logo_green
-            "blue" -> R.drawable.nrd_logo_blue
-            "orange" -> R.drawable.nrd_logo_orange
-            else -> R.drawable.nrd_logo_red
-        }
-        val bannerAspectRatio = when (normalizedTheme) {
-            "multicolor" -> 2172f / 724f
-            "red" -> 2688f / 704f
-            "orange" -> 2688f / 665f
-            "gold" -> 2688f / 748f
-            "green" -> 2688f / 713f
-            "blue" -> 2688f / 651f
-            else -> 2688f / 704f
-        }
-
-        // App Bar / Header: reserve independent vertical space for the logo
-        // so the full native artwork, including the hands, is never cropped.
+        // App Bar / Header: each official asset uses the same native 3:1
+        // composition. The banner is the only artwork; no separate logo is overlaid.
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val artworkHeight = maxWidth / bannerAspectRatio
-            val logoWidth = maxWidth * 0.56f
-            val logoHeight = logoWidth / 1.776f
-            val headerHeight = artworkHeight + (logoHeight * 0.85f)
-            val logoOffset = artworkHeight - (logoHeight * 0.15f)
+            val headerHeight = maxWidth / 3f
 
             Box(
                 modifier = Modifier
@@ -317,20 +295,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
             ) {
                 ThemeBanner(
                     appTheme = normalizedTheme,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(artworkHeight)
-                )
-
-                Image(
-                    painter = painterResource(logoResource),
-                    contentDescription = "NRD Códigos Correlatos",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .offset(y = logoOffset)
-                        .width(logoWidth)
-                        .aspectRatio(1.776f)
+                    modifier = Modifier.fillMaxSize()
                 )
 
                 // Hamburger Menu overlay
