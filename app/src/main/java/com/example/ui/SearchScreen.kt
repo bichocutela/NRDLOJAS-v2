@@ -274,10 +274,14 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
-        val bannerAspectRatio = if (normalizedTheme == "multicolor") {
-            2172f / 470f
-        } else {
-            2688f / 480f
+        val bannerAspectRatio = when (normalizedTheme) {
+            "multicolor" -> 2172f / 470f
+            "red" -> 2688f / 704f
+            "orange" -> 2688f / 665f
+            "gold" -> 2688f / 748f
+            "green" -> 2688f / 713f
+            "blue" -> 2688f / 651f
+            else -> 2688f / 704f
         }
         val logoResource = when (normalizedTheme) {
             "multicolor" -> R.drawable.nrd_logo_multicolor
@@ -288,7 +292,8 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
             else -> R.drawable.nrd_logo_red
         }
 
-        // App Bar / Header: art is separated from the transparent theme logo to avoid white surfaces in dark mode.
+        // App Bar / Header: the logo remains transparent and overlays the artwork,
+        // preventing a detached white strip while preserving the full banner frame.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -297,6 +302,16 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
             ThemeBanner(
                 appTheme = normalizedTheme,
                 modifier = Modifier.fillMaxSize()
+            )
+
+            Image(
+                painter = painterResource(logoResource),
+                contentDescription = "NRD Códigos Correlatos",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .height(42.dp)
+                    .padding(top = 8.dp)
             )
 
             // Hamburger Menu overlay
@@ -334,22 +349,6 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                     Icon(Icons.Default.Notifications, contentDescription = "Notificações", tint = MaterialTheme.colorScheme.primary)
                 }
             }
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(82.dp)
-                .background(MaterialTheme.colorScheme.background),
-            contentAlignment = Alignment.Center
-        ) {
-            Image(
-                painter = painterResource(logoResource),
-                contentDescription = "NRD Códigos Correlatos",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 76.dp, vertical = 8.dp)
-            )
         }
         Spacer(modifier = Modifier.height(16.dp))
 
