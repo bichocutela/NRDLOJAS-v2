@@ -88,11 +88,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.Image
 import com.example.R
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
@@ -282,10 +279,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
         // App Bar / Header: each official asset uses the same native 3:1
         // composition. The banner is the only artwork; no separate logo is overlaid.
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val isDarkMode = MaterialTheme.colorScheme.background.luminance() < 0.35f
-            // Official art includes white display margins. In dark mode, crop only
-            // those outer margins while preserving the complete colored artwork.
-            val headerHeight = if (isDarkMode) maxWidth / 3.55f else maxWidth / 3f
+            val headerHeight = maxWidth / 3f
 
             Box(
                 modifier = Modifier
@@ -297,13 +291,10 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                             bottomEnd = 32.dp
                         )
                     )
-                    .background(
-                        if (isDarkMode) MaterialTheme.colorScheme.background else Color.White
-                    )
+                    .background(Color.White)
             ) {
                 ThemeBanner(
                     appTheme = normalizedTheme,
-                    isDarkMode = isDarkMode,
                     modifier = Modifier.fillMaxSize()
                 )
 
@@ -328,7 +319,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                         Icon(
                             imageVector = Icons.Default.Menu,
                             contentDescription = "Menu",
-                            tint = Color.White
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -339,7 +330,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                     BadgedBox(
                         badge = { if (unreadNotifications > 0) Badge { Text(unreadNotifications.toString()) } }
                     ) {
-                        Icon(Icons.Default.Notifications, contentDescription = "Notificações", tint = Color.White)
+                        Icon(Icons.Default.Notifications, contentDescription = "Notificações", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
@@ -1189,11 +1180,7 @@ fun generateBarcodeBitmap(data: String, profile: String = "Padrão"): ImageBitma
 
 
 @Composable
-fun ThemeBanner(
-    appTheme: String,
-    isDarkMode: Boolean,
-    modifier: Modifier = Modifier
-) {
+fun ThemeBanner(appTheme: String, modifier: Modifier = Modifier) {
     val normalizedTheme = when (appTheme.trim().lowercase()) {
         "multicolor" -> "multicolor"
         "gold" -> "gold"
@@ -1214,7 +1201,7 @@ fun ThemeBanner(
         contentDescription = "Banner do tema $normalizedTheme",
         modifier = modifier,
         contentScale = ContentScale.FillWidth,
-        alignment = if (isDarkMode) BiasAlignment(0f, -0.25f) else Alignment.TopCenter
+        alignment = Alignment.TopCenter
     )
 }
 
