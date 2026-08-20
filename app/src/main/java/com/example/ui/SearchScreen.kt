@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -274,15 +275,6 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
-        val bannerAspectRatio = when (normalizedTheme) {
-            "multicolor" -> 2172f / 470f
-            "red" -> 2688f / 704f
-            "orange" -> 2688f / 665f
-            "gold" -> 2688f / 748f
-            "green" -> 2688f / 713f
-            "blue" -> 2688f / 651f
-            else -> 2688f / 704f
-        }
         val logoResource = when (normalizedTheme) {
             "multicolor" -> R.drawable.nrd_logo_multicolor
             "gold" -> R.drawable.nrd_logo_gold
@@ -292,61 +284,75 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
             else -> R.drawable.nrd_logo_red
         }
 
-        // App Bar / Header: the logo remains transparent and overlays the artwork,
-        // preventing a detached white strip while preserving the full banner frame.
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(bannerAspectRatio)
-        ) {
-            ThemeBanner(
-                appTheme = normalizedTheme,
-                modifier = Modifier.fillMaxSize()
-            )
+        // App Bar / Header: the complete artwork is drawn above a white,
+        // rounded transition. The transparent logo grows from that transition
+        // and meets the character hands without clipping either element.
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val headerHeight = maxWidth / 3f
+            val logoWidth = maxWidth * 0.28f
 
-            Image(
-                painter = painterResource(logoResource),
-                contentDescription = "NRD Códigos Correlatos",
-                contentScale = ContentScale.Fit,
+            Box(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .height(42.dp)
-                    .padding(top = 8.dp)
-            )
-
-            // Hamburger Menu overlay
-            IconButton(
-                onClick = {
-                    viewModel.clearNewProductsCount()
-                    onOpenDrawer()
-                },
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(top = 48.dp, start = 8.dp)
-                    .background(Color.Transparent) // Transparent background
-            ) {
-                BadgedBox(
-                    badge = {
-                        if (newProductsCount > 0) {
-                            Badge { Text(newProductsCount.toString()) }
-                        }
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Menu, 
-                        contentDescription = "Menu",
-                        tint = MaterialTheme.colorScheme.primary
+                    .fillMaxWidth()
+                    .height(headerHeight)
+                    .clip(
+                        RoundedCornerShape(
+                            bottomStart = 32.dp,
+                            bottomEnd = 32.dp
+                        )
                     )
-                }
-            }
-            IconButton(
-                onClick = { showNotificationsSheet = true },
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 48.dp, end = 8.dp)
+                    .background(Color.White)
             ) {
-                BadgedBox(
-                    badge = { if (unreadNotifications > 0) Badge { Text(unreadNotifications.toString()) } }
+                ThemeBanner(
+                    appTheme = normalizedTheme,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                Image(
+                    painter = painterResource(logoResource),
+                    contentDescription = "NRD Códigos Correlatos",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .width(logoWidth)
+                        .aspectRatio(1.776f)
+                        .padding(bottom = 7.dp)
+                )
+
+                // Hamburger Menu overlay
+                IconButton(
+                    onClick = {
+                        viewModel.clearNewProductsCount()
+                        onOpenDrawer()
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(top = 48.dp, start = 8.dp)
+                        .background(Color.Transparent) // Transparent background
                 ) {
-                    Icon(Icons.Default.Notifications, contentDescription = "Notificações", tint = MaterialTheme.colorScheme.primary)
+                    BadgedBox(
+                        badge = {
+                            if (newProductsCount > 0) {
+                                Badge { Text(newProductsCount.toString()) }
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "Menu",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = { showNotificationsSheet = true },
+                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 48.dp, end = 8.dp)
+                ) {
+                    BadgedBox(
+                        badge = { if (unreadNotifications > 0) Badge { Text(unreadNotifications.toString()) } }
+                    ) {
+                        Icon(Icons.Default.Notifications, contentDescription = "Notificações", tint = MaterialTheme.colorScheme.primary)
+                    }
                 }
             }
         }
