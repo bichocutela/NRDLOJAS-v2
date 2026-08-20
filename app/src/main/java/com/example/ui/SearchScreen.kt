@@ -270,57 +270,35 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
     }
 
     Column(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
         ) {
-        val heroAspectRatio = if (normalizedTheme == "multicolor") {
-            1536f / 630f
+        val bannerAspectRatio = if (normalizedTheme == "multicolor") {
+            2172f / 470f
         } else {
-            2688f / 1152f
+            2688f / 480f
+        }
+        val logoResource = when (normalizedTheme) {
+            "multicolor" -> R.drawable.nrd_logo_multicolor
+            "gold" -> R.drawable.nrd_logo_gold
+            "green" -> R.drawable.nrd_logo_green
+            "blue" -> R.drawable.nrd_logo_blue
+            "orange" -> R.drawable.nrd_logo_orange
+            else -> R.drawable.nrd_logo_red
         }
 
-        // App Bar / Header (Hero Image)
+        // App Bar / Header: art is separated from the transparent theme logo to avoid white surfaces in dark mode.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(heroAspectRatio)
+                .aspectRatio(bannerAspectRatio)
         ) {
-            Box(
+            ThemeBanner(
+                appTheme = normalizedTheme,
                 modifier = Modifier.fillMaxSize()
-            ) {
-                ThemeBanner(appTheme = normalizedTheme)
-                if (normalizedTheme == "multicolor") {
-                    val gradientBrush = androidx.compose.runtime.remember {
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(0xFFE62325), // Vermelho
-                                Color(0xFFFF9800), // Laranja
-                                Color(0xFFD4AF37), // Dourado
-                                Color(0xFF388E3C), // Verde
-                                Color(0xFF1976D2)  // Azul
-                            )
-                        )
-                    }
-                    Text(
-                        text = "NRD Códigos Correlatos",
-                        style = MaterialTheme.typography.titleMedium.copy(brush = gradientBrush),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 8.dp)
-                    )
-                } else {
-                    Text(
-                        text = "NRD Códigos Correlatos",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 8.dp)
-                    )
-                }
-            }
-            
+            )
+
             // Hamburger Menu overlay
             IconButton(
                 onClick = {
@@ -356,6 +334,22 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                     Icon(Icons.Default.Notifications, contentDescription = "Notificações", tint = MaterialTheme.colorScheme.primary)
                 }
             }
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(82.dp)
+                .background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = painterResource(logoResource),
+                contentDescription = "NRD Códigos Correlatos",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 76.dp, vertical = 8.dp)
+            )
         }
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -1202,7 +1196,7 @@ fun generateBarcodeBitmap(data: String, profile: String = "Padrão"): ImageBitma
 
 
 @Composable
-fun ThemeBanner(appTheme: String) {
+fun ThemeBanner(appTheme: String, modifier: Modifier = Modifier) {
     val normalizedTheme = when (appTheme.trim().lowercase()) {
         "multicolor" -> "multicolor"
         "gold" -> "gold"
@@ -1212,23 +1206,17 @@ fun ThemeBanner(appTheme: String) {
         else -> "red"
     }
 
-    val imageUrl = if (normalizedTheme == "multicolor") {
-        "https://kkayksyzksexoarpfxyj.supabase.co/storage/v1/object/public/nrdlojas-images/banners/themes/theme_multicolor.jpg"
+    val imageModel: Any = if (normalizedTheme == "multicolor") {
+        R.drawable.theme_multicolor_header
     } else {
         "file:///android_asset/themes/theme_${normalizedTheme}.jpg"
     }
 
-    val bannerScale = if (normalizedTheme == "multicolor") {
-        ContentScale.FillWidth
-    } else {
-        ContentScale.Fit
-    }
-
     AsyncImage(
-        model = imageUrl,
+        model = imageModel,
         contentDescription = "Banner do tema $normalizedTheme",
-        modifier = Modifier.fillMaxSize(),
-        contentScale = bannerScale,
+        modifier = modifier,
+        contentScale = ContentScale.FillWidth,
         alignment = Alignment.TopCenter
     )
 }
