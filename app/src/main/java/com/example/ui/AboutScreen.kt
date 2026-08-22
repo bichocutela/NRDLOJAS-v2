@@ -36,7 +36,7 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 import com.example.R
 
-private const val IPHONE_PWA_URL = "https://nrdpwa-i6x25cjv.manus.space/"
+private const val IPHONE_PWA_URL = "https://bichocutela.github.io"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
