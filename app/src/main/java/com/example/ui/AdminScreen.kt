@@ -7,6 +7,11 @@ import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -158,23 +163,34 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         contentColor = getDynamicThemeColor(1, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second
                     ),
                     onClick = {
-                        productName = ""
-                        productCode = ""
-                        productCategory = ""
-                        productImageUrl = ""
-                        showManualForm = true
+                        if (showManualForm) {
+                            showManualForm = false
+                        } else {
+                            productName = ""
+                            productCode = ""
+                            productCategory = ""
+                            productImageUrl = ""
+                            showManualForm = true
+                        }
                     },
                     shape = RoundedCornerShape(14.dp)
                 ) {
-                    Icon(Icons.Default.Edit, contentDescription = null)
+                    Icon(
+                        imageVector = if (showManualForm) Icons.Default.Close else Icons.Default.Edit,
+                        contentDescription = if (showManualForm) "Recolher formulário" else "Adicionar produto"
+                    )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Adicionar Produto")
+                    Text(if (showManualForm) "Recolher formulário" else "Adicionar Produto")
                 }
             }
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            if (showManualForm) {
+            AnimatedVisibility(
+                visible = showManualForm,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
