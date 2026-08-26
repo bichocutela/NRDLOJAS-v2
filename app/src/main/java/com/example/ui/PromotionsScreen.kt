@@ -127,6 +127,12 @@ fun PromotionsLoginScreen(
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
+    LaunchedEffect(api) {
+        if (api.hasSession()) {
+            onLoginSuccess()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(

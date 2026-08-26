@@ -30,7 +30,7 @@ class NossaGenteApi(context: Context) {
     private val appContext = context.applicationContext
     private val sessionStore = NossaGenteSessionStore(appContext)
     @Volatile
-    private var inMemoryToken: String? = sessionStore.readToken()
+    private var inMemoryToken: String? = null
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -73,10 +73,15 @@ class NossaGenteApi(context: Context) {
                 if (token.isNullOrBlank()) {
                     return@withContext NossaGenteLoginResult.Error("A resposta de autenticação não trouxe uma sessão válida.")
                 }
+                // A cópia em memória atende a sessão corrente, enquanto a persistência
+                // cifrada mantém o acesso após fechar e reabrir o aplicativo.
+                if (!sessionStore.saveToken(token)) {
+                    inMemoryToken = null
+                    return@withContext NossaGenteLoginResult.Error(
+                        "Não foi possível salvar a sessão neste aparelho. Tente novamente."
+                    )
+                }
                 inMemoryToken = token
-                // A persistência cifrada é preferencial; a cópia em memória evita uma
-                // corrida de leitura no Android Keystore logo após o login.
-                sessionStore.saveToken(token)
                 NossaGenteLoginResult.Success
             }
         } catch (_: Exception) {
@@ -121,7 +126,13 @@ class NossaGenteApi(context: Context) {
         sessionStore.clear()
     }
 
-    private fun currentToken(): String? = inMemoryToken ?: sessionStore.readToken()
+    private fun currentToken(): String? {
+        val memoryToken = inMemoryToken
+        if (!memoryToken.isNullOrBlank()) return memoryToken
+        return sessionStore.readToken()?.also { restoredToken ->
+            inMemoryToken = restoredToken
+        }
+    }
 
     internal fun parsePromotionsForTest(raw: String): List<Promotion> = parsePromotions(raw)
 
@@ -377,6 +388,7 @@ sealed interface NossaGentePromotionsResult {
 private class NossaGenteSessionStore(private val context: Context) {
     private val preferences = context.getSharedPreferences("nossa_gente_session", Context.MODE_PRIVATE)
     private val alias = "nrd_nossa_gente_session_key"
+    private val keyLock = Any()
 
     fun saveToken(token: String): Boolean = runCatching {
         val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
@@ -399,14 +411,12 @@ private class NossaGenteSessionStore(private val context: Context) {
         String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
     }.getOrNull()
 
-    fun clear() {
-        preferences.edit().clear().apply()
-    }
+    fun clear(): Boolean = preferences.edit().clear().commit()
 
-    private fun getOrCreateKey(): SecretKey {
+    private fun getOrCreateKey(): SecretKey = synchronized(keyLock) {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         val existing = keyStore.getKey(alias, null)
-        if (existing is SecretKey) return existing
+        if (existing is SecretKey) return@synchronized existing
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         generator.init(
             KeyGenParameterSpec.Builder(
@@ -418,6 +428,6 @@ private class NossaGenteSessionStore(private val context: Context) {
                 .setKeySize(256)
                 .build()
         )
-        return generator.generateKey()
+        generator.generateKey()
     }
 }
