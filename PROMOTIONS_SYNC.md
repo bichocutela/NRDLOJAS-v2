@@ -1,6 +1,6 @@
 # Promoções — integração com Nossa Gente
 
-A tela **Promoções** usa o mesmo fluxo de autenticação do Nossa Gente. O funcionário informa CPF e senha, o NRD envia `POST /auth/login` e guarda somente o token de sessão cifrado com Android Keystore. A senha não é persistida.
+A tela **Promoções** usa o mesmo fluxo de autenticação do Nossa Gente. O funcionário informa CPF e senha, o NRD envia `POST /auth/login` e mantém o token somente na memória da sessão atual. A senha e o token não são persistidos no aparelho.
 
 ## Rotas usadas
 
@@ -28,7 +28,7 @@ O carregamento inicial continua exibindo progresso. A consulta automática não 
 
 ## Lojas, ordenação e sessão
 
-Os códigos de filial são apresentados com nomes amigáveis por meio de `StoreCatalog`, mantendo o código entre parênteses para conferência. A tela permite escolher uma loja favorita no cabeçalho; a preferência é persistida no DataStore e passa a ser o filtro padrão na abertura do painel. O botão **Sair** limpa o token Nossa Gente cifrado e retorna ao login. Enquanto o usuário não tocar em **Sair**, a sessão permanece disponível após fechar e reabrir o aplicativo.
+Os códigos de filial são apresentados com nomes amigáveis por meio de `StoreCatalog`, mantendo o código entre parênteses para conferência. A tela permite escolher uma loja favorita no cabeçalho; a preferência é persistida no DataStore e passa a ser o filtro padrão na abertura do painel. O botão **Sair** limpa o token Nossa Gente da sessão atual e retorna ao login. Por decisão de compatibilidade, o token não é persistido; depois de fechar e reabrir o aplicativo, o funcionário precisa autenticar novamente.
 
 Na lista de uma categoria, a chave **Ordenar** permite escolher nome, data de validade, ordem de adição, maior ou menor desconto e preço menor ou maior. A ordenação é feita localmente sobre os grupos já carregados, sem nova consulta à API.
 

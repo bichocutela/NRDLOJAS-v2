@@ -1,7 +1,6 @@
 package com.example.data
 
 import android.content.Context
-import android.util.Base64
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -12,23 +11,13 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.charset.StandardCharsets
-import java.security.KeyStore
 import java.security.MessageDigest
-import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
-import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
 
 /** Cliente mínimo para autenticar e consultar promoções da Nossa Gente.
  *  A senha é usada somente na requisição de login e nunca é persistida.
  */
-class NossaGenteApi(context: Context) {
-    private val appContext = context.applicationContext
-    private val sessionStore = NossaGenteSessionStore(appContext)
+class NossaGenteApi(@Suppress("UNUSED_PARAMETER") context: Context) {
     @Volatile
     private var inMemoryToken: String? = null
     private val client = OkHttpClient.Builder()
@@ -73,14 +62,8 @@ class NossaGenteApi(context: Context) {
                 if (token.isNullOrBlank()) {
                     return@withContext NossaGenteLoginResult.Error("A resposta de autenticação não trouxe uma sessão válida.")
                 }
-                // A cópia em memória atende a sessão corrente, enquanto a persistência
-                // cifrada mantém o acesso após fechar e reabrir o aplicativo.
-                if (!sessionStore.saveToken(token)) {
-                    inMemoryToken = null
-                    return@withContext NossaGenteLoginResult.Error(
-                        "Não foi possível salvar a sessão neste aparelho. Tente novamente."
-                    )
-                }
+                // A sessão é deliberadamente mantida somente em memória. Ao fechar
+                // o aplicativo, o funcionário deverá autenticar novamente.
                 inMemoryToken = token
                 NossaGenteLoginResult.Success
             }
@@ -104,7 +87,6 @@ class NossaGenteApi(context: Context) {
                 val body = response.body?.string().orEmpty()
                 if (response.code == 401 || response.code == 403) {
                     inMemoryToken = null
-                    sessionStore.clear()
                     return@withContext NossaGentePromotionsResult.Unauthorized
                 }
                 if (!response.isSuccessful) {
@@ -123,16 +105,9 @@ class NossaGenteApi(context: Context) {
 
     fun logout() {
         inMemoryToken = null
-        sessionStore.clear()
     }
 
-    private fun currentToken(): String? {
-        val memoryToken = inMemoryToken
-        if (!memoryToken.isNullOrBlank()) return memoryToken
-        return sessionStore.readToken()?.also { restoredToken ->
-            inMemoryToken = restoredToken
-        }
-    }
+    private fun currentToken(): String? = inMemoryToken
 
     internal fun parsePromotionsForTest(raw: String): List<Promotion> = parsePromotions(raw)
 
@@ -360,16 +335,17 @@ data class Promotion(
     val products: List<PromotionProduct>
 )
 
-data class PromotionProduct(
-    val code: String,
-    val name: String,
-    val offerPrice: String?,
-    val regularPrice: String?,
-    val discount: String?,
-    val storeCode: String? = null,
-    val imageUrl: String? = null,
-    val linkUrl: String? = null
-)
+    data class PromotionProduct(
+        val code: String,
+        val name: String,
+        val offerPrice: String?,
+        val regularPrice: String?,
+        val discount: String?,
+        val storeCode: String? = null,
+        val imageUrl: String? = null,
+        val linkUrl: String? = null
+    )
+
 
 sealed interface NossaGenteLoginResult {
     data object Success : NossaGenteLoginResult
@@ -383,51 +359,4 @@ sealed interface NossaGentePromotionsResult {
     ) : NossaGentePromotionsResult
     data object Unauthorized : NossaGentePromotionsResult
     data class Error(val message: String) : NossaGentePromotionsResult
-}
-
-private class NossaGenteSessionStore(private val context: Context) {
-    private val preferences = context.getSharedPreferences("nossa_gente_session", Context.MODE_PRIVATE)
-    private val alias = "nrd_nossa_gente_session_key"
-    private val keyLock = Any()
-
-    fun saveToken(token: String): Boolean = runCatching {
-        val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
-        val ciphertext = cipher.doFinal(token.toByteArray(StandardCharsets.UTF_8))
-        preferences.edit()
-            .putString("iv", Base64.encodeToString(iv, Base64.NO_WRAP))
-            .putString("token", Base64.encodeToString(ciphertext, Base64.NO_WRAP))
-            .commit()
-    }.getOrDefault(false)
-
-    fun readToken(): String? = runCatching {
-        val encodedIv = preferences.getString("iv", null) ?: return@runCatching null
-        val encodedToken = preferences.getString("token", null) ?: return@runCatching null
-        val iv = Base64.decode(encodedIv, Base64.NO_WRAP)
-        val ciphertext = Base64.decode(encodedToken, Base64.NO_WRAP)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
-        String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
-    }.getOrNull()
-
-    fun clear(): Boolean = preferences.edit().clear().commit()
-
-    private fun getOrCreateKey(): SecretKey = synchronized(keyLock) {
-        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        val existing = keyStore.getKey(alias, null)
-        if (existing is SecretKey) return@synchronized existing
-        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
-        generator.init(
-            KeyGenParameterSpec.Builder(
-                alias,
-                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-            )
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .setKeySize(256)
-                .build()
-        )
-        generator.generateKey()
-    }
 }
