@@ -16,6 +16,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val title = message.data["title"]?.trim()
         val body = message.data["body"]?.trim()
         val type = message.data["type"]?.trim()
+        val messageStoreCode = message.data["storeCode"]?.trim()
+            ?: message.data["loja"]?.trim()
 
         if (title.isNullOrBlank() || body.isNullOrBlank() || type.isNullOrBlank()) {
             Log.w(TAG, "Mensagem FCM ignorada: title, body ou type ausente no payload data-only")
@@ -42,7 +44,18 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 TYPE_CODE_CHANGED -> preferences.notificationsCodeChangedEnabled.first()
                 TYPE_SUGGESTION_FIXED -> true
                 TYPE_APP_UPDATE -> true
+                TYPE_PROMOTION_UPDATED -> true
                 else -> false
+            }
+
+            if (type == TYPE_PROMOTION_UPDATED) {
+                val favoriteStoreCode = preferences.favoriteStoreCode.first()?.trim().orEmpty()
+                if (favoriteStoreCode.isNotBlank() &&
+                    (messageStoreCode.isNullOrBlank() || messageStoreCode != favoriteStoreCode)
+                ) {
+                    Log.d(TAG, "Promoção ignorada: loja diferente da favorita")
+                    return@runBlocking
+                }
             }
 
             Log.d(
@@ -94,6 +107,13 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         const val TYPE_CODE_CHANGED = "CODE_CHANGED"
         const val TYPE_SUGGESTION_FIXED = "SUGGESTION_FIXED"
         const val TYPE_APP_UPDATE = "APP_UPDATE"
-        val SUPPORTED_TYPES = setOf(TYPE_NEW_PRODUCT, TYPE_CODE_CHANGED, TYPE_SUGGESTION_FIXED, TYPE_APP_UPDATE)
+        const val TYPE_PROMOTION_UPDATED = "PROMOTION_UPDATED"
+        val SUPPORTED_TYPES = setOf(
+            TYPE_NEW_PRODUCT,
+            TYPE_CODE_CHANGED,
+            TYPE_SUGGESTION_FIXED,
+            TYPE_APP_UPDATE,
+            TYPE_PROMOTION_UPDATED
+        )
     }
 }

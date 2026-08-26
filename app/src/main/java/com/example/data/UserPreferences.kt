@@ -77,6 +77,7 @@ class UserPreferences(private val context: Context) {
 
     val lastNotifiedProductCode: Flow<String?> = context.dataStore.data.map { it[LAST_NOTIFIED_PRODUCT_CODE] }
     val lastNotifiedUpdateTag: Flow<String?> = context.dataStore.data.map { it[LAST_NOTIFIED_UPDATE_TAG] }
+    val favoriteStoreCode: Flow<String?> = context.dataStore.data.map { it[FAVORITE_STORE_CODE] }
     
     val appTheme: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[APP_THEME] ?: "multicolor"
@@ -162,6 +163,23 @@ class UserPreferences(private val context: Context) {
         context.dataStore.edit { it[LAST_NOTIFIED_UPDATE_TAG] = tag }
     }
 
+    suspend fun setFavoriteStoreCode(code: String?) {
+        context.dataStore.edit { preferences ->
+            if (code.isNullOrBlank()) {
+                preferences.remove(FAVORITE_STORE_CODE)
+            } else {
+                preferences[FAVORITE_STORE_CODE] = code.trim()
+            }
+            preferences.remove(LAST_NOTIFIED_PROMOTION_FINGERPRINT)
+        }
+    }
+
+    suspend fun setLastNotifiedPromotionFingerprint(fingerprint: String) {
+        context.dataStore.edit { it[LAST_NOTIFIED_PROMOTION_FINGERPRINT] = fingerprint }
+    }
+
+    val lastNotifiedPromotionFingerprint: Flow<String?> = context.dataStore.data.map { it[LAST_NOTIFIED_PROMOTION_FINGERPRINT] }
+
     suspend fun setAppTheme(theme: String) {
         context.dataStore.edit { it[APP_THEME] = theme }
     }
@@ -200,6 +218,8 @@ class UserPreferences(private val context: Context) {
         val BANNER_IMAGE_URI = stringPreferencesKey("banner_image_uri")
         val LAST_NOTIFIED_PRODUCT_CODE = stringPreferencesKey("last_notified_product_code")
         val LAST_NOTIFIED_UPDATE_TAG = stringPreferencesKey("last_notified_update_tag")
+        val FAVORITE_STORE_CODE = stringPreferencesKey("favorite_store_code")
+        val LAST_NOTIFIED_PROMOTION_FINGERPRINT = stringPreferencesKey("last_notified_promotion_fingerprint")
         val APP_THEME = stringPreferencesKey("app_theme")
         val APPEARANCE_MODE = stringPreferencesKey("appearance_mode")
         val ONBOARDING_SHOWN = booleanPreferencesKey("onboarding_shown")

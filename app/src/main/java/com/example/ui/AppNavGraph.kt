@@ -172,6 +172,13 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
                             navController.navigate("promotions_login") {
                                 popUpTo("promotions") { inclusive = true }
                             }
+                        },
+                        onLogout = {
+                            nossaGenteApi.logout()
+                            navController.navigate("promotions_login") {
+                                popUpTo("promotions") { inclusive = true }
+                                launchSingleTop = true
+                            }
                         }
                     )
                 }

@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LocalOffer
@@ -66,6 +68,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -80,8 +83,11 @@ import com.example.data.NossaGenteApi
 import com.example.data.NossaGenteLoginResult
 import com.example.data.NossaGentePromotionsResult
 import com.example.data.Promotion
+import com.example.data.StoreCatalog
+import com.example.data.UserPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -91,6 +97,16 @@ private const val CATEGORY_PREVIEW_LIMIT = 10
 private const val MAX_SEARCH_LENGTH = 80
 private const val ALL_STORES_LABEL = "Todas"
 private const val UNKNOWN_STORE_LABEL = "Loja não informada"
+
+private enum class OfferSortOption(val label: String) {
+    NAME("Nome"),
+    VALID_UNTIL("Data de validade"),
+    ADDED("Ordem de adição"),
+    DISCOUNT_DESC("Maior desconto"),
+    DISCOUNT_ASC("Menor desconto"),
+    PRICE_ASC("Preço menor para maior"),
+    PRICE_DESC("Preço maior para menor")
+}
 
 private data class PendingPromotionUpdate(
     val promotions: List<Promotion>,
@@ -204,7 +220,8 @@ fun PromotionsLoginScreen(
 fun PromotionsScreen(
     api: NossaGenteApi,
     onNavigateBack: () -> Unit,
-    onRequireLogin: () -> Unit
+    onRequireLogin: () -> Unit,
+    onLogout: () -> Unit
 ) {
     var promotions by remember { mutableStateOf<List<Promotion>>(emptyList()) }
     var offerGroups by remember { mutableStateOf<List<OfferGroup>>(emptyList()) }
@@ -216,8 +233,14 @@ fun PromotionsScreen(
     var loginRedirectRequested by remember { mutableStateOf(false) }
     var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedStore by rememberSaveable { mutableStateOf(ALL_STORES_LABEL) }
+    var favoriteStoreCode by rememberSaveable { mutableStateOf<String?>(null) }
+    var sortOptionName by rememberSaveable { mutableStateOf(OfferSortOption.ADDED.name) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var visibleOfferCount by rememberSaveable { mutableStateOf(INITIAL_OFFER_PAGE) }
+    val context = LocalContext.current
+    val userPreferences = remember { UserPreferences(context) }
+    val sortOption = OfferSortOption.values().firstOrNull { it.name == sortOptionName }
+        ?: OfferSortOption.ADDED
     var enlargedImageUrl by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -285,6 +308,7 @@ fun PromotionsScreen(
         if (!api.hasSession()) {
             requestLoginOnce()
         } else {
+            favoriteStoreCode = userPreferences.favoriteStoreCode.first()
             checkForPromotions(initialLoad = true)
         }
     }
@@ -306,8 +330,8 @@ fun PromotionsScreen(
             .sorted()
     }
     val normalizedQuery = searchQuery.trim().lowercase()
-    val visibleOffers = remember(offerGroups, selectedStore, normalizedQuery, selectedCategory) {
-        offerGroups.filter { offer ->
+    val visibleOffers = remember(offerGroups, selectedStore, normalizedQuery, selectedCategory, sortOption) {
+        val filtered = offerGroups.filter { offer ->
             val matchesCategory = selectedCategory == null || offer.category == selectedCategory
             val matchesStore = selectedStore == ALL_STORES_LABEL || offer.stores.any { it.storeCode == selectedStore }
             val matchesSearch = normalizedQuery.isBlank() ||
@@ -315,6 +339,7 @@ fun PromotionsScreen(
                 offer.code.lowercase().contains(normalizedQuery)
             matchesCategory && matchesStore && matchesSearch
         }
+        sortOfferGroups(filtered, sortOption)
     }
     val categoryGroups = remember(offerGroups, selectedStore, normalizedQuery) {
         offerGroups
@@ -331,13 +356,19 @@ fun PromotionsScreen(
             .sortedBy { it.first.lowercase() }
     }
 
-    LaunchedEffect(selectedCategory, selectedStore, normalizedQuery) {
+    LaunchedEffect(selectedCategory, selectedStore, normalizedQuery, sortOptionName) {
         visibleOfferCount = INITIAL_OFFER_PAGE
     }
 
-    LaunchedEffect(storeOptions) {
+    LaunchedEffect(storeOptions, favoriteStoreCode) {
         if (selectedStore != ALL_STORES_LABEL && selectedStore !in storeOptions) {
             selectedStore = ALL_STORES_LABEL
+        } else if (
+            selectedStore == ALL_STORES_LABEL &&
+            favoriteStoreCode != null &&
+            favoriteStoreCode in storeOptions
+        ) {
+            selectedStore = favoriteStoreCode!!
         }
     }
 
@@ -362,6 +393,18 @@ fun PromotionsScreen(
                     }
                 },
                 actions = {
+                    FavoriteStoreSelector(
+                        storeOptions = storeOptions,
+                        favoriteStoreCode = favoriteStoreCode,
+                        onFavoriteStoreChange = { code ->
+                            favoriteStoreCode = code
+                            selectedStore = code ?: ALL_STORES_LABEL
+                            scope.launch { userPreferences.setFavoriteStoreCode(code) }
+                        }
+                    )
+                    TextButton(onClick = onLogout) {
+                        Text("Sair")
+                    }
                     IconButton(
                         onClick = ::handleRefreshClick,
                         enabled = !isLoading && !isChecking,
@@ -414,6 +457,8 @@ fun PromotionsScreen(
                 selectedStore = selectedStore,
                 searchQuery = searchQuery,
                 onSearchQueryChange = { searchQuery = it.take(MAX_SEARCH_LENGTH) },
+                sortOption = sortOption,
+                onSortOptionChange = { sortOptionName = it.name },
                 visibleOffers = visibleOffers,
                 visibleOfferCount = visibleOfferCount,
                 onLoadMore = {
@@ -554,6 +599,62 @@ private fun PromotionsHome(
 }
 
 @Composable
+private fun FavoriteStoreSelector(
+    storeOptions: List<String>,
+    favoriteStoreCode: String?,
+    onFavoriteStoreChange: (String?) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val safeOptions = storeOptions.filter { it != ALL_STORES_LABEL }
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            enabled = safeOptions.isNotEmpty()
+        ) {
+            Icon(
+                imageVector = if (favoriteStoreCode.isNullOrBlank()) Icons.Default.FavoriteBorder else Icons.Default.Favorite,
+                contentDescription = if (favoriteStoreCode.isNullOrBlank()) {
+                    "Escolher loja favorita"
+                } else {
+                    "Loja favorita: ${StoreCatalog.nameFor(favoriteStoreCode)}"
+                },
+                tint = if (favoriteStoreCode.isNullOrBlank()) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.primary
+                }
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Todas as lojas") },
+                onClick = {
+                    onFavoriteStoreChange(null)
+                    expanded = false
+                }
+            )
+            safeOptions.forEach { code ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(StoreCatalog.nameFor(code))
+                            Text(code, style = MaterialTheme.typography.bodySmall)
+                        }
+                    },
+                    onClick = {
+                        onFavoriteStoreChange(code)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun StoreTabs(
     storeOptions: List<String>,
     selectedStore: String,
@@ -567,7 +668,7 @@ private fun StoreTabs(
                 onClick = { onStoreSelected(store) },
                 text = {
                     Text(
-                        text = store,
+                        text = if (store == ALL_STORES_LABEL) ALL_STORES_LABEL else StoreCatalog.nameFor(store),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -675,6 +776,8 @@ private fun PromotionCategoryList(
     selectedStore: String,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
+    sortOption: OfferSortOption,
+    onSortOptionChange: (OfferSortOption) -> Unit,
     visibleOffers: List<OfferGroup>,
     visibleOfferCount: Int,
     onLoadMore: () -> Unit,
@@ -701,8 +804,13 @@ private fun PromotionCategoryList(
                 Text(
                     "$categoryName • ${visibleOffers.size}",
                     style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
+                )
+                OfferSortSelector(
+                    selected = sortOption,
+                    onSelected = onSortOptionChange
                 )
             }
         }
@@ -711,7 +819,7 @@ private fun PromotionCategoryList(
         }
         item {
             Text(
-                if (selectedStore == ALL_STORES_LABEL) "Preços por loja" else "Filtrado por $selectedStore",
+                if (selectedStore == ALL_STORES_LABEL) "Preços por loja" else "Filtrado por ${StoreCatalog.nameFor(selectedStore)}",
                 modifier = Modifier.padding(horizontal = 16.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -742,6 +850,49 @@ private fun PromotionCategoryList(
                 ) {
                     Text("Carregar mais ofertas (${visibleOffers.size - visibleOfferCount} restantes)")
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OfferSortSelector(
+    selected: OfferSortOption,
+    onSelected: (OfferSortOption) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(
+            onClick = { expanded = true },
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+        ) {
+            Text("Ordenar", maxLines = 1)
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                Icons.Default.ExpandMore,
+                contentDescription = "Escolher ordem das ofertas",
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            OfferSortOption.values().forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(option.label)
+                            if (option == selected) {
+                                Text("Selecionado", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    },
+                    onClick = {
+                        onSelected(option)
+                        expanded = false
+                    }
+                )
             }
         }
     }
@@ -824,7 +975,7 @@ private fun StorePriceSelector(offer: OfferGroup, selectedStore: String) {
                 Icon(Icons.Default.Storefront, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    if (pickedStore.isBlank()) "Escolher loja" else "Preço na loja: $pickedStore",
+                    if (pickedStore.isBlank()) "Escolher loja" else "Preço na loja: ${StoreCatalog.nameFor(pickedStore)}",
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -842,7 +993,12 @@ private fun StorePriceSelector(offer: OfferGroup, selectedStore: String) {
                     DropdownMenuItem(
                         text = {
                             Column {
-                                Text(storeOffer.storeCode)
+                                Text(StoreCatalog.nameFor(storeOffer.storeCode))
+                                Text(
+                                    storeOffer.storeCode,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                                 Text(
                                     storeOffer.offerPrice ?: "Preço não informado",
                                     style = MaterialTheme.typography.bodySmall
@@ -1104,6 +1260,42 @@ private fun buildOfferGroups(promotions: List<Promotion>): List<OfferGroup> {
         )
     }
 }
+
+private fun sortOfferGroups(offers: List<OfferGroup>, option: OfferSortOption): List<OfferGroup> = when (option) {
+    OfferSortOption.NAME -> offers.sortedWith(compareBy<OfferGroup> { it.name.lowercase() }.thenBy { it.id })
+    OfferSortOption.VALID_UNTIL -> offers.sortedWith(
+        compareBy<OfferGroup> { it.validTo.isNullOrBlank() }
+            .thenBy { it.validTo.orEmpty() }
+            .thenBy { it.name.lowercase() }
+    )
+    OfferSortOption.ADDED -> offers
+    OfferSortOption.DISCOUNT_DESC -> offers.sortedWith(
+        compareByDescending<OfferGroup> { it.maxDiscountPercent() ?: -1.0 }
+            .thenBy { it.name.lowercase() }
+    )
+    OfferSortOption.DISCOUNT_ASC -> offers.sortedWith(
+        compareBy<OfferGroup> { it.maxDiscountPercent() ?: Double.MAX_VALUE }
+            .thenBy { it.name.lowercase() }
+    )
+    OfferSortOption.PRICE_ASC -> offers.sortedWith(
+        compareBy<OfferGroup> { it.bestOffer?.offerNumeric ?: Double.MAX_VALUE }
+            .thenBy { it.name.lowercase() }
+    )
+    OfferSortOption.PRICE_DESC -> offers.sortedWith(
+        compareByDescending<OfferGroup> { it.bestOffer?.offerNumeric ?: -1.0 }
+            .thenBy { it.name.lowercase() }
+    )
+}
+
+private fun OfferGroup.maxDiscountPercent(): Double? = stores
+    .mapNotNull { it.discount.toNumericPercent() }
+    .maxOrNull()
+
+private fun String?.toNumericPercent(): Double? = this
+    ?.replace("%", "")
+    ?.replace(",", ".")
+    ?.trim()
+    ?.toDoubleOrNull()
 
 private data class MutableOfferGroup(
     val id: String,
