@@ -16,7 +16,7 @@ Authorization: Bearer <token-da-sessao>
 Accept: application/json
 ```
 
-A tela interpreta os nomes mais comuns para o retorno de promoções e produtos em oferta, incluindo `data`, `promocoes`, `promotions`, `items`, `produtos`, `products`, `itens` e `ofertas`. O contrato definitivo deve ser confirmado com a API.
+A API atual retorna uma lista plana, com uma linha por produto e loja, usando `loja`, `codproduto`, `desc_prod`, `categoria`, `datainicio`, `datafim`, `preco_normal`, `preco_promo`, `imagem` e `linkloja`. O NRD agrupa as linhas por produto e intervalo de validade e exibe cada loja como uma oferta individual, preservando código, preços, imagem e link. O parser também mantém compatibilidade com respostas aninhadas usando `data`, `promocoes`, `promotions`, `items`, `produtos`, `products`, `itens` e `ofertas`.
 
 ## Atualização
 

@@ -28,6 +28,8 @@ import android.security.keystore.KeyProperties
 class NossaGenteApi(context: Context) {
     private val appContext = context.applicationContext
     private val sessionStore = NossaGenteSessionStore(appContext)
+    @Volatile
+    private var inMemoryToken: String? = sessionStore.readToken()
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -35,7 +37,7 @@ class NossaGenteApi(context: Context) {
         .callTimeout(25, TimeUnit.SECONDS)
         .build()
 
-    fun hasSession(): Boolean = !sessionStore.readToken().isNullOrBlank()
+    fun hasSession(): Boolean = !currentToken().isNullOrBlank()
 
     suspend fun login(cpf: String, password: String): NossaGenteLoginResult = withContext(Dispatchers.IO) {
         val cleanCpf = cpf.filter(Char::isDigit)
@@ -70,6 +72,9 @@ class NossaGenteApi(context: Context) {
                 if (token.isNullOrBlank()) {
                     return@withContext NossaGenteLoginResult.Error("A resposta de autenticação não trouxe uma sessão válida.")
                 }
+                inMemoryToken = token
+                // A persistência cifrada é preferencial; a cópia em memória evita uma
+                // corrida de leitura no Android Keystore logo após o login.
                 sessionStore.saveToken(token)
                 NossaGenteLoginResult.Success
             }
@@ -79,7 +84,7 @@ class NossaGenteApi(context: Context) {
     }
 
     suspend fun fetchPromotions(): NossaGentePromotionsResult = withContext(Dispatchers.IO) {
-        val token = sessionStore.readToken()
+        val token = currentToken()
             ?: return@withContext NossaGentePromotionsResult.Unauthorized
         try {
             val request = Request.Builder()
@@ -92,6 +97,7 @@ class NossaGenteApi(context: Context) {
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (response.code == 401 || response.code == 403) {
+                    inMemoryToken = null
                     sessionStore.clear()
                     return@withContext NossaGentePromotionsResult.Unauthorized
                 }
@@ -106,8 +112,13 @@ class NossaGenteApi(context: Context) {
     }
 
     fun logout() {
+        inMemoryToken = null
         sessionStore.clear()
     }
+
+    private fun currentToken(): String? = inMemoryToken ?: sessionStore.readToken()
+
+    internal fun parsePromotionsForTest(raw: String): List<Promotion> = parsePromotions(raw)
 
     private fun loginErrorMessage(code: Int, body: String): String {
         val serverCode = runCatching {
@@ -130,10 +141,71 @@ class NossaGenteApi(context: Context) {
             val rootArray = if (trimmed.startsWith("[")) JSONArray(trimmed) else {
                 firstArray(rootObject, "data", "promocoes", "promotions", "items", "results") ?: JSONArray()
             }
-            (0 until rootArray.length()).mapNotNull { index ->
-                rootArray.optJSONObject(index)?.let(::parsePromotion)
+            if (isFlatPromotionArray(rootArray)) parseFlatPromotions(rootArray) else {
+                (0 until rootArray.length()).mapNotNull { index ->
+                    rootArray.optJSONObject(index)?.let(::parsePromotion)
+                }
             }
         }.getOrDefault(emptyList())
+    }
+
+    private fun isFlatPromotionArray(array: JSONArray): Boolean {
+        val first = array.optJSONObject(0) ?: return false
+        return first.has("codproduto") || first.has("desc_prod") || first.has("preco_promo")
+    }
+
+    /** Converte o contrato real: uma linha por produto e loja, não promoções aninhadas. */
+    private fun parseFlatPromotions(array: JSONArray): List<Promotion> {
+        val grouped = linkedMapOf<String, FlatPromotionAccumulator>()
+        for (index in 0 until array.length()) {
+            val item = array.optJSONObject(index) ?: continue
+            val code = firstNonBlank(
+                item.optString("codproduto"),
+                item.optString("codigoProduto"),
+                item.optString("codigo"),
+                item.optString("code")
+            ) ?: continue
+            val name = firstNonBlank(item.optString("desc_prod"), item.optString("nome"), item.optString("name")) ?: "Produto em oferta"
+            val start = firstNonBlank(item.optString("datainicio"), item.optString("dataInicio"), item.optString("inicio"))
+            val end = firstNonBlank(item.optString("datafim"), item.optString("dataFim"), item.optString("fim"))
+            val groupKey = listOf(code, name, start.orEmpty(), end.orEmpty()).joinToString("|")
+            val accumulator = grouped.getOrPut(groupKey) {
+                FlatPromotionAccumulator(
+                    id = groupKey.hashCode().toString(),
+                    title = name,
+                    description = item.optString("categoria").trim(),
+                    imageUrl = firstNonBlank(item.optString("imagem"), item.optString("image"), item.optString("imageUrl")),
+                    validFrom = start,
+                    validTo = end
+                )
+            }
+            val store = item.optString("loja").trim().takeIf { it.isNotBlank() }
+            val productKey = listOf(store.orEmpty(), code, item.optString("preco_normal"), item.optString("preco_promo")).joinToString("|")
+            if (accumulator.products.containsKey(productKey)) continue
+            val regularPrice = formatPrice(item.opt("preco_normal"))
+            val offerPrice = formatPrice(item.opt("preco_promo"))
+            accumulator.products[productKey] = PromotionProduct(
+                code = code,
+                name = name,
+                offerPrice = offerPrice,
+                regularPrice = regularPrice,
+                discount = calculateDiscount(item.opt("preco_normal"), item.opt("preco_promo")),
+                storeCode = store,
+                imageUrl = firstNonBlank(item.optString("imagem"), item.optString("image"), item.optString("imageUrl")),
+                linkUrl = firstNonBlank(item.optString("linkloja"), item.optString("link"), item.optString("url"))
+            )
+        }
+        return grouped.values.map { accumulator ->
+            Promotion(
+                id = accumulator.id,
+                title = accumulator.title,
+                description = accumulator.description,
+                imageUrl = accumulator.imageUrl,
+                validFrom = accumulator.validFrom,
+                validTo = accumulator.validTo,
+                products = accumulator.products.values.toList()
+            )
+        }
     }
 
     private fun parsePromotion(item: JSONObject): Promotion {
@@ -144,27 +216,56 @@ class NossaGenteApi(context: Context) {
             }
         }
         return Promotion(
-            id = firstNonBlank(item.optString("id"), item.optString("codigo"), item.optString("code"))
+            id = firstNonBlank(item.optString("id"), item.optString("codigo"), item.optString("codproduto"), item.optString("code"))
                 ?: item.toString().hashCode().toString(),
-            title = firstNonBlank(item.optString("titulo"), item.optString("title"), item.optString("nome"), item.optString("name"))
+            title = firstNonBlank(item.optString("titulo"), item.optString("title"), item.optString("nome"), item.optString("name"), item.optString("desc_prod"))
                 ?: "Promoção",
-            description = firstNonBlank(item.optString("descricao"), item.optString("description"), item.optString("texto"), item.optString("detalhes"))
+            description = firstNonBlank(item.optString("descricao"), item.optString("description"), item.optString("texto"), item.optString("detalhes"), item.optString("categoria"))
                 .orEmpty(),
             imageUrl = firstNonBlank(item.optString("imagem"), item.optString("image"), item.optString("imageUrl"), item.optString("banner"), item.optString("urlImagem")),
-            validFrom = firstNonBlank(item.optString("dataInicio"), item.optString("inicio"), item.optString("validFrom"), item.optString("startDate")),
-            validTo = firstNonBlank(item.optString("dataFim"), item.optString("fim"), item.optString("validTo"), item.optString("endDate")),
+            validFrom = firstNonBlank(item.optString("dataInicio"), item.optString("datainicio"), item.optString("inicio"), item.optString("validFrom"), item.optString("startDate")),
+            validTo = firstNonBlank(item.optString("dataFim"), item.optString("datafim"), item.optString("fim"), item.optString("validTo"), item.optString("endDate")),
             products = products
         )
     }
 
     private fun parsePromotionProduct(item: JSONObject): PromotionProduct {
         return PromotionProduct(
-            code = firstNonBlank(item.optString("codigo"), item.optString("code"), item.optString("codigoProduto"), item.optString("productCode")).orEmpty(),
-            name = firstNonBlank(item.optString("nome"), item.optString("name"), item.optString("produto"), item.optString("description")).orEmpty(),
-            offerPrice = firstNonBlank(item.optString("precoOferta"), item.optString("offerPrice"), item.optString("preco"), item.optString("price")),
-            regularPrice = firstNonBlank(item.optString("precoOriginal"), item.optString("regularPrice"), item.optString("precoDe"), item.optString("originalPrice")),
-            discount = firstNonBlank(item.optString("desconto"), item.optString("discount"), item.optString("percentualDesconto"))
+            code = firstNonBlank(item.optString("codigo"), item.optString("code"), item.optString("codigoProduto"), item.optString("codproduto"), item.optString("productCode")).orEmpty(),
+            name = firstNonBlank(item.optString("nome"), item.optString("name"), item.optString("produto"), item.optString("description"), item.optString("desc_prod")).orEmpty(),
+            offerPrice = firstNonBlank(item.optString("precoOferta"), item.optString("offerPrice"), item.optString("preco_promo"), item.optString("preco"), item.optString("price")),
+            regularPrice = firstNonBlank(item.optString("precoOriginal"), item.optString("regularPrice"), item.optString("preco_normal"), item.optString("precoDe"), item.optString("originalPrice")),
+            discount = firstNonBlank(item.optString("desconto"), item.optString("discount"), item.optString("percentualDesconto")),
+            storeCode = firstNonBlank(item.optString("loja"), item.optString("store"), item.optString("storeCode")),
+            imageUrl = firstNonBlank(item.optString("imagem"), item.optString("image"), item.optString("imageUrl")),
+            linkUrl = firstNonBlank(item.optString("linkloja"), item.optString("link"), item.optString("url"))
         )
+    }
+
+    private fun formatPrice(value: Any?): String? {
+        val raw = when (value) {
+            null, JSONObject.NULL -> return null
+            is Number -> value.toString()
+            else -> value.toString().trim()
+        }
+        val numeric = raw.replace(",", ".").toBigDecimalOrNull() ?: return raw.takeIf { it.isNotBlank() }
+        return "R$ " + numeric.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString().replace('.', ',')
+    }
+
+    private fun calculateDiscount(normal: Any?, offer: Any?): String? {
+        val normalValue = normal.toDecimalOrNull() ?: return null
+        val offerValue = offer.toDecimalOrNull() ?: return null
+        if (normalValue <= java.math.BigDecimal.ZERO || offerValue < java.math.BigDecimal.ZERO || offerValue >= normalValue) return null
+        val percentage = normalValue.subtract(offerValue)
+            .divide(normalValue, 4, java.math.RoundingMode.HALF_UP)
+            .multiply(java.math.BigDecimal(100))
+            .setScale(0, java.math.RoundingMode.HALF_UP)
+        return "${percentage.toPlainString()}%"
+    }
+
+    private fun Any?.toDecimalOrNull(): java.math.BigDecimal? {
+        if (this == null || this == JSONObject.NULL) return null
+        return toString().replace(",", ".").toBigDecimalOrNull()
     }
 
     private fun firstArray(objectValue: JSONObject?, vararg keys: String): JSONArray? {
@@ -176,6 +277,16 @@ class NossaGenteApi(context: Context) {
     }
 
     private fun firstNonBlank(vararg values: String?): String? = values.firstOrNull { !it.isNullOrBlank() }
+
+    private data class FlatPromotionAccumulator(
+        val id: String,
+        val title: String,
+        val description: String,
+        val imageUrl: String?,
+        val validFrom: String?,
+        val validTo: String?,
+        val products: LinkedHashMap<String, PromotionProduct> = linkedMapOf()
+    )
 }
 
 data class Promotion(
@@ -193,7 +304,10 @@ data class PromotionProduct(
     val name: String,
     val offerPrice: String?,
     val regularPrice: String?,
-    val discount: String?
+    val discount: String?,
+    val storeCode: String? = null,
+    val imageUrl: String? = null,
+    val linkUrl: String? = null
 )
 
 sealed interface NossaGenteLoginResult {
@@ -211,18 +325,16 @@ private class NossaGenteSessionStore(private val context: Context) {
     private val preferences = context.getSharedPreferences("nossa_gente_session", Context.MODE_PRIVATE)
     private val alias = "nrd_nossa_gente_session_key"
 
-    fun saveToken(token: String) {
-        runCatching {
-            val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
-            val ciphertext = cipher.doFinal(token.toByteArray(StandardCharsets.UTF_8))
-            preferences.edit()
-                .putString("iv", Base64.encodeToString(iv, Base64.NO_WRAP))
-                .putString("token", Base64.encodeToString(ciphertext, Base64.NO_WRAP))
-                .apply()
-        }
-    }
+    fun saveToken(token: String): Boolean = runCatching {
+        val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
+        val ciphertext = cipher.doFinal(token.toByteArray(StandardCharsets.UTF_8))
+        preferences.edit()
+            .putString("iv", Base64.encodeToString(iv, Base64.NO_WRAP))
+            .putString("token", Base64.encodeToString(ciphertext, Base64.NO_WRAP))
+            .commit()
+    }.getOrDefault(false)
 
     fun readToken(): String? = runCatching {
         val encodedIv = preferences.getString("iv", null) ?: return@runCatching null

@@ -131,7 +131,11 @@ fun PromotionsLoginScreen(
                         when (val result = api.login(cpf, password)) {
                             NossaGenteLoginResult.Success -> {
                                 password = ""
-                                onLoginSuccess()
+                                if (api.hasSession()) {
+                                    onLoginSuccess()
+                                } else {
+                                    error = "A sessão não ficou disponível. Tente novamente."
+                                }
                             }
                             is NossaGenteLoginResult.Error -> error = result.message
                         }
@@ -165,7 +169,14 @@ fun PromotionsScreen(
     var promotions by remember { mutableStateOf<List<Promotion>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var loginRedirectRequested by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    fun requestLoginOnce() {
+        if (loginRedirectRequested) return
+        loginRedirectRequested = true
+        onRequireLogin()
+    }
 
     fun loadPromotions() {
         scope.launch {
@@ -173,7 +184,7 @@ fun PromotionsScreen(
             error = null
             when (val result = api.fetchPromotions()) {
                 is NossaGentePromotionsResult.Success -> promotions = result.promotions
-                NossaGentePromotionsResult.Unauthorized -> onRequireLogin()
+                NossaGentePromotionsResult.Unauthorized -> requestLoginOnce()
                 is NossaGentePromotionsResult.Error -> error = result.message
             }
             isLoading = false
@@ -182,7 +193,7 @@ fun PromotionsScreen(
 
     LaunchedEffect(Unit) {
         if (!api.hasSession()) {
-            onRequireLogin()
+            requestLoginOnce()
         } else {
             loadPromotions()
         }
@@ -331,6 +342,9 @@ private fun PromotionProductRow(product: PromotionProduct) {
         }
         if (product.code.isNotBlank()) {
             Text("Código: ${product.code}", style = MaterialTheme.typography.bodySmall)
+        }
+        if (!product.storeCode.isNullOrBlank()) {
+            Text("Loja: ${product.storeCode}", style = MaterialTheme.typography.bodySmall)
         }
         val details = listOfNotNull(
             product.regularPrice?.takeIf { it.isNotBlank() }?.let { "De $it" },
