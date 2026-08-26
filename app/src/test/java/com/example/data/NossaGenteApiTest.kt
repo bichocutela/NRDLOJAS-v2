@@ -3,11 +3,14 @@ package com.example.data
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.LEGACY)
 class NossaGenteApiTest {
     @Test
     fun parsesFlatPromotionsByProductAndStore() {
@@ -30,5 +33,37 @@ class NossaGenteApiTest {
         assertEquals("15%", promotions.single().products.first().discount)
         assertFalse(promotions.single().products.first().imageUrl.isNullOrBlank())
         assertFalse(promotions.single().products.first().linkUrl.isNullOrBlank())
+    }
+
+    @Test
+    fun fingerprintChangesWhenOfferPriceChanges() {
+        val base = listOf(
+            Promotion(
+                id = "higiene-123",
+                title = "PRODUTO TESTE",
+                description = "HIGIENE",
+                imageUrl = "https://example.com/product.jpg",
+                validFrom = "2026-08-25",
+                validTo = "2026-08-31",
+                products = listOf(
+                    PromotionProduct(
+                        code = "123",
+                        name = "PRODUTO TESTE",
+                        offerPrice = "R$ 8,50",
+                        regularPrice = "R$ 10,00",
+                        discount = "15%",
+                        storeCode = "0031",
+                        imageUrl = "https://example.com/product.jpg",
+                        linkUrl = "https://example.com/product"
+                    )
+                )
+            )
+        )
+        val changed = base.map { promotion ->
+            promotion.copy(products = promotion.products.map { it.copy(offerPrice = "R$ 7,50") })
+        }
+
+        assertEquals(fingerprintPromotionsForTest(base), fingerprintPromotionsForTest(base))
+        assertNotEquals(fingerprintPromotionsForTest(base), fingerprintPromotionsForTest(changed))
     }
 }

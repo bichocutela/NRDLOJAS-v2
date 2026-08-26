@@ -13,6 +13,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
+import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
@@ -104,7 +105,11 @@ class NossaGenteApi(context: Context) {
                 if (!response.isSuccessful) {
                     return@withContext NossaGentePromotionsResult.Error("Não foi possível carregar as promoções agora.")
                 }
-                NossaGentePromotionsResult.Success(parsePromotions(body))
+                val promotions = parsePromotions(body)
+                NossaGentePromotionsResult.Success(
+                    promotions = promotions,
+                    fingerprint = fingerprintPromotions(promotions)
+                )
             }
         } catch (_: Exception) {
             NossaGentePromotionsResult.Error("Não foi possível carregar as promoções. Verifique a internet.")
@@ -119,6 +124,9 @@ class NossaGenteApi(context: Context) {
     private fun currentToken(): String? = inMemoryToken ?: sessionStore.readToken()
 
     internal fun parsePromotionsForTest(raw: String): List<Promotion> = parsePromotions(raw)
+
+    /** Assinatura estável do conteúdo comercial; a ordem da resposta não altera o resultado. */
+    private fun fingerprintPromotions(promotions: List<Promotion>): String = fingerprintPromotionsForTest(promotions)
 
     private fun loginErrorMessage(code: Int, body: String): String {
         val serverCode = runCatching {
@@ -289,6 +297,48 @@ class NossaGenteApi(context: Context) {
     )
 }
 
+internal fun fingerprintPromotionsForTest(promotions: List<Promotion>): String {
+    val canonical = buildString {
+        promotions
+            .sortedWith(compareBy<Promotion>({ it.id }, { it.title }, { it.validFrom.orEmpty() }, { it.validTo.orEmpty() }))
+            .forEach { promotion ->
+                appendFingerprintValue(promotion.id)
+                appendFingerprintValue(promotion.title)
+                appendFingerprintValue(promotion.description)
+                appendFingerprintValue(promotion.validFrom)
+                appendFingerprintValue(promotion.validTo)
+                promotion.products
+                    .sortedWith(
+                        compareBy<PromotionProduct>(
+                            { it.code },
+                            { it.name },
+                            { it.storeCode.orEmpty() },
+                            { it.offerPrice.orEmpty() },
+                            { it.regularPrice.orEmpty() }
+                        )
+                    )
+                    .forEach { product ->
+                        appendFingerprintValue(product.code)
+                        appendFingerprintValue(product.name)
+                        appendFingerprintValue(product.offerPrice)
+                        appendFingerprintValue(product.regularPrice)
+                        appendFingerprintValue(product.discount)
+                        appendFingerprintValue(product.storeCode)
+                        appendFingerprintValue(product.imageUrl)
+                        appendFingerprintValue(product.linkUrl)
+                    }
+            }
+    }
+    return MessageDigest.getInstance("SHA-256")
+        .digest(canonical.toByteArray(StandardCharsets.UTF_8))
+        .joinToString("") { byte -> "%02x".format(byte) }
+}
+
+private fun StringBuilder.appendFingerprintValue(value: String?) {
+    val safeValue = value.orEmpty()
+    append(safeValue.length).append(':').append(safeValue)
+}
+
 data class Promotion(
     val id: String,
     val title: String,
@@ -316,7 +366,10 @@ sealed interface NossaGenteLoginResult {
 }
 
 sealed interface NossaGentePromotionsResult {
-    data class Success(val promotions: List<Promotion>) : NossaGentePromotionsResult
+    data class Success(
+        val promotions: List<Promotion>,
+        val fingerprint: String
+    ) : NossaGentePromotionsResult
     data object Unauthorized : NossaGentePromotionsResult
     data class Error(val message: String) : NossaGentePromotionsResult
 }

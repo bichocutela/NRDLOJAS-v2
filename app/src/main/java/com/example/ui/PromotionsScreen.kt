@@ -1,39 +1,57 @@
 package com.example.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -43,20 +61,42 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.data.NossaGenteApi
 import com.example.data.NossaGenteLoginResult
 import com.example.data.NossaGentePromotionsResult
 import com.example.data.Promotion
-import com.example.data.PromotionProduct
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+private const val INITIAL_OFFER_PAGE = 48
+private const val OFFER_PAGE_INCREMENT = 48
+private const val CATEGORY_PREVIEW_LIMIT = 10
+private const val MAX_SEARCH_LENGTH = 80
+private const val ALL_STORES_LABEL = "Todas"
+private const val UNKNOWN_STORE_LABEL = "Loja não informada"
+
+private data class PendingPromotionUpdate(
+    val promotions: List<Promotion>,
+    val offerGroups: List<OfferGroup>,
+    val fingerprint: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,7 +127,6 @@ fun PromotionsLoginScreen(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -107,9 +146,10 @@ fun PromotionsLoginScreen(
             Spacer(Modifier.height(24.dp))
             OutlinedTextField(
                 value = cpf,
-                onValueChange = { value -> cpf = value.take(14) },
+                onValueChange = { value -> cpf = value.filter(Char::isDigit).take(11) },
                 label = { Text("CPF") },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(12.dp))
@@ -142,7 +182,7 @@ fun PromotionsLoginScreen(
                         isLoading = false
                     }
                 },
-                enabled = !isLoading && cpf.filter(Char::isDigit).length == 11 && password.isNotBlank(),
+                enabled = !isLoading && cpf.length == 11 && password.isNotBlank(),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (isLoading) {
@@ -167,9 +207,18 @@ fun PromotionsScreen(
     onRequireLogin: () -> Unit
 ) {
     var promotions by remember { mutableStateOf<List<Promotion>>(emptyList()) }
+    var offerGroups by remember { mutableStateOf<List<OfferGroup>>(emptyList()) }
+    var loadedFingerprint by remember { mutableStateOf<String?>(null) }
+    var pendingUpdate by remember { mutableStateOf<PendingPromotionUpdate?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var isChecking by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var loginRedirectRequested by remember { mutableStateOf(false) }
+    var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedStore by rememberSaveable { mutableStateOf(ALL_STORES_LABEL) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var visibleOfferCount by rememberSaveable { mutableStateOf(INITIAL_OFFER_PAGE) }
+    var enlargedImageUrl by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     fun requestLoginOnce() {
@@ -178,16 +227,57 @@ fun PromotionsScreen(
         onRequireLogin()
     }
 
-    fun loadPromotions() {
+    fun applyPromotionUpdate(update: PendingPromotionUpdate) {
+        promotions = update.promotions
+        offerGroups = update.offerGroups
+        loadedFingerprint = update.fingerprint
+        pendingUpdate = null
+        if (selectedCategory != null && update.offerGroups.none { it.category == selectedCategory }) {
+            selectedCategory = null
+        }
+        visibleOfferCount = INITIAL_OFFER_PAGE
+    }
+
+    fun checkForPromotions(initialLoad: Boolean) {
         scope.launch {
-            isLoading = true
-            error = null
-            when (val result = api.fetchPromotions()) {
-                is NossaGentePromotionsResult.Success -> promotions = result.promotions
-                NossaGentePromotionsResult.Unauthorized -> requestLoginOnce()
-                is NossaGentePromotionsResult.Error -> error = result.message
+            if (initialLoad) {
+                isLoading = true
+                error = null
+            } else {
+                isChecking = true
             }
-            isLoading = false
+            when (val result = api.fetchPromotions()) {
+                is NossaGentePromotionsResult.Success -> {
+                    val nextPromotions = result.promotions
+                    val nextOfferGroups = withContext(Dispatchers.Default) {
+                        buildOfferGroups(nextPromotions)
+                    }
+                    val update = PendingPromotionUpdate(
+                        promotions = nextPromotions,
+                        offerGroups = nextOfferGroups,
+                        fingerprint = result.fingerprint
+                    )
+                    if (initialLoad || loadedFingerprint == null) {
+                        applyPromotionUpdate(update)
+                    } else if (result.fingerprint != loadedFingerprint) {
+                        pendingUpdate = update
+                    }
+                }
+                NossaGentePromotionsResult.Unauthorized -> requestLoginOnce()
+                is NossaGentePromotionsResult.Error -> {
+                    if (initialLoad || promotions.isEmpty()) error = result.message
+                }
+            }
+            if (initialLoad) isLoading = false else isChecking = false
+        }
+    }
+
+    fun handleRefreshClick() {
+        val update = pendingUpdate
+        if (update != null) {
+            applyPromotionUpdate(update)
+        } else if (!isChecking && !isLoading) {
+            checkForPromotions(initialLoad = false)
         }
     }
 
@@ -195,7 +285,7 @@ fun PromotionsScreen(
         if (!api.hasSession()) {
             requestLoginOnce()
         } else {
-            loadPromotions()
+            checkForPromotions(initialLoad = true)
         }
     }
 
@@ -203,126 +293,454 @@ fun PromotionsScreen(
         while (true) {
             delay(60_000)
             if (!api.hasSession()) break
-            loadPromotions()
+            checkForPromotions(initialLoad = false)
         }
+    }
+
+    val storeOptions = remember(offerGroups) {
+        listOf(ALL_STORES_LABEL) + offerGroups
+            .flatMap { it.stores }
+            .map { it.storeCode }
+            .filter { it.isNotBlank() && it != UNKNOWN_STORE_LABEL }
+            .distinct()
+            .sorted()
+    }
+    val normalizedQuery = searchQuery.trim().lowercase()
+    val visibleOffers = remember(offerGroups, selectedStore, normalizedQuery, selectedCategory) {
+        offerGroups.filter { offer ->
+            val matchesCategory = selectedCategory == null || offer.category == selectedCategory
+            val matchesStore = selectedStore == ALL_STORES_LABEL || offer.stores.any { it.storeCode == selectedStore }
+            val matchesSearch = normalizedQuery.isBlank() ||
+                offer.name.lowercase().contains(normalizedQuery) ||
+                offer.code.lowercase().contains(normalizedQuery)
+            matchesCategory && matchesStore && matchesSearch
+        }
+    }
+    val categoryGroups = remember(offerGroups, selectedStore, normalizedQuery) {
+        offerGroups
+            .asSequence()
+            .filter { offer ->
+                val matchesStore = selectedStore == ALL_STORES_LABEL || offer.stores.any { it.storeCode == selectedStore }
+                val matchesSearch = normalizedQuery.isBlank() ||
+                    offer.name.lowercase().contains(normalizedQuery) ||
+                    offer.code.lowercase().contains(normalizedQuery)
+                matchesStore && matchesSearch
+            }
+            .groupBy { it.category }
+            .toList()
+            .sortedBy { it.first.lowercase() }
+    }
+
+    LaunchedEffect(selectedCategory, selectedStore, normalizedQuery) {
+        visibleOfferCount = INITIAL_OFFER_PAGE
+    }
+
+    LaunchedEffect(storeOptions) {
+        if (selectedStore != ALL_STORES_LABEL && selectedStore !in storeOptions) {
+            selectedStore = ALL_STORES_LABEL
+        }
+    }
+
+    if (enlargedImageUrl != null) {
+        PromotionImageDialog(
+            imageUrl = enlargedImageUrl!!,
+            onDismiss = { enlargedImageUrl = null }
+        )
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Promoções") },
+                title = { Text(if (selectedCategory == null) "Promoção" else selectedCategory.orEmpty()) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(
+                        onClick = {
+                            if (selectedCategory != null) selectedCategory = null else onNavigateBack()
+                        }
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                     }
                 },
                 actions = {
-                    IconButton(onClick = ::loadPromotions, enabled = !isLoading) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Atualizar promoções")
+                    IconButton(
+                        onClick = ::handleRefreshClick,
+                        enabled = !isLoading && !isChecking,
+                        modifier = Modifier
+                            .background(
+                                color = if (pendingUpdate != null) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0f)
+                                },
+                                shape = CircleShape
+                            )
+                    ) {
+                        if (isChecking) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = if (pendingUpdate != null) {
+                                    "Aplicar novas promoções"
+                                } else {
+                                    "Verificar atualizações"
+                                },
+                                tint = if (pendingUpdate != null) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
                     }
                 }
             )
         }
     ) { innerPadding ->
         when {
-            isLoading -> Box(
-                modifier = Modifier.padding(innerPadding).fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
+            isLoading -> LoadingPromotionsState(innerPadding)
+            error != null -> ErrorPromotionsState(
+                innerPadding = innerPadding,
+                message = error!!,
+                onRetry = { checkForPromotions(initialLoad = true) }
+            )
+            promotions.isEmpty() -> EmptyPromotionsState(
+                innerPadding = innerPadding,
+                onRetry = { checkForPromotions(initialLoad = true) }
+            )
+            selectedCategory != null -> PromotionCategoryList(
+                innerPadding = innerPadding,
+                categoryName = selectedCategory.orEmpty(),
+                selectedStore = selectedStore,
+                searchQuery = searchQuery,
+                onSearchQueryChange = { searchQuery = it.take(MAX_SEARCH_LENGTH) },
+                visibleOffers = visibleOffers,
+                visibleOfferCount = visibleOfferCount,
+                onLoadMore = {
+                    visibleOfferCount = (visibleOfferCount + OFFER_PAGE_INCREMENT).coerceAtMost(visibleOffers.size)
+                },
+                onImageClick = { enlargedImageUrl = it },
+                onBack = { selectedCategory = null }
+            )
+            else -> PromotionsHome(
+                innerPadding = innerPadding,
+                storeOptions = storeOptions,
+                selectedStore = selectedStore,
+                onStoreSelected = { selectedStore = it },
+                searchQuery = searchQuery,
+                onSearchQueryChange = { searchQuery = it.take(MAX_SEARCH_LENGTH) },
+                categories = categoryGroups,
+                onCategoryClick = { selectedCategory = it },
+                onImageClick = { enlargedImageUrl = it }
+            )
+        }
+    }
+}
+
+@Composable
+private fun LoadingPromotionsState(innerPadding: PaddingValues) {
+    Box(
+        modifier = Modifier.padding(innerPadding).fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator()
+            Spacer(Modifier.height(12.dp))
+            Text("Carregando ofertas…", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun ErrorPromotionsState(
+    innerPadding: PaddingValues,
+    message: String,
+    onRetry: () -> Unit
+) {
+    Column(
+        modifier = Modifier.padding(innerPadding).fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(Icons.Default.LocalOffer, contentDescription = null, modifier = Modifier.size(48.dp))
+        Spacer(Modifier.height(12.dp))
+        Text(message, color = MaterialTheme.colorScheme.error)
+        Spacer(Modifier.height(16.dp))
+        OutlinedButton(onClick = onRetry) { Text("Tentar novamente") }
+    }
+}
+
+@Composable
+private fun EmptyPromotionsState(innerPadding: PaddingValues, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier.padding(innerPadding).fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(Icons.Default.LocalOffer, contentDescription = null, modifier = Modifier.size(48.dp))
+        Spacer(Modifier.height(12.dp))
+        Text("Nenhuma promoção disponível no momento.")
+        Spacer(Modifier.height(8.dp))
+        Text("Toque em atualizar para consultar novamente.", style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(16.dp))
+        OutlinedButton(onClick = onRetry) { Text("Atualizar") }
+    }
+}
+
+@Composable
+private fun PromotionsHome(
+    innerPadding: PaddingValues,
+    storeOptions: List<String>,
+    selectedStore: String,
+    onStoreSelected: (String) -> Unit,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    categories: List<Pair<String, List<OfferGroup>>>,
+    onCategoryClick: (String) -> Unit,
+    onImageClick: (String) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.padding(innerPadding).fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            StoreTabs(
+                storeOptions = storeOptions,
+                selectedStore = selectedStore,
+                onStoreSelected = onStoreSelected
+            )
+        }
+        item {
+            SearchField(query = searchQuery, onQueryChange = onSearchQueryChange)
+        }
+        item {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Text("Ofertas por categoria", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Escolha uma categoria para ver todos os produtos em oferta.",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
-            error != null -> Column(
-                modifier = Modifier.padding(innerPadding).fillMaxSize().padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Icon(Icons.Default.LocalOffer, contentDescription = null, modifier = Modifier.size(48.dp))
-                Spacer(Modifier.height(12.dp))
-                Text(error!!, color = MaterialTheme.colorScheme.error)
-                Spacer(Modifier.height(16.dp))
-                OutlinedButton(onClick = ::loadPromotions) { Text("Tentar novamente") }
+        }
+        if (categories.isEmpty()) {
+            item {
+                Text(
+                    "Nenhum produto encontrado para esta busca ou loja.",
+                    modifier = Modifier.padding(24.dp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
-            promotions.isEmpty() -> Column(
-                modifier = Modifier.padding(innerPadding).fillMaxSize().padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Icon(Icons.Default.LocalOffer, contentDescription = null, modifier = Modifier.size(48.dp))
-                Spacer(Modifier.height(12.dp))
-                Text("Nenhuma promoção disponível no momento.")
-                Spacer(Modifier.height(8.dp))
-                Text("Toque em atualizar para consultar novamente.", style = MaterialTheme.typography.bodyMedium)
+        } else {
+            items(categories, key = { it.first }) { (categoryName, offers) ->
+                CategoryPreviewSection(
+                    categoryName = categoryName,
+                    offers = offers.take(CATEGORY_PREVIEW_LIMIT),
+                    totalOffers = offers.size,
+                    onCategoryClick = onCategoryClick,
+                    onImageClick = onImageClick
+                )
             }
-            else -> LazyColumn(
-                modifier = Modifier.padding(innerPadding).fillMaxSize(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                item {
+        }
+        item {
+            Text(
+                "Atualização automática a cada minuto enquanto esta tela estiver aberta.",
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+@Composable
+private fun StoreTabs(
+    storeOptions: List<String>,
+    selectedStore: String,
+    onStoreSelected: (String) -> Unit
+) {
+    val safeStores = if (storeOptions.isEmpty()) listOf(ALL_STORES_LABEL) else storeOptions
+    ScrollableTabRow(selectedTabIndex = safeStores.indexOf(selectedStore).coerceAtLeast(0)) {
+        safeStores.forEach { store ->
+            Tab(
+                selected = store == selectedStore,
+                onClick = { onStoreSelected(store) },
+                text = {
                     Text(
-                        "Ofertas disponíveis",
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                    Text(
-                        "Atualização automática a cada minuto enquanto esta tela estiver aberta.",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        text = store,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-                items(promotions, key = { it.id }) { promotion ->
-                    PromotionCard(promotion)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        singleLine = true,
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Default.Close, contentDescription = "Limpar busca")
                 }
+            }
+        },
+        placeholder = { Text("Buscar produto") },
+        shape = RoundedCornerShape(10.dp)
+    )
+}
+
+@Composable
+private fun CategoryPreviewSection(
+    categoryName: String,
+    offers: List<OfferGroup>,
+    totalOffers: Int,
+    onCategoryClick: (String) -> Unit,
+    onImageClick: (String) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onCategoryClick(categoryName) }
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(categoryName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    "$totalOffers produto(s) em oferta",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            TextButton(onClick = { onCategoryClick(categoryName) }) { Text("Ver todos") }
+        }
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(offers, key = { it.id }) { offer ->
+                CompactOfferCard(offer = offer, onImageClick = onImageClick)
             }
         }
     }
 }
 
 @Composable
-private fun PromotionCard(promotion: Promotion) {
+private fun CompactOfferCard(offer: OfferGroup, onImageClick: (String) -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.width(190.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            if (!promotion.imageUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = promotion.imageUrl,
-                    contentDescription = promotion.title,
-                    modifier = Modifier.fillMaxWidth().height(180.dp),
-                    contentScale = ContentScale.Crop
+        Column {
+            ProductImage(
+                imageUrl = offer.imageUrl,
+                contentDescription = offer.name,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp),
+                onClick = onImageClick
+            )
+            Column(modifier = Modifier.padding(10.dp)) {
+                DiscountBadge(discount = offer.bestDiscount, compact = true)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    offer.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.height(12.dp))
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.LocalOffer, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(8.dp))
-                Text(promotion.title, style = MaterialTheme.typography.titleLarge)
-            }
-            if (promotion.description.isNotBlank()) {
-                Spacer(Modifier.height(8.dp))
-                Text(promotion.description, style = MaterialTheme.typography.bodyMedium)
-            }
-            if (!promotion.validFrom.isNullOrBlank() || !promotion.validTo.isNullOrBlank()) {
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "Validade: ${promotion.validFrom.orEmpty()}${if (!promotion.validTo.isNullOrBlank()) " até ${promotion.validTo}" else ""}",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-            if (promotion.products.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
-                HorizontalDivider()
-                Spacer(Modifier.height(8.dp))
-                Text("Produtos em oferta", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
-                promotion.products.forEach { product ->
-                    PromotionProductRow(product)
+                PriceSummary(offer = offer, compact = true)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PromotionCategoryList(
+    innerPadding: PaddingValues,
+    categoryName: String,
+    selectedStore: String,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    visibleOffers: List<OfferGroup>,
+    visibleOfferCount: Int,
+    onLoadMore: () -> Unit,
+    onImageClick: (String) -> Unit,
+    onBack: () -> Unit
+) {
+    val offersToRender = visibleOffers.take(visibleOfferCount)
+    LazyColumn(
+        modifier = Modifier.padding(innerPadding).fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Categorias")
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "$categoryName • ${visibleOffers.size}",
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        item {
+            SearchField(query = searchQuery, onQueryChange = onSearchQueryChange)
+        }
+        item {
+            Text(
+                if (selectedStore == ALL_STORES_LABEL) "Preços por loja" else "Filtrado por $selectedStore",
+                modifier = Modifier.padding(horizontal = 16.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (offersToRender.isEmpty()) {
+            item {
+                Text(
+                    "Nenhum produto encontrado para este filtro.",
+                    modifier = Modifier.padding(24.dp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        } else {
+            items(offersToRender, key = { it.id }) { offer ->
+                DetailedOfferCard(
+                    offer = offer,
+                    selectedStore = selectedStore,
+                    onImageClick = onImageClick
+                )
+            }
+        }
+        if (visibleOfferCount < visibleOffers.size) {
+            item {
+                Button(
+                    onClick = onLoadMore,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                ) {
+                    Text("Carregar mais ofertas (${visibleOffers.size - visibleOfferCount} restantes)")
                 }
             }
         }
@@ -330,28 +748,389 @@ private fun PromotionCard(promotion: Promotion) {
 }
 
 @Composable
-private fun PromotionProductRow(product: PromotionProduct) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(product.name.ifBlank { product.code }, modifier = Modifier.weight(1f))
-            val offer = product.offerPrice
-            if (!offer.isNullOrBlank()) {
-                Spacer(Modifier.width(8.dp))
-                Text(offer, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+private fun DetailedOfferCard(
+    offer: OfferGroup,
+    selectedStore: String,
+    onImageClick: (String) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                ProductImage(
+                    imageUrl = offer.imageUrl,
+                    contentDescription = "Ver imagem de ${offer.name}",
+                    modifier = Modifier
+                        .size(width = 126.dp, height = 144.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp)),
+                    onClick = onImageClick
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    DiscountBadge(discount = offer.bestDiscount, compact = false)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        offer.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (offer.code.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text("Código ${offer.code}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (offer.validity.isNotBlank()) {
+                        Spacer(Modifier.height(5.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(offer.validity, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    PriceSummary(offer = offer, selectedStore = selectedStore, compact = false)
+                }
             }
-        }
-        if (product.code.isNotBlank()) {
-            Text("Código: ${product.code}", style = MaterialTheme.typography.bodySmall)
-        }
-        if (!product.storeCode.isNullOrBlank()) {
-            Text("Loja: ${product.storeCode}", style = MaterialTheme.typography.bodySmall)
-        }
-        val details = listOfNotNull(
-            product.regularPrice?.takeIf { it.isNotBlank() }?.let { "De $it" },
-            product.discount?.takeIf { it.isNotBlank() }?.let { "Desconto $it" }
-        )
-        if (details.isNotEmpty()) {
-            Text(details.joinToString(" • "), style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(10.dp))
+            StorePriceSelector(offer = offer, selectedStore = selectedStore)
         }
     }
 }
+
+@Composable
+private fun StorePriceSelector(offer: OfferGroup, selectedStore: String) {
+    var expanded by remember(offer.id, selectedStore) { mutableStateOf(false) }
+    var pickedStore by remember(offer.id, selectedStore) {
+        mutableStateOf(
+            if (selectedStore != ALL_STORES_LABEL && offer.stores.any { it.storeCode == selectedStore }) {
+                selectedStore
+            } else {
+                offer.stores.firstOrNull()?.storeCode.orEmpty()
+            }
+        )
+    }
+    val pickedOffer = offer.stores.firstOrNull { it.storeCode == pickedStore } ?: offer.stores.firstOrNull()
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box {
+            OutlinedButton(
+                onClick = { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Storefront, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (pickedStore.isBlank()) "Escolher loja" else "Preço na loja: $pickedStore",
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Fechar lojas" else "Abrir lojas"
+                )
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                offer.stores.forEach { storeOffer ->
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text(storeOffer.storeCode)
+                                Text(
+                                    storeOffer.offerPrice ?: "Preço não informado",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        },
+                        onClick = {
+                            pickedStore = storeOffer.storeCode
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+        AnimatedVisibility(visible = pickedOffer != null) {
+            pickedOffer?.let { storeOffer ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Oferta nesta loja", style = MaterialTheme.typography.bodyMedium)
+                    Column(horizontalAlignment = Alignment.End) {
+                        storeOffer.regularPrice?.let {
+                            Text(
+                                "De $it",
+                                style = MaterialTheme.typography.bodySmall,
+                                textDecoration = TextDecoration.LineThrough,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            storeOffer.offerPrice ?: "Preço não informado",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PriceSummary(
+    offer: OfferGroup,
+    selectedStore: String? = null,
+    compact: Boolean
+) {
+    val storeOffer = if (selectedStore != null && selectedStore != ALL_STORES_LABEL) {
+        offer.stores.firstOrNull { it.storeCode == selectedStore } ?: offer.stores.firstOrNull()
+    } else {
+        offer.bestOffer
+    }
+    Column {
+        storeOffer?.regularPrice?.let {
+            Text(
+                "De $it",
+                style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                textDecoration = TextDecoration.LineThrough,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Text(
+            storeOffer?.offerPrice ?: "Preço não informado",
+            style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+private fun DiscountBadge(discount: String?, compact: Boolean) {
+    if (discount.isNullOrBlank()) return
+    Surface(
+        color = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+        shape = RoundedCornerShape(6.dp)
+    ) {
+        Text(
+            text = "-${discount.removePrefix("-")}",
+            modifier = Modifier.padding(horizontal = if (compact) 7.dp else 9.dp, vertical = 4.dp),
+            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun ProductImage(
+    imageUrl: String?,
+    contentDescription: String,
+    modifier: Modifier,
+    onClick: (String) -> Unit
+) {
+    val shape = RoundedCornerShape(10.dp)
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .then(
+                if (!imageUrl.isNullOrBlank()) {
+                    Modifier.clickable { onClick(imageUrl) }
+                } else {
+                    Modifier
+                }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            Icons.Default.Image,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(38.dp)
+        )
+        if (!imageUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+        }
+    }
+}
+
+@Composable
+private fun PromotionImageDialog(imageUrl: String, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.94f).heightIn(max = 620.dp),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Fechar imagem")
+                    }
+                }
+                Box(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 260.dp, max = 540.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = "Imagem ampliada da oferta",
+                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Toque fora da imagem ou no X para fechar.",
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
+}
+
+private data class OfferGroup(
+    val id: String,
+    val category: String,
+    val code: String,
+    val name: String,
+    val imageUrl: String?,
+    val validFrom: String?,
+    val validTo: String?,
+    val stores: List<StoreOffer>
+) {
+    val bestOffer: StoreOffer?
+        get() = stores.minByOrNull { it.offerNumeric ?: Double.MAX_VALUE }
+
+    val bestDiscount: String?
+        get() = stores.firstOrNull { !it.discount.isNullOrBlank() }?.discount
+
+    val validity: String
+        get() = listOfNotNull(validFrom?.takeIf { it.isNotBlank() }, validTo?.takeIf { it.isNotBlank() })
+            .joinToString(" até ")
+}
+
+private data class StoreOffer(
+    val storeCode: String,
+    val offerPrice: String?,
+    val regularPrice: String?,
+    val discount: String?,
+    val imageUrl: String?,
+    val linkUrl: String?,
+    val offerNumeric: Double?
+)
+
+private fun buildOfferGroups(promotions: List<Promotion>): List<OfferGroup> {
+    val grouped = linkedMapOf<String, MutableOfferGroup>()
+    promotions.forEach { promotion ->
+        val category = promotion.description.trim().ifBlank { "Outras ofertas" }
+        promotion.products.forEach { product ->
+            val name = product.name.trim().ifBlank { product.code.ifBlank { "Produto em oferta" } }
+            val key = listOf(category, product.code, name, promotion.validFrom.orEmpty(), promotion.validTo.orEmpty())
+                .joinToString("|")
+            val group = grouped.getOrPut(key) {
+                MutableOfferGroup(
+                    id = key,
+                    category = category,
+                    code = product.code,
+                    name = name,
+                    imageUrl = product.imageUrl ?: promotion.imageUrl,
+                    validFrom = promotion.validFrom,
+                    validTo = promotion.validTo
+                )
+            }
+            val store = product.storeCode?.trim().orEmpty().ifBlank { UNKNOWN_STORE_LABEL }
+            val storeKey = listOf(store, product.offerPrice.orEmpty(), product.regularPrice.orEmpty()).joinToString("|")
+            if (group.stores.none { it.key == storeKey }) {
+                group.stores += MutableStoreOffer(
+                    key = storeKey,
+                    storeCode = store,
+                    offerPrice = product.offerPrice,
+                    regularPrice = product.regularPrice,
+                    discount = product.discount,
+                    imageUrl = product.imageUrl ?: promotion.imageUrl,
+                    linkUrl = product.linkUrl,
+                    offerNumeric = product.offerPrice.toNumericPrice()
+                )
+            }
+        }
+    }
+    return grouped.values.map { group ->
+        OfferGroup(
+            id = group.id,
+            category = group.category,
+            code = group.code,
+            name = group.name,
+            imageUrl = group.imageUrl,
+            validFrom = group.validFrom,
+            validTo = group.validTo,
+            stores = group.stores
+                .map { store ->
+                    StoreOffer(
+                        storeCode = store.storeCode,
+                        offerPrice = store.offerPrice,
+                        regularPrice = store.regularPrice,
+                        discount = store.discount,
+                        imageUrl = store.imageUrl,
+                        linkUrl = store.linkUrl,
+                        offerNumeric = store.offerNumeric
+                    )
+                }
+                .sortedBy { it.storeCode.lowercase() }
+        )
+    }
+}
+
+private data class MutableOfferGroup(
+    val id: String,
+    val category: String,
+    val code: String,
+    val name: String,
+    val imageUrl: String?,
+    val validFrom: String?,
+    val validTo: String?,
+    val stores: MutableList<MutableStoreOffer> = mutableListOf()
+)
+
+private data class MutableStoreOffer(
+    val key: String,
+    val storeCode: String,
+    val offerPrice: String?,
+    val regularPrice: String?,
+    val discount: String?,
+    val imageUrl: String?,
+    val linkUrl: String?,
+    val offerNumeric: Double?
+)
+
+private fun String?.toNumericPrice(): Double? = this
+    ?.replace("R$", "", ignoreCase = true)
+    ?.trim()
+    ?.let { raw ->
+        if (raw.contains(",")) raw.replace(".", "").replace(",", ".") else raw.replace(",", "")
+    }
+    ?.toDoubleOrNull()
