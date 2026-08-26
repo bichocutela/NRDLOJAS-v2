@@ -36,6 +36,7 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val nossaGenteApi = remember { com.example.data.NossaGenteApi(context) }
     val sharedPref = remember { context.getSharedPreferences("admin_prefs", Context.MODE_PRIVATE) }
     var isLoggedIn by remember { mutableStateOf(sharedPref.getBoolean("is_logged_in", false)) }
     var userRole by remember { mutableStateOf(sharedPref.getString("user_role", "admin") ?: "admin") }
@@ -81,6 +82,10 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
                             launchSingleTop = true
                             restoreState = true
                         }
+                    },
+                    onGoToPromotions = {
+                        scope.launch { drawerState.close() }
+                        navController.navigate(if (nossaGenteApi.hasSession()) "promotions" else "promotions_login")
                     },
                     onGoToSettings = { scope.launch { drawerState.close() }; navController.navigate("settings") },
                     onGoToAdmin = {
@@ -147,6 +152,29 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
                 composable("manage_products") {
                     ManageProductsScreen(viewModel = viewModel, onNavigateBack = { navController.popBackStack() })
                 }
+                composable("promotions_login") {
+                    PromotionsLoginScreen(
+                        api = nossaGenteApi,
+                        onLoginSuccess = {
+                            navController.navigate("promotions") {
+                                popUpTo("promotions_login") { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        },
+                        onNavigateBack = { navController.popBackStack() }
+                    )
+                }
+                composable("promotions") {
+                    PromotionsScreen(
+                        api = nossaGenteApi,
+                        onNavigateBack = { navController.popBackStack() },
+                        onRequireLogin = {
+                            navController.navigate("promotions_login") {
+                                popUpTo("promotions") { inclusive = true }
+                            }
+                        }
+                    )
+                }
                 composable("settings") {
                     SettingsScreen(viewModel, onNavigateBack = {
                         navController.popBackStack()
@@ -170,6 +198,7 @@ fun LoginDrawerContent(
     onLoginSuccess: (String) -> Unit,
     onLogout: () -> Unit,
     onGoToAdmin: () -> Unit,
+    onGoToPromotions: () -> Unit,
     onGoToSettings: () -> Unit,
     onGoToAbout: () -> Unit,
     onGoToDynamicTab: (Int) -> Unit
@@ -341,6 +370,15 @@ fun LoginDrawerContent(
         Spacer(modifier = Modifier.height(24.dp))
         HorizontalDivider()
         Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = onGoToPromotions,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Promoções")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         Button(
             onClick = onGoToSettings,

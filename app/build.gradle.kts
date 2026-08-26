@@ -23,6 +23,8 @@ android {
     buildConfigField("String", "SUPABASE_URL", "\"${supabaseUrl}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${System.getenv("SUPABASE_ANON_KEY") ?: ""}\"")
         buildConfigField("String", "GEMINI_API_KEY", "\"${System.getenv("GEMINI_API_KEY") ?: "dummy"}\"")
+        val nossaGenteApiBaseUrl = System.getenv("NOSSA_GENTE_API_BASE_URL") ?: "https://app.nordestao.com.br/nossa-gente/v1"
+        buildConfigField("String", "NOSSA_GENTE_API_BASE_URL", "\"${nossaGenteApiBaseUrl.trimEnd('/') }\"")
 
   }
   signingConfigs {
@@ -33,12 +35,6 @@ android {
       keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
-    create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
-    }
   }
   buildTypes {
     release {
@@ -47,7 +43,7 @@ android {
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
-    debug { signingConfig = signingConfigs.getByName("debugConfig"); isCrunchPngs = false }
+    debug { isCrunchPngs = false }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
