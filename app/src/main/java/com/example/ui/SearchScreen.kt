@@ -29,7 +29,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -82,9 +81,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.ui.window.Dialog
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.Image
@@ -114,9 +111,6 @@ import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import com.example.data.Product
 import com.example.data.AppNotification
-import com.example.api.BarcodeLookupResult
-import com.example.api.BarcodeLookupService
-import com.example.api.ExternalProductInfo
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.FilterQuality
 import com.google.zxing.EncodeHintType
@@ -127,9 +121,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.ui.window.Dialog
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.ImageBitmap
 
@@ -214,7 +206,6 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val newProductsCount by viewModel.newProductsCount.collectAsStateWithLifecycle()
 
-    var isScannerOpen by remember { mutableStateOf(false) }
     var showProductSearchSheet by remember { mutableStateOf(false) }
     var showMostUsedSheet by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
@@ -228,7 +219,6 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
     val carouselIntervalSeconds by viewModel.userPreferences.carouselIntervalSeconds.collectAsStateWithLifecycle(initialValue = 5)
     val mostUsedListState = rememberLazyListState()
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
     var hadSearchResults by remember { mutableStateOf(false) }
     val voiceLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -239,41 +229,6 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
             if (!spokenText.isNullOrBlank()) viewModel.updateSearchQuery(spokenText)
         }
     }
-    var scannerHasReported by remember { mutableStateOf(false) }
-    var externalLookupBarcode by remember { mutableStateOf<String?>(null) }
-    var externalLookupResult by remember { mutableStateOf<BarcodeLookupResult?>(null) }
-    var isExternalLookupLoading by remember { mutableStateOf(false) }
-    var lookupRequestId by remember { mutableStateOf(0) }
-
-    if (isScannerOpen) {
-        BarcodeScannerScreen(
-            onBarcodeScanned = { code ->
-                if (scannerHasReported) return@BarcodeScannerScreen
-                scannerHasReported = true
-                isScannerOpen = false
-                externalLookupBarcode = code
-                externalLookupResult = null
-                isExternalLookupLoading = true
-                val currentRequestId = lookupRequestId + 1
-                lookupRequestId = currentRequestId
-                scope.launch {
-                    val result = BarcodeLookupService.lookup(code)
-                    if (lookupRequestId == currentRequestId) {
-                        externalLookupResult = result
-                        isExternalLookupLoading = false
-                    }
-                }
-            },
-            onClose = {
-                scannerHasReported = true
-                isScannerOpen = false
-            }
-        )
-        return // Return early so we don't show the rest of the screen
-    }
-
-
-
     LaunchedEffect(searchQuery, searchResults, vibrateOnFound) {
         val hasSearchResults = searchQuery.isNotBlank() && searchResults.isNotEmpty()
         if (hasSearchResults && !hadSearchResults && vibrateOnFound) {
@@ -385,12 +340,6 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                             }
 
                         } else {
-                            IconButton(onClick = {
-                                scannerHasReported = false
-                                isScannerOpen = true
-                            }) {
-                                Icon(Icons.Default.CameraAlt, contentDescription = "Scanner QR", tint = MaterialTheme.colorScheme.primary)
-                            }
                             IconButton(onClick = {
                                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -664,20 +613,6 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
             )
         }
 
-        externalLookupBarcode?.let { barcode ->
-            ExternalProductLookupSheet(
-                barcode = barcode,
-                isLoading = isExternalLookupLoading,
-                result = externalLookupResult,
-                onDismiss = {
-                    externalLookupBarcode = null
-                    externalLookupResult = null
-                    isExternalLookupLoading = false
-                    lookupRequestId += 1
-                }
-            )
-        }
-
         if (showClearHistoryDialog) {
             AlertDialog(
                 onDismissRequest = { showClearHistoryDialog = false },
@@ -696,109 +631,6 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
         }
 
     }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ExternalProductLookupSheet(
-    barcode: String,
-    isLoading: Boolean,
-    result: BarcodeLookupResult?,
-    onDismiss: () -> Unit
-) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text("Consulta online", style = MaterialTheme.typography.headlineSmall)
-            Text("Código: $barcode", style = MaterialTheme.typography.labelLarge)
-
-            when {
-                isLoading -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 28.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator()
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("Consultando fontes gratuitas...")
-                        }
-                    }
-                }
-
-                result is BarcodeLookupResult.Found -> {
-                    ExternalProductInfoContent(product = result.product)
-                }
-
-                result is BarcodeLookupResult.NotFound -> {
-                    Text(
-                        "Nenhuma das fontes encontrou informações para este código.",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
-
-                result is BarcodeLookupResult.Failure -> {
-                    Text(
-                        result.message,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
-
-                else -> {
-                    Text("A consulta não foi iniciada.", style = MaterialTheme.typography.bodyLarge)
-                }
-            }
-
-            Text(
-                "Consulta somente leitura. Nenhum dado será salvo no catálogo.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.align(Alignment.End)
-            ) {
-                Text("Fechar")
-            }
-        }
-    }
-}
-
-@Composable
-private fun ExternalProductInfoContent(product: ExternalProductInfo) {
-    product.imageUrl?.let { imageUrl ->
-        AsyncImage(
-            model = imageUrl,
-            contentDescription = product.name ?: "Imagem do produto",
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp),
-            contentScale = ContentScale.Fit
-        )
-    }
-
-    product.name?.let { ExternalProductInfoRow("Produto", it) }
-    product.brand?.let { ExternalProductInfoRow("Marca", it) }
-    product.category?.let { ExternalProductInfoRow("Categoria", it) }
-    product.quantity?.let { ExternalProductInfoRow("Quantidade", it) }
-    product.description?.let { ExternalProductInfoRow("Informações", it) }
-    ExternalProductInfoRow("Fonte", product.source)
-}
-
-@Composable
-private fun ExternalProductInfoRow(label: String, value: String) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        Text(value, style = MaterialTheme.typography.bodyLarge)
-    }
-}
 
 @Composable
 fun SectionHeader(

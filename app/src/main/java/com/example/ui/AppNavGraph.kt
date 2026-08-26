@@ -83,7 +83,6 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
                         }
                     },
                     onGoToSettings = { scope.launch { drawerState.close() }; navController.navigate("settings") },
-                    onGoToProductConsult = { scope.launch { drawerState.close() }; navController.navigate("consult_product") },
                     onGoToAdmin = {
                         scope.launch { drawerState.close() }
                         if (userRole == "mestre") {
@@ -148,11 +147,6 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
                 composable("manage_products") {
                     ManageProductsScreen(viewModel = viewModel, onNavigateBack = { navController.popBackStack() })
                 }
-                composable("consult_product") {
-                    ProductConsultationScreen(onNavigateBack = {
-                        navController.popBackStack()
-                    })
-                }
                 composable("settings") {
                     SettingsScreen(viewModel, onNavigateBack = {
                         navController.popBackStack()
@@ -177,7 +171,6 @@ fun LoginDrawerContent(
     onLogout: () -> Unit,
     onGoToAdmin: () -> Unit,
     onGoToSettings: () -> Unit,
-    onGoToProductConsult: () -> Unit,
     onGoToAbout: () -> Unit,
     onGoToDynamicTab: (Int) -> Unit
 ) {
@@ -348,15 +341,6 @@ fun LoginDrawerContent(
         Spacer(modifier = Modifier.height(24.dp))
         HorizontalDivider()
         Spacer(modifier = Modifier.height(16.dp))
-
-        Button(
-            onClick = onGoToProductConsult,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Consultar Produto")
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
 
         Button(
             onClick = onGoToSettings,
