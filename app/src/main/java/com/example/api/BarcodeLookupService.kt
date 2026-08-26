@@ -1,5 +1,6 @@
 package com.example.api
 
+import android.net.Uri
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -38,6 +39,12 @@ sealed interface BarcodeLookupResult {
     data class Failure(val message: String) : BarcodeLookupResult
 }
 
+sealed interface ProductSearchResult {
+    data class Found(val products: List<ExternalProductInfo>) : ProductSearchResult
+    data object NotFound : ProductSearchResult
+    data class Failure(val message: String) : ProductSearchResult
+}
+
 /**
  * Consulta dados públicos de produto por código de barras.
  *
@@ -47,10 +54,16 @@ sealed interface BarcodeLookupResult {
 object BarcodeLookupService {
     private const val OPEN_PRODUCTS_FACTS_URL =
         "https://world.openproductsfacts.org/api/v2/product/"
+    private const val OPEN_PRODUCTS_FACTS_SEARCH_URL =
+        "https://world.openproductsfacts.org/cgi/search.pl"
     private const val OPEN_FOOD_FACTS_URL =
         "https://world.openfoodfacts.org/api/v3/product/"
+    private const val OPEN_FOOD_FACTS_SEARCH_URL =
+        "https://world.openfoodfacts.org/cgi/search.pl"
     private const val UPCITEMDB_URL =
         "https://api.upcitemdb.com/prod/trial/lookup?upc="
+    private const val UPCITEMDB_SEARCH_URL =
+        "https://api.upcitemdb.com/prod/trial/search"
 
     private const val MIN_INTERVAL_BETWEEN_REQUESTS_MS = 1_200L
     private const val OPEN_FOOD_FACTS_MAX_REQUESTS_PER_MINUTE = 10
@@ -67,6 +80,7 @@ object BarcodeLookupService {
         .build()
     private val lookupMutex = Mutex()
     private val cache = mutableMapOf<String, BarcodeLookupResult>()
+    private val searchCache = mutableMapOf<String, ProductSearchResult>()
     private val rateLock = Any()
     private val openFoodFactsRequests = ArrayDeque<Long>()
     private var lastRequestAt = 0L
@@ -86,12 +100,16 @@ object BarcodeLookupService {
     }
 
     suspend fun lookup(rawBarcode: String): BarcodeLookupResult = lookupMutex.withLock {
+        lookupInternal(rawBarcode)
+    }
+
+    private suspend fun lookupInternal(rawBarcode: String): BarcodeLookupResult {
         val barcode = normalizeBarcode(rawBarcode)
-            ?: return@withLock BarcodeLookupResult.Failure(
+            ?: return BarcodeLookupResult.Failure(
                 "O código detectado não é um EAN/UPC válido."
             )
 
-        cache[barcode]?.let { return@withLock it }
+        cache[barcode]?.let { return it }
 
         var lastFailure: String? = null
         for (source in Source.entries) {
@@ -128,7 +146,7 @@ object BarcodeLookupService {
                         }
 
                         if (product != null) {
-                            return@withLock BarcodeLookupResult.Found(product).also {
+                            return BarcodeLookupResult.Found(product).also {
                                 cache[barcode] = it
                             }
                         }
@@ -160,7 +178,152 @@ object BarcodeLookupService {
         if (result is BarcodeLookupResult.NotFound) {
             cache[barcode] = result
         }
+        return result
+    }
+
+    suspend fun search(rawQuery: String): ProductSearchResult = lookupMutex.withLock {
+        val query = rawQuery.trim().replace(Regex("\\s+"), " ")
+        if (query.length < 3) {
+            return@withLock ProductSearchResult.Failure(
+                "Digite pelo menos 3 caracteres ou informe um código de barras."
+            )
+        }
+
+        val cacheKey = query.lowercase()
+        searchCache[cacheKey]?.let { return@withLock it }
+
+        val numericQuery = normalizeBarcode(query)
+        if (numericQuery != null) {
+            return@withLock when (val barcodeResult = lookupInternal(numericQuery)) {
+                is BarcodeLookupResult.Found -> ProductSearchResult.Found(
+                    listOf(barcodeResult.product)
+                )
+
+                is BarcodeLookupResult.NotFound -> ProductSearchResult.NotFound
+                is BarcodeLookupResult.Failure -> ProductSearchResult.Failure(
+                    barcodeResult.message
+                )
+            }.also { searchCache[cacheKey] = it }
+        }
+
+        var lastFailure: String? = null
+        val sources = listOf(Source.OPEN_FOOD_FACTS, Source.UPCITEMDB)
+        for (source in sources) {
+            try {
+                val url = when (source) {
+                    Source.OPEN_FOOD_FACTS -> buildOpenFoodFactsSearchUrl(query)
+                    Source.UPCITEMDB -> buildUpcitemdbSearchUrl(query)
+                    Source.OPEN_PRODUCTS_FACTS -> continue
+                }
+                when (val response = getJson(source, url)) {
+                    is HttpResult.Body -> {
+                        val products = when (source) {
+                            Source.OPEN_FOOD_FACTS -> parseOpenFactsSearch(response.value)
+                            Source.UPCITEMDB -> parseUpcitemdbSearch(response.value)
+                            Source.OPEN_PRODUCTS_FACTS -> emptyList()
+                        }
+                            .distinctBy { it.barcode }
+                            .take(10)
+
+                        if (products.isNotEmpty()) {
+                            return@withLock ProductSearchResult.Found(products).also {
+                                searchCache[cacheKey] = it
+                            }
+                        }
+                    }
+
+                    HttpResult.NotFound -> Unit
+                    HttpResult.RateLimited -> {
+                        lastFailure = "${source.label} atingiu o limite gratuito temporariamente."
+                    }
+
+                    is HttpResult.Failed -> {
+                        lastFailure = "${source.label} indisponível no momento."
+                    }
+                }
+            } catch (limit: SessionLimitReached) {
+                lastFailure = limit.message
+            } catch (_: Exception) {
+                lastFailure = "Não foi possível consultar ${source.label}."
+            }
+        }
+
+        val result = if (lastFailure != null) {
+            ProductSearchResult.Failure(
+                "$lastFailure Tente novamente mais tarde."
+            )
+        } else {
+            ProductSearchResult.NotFound
+        }
+        searchCache[cacheKey] = result
         result
+    }
+
+    private fun buildOpenFoodFactsSearchUrl(query: String): String =
+        Uri.parse(OPEN_FOOD_FACTS_SEARCH_URL).buildUpon()
+            .appendQueryParameter("search_terms", query)
+            .appendQueryParameter("search_simple", "1")
+            .appendQueryParameter("action", "process")
+            .appendQueryParameter("json", "1")
+            .appendQueryParameter("page_size", "10")
+            .appendQueryParameter(
+                "fields",
+                "code,product_name,product_name_pt,brands,quantity,categories,image_front_url"
+            )
+            .build()
+            .toString()
+
+    private fun buildUpcitemdbSearchUrl(query: String): String =
+        Uri.parse(UPCITEMDB_SEARCH_URL).buildUpon()
+            .appendQueryParameter("s", query)
+            .build()
+            .toString()
+
+    private fun parseOpenFactsSearch(body: String): List<ExternalProductInfo> {
+        val root = json.parseToJsonElement(body).jsonObject
+        return root["products"]?.jsonArray.orEmpty().mapNotNull { element ->
+            val product = element.jsonObject
+            val barcode = product.stringValue("code")
+                ?.let(::normalizeBarcode)
+                ?: return@mapNotNull null
+            ExternalProductInfo(
+                barcode = barcode,
+                name = product.stringValue("product_name", "product_name_pt"),
+                brand = product.stringValue("brands", "brands_tags"),
+                category = product.stringValue("categories", "categories_tags"),
+                quantity = product.stringValue("quantity", "product_quantity"),
+                description = null,
+                imageUrl = product.stringValue(
+                    "image_front_url",
+                    "image_front_small_url"
+                ).onlyHttps(),
+                source = Source.OPEN_FOOD_FACTS.label
+            )
+        }
+    }
+
+    private fun parseUpcitemdbSearch(body: String): List<ExternalProductInfo> {
+        val root = json.parseToJsonElement(body).jsonObject
+        return root["items"]?.jsonArray.orEmpty().mapNotNull { element ->
+            val item = element.jsonObject
+            val barcode = item.stringValue("ean", "upc", "gtin")
+                ?.let(::normalizeBarcode)
+                ?: return@mapNotNull null
+            val imageUrl = item["images"]?.jsonArray
+                ?.mapNotNull { image -> image.jsonPrimitive.contentOrNull }
+                ?.firstOrNull()
+                .onlyHttps()
+            ExternalProductInfo(
+                barcode = barcode,
+                name = item.stringValue("title", "description"),
+                brand = item.stringValue("brand"),
+                category = item.stringValue("category"),
+                quantity = item.stringValue("size", "weight", "dimension"),
+                description = item.stringValue("model", "asin"),
+                imageUrl = imageUrl,
+                source = Source.UPCITEMDB.label
+            )
+        }
     }
 
     private suspend fun getJson(source: Source, url: String): HttpResult {
