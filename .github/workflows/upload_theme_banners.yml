@@ -8,7 +8,6 @@ on:
       - 'app/src/main/assets/themes/theme_green.jpg'
       - 'app/src/main/assets/themes/theme_blue.jpg'
       - 'app/src/main/assets/themes/theme_orange.jpg'
-      - 'app/src/main/java/com/example/ui/SearchScreen.kt'
       - '.github/workflows/upload_theme_banners.yml'
   workflow_dispatch:
 

@@ -3,8 +3,25 @@ name: Validate Banners before Build
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'app/src/main/assets/themes/theme_red.jpg'
+      - 'app/src/main/assets/themes/theme_gold.jpg'
+      - 'app/src/main/assets/themes/theme_green.jpg'
+      - 'app/src/main/assets/themes/theme_blue.jpg'
+      - 'app/src/main/assets/themes/theme_orange.jpg'
+      - 'app/src/main/res/drawable-nodpi/hero_banner.png'
+      - '.github/workflows/validate_banners.yml'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'app/src/main/assets/themes/theme_red.jpg'
+      - 'app/src/main/assets/themes/theme_gold.jpg'
+      - 'app/src/main/assets/themes/theme_green.jpg'
+      - 'app/src/main/assets/themes/theme_blue.jpg'
+      - 'app/src/main/assets/themes/theme_orange.jpg'
+      - 'app/src/main/res/drawable-nodpi/hero_banner.png'
+      - '.github/workflows/validate_banners.yml'
+  workflow_dispatch:
 
 jobs:
   validate-and-build:
