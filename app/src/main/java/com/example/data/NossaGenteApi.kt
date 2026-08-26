@@ -37,17 +37,15 @@ class NossaGenteApi(context: Context) {
 
     fun hasSession(): Boolean = !sessionStore.readToken().isNullOrBlank()
 
-    suspend fun login(matricula: String, password: String): NossaGenteLoginResult = withContext(Dispatchers.IO) {
-        val cleanMatricula = matricula.trim()
-        if (cleanMatricula.isBlank() || password.isBlank()) {
-            return@withContext NossaGenteLoginResult.Error("Informe matrícula e senha.")
+    suspend fun login(cpf: String, password: String): NossaGenteLoginResult = withContext(Dispatchers.IO) {
+        val cleanCpf = cpf.filter(Char::isDigit)
+        if (cleanCpf.length != 11 || password.isBlank()) {
+            return@withContext NossaGenteLoginResult.Error("Informe um CPF válido e sua senha.")
         }
 
         try {
-            // A tela usa matrícula, mas a API REST legada espera esse valor na chave "cpf".
-            // O valor enviado continua sendo a matrícula informada pelo funcionário.
             val payload = JSONObject()
-                .put("cpf", cleanMatricula)
+                .put("cpf", cleanCpf)
                 .put("senha", password)
                 .toString()
             val request = Request.Builder()
@@ -117,8 +115,8 @@ class NossaGenteApi(context: Context) {
             json.optString("erro").ifBlank { json.optString("code") }
         }.getOrNull().orEmpty().lowercase()
         return when {
-            code == 401 || code == 403 -> "Matrícula ou senha incorretas."
-            serverCode in setOf("dados_invalidos", "credenciais_invalidas", "login_invalido") -> "Matrícula ou senha incorretas."
+            code == 401 || code == 403 -> "CPF ou senha incorretos."
+            serverCode in setOf("dados_invalidos", "credenciais_invalidas", "login_invalido") -> "CPF ou senha incorretos."
             serverCode.contains("bloque") -> "Acesso bloqueado. Procure o suporte do Nossa Gente."
             else -> "Não foi possível autenticar agora."
         }

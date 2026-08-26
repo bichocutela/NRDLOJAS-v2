@@ -1,11 +1,11 @@
 # Promoções — integração com Nossa Gente
 
-A tela **Promoções** usa o mesmo fluxo de autenticação do Nossa Gente. O funcionário informa matrícula e senha, o NRD envia `POST /auth/login` e guarda somente o token de sessão cifrado com Android Keystore. A senha não é persistida. Por compatibilidade com a API REST legada, a chave técnica do identificador é `cpf`, mas o valor enviado é a matrícula digitada na tela.
+A tela **Promoções** usa o mesmo fluxo de autenticação do Nossa Gente. O funcionário informa CPF e senha, o NRD envia `POST /auth/login` e guarda somente o token de sessão cifrado com Android Keystore. A senha não é persistida.
 
 ## Rotas usadas
 
 ```text
-POST /auth/login       payload: { "cpf": "<matrícula>", "senha": "<senha>" }
+POST /auth/login       payload: { "cpf": "<CPF>", "senha": "<senha>" }
 GET  /promocoes?limit=10
 ```
 
@@ -32,4 +32,4 @@ A URL pode ser alterada por ambiente com:
 NOSSA_GENTE_API_BASE_URL=https://app.nordestao.com.br/nossa-gente/v1
 ```
 
-Para homologação, use uma URL de homologação e um `applicationId`/flavor separado. Nunca coloque matrícula, senha ou token em código, logs, Firestore público ou arquivo `.env` versionado.
+Para homologação, use uma URL de homologação e um `applicationId`/flavor separado. Nunca coloque CPF, senha ou token em código, logs, Firestore público ou arquivo `.env` versionado.
