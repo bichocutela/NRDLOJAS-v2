@@ -1,11 +1,11 @@
 # Promoções — integração com Nossa Gente
 
-A tela **Promoções** usa o mesmo fluxo de autenticação do Nossa Gente. O funcionário informa matrícula e senha, o NRD envia `POST /auth/login` e guarda somente o token de sessão cifrado com Android Keystore. A senha não é persistida.
+A tela **Promoções** usa o mesmo fluxo de autenticação do Nossa Gente. O funcionário informa matrícula e senha, o NRD envia `POST /auth/login` e guarda somente o token de sessão cifrado com Android Keystore. A senha não é persistida. Por compatibilidade com a API REST legada, a chave técnica do identificador é `cpf`, mas o valor enviado é a matrícula digitada na tela.
 
 ## Rotas usadas
 
 ```text
-POST /auth/login
+POST /auth/login       payload: { "cpf": "<matrícula>", "senha": "<senha>" }
 GET  /promocoes?limit=10
 ```
 

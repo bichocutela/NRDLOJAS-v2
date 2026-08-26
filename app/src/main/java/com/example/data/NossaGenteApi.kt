@@ -44,8 +44,10 @@ class NossaGenteApi(context: Context) {
         }
 
         try {
+            // A tela usa matrícula, mas a API REST legada espera esse valor na chave "cpf".
+            // O valor enviado continua sendo a matrícula informada pelo funcionário.
             val payload = JSONObject()
-                .put("matricula", cleanMatricula)
+                .put("cpf", cleanMatricula)
                 .put("senha", password)
                 .toString()
             val request = Request.Builder()
@@ -110,9 +112,16 @@ class NossaGenteApi(context: Context) {
     }
 
     private fun loginErrorMessage(code: Int, body: String): String {
-        if (code == 401 || code == 403) return "Matrícula ou senha incorretas."
-        val serverMessage = runCatching { JSONObject(body).optString("erro") }.getOrNull()
-        return if (!serverMessage.isNullOrBlank()) "Não foi possível autenticar: $serverMessage" else "Não foi possível autenticar agora."
+        val serverCode = runCatching {
+            val json = JSONObject(body)
+            json.optString("erro").ifBlank { json.optString("code") }
+        }.getOrNull().orEmpty().lowercase()
+        return when {
+            code == 401 || code == 403 -> "Matrícula ou senha incorretas."
+            serverCode in setOf("dados_invalidos", "credenciais_invalidas", "login_invalido") -> "Matrícula ou senha incorretas."
+            serverCode.contains("bloque") -> "Acesso bloqueado. Procure o suporte do Nossa Gente."
+            else -> "Não foi possível autenticar agora."
+        }
     }
 
     private fun parsePromotions(raw: String): List<Promotion> {
