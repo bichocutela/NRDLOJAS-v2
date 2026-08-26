@@ -37,21 +37,22 @@ class NossaGenteApi(context: Context) {
 
     fun hasSession(): Boolean = !sessionStore.readToken().isNullOrBlank()
 
-    suspend fun login(cpf: String, password: String): NossaGenteLoginResult = withContext(Dispatchers.IO) {
-        val cleanCpf = cpf.filter(Char::isDigit)
-        if (cleanCpf.isBlank() || password.isBlank()) {
-            return@withContext NossaGenteLoginResult.Error("Informe CPF e senha.")
+    suspend fun login(matricula: String, password: String): NossaGenteLoginResult = withContext(Dispatchers.IO) {
+        val cleanMatricula = matricula.trim()
+        if (cleanMatricula.isBlank() || password.isBlank()) {
+            return@withContext NossaGenteLoginResult.Error("Informe matrícula e senha.")
         }
 
         try {
             val payload = JSONObject()
-                .put("cpf", cleanCpf)
+                .put("matricula", cleanMatricula)
                 .put("senha", password)
                 .toString()
             val request = Request.Builder()
                 .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/auth/login")
                 .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
                 .header("Accept", "application/json")
+                .header("X-Requested-With", "XMLHttpRequest")
                 .build()
 
             client.newCall(request).execute().use { response ->
@@ -82,9 +83,10 @@ class NossaGenteApi(context: Context) {
             ?: return@withContext NossaGentePromotionsResult.Unauthorized
         try {
             val request = Request.Builder()
-                .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/promocoes")
+                .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/promocoes?limit=10")
                 .get()
                 .header("Accept", "application/json")
+                .header("X-Requested-With", "XMLHttpRequest")
                 .header("Authorization", "Bearer $token")
                 .build()
             client.newCall(request).execute().use { response ->
@@ -108,7 +110,7 @@ class NossaGenteApi(context: Context) {
     }
 
     private fun loginErrorMessage(code: Int, body: String): String {
-        if (code == 401 || code == 403) return "CPF ou senha incorretos."
+        if (code == 401 || code == 403) return "Matrícula ou senha incorretas."
         val serverMessage = runCatching { JSONObject(body).optString("erro") }.getOrNull()
         return if (!serverMessage.isNullOrBlank()) "Não foi possível autenticar: $serverMessage" else "Não foi possível autenticar agora."
     }

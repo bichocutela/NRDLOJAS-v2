@@ -1,12 +1,12 @@
 # Promoções — integração com Nossa Gente
 
-A tela **Promoções** usa o mesmo fluxo de autenticação do Nossa Gente. O funcionário informa CPF e senha, o NRD envia `POST /auth/login` e guarda somente o token de sessão cifrado com Android Keystore. A senha não é persistida.
+A tela **Promoções** usa o mesmo fluxo de autenticação do Nossa Gente. O funcionário informa matrícula e senha, o NRD envia `POST /auth/login` e guarda somente o token de sessão cifrado com Android Keystore. A senha não é persistida.
 
 ## Rotas usadas
 
 ```text
 POST /auth/login
-GET  /promocoes
+GET  /promocoes?limit=10
 ```
 
 O cliente envia a consulta com:
@@ -32,4 +32,4 @@ A URL pode ser alterada por ambiente com:
 NOSSA_GENTE_API_BASE_URL=https://app.nordestao.com.br/nossa-gente/v1
 ```
 
-Para homologação, use uma URL de homologação e um `applicationId`/flavor separado. Nunca coloque CPF, senha ou token em código, logs, Firestore público ou arquivo `.env` versionado.
+Para homologação, use uma URL de homologação e um `applicationId`/flavor separado. Nunca coloque matrícula, senha ou token em código, logs, Firestore público ou arquivo `.env` versionado.

@@ -65,7 +65,7 @@ fun PromotionsLoginScreen(
     onLoginSuccess: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
-    var cpf by remember { mutableStateOf("") }
+    var matricula by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
@@ -101,14 +101,14 @@ fun PromotionsLoginScreen(
             Text("Entre com o mesmo acesso do Nossa Gente", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
             Text(
-                "Use seu CPF e sua senha. A senha é usada somente nesta autenticação e não é salva no aparelho.",
+                "Use sua matrícula e sua senha do Nossa Gente. A senha é usada somente nesta autenticação e não é salva no aparelho.",
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(Modifier.height(24.dp))
             OutlinedTextField(
-                value = cpf,
-                onValueChange = { value -> cpf = value.filter { it.isDigit() }.take(11) },
-                label = { Text("CPF") },
+                value = matricula,
+                onValueChange = { value -> matricula = value.take(20) },
+                label = { Text("Matrícula") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -128,7 +128,7 @@ fun PromotionsLoginScreen(
                     error = null
                     isLoading = true
                     scope.launch {
-                        when (val result = api.login(cpf, password)) {
+                        when (val result = api.login(matricula, password)) {
                             NossaGenteLoginResult.Success -> {
                                 password = ""
                                 onLoginSuccess()
@@ -138,7 +138,7 @@ fun PromotionsLoginScreen(
                         isLoading = false
                     }
                 },
-                enabled = !isLoading && cpf.filter { it.isDigit() }.length >= 11 && password.isNotBlank(),
+                enabled = !isLoading && matricula.isNotBlank() && password.isNotBlank(),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (isLoading) {
