@@ -1,7 +1,9 @@
 package com.example.util
 
 import android.util.Log
+import com.example.data.NotificationSettings
 import com.example.data.UserPreferences
+import com.example.data.FirebaseService
 import com.example.util.FcmTopicSubscription
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -36,6 +38,27 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             val notificationsEnabled = preferences.notificationsEnabled.first()
             if (!notificationsEnabled) {
                 Log.d(TAG, "Mensagem FCM ignorada: notificações gerais desativadas; type=$type")
+                return@runBlocking
+            }
+
+            val remoteSettings = runCatching {
+                FirebaseService.getNotificationSettings()
+            }.getOrElse { NotificationSettings() }
+            if (!remoteSettings.enabled) {
+                Log.d(TAG, "Mensagem FCM ignorada: notificações globais desativadas pelo Mestre; type=$type")
+                return@runBlocking
+            }
+
+            val remoteTypeEnabled = when (type) {
+                TYPE_NEW_PRODUCT -> remoteSettings.productAddedEnabled
+                TYPE_CODE_CHANGED -> remoteSettings.codeChangedEnabled
+                TYPE_SUGGESTION_FIXED -> remoteSettings.suggestionFixedEnabled
+                TYPE_APP_UPDATE -> remoteSettings.appUpdateEnabled
+                TYPE_PROMOTION_UPDATED -> remoteSettings.promotionUpdatedEnabled
+                else -> false
+            }
+            if (!remoteTypeEnabled) {
+                Log.d(TAG, "Mensagem FCM ignorada: tipo desativado pelo Mestre; type=$type")
                 return@runBlocking
             }
 
@@ -95,9 +118,11 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val preferences = UserPreferences(applicationContext)
         runBlocking {
             val notificationsEnabled = preferences.notificationsEnabled.first()
-            FcmTopicSubscription.reconcile(notificationsEnabled)
+            val remoteNotificationsEnabled = FirebaseService.getNotificationSettings().enabled
+            val effectiveNotificationsEnabled = notificationsEnabled && remoteNotificationsEnabled
+            FcmTopicSubscription.reconcile(effectiveNotificationsEnabled)
             val installationId = preferences.getOrCreateInstallationId()
-            FcmTopicSubscription.reconcileSuggestionTopic(notificationsEnabled, installationId)
+            FcmTopicSubscription.reconcileSuggestionTopic(effectiveNotificationsEnabled, installationId)
         }
     }
 

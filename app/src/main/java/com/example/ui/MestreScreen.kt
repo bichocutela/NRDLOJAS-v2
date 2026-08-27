@@ -33,6 +33,7 @@ import java.util.Locale
 import com.example.data.CategoryDefinition
 import com.example.data.FirebaseService
 import com.example.data.ProductImportParser
+import com.example.data.NotificationSettings
 import com.example.data.ProductImportResult
 import com.example.data.ProductSuggestion
 
@@ -52,6 +53,10 @@ fun MestreScreen(
     var isSavingHomeSettings by remember { mutableStateOf(false) }
     val categoryDefinitions by viewModel.categoryDefinitions.collectAsStateWithLifecycle()
     var showCategoryDialog by remember { mutableStateOf(false) }
+    val notificationSettings by FirebaseService.observeNotificationSettings()
+        .collectAsStateWithLifecycle(initialValue = NotificationSettings())
+    var draftNotificationSettings by remember(notificationSettings) { mutableStateOf(notificationSettings) }
+    var isSavingNotificationSettings by remember { mutableStateOf(false) }
     var editingCategory by remember { mutableStateOf<CategoryDefinition?>(null) }
     var categoryName by remember { mutableStateOf("") }
     val suggestions by FirebaseService.observeSuggestions().collectAsStateWithLifecycle(initialValue = emptyList())
@@ -335,7 +340,82 @@ fun MestreScreen(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            
+
+            MestreSectionHeader(
+                title = "Notificações globais",
+                description = "Controle o que pode ser recebido pelos usuários"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    NotificationSettingSwitch(
+                        label = "Permitir notificações",
+                        checked = draftNotificationSettings.enabled,
+                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(enabled = it) }
+                    )
+                    Text(
+                        "As preferências individuais continuam sendo respeitadas.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    NotificationSettingSwitch(
+                        label = "Produto adicionado",
+                        checked = draftNotificationSettings.productAddedEnabled,
+                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(productAddedEnabled = it) }
+                    )
+                    NotificationSettingSwitch(
+                        label = "Código alterado",
+                        checked = draftNotificationSettings.codeChangedEnabled,
+                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(codeChangedEnabled = it) }
+                    )
+                    NotificationSettingSwitch(
+                        label = "Sugestão corrigida",
+                        checked = draftNotificationSettings.suggestionFixedEnabled,
+                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(suggestionFixedEnabled = it) }
+                    )
+                    NotificationSettingSwitch(
+                        label = "Atualização do app",
+                        checked = draftNotificationSettings.appUpdateEnabled,
+                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(appUpdateEnabled = it) }
+                    )
+                    NotificationSettingSwitch(
+                        label = "Promoções atualizadas",
+                        checked = draftNotificationSettings.promotionUpdatedEnabled,
+                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(promotionUpdatedEnabled = it) }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                isSavingNotificationSettings = true
+                                val saved = FirebaseService.saveNotificationSettings(draftNotificationSettings)
+                                isSavingNotificationSettings = false
+                                snackbarHostState.showSnackbar(
+                                    if (saved) "Política de notificações publicada para todos."
+                                    else "Não foi possível publicar a política de notificações."
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isSavingNotificationSettings
+                    ) {
+                        if (isSavingNotificationSettings) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Publicando...")
+                        } else {
+                            Text("Publicar notificações")
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
             MestreSectionHeader(
                 title = "Ferramentas administrativas",
                 description = "Gerencie abas, produtos e conteúdo visual do aplicativo"
@@ -615,6 +695,22 @@ fun MestreScreen(
                 description = "Peça ao assistente no chat: 'Modifique o texto na tela inicial'."
             )
         }
+    }
+}
+
+@Composable
+private fun NotificationSettingSwitch(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

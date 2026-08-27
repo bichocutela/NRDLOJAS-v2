@@ -533,6 +533,83 @@ object FirebaseService {
         return email == "admin@nrdlojas.com" || email == "mestre@nrdlojas.com"
     }
 
+    fun observeNotificationSettings(): Flow<NotificationSettings> = callbackFlow {
+        if (!isFirebaseConfigured()) {
+            trySend(NotificationSettings())
+            close()
+            return@callbackFlow
+        }
+
+        val registration = FirebaseFirestore.getInstance()
+            .collection("config")
+            .document("appSettings")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("FirebaseService", "Erro ao observar notificações", error)
+                    return@addSnapshotListener
+                }
+                trySend(
+                    NotificationSettings(
+                        enabled = snapshot?.getBoolean("notificationsEnabled") ?: true,
+                        productAddedEnabled = snapshot?.getBoolean("notificationsProductAddedEnabled") ?: true,
+                        codeChangedEnabled = snapshot?.getBoolean("notificationsCodeChangedEnabled") ?: true,
+                        suggestionFixedEnabled = snapshot?.getBoolean("notificationsSuggestionFixedEnabled") ?: true,
+                        appUpdateEnabled = snapshot?.getBoolean("notificationsAppUpdateEnabled") ?: true,
+                        promotionUpdatedEnabled = snapshot?.getBoolean("notificationsPromotionUpdatedEnabled") ?: true
+                    )
+                )
+            }
+        awaitClose { registration.remove() }
+    }
+
+    suspend fun getNotificationSettings(): NotificationSettings {
+        if (!isFirebaseConfigured()) return NotificationSettings()
+        return try {
+            val snapshot = FirebaseFirestore.getInstance()
+                .collection("config")
+                .document("appSettings")
+                .get()
+                .await()
+            NotificationSettings(
+                enabled = snapshot.getBoolean("notificationsEnabled") ?: true,
+                productAddedEnabled = snapshot.getBoolean("notificationsProductAddedEnabled") ?: true,
+                codeChangedEnabled = snapshot.getBoolean("notificationsCodeChangedEnabled") ?: true,
+                suggestionFixedEnabled = snapshot.getBoolean("notificationsSuggestionFixedEnabled") ?: true,
+                appUpdateEnabled = snapshot.getBoolean("notificationsAppUpdateEnabled") ?: true,
+                promotionUpdatedEnabled = snapshot.getBoolean("notificationsPromotionUpdatedEnabled") ?: true
+            )
+        } catch (e: Exception) {
+            Log.e("FirebaseService", "Erro ao ler política de notificações", e)
+            NotificationSettings()
+        }
+    }
+
+    suspend fun saveNotificationSettings(settings: NotificationSettings): Boolean {
+        if (!isFirebaseConfigured() || !hasManagementAccess()) return false
+        return try {
+            FirebaseFirestore.getInstance()
+                .collection("config")
+                .document("appSettings")
+                .set(
+                    mapOf(
+                        "notificationsEnabled" to settings.enabled,
+                        "notificationsProductAddedEnabled" to settings.productAddedEnabled,
+                        "notificationsCodeChangedEnabled" to settings.codeChangedEnabled,
+                        "notificationsSuggestionFixedEnabled" to settings.suggestionFixedEnabled,
+                        "notificationsAppUpdateEnabled" to settings.appUpdateEnabled,
+                        "notificationsPromotionUpdatedEnabled" to settings.promotionUpdatedEnabled
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge()
+                )
+                .await()
+            true
+        } catch (e: Exception) {
+            lastError = e.message
+            Log.e("FirebaseService", "Erro ao salvar política de notificações", e)
+            false
+        }
+    }
+
     fun observeCategories(): Flow<List<CategoryDefinition>> = callbackFlow {
         if (!isFirebaseConfigured()) {
             trySend(CategoryDefinition.defaults)
