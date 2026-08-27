@@ -9,6 +9,8 @@ import com.example.api.Part
 import com.example.api.RetrofitClient
 import com.example.data.Product
 import com.example.data.CategoryDefinition
+import com.example.data.ProductImportCommitResult
+import com.example.data.ProductImportRow
 import com.example.data.FirebaseService
 import com.example.data.HomeSettings
 import com.example.data.ProductRepository
@@ -394,6 +396,54 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         repository.deleteProducts(products)
         _syncMessage.emit("${products.size} produto(s) excluído(s) com sucesso.")
         return true
+    }
+
+    suspend fun importProducts(rows: List<ProductImportRow>): ProductImportCommitResult {
+        if (rows.isEmpty()) {
+            return ProductImportCommitResult(0, 0, listOf("Nenhuma linha válida para importar."))
+        }
+        val activeCategories = activeCategoryNames.value
+        val activeCategoryByKey = activeCategories.associateBy { ProductStandards.searchNameFrom(it) }
+        val existingCodes = repository.getAllProductsSync().map { it.code.trim() }.toSet()
+        val seenCodes = mutableSetOf<String>()
+        val errors = mutableListOf<String>()
+        val candidates = rows.mapNotNull { row ->
+            val code = row.code.trim()
+            val category = activeCategoryByKey[ProductStandards.searchNameFrom(row.category.trim())]
+            when {
+                code in existingCodes -> {
+                    errors += "Linha ${row.lineNumber}: código $code já existe e foi ignorado."
+                    null
+                }
+                !seenCodes.add(code) -> {
+                    errors += "Linha ${row.lineNumber}: código $code repetido na própria planilha."
+                    null
+                }
+                category == null -> {
+                    errors += "Linha ${row.lineNumber}: categoria '${row.category}' não está ativa."
+                    null
+                }
+                else -> Product(
+                    code = code,
+                    name = ProductStandards.normalizeProductName(row.name.trim()),
+                    searchName = ProductStandards.searchNameFrom(row.name.trim()),
+                    category = category,
+                    unit = row.unit.trim().ifBlank { "UN" },
+                    imageUrl = row.imageUrl?.trim()?.takeIf { it.isNotBlank() }
+                )
+            }
+        }
+        if (candidates.isEmpty()) {
+            return ProductImportCommitResult(0, rows.size, errors.ifEmpty { listOf("Nenhum produto novo foi encontrado.") })
+        }
+        val saved = FirebaseService.saveProductsBatch(candidates)
+        if (!saved) {
+            return ProductImportCommitResult(0, rows.size, errors + "Não foi possível publicar os produtos na nuvem.")
+        }
+        repository.insertProducts(candidates)
+        _newProductsCount.value += candidates.size
+        _syncMessage.emit("${candidates.size} produto(s) importado(s) com sucesso.")
+        return ProductImportCommitResult(candidates.size, rows.size - candidates.size, errors)
     }
 
     suspend fun checkDuplicateCode(code: String, currentId: Int? = null): Product? {

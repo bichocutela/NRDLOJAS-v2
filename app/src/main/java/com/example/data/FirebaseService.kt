@@ -660,6 +660,37 @@ object FirebaseService {
         }
     }
 
+    suspend fun saveProductsBatch(products: List<com.example.data.Product>): Boolean {
+        if (!isFirebaseConfigured() || !hasManagementAccess() || products.isEmpty()) return false
+        return try {
+            val firestore = FirebaseFirestore.getInstance()
+            products.chunked(450).forEach { chunk ->
+                val batch = firestore.batch()
+                chunk.forEach { product ->
+                    batch.set(
+                        firestore.collection("products").document(product.code),
+                        mapOf(
+                            "code" to product.code,
+                            "name" to product.name,
+                            "searchName" to product.searchName,
+                            "category" to product.category,
+                            "unit" to product.unit,
+                            "imageUrl" to product.imageUrl,
+                            "searchCount" to product.searchCount,
+                            "timestamp" to System.currentTimeMillis()
+                        )
+                    )
+                }
+                batch.commit().await()
+            }
+            true
+        } catch (e: Exception) {
+            lastError = e.message
+            Log.e("FirebaseService", "Erro ao importar produtos em lote", e)
+            false
+        }
+    }
+
 
     suspend fun syncAllDynamicTabs(tabs: List<com.example.data.DynamicTab>) {
         if (!isFirebaseConfigured()) return

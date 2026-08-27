@@ -32,6 +32,8 @@ import java.util.Date
 import java.util.Locale
 import com.example.data.CategoryDefinition
 import com.example.data.FirebaseService
+import com.example.data.ProductImportParser
+import com.example.data.ProductImportResult
 import com.example.data.ProductSuggestion
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,6 +57,22 @@ fun MestreScreen(
     val suggestions by FirebaseService.observeSuggestions().collectAsStateWithLifecycle(initialValue = emptyList())
     var suggestionFilter by remember { mutableStateOf("all") }
     val coroutineScope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var importResult by remember { mutableStateOf<ProductImportResult?>(null) }
+    var showImportDialog by remember { mutableStateOf(false) }
+    var isParsingImport by remember { mutableStateOf(false) }
+    var isImporting by remember { mutableStateOf(false) }
+    val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        coroutineScope.launch {
+            isParsingImport = true
+            importResult = ProductImportParser.parse(context, uri)
+            isParsingImport = false
+            showImportDialog = true
+        }
+    }
     
     LaunchedEffect(Unit) {
         viewModel.syncMessage.collect { message ->
@@ -375,12 +393,29 @@ fun MestreScreen(
             }
             
             Spacer(modifier = Modifier.height(16.dp))
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    if (!isParsingImport && !isImporting) importLauncher.launch("text/*")
+                }
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Inventory, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text("Importar produtos por planilha", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        Text("Use CSV ou TSV e confira a prévia antes de publicar.", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
             var showConfirmDialog by remember { mutableStateOf(false) }
             var bannerUrlInput by remember { mutableStateOf("") }
             var showUrlDialog by remember { mutableStateOf(false) }
             var selectedUri by remember { mutableStateOf<android.net.Uri?>(null) }
-            val context = androidx.compose.ui.platform.LocalContext.current
-            val coroutineScope = rememberCoroutineScope()
             val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
                 contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
             ) { uri: android.net.Uri? ->
@@ -455,6 +490,32 @@ fun MestreScreen(
                 }
             }
             
+            if (showImportDialog && importResult != null) {
+                ImportPreviewDialog(
+                    result = importResult!!,
+                    isImporting = isImporting,
+                    onDismiss = { if (!isImporting) showImportDialog = false },
+                    onConfirm = {
+                        coroutineScope.launch {
+                            isImporting = true
+                            val commitResult = viewModel.importProducts(importResult!!.rows)
+                            isImporting = false
+                            val summary = buildString {
+                                append("${commitResult.importedCount} produto(s) importado(s).")
+                                if (commitResult.skippedRows > 0) {
+                                    append(" ${commitResult.skippedRows} linha(s) ignorada(s).")
+                                }
+                            }
+                            snackbarHostState.showSnackbar(summary)
+                            if (commitResult.importedCount > 0 || commitResult.errors.isNotEmpty()) {
+                                showImportDialog = false
+                                importResult = null
+                            }
+                        }
+                    }
+                )
+            }
+
             if (showCategoryDialog) {
                 AlertDialog(
                     onDismissRequest = { showCategoryDialog = false },
@@ -555,6 +616,70 @@ fun MestreScreen(
             )
         }
     }
+}
+
+@Composable
+private fun ImportPreviewDialog(
+    result: ProductImportResult,
+    isImporting: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Prévia da importação") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text("${result.rows.size} linha(s) pronta(s) para análise de duplicidade.")
+                Text(
+                    "Formato detectado: ${if (result.delimiter == '\t') "TSV" else "CSV"}.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                result.rows.take(8).forEach { row ->
+                    Text(
+                        "Linha ${row.lineNumber}: ${row.name} • ${row.code} • ${row.category}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+                if (result.rows.size > 8) {
+                    Text("... e mais ${result.rows.size - 8} linha(s).", style = MaterialTheme.typography.bodySmall)
+                }
+                if (result.errors.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Alertas da leitura", style = MaterialTheme.typography.titleSmall)
+                    result.errors.take(6).forEach { error ->
+                        Text(
+                            "• $error",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    if (result.errors.size > 6) {
+                        Text("... e mais ${result.errors.size - 6} alerta(s).", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = !isImporting && result.rows.isNotEmpty()
+            ) {
+                Text(if (isImporting) "Publicando..." else "Publicar válidos")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isImporting) {
+                Text("Cancelar")
+            }
+        }
+    )
 }
 
 @Composable
