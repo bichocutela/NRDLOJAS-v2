@@ -473,6 +473,66 @@ object FirebaseService {
         awaitClose { registration.remove() }
     }
 
+    fun observeHomeSettings(): Flow<RemoteHomeSettings> = callbackFlow {
+        if (!isFirebaseConfigured()) {
+            trySend(RemoteHomeSettings())
+            close()
+            return@callbackFlow
+        }
+
+        val firestore = FirebaseFirestore.getInstance()
+        val registration = firestore.collection("config").document("appSettings")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("FirebaseService", "Erro ao observar configurações da Home", error)
+                    return@addSnapshotListener
+                }
+                trySend(
+                    RemoteHomeSettings(
+                        showCategories = snapshot?.getBoolean("homeShowCategories"),
+                        showMostUsed = snapshot?.getBoolean("homeShowMostUsed"),
+                        showHistory = snapshot?.getBoolean("homeShowHistory"),
+                        showFavorites = snapshot?.getBoolean("homeShowFavorites"),
+                        mostUsedLimit = snapshot?.getLong("homeMostUsedLimit")?.toInt(),
+                        carouselIntervalSeconds = snapshot?.getLong("homeCarouselIntervalSeconds")?.toInt()
+                    )
+                )
+            }
+
+        awaitClose { registration.remove() }
+    }
+
+    suspend fun saveHomeSettings(settings: HomeSettings): Boolean {
+        if (!isFirebaseConfigured() || !hasManagementAccess()) return false
+        return try {
+            FirebaseFirestore.getInstance()
+                .collection("config")
+                .document("appSettings")
+                .set(
+                    mapOf(
+                        "homeShowCategories" to settings.showCategories,
+                        "homeShowMostUsed" to settings.showMostUsed,
+                        "homeShowHistory" to settings.showHistory,
+                        "homeShowFavorites" to settings.showFavorites,
+                        "homeMostUsedLimit" to settings.mostUsedLimit.coerceIn(1, 50),
+                        "homeCarouselIntervalSeconds" to settings.carouselIntervalSeconds.coerceIn(3, 30)
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge()
+                )
+                .await()
+            true
+        } catch (e: Exception) {
+            lastError = e.message
+            Log.e("FirebaseService", "Erro ao salvar configurações da Home", e)
+            false
+        }
+    }
+
+    private fun hasManagementAccess(): Boolean {
+        val email = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email?.lowercase()
+        return email == "admin@nrdlojas.com" || email == "mestre@nrdlojas.com"
+    }
+
 
     suspend fun syncAllDynamicTabs(tabs: List<com.example.data.DynamicTab>) {
         if (!isFirebaseConfigured()) return

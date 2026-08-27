@@ -109,6 +109,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.example.data.Product
 import com.example.data.AppNotification
 import android.graphics.Bitmap
@@ -205,6 +206,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
     val latestProductFirebase by viewModel.latestProduct.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val newProductsCount by viewModel.newProductsCount.collectAsStateWithLifecycle()
+    val homeSettings by viewModel.homeSettings.collectAsStateWithLifecycle()
 
     var showProductSearchSheet by remember { mutableStateOf(false) }
     var showMostUsedSheet by remember { mutableStateOf(false) }
@@ -215,10 +217,9 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
     var sheetQuery by remember { mutableStateOf("") }
     val notificationHistory by viewModel.notificationHistory.collectAsStateWithLifecycle()
     val unreadNotifications = notificationHistory.count { !it.read }
-    val mostUsedLimit by viewModel.userPreferences.mostUsedLimit.collectAsStateWithLifecycle(initialValue = 8)
-    val carouselIntervalSeconds by viewModel.userPreferences.carouselIntervalSeconds.collectAsStateWithLifecycle(initialValue = 5)
     val mostUsedListState = rememberLazyListState()
     val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
     var hadSearchResults by remember { mutableStateOf(false) }
     val voiceLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -242,10 +243,10 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
         hadSearchResults = hasSearchResults
     }
 
-    LaunchedEffect(mostUsed, carouselIntervalSeconds) {
-        if (mostUsed.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(mostUsed, homeSettings.carouselIntervalSeconds) {
+        if (mostUsed.isEmpty() || !homeSettings.showMostUsed) return@LaunchedEffect
         while (true) {
-            delay(carouselIntervalSeconds * 1000L)
+            delay(homeSettings.carouselIntervalSeconds * 1000L)
             if (!mostUsedListState.isScrollInProgress) {
                 val nextIndex = (mostUsedListState.firstVisibleItemIndex + 1) % mostUsed.size
                 mostUsedListState.animateScrollToItem(nextIndex)
@@ -327,9 +328,9 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
             SearchBar(
                 query = searchQuery,
                 onQueryChange = viewModel::updateSearchQuery,
-                onSearch = { },
+                onSearch = { keyboardController?.hide() },
                 active = false,
-                onActiveChange = { },
+                onActiveChange = { keyboardController?.hide() },
                 placeholder = { Text("Pesquisar produto...", style = MaterialTheme.typography.bodyLarge) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Pesquisar", modifier = Modifier.size(28.dp)) },
                 trailingIcon = {
@@ -370,39 +371,53 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                     sheetQuery = searchQuery
                     showProductSearchSheet = true
                 },
-                shape = RoundedCornerShape(32.dp), // Estilo balão gigante
-                modifier = Modifier.fillMaxWidth().height(64.dp),
+                shape = RoundedCornerShape(28.dp),
+                modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 )
             ) {
-                Text("PESQUISAR PRODUTO", fontWeight = FontWeight.Black, fontSize = 18.sp, letterSpacing = 1.sp)
+                Icon(Icons.Default.Search, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Pesquisar", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (searchQuery.isNotEmpty()) {
+                if (searchQuery.isNotEmpty()) {
             // Search Results
             LazyColumn(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                itemsIndexed(searchResults, key = { _, it -> it.code }) { index, product ->
-                    ProductCard(product, viewModel, index, appTheme, textPreferences)
+                if (searchResults.isEmpty()) {
+                    item {
+                        SearchEmptyState(onClear = { viewModel.updateSearchQuery("") })
+                    }
+                } else {
+                    itemsIndexed(searchResults, key = { _, it -> it.code }) { index, product ->
+                        ProductCard(product, viewModel, index, appTheme, textPreferences)
+                    }
                 }
             }
         } else {
             // Dashboard (Categories, Most Used, History, Favorites)
+            val hasVisibleHomeSection = homeSettings.showCategories ||
+                (homeSettings.showMostUsed && mostUsed.isNotEmpty()) ||
+                (homeSettings.showHistory && history.isNotEmpty()) ||
+                (homeSettings.showFavorites && favorites.isNotEmpty())
             LazyColumn(
                 contentPadding = PaddingValues(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                item {
-                    CategorySection(viewModel, appTheme, textPreferences, onCategoryClick = { selectedCategory = it })
+                if (homeSettings.showCategories) {
+                    item {
+                        CategorySection(viewModel, appTheme, textPreferences, onCategoryClick = { selectedCategory = it })
+                    }
                 }
 
-                if (mostUsed.isNotEmpty()) {
+                if (homeSettings.showMostUsed && mostUsed.isNotEmpty()) {
                     item {
                         SectionHeader("Mais Utilizados", textPreferences, actionLabel = "VER TODOS", onAction = { showMostUsedSheet = true })
                         LazyRow(
@@ -417,7 +432,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                     }
                 }
 
-                if (history.isNotEmpty()) {
+                if (homeSettings.showHistory && history.isNotEmpty()) {
                     item {
                         SectionHeader("Histórico Recente", textPreferences, actionLabel = "Limpar Histórico", onAction = { showClearHistoryDialog = true })
                         Column(
@@ -430,9 +445,8 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                         }
                     }
                 }
-                
 
-                if (favorites.isNotEmpty()) {
+                if (homeSettings.showFavorites && favorites.isNotEmpty()) {
                     item {
                         SectionHeader("Meus Favoritos", textPreferences)
                         Column(
@@ -445,8 +459,20 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
                         }
                     }
                 }
+
+                if (!hasVisibleHomeSection) {
+                    item {
+                        Text(
+                            "Nenhuma seção da Home está disponível no momento.",
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
+
         }
 
         val onboardingShown by viewModel.userPreferences.onboardingShown.collectAsState(initial = true)
@@ -663,6 +689,38 @@ fun SectionHeader(
                     color = MaterialTheme.colorScheme.primary
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun SearchEmptyState(onClear: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(40.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text("Nenhum produto encontrado", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "Tente uma parte do nome ou confira o código.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(onClick = onClear) { Text("Limpar busca") }
         }
     }
 }

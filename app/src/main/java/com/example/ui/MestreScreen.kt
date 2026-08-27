@@ -39,8 +39,9 @@ fun MestreScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
-    val mostUsedLimit by viewModel.userPreferences.mostUsedLimit.collectAsStateWithLifecycle(initialValue = 8)
-    val carouselIntervalSeconds by viewModel.userPreferences.carouselIntervalSeconds.collectAsStateWithLifecycle(initialValue = 5)
+    val homeSettings by viewModel.homeSettings.collectAsStateWithLifecycle()
+    var draftHomeSettings by remember(homeSettings) { mutableStateOf(homeSettings) }
+    var isSavingHomeSettings by remember { mutableStateOf(false) }
     val suggestions by FirebaseService.observeSuggestions().collectAsStateWithLifecycle(initialValue = emptyList())
     var suggestionFilter by remember { mutableStateOf("all") }
     val coroutineScope = rememberCoroutineScope()
@@ -176,26 +177,83 @@ fun MestreScreen(
 
             MestreSectionHeader(
                 title = "Configurações da Home",
-                description = "Defina a quantidade de produtos e o intervalo do carrossel"
+                description = "Escolha o que aparece para todos os usuários"
             )
             Spacer(modifier = Modifier.height(8.dp))
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Mais Utilizados", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                    Text("Quantidade de produtos: $mostUsedLimit", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Seções visíveis",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                    HomeSettingSwitch(
+                        label = "Categorias",
+                        checked = draftHomeSettings.showCategories,
+                        onCheckedChange = { draftHomeSettings = draftHomeSettings.copy(showCategories = it) }
+                    )
+                    HomeSettingSwitch(
+                        label = "Mais utilizados",
+                        checked = draftHomeSettings.showMostUsed,
+                        onCheckedChange = { draftHomeSettings = draftHomeSettings.copy(showMostUsed = it) }
+                    )
+                    HomeSettingSwitch(
+                        label = "Histórico recente",
+                        checked = draftHomeSettings.showHistory,
+                        onCheckedChange = { draftHomeSettings = draftHomeSettings.copy(showHistory = it) }
+                    )
+                    HomeSettingSwitch(
+                        label = "Meus favoritos",
+                        checked = draftHomeSettings.showFavorites,
+                        onCheckedChange = { draftHomeSettings = draftHomeSettings.copy(showFavorites = it) }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Mais utilizados: ${draftHomeSettings.mostUsedLimit} produtos", style = MaterialTheme.typography.bodyMedium)
                     Slider(
-                        value = mostUsedLimit.toFloat(),
-                        onValueChange = { coroutineScope.launch { viewModel.userPreferences.setMostUsedLimit(it.toInt()) } },
+                        value = draftHomeSettings.mostUsedLimit.toFloat(),
+                        onValueChange = {
+                            draftHomeSettings = draftHomeSettings.copy(mostUsedLimit = it.toInt())
+                        },
                         valueRange = 1f..50f,
                         steps = 48
                     )
-                    Text("Tempo do carrossel: ${carouselIntervalSeconds}s", style = MaterialTheme.typography.bodyMedium)
+                    Text("Intervalo do carrossel: ${draftHomeSettings.carouselIntervalSeconds}s", style = MaterialTheme.typography.bodyMedium)
                     Slider(
-                        value = carouselIntervalSeconds.toFloat(),
-                        onValueChange = { coroutineScope.launch { viewModel.userPreferences.setCarouselIntervalSeconds(it.toInt()) } },
+                        value = draftHomeSettings.carouselIntervalSeconds.toFloat(),
+                        onValueChange = {
+                            draftHomeSettings = draftHomeSettings.copy(carouselIntervalSeconds = it.toInt())
+                        },
                         valueRange = 3f..30f,
                         steps = 26
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                isSavingHomeSettings = true
+                                val saved = FirebaseService.saveHomeSettings(draftHomeSettings)
+                                isSavingHomeSettings = false
+                                snackbarHostState.showSnackbar(
+                                    if (saved) "Configurações da Home publicadas para todos."
+                                    else "Não foi possível publicar as configurações da Home."
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isSavingHomeSettings
+                    ) {
+                        if (isSavingHomeSettings) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Publicando...")
+                        } else {
+                            Text("Publicar configurações")
+                        }
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -398,6 +456,22 @@ fun MestreScreen(
                 description = "Peça ao assistente no chat: 'Modifique o texto na tela inicial'."
             )
         }
+    }
+}
+
+@Composable
+private fun HomeSettingSwitch(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

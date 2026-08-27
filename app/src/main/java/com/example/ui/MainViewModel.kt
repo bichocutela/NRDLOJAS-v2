@@ -9,8 +9,10 @@ import com.example.api.Part
 import com.example.api.RetrofitClient
 import com.example.data.Product
 import com.example.data.FirebaseService
+import com.example.data.HomeSettings
 import com.example.data.ProductRepository
 import com.example.data.ProductStandards
+import com.example.data.RemoteHomeSettings
 import com.example.data.UserPreferences
 import com.example.util.FcmTopicSubscription
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,9 +21,14 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -52,8 +59,29 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     private val _newProductsCount = MutableStateFlow(0)
     val newProductsCount: StateFlow<Int> = _newProductsCount.asStateFlow()
 
+    private val remoteHomeSettings = FirebaseService.observeHomeSettings()
+        .onStart { emit(RemoteHomeSettings()) }
+        .catch { emit(RemoteHomeSettings()) }
+
+    val homeSettings: StateFlow<HomeSettings> = combine(
+        remoteHomeSettings,
+        userPreferences.mostUsedLimit,
+        userPreferences.carouselIntervalSeconds
+    ) { remote, localMostUsedLimit, localCarouselIntervalSeconds ->
+        HomeSettings(
+            showCategories = remote.showCategories ?: true,
+            showMostUsed = remote.showMostUsed ?: true,
+            showHistory = remote.showHistory ?: true,
+            showFavorites = remote.showFavorites ?: true,
+            mostUsedLimit = (remote.mostUsedLimit ?: localMostUsedLimit).coerceIn(1, 50),
+            carouselIntervalSeconds = (remote.carouselIntervalSeconds ?: localCarouselIntervalSeconds).coerceIn(3, 30)
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeSettings())
+
     val favorites = repository.favorites.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val mostUsed = userPreferences.mostUsedLimit
+    val mostUsed = homeSettings
+        .map { it.mostUsedLimit }
+        .distinctUntilChanged()
         .flatMapLatest { repository.mostUsed(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val history = repository.history.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
