@@ -31,6 +31,12 @@ object ProductStandards {
 
     fun isOfficialCategory(category: String): Boolean = category in officialCategories
 
+    fun categoryId(value: String): String = Normalizer.normalize(value.trim().lowercase(Locale.ROOT), Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}"), "")
+        .replace(Regex("[^a-z0-9]+"), "-")
+        .trim('-')
+        .ifBlank { "categoria" }
+
     fun categoryFromSuggestion(value: String): String? {
         val normalizedSuggestion = categoryKey(value)
         return officialCategories.firstOrNull { categoryKey(it) == normalizedSuggestion }

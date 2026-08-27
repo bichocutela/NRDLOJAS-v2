@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val products by viewModel.allProducts.collectAsState()
+    val activeCategoryNames by viewModel.activeCategoryNames.collectAsState()
     val appTheme by viewModel.userPreferences.appTheme.collectAsState(initial = "multicolor")
     val coroutineScope = rememberCoroutineScope()
     var showDialog by remember { mutableStateOf(false) }
@@ -85,7 +86,7 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         IconButton(onClick = {
                             name = product.name
                             code = product.code
-                            category = product.category.takeIf { ProductStandards.isOfficialCategory(it) }.orEmpty()
+                            category = product.category.takeIf { it in activeCategoryNames }.orEmpty()
                             imageUrl = product.imageUrl ?: ""
                             editingProduct = product
                             showDialog = true
@@ -130,7 +131,7 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        if (category.isBlank() && !ProductStandards.isOfficialCategory(editingProduct!!.category)) {
+                        if (category.isBlank() && editingProduct!!.category !in activeCategoryNames) {
                             Text(
                                 text = "Categoria atual (legado): ${editingProduct!!.category}",
                                 style = MaterialTheme.typography.bodySmall,
@@ -142,7 +143,8 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             selectedCategory = category,
                             onCategorySelected = { category = it },
                             modifier = Modifier.fillMaxWidth(),
-                            label = if (category.isBlank()) "Nova categoria (opcional)" else "Categoria"
+                            label = if (category.isBlank()) "Nova categoria (opcional)" else "Categoria",
+                            categories = activeCategoryNames
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(

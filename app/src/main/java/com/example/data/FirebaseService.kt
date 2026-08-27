@@ -533,6 +533,95 @@ object FirebaseService {
         return email == "admin@nrdlojas.com" || email == "mestre@nrdlojas.com"
     }
 
+    fun observeCategories(): Flow<List<CategoryDefinition>> = callbackFlow {
+        if (!isFirebaseConfigured()) {
+            trySend(CategoryDefinition.defaults)
+            close()
+            return@callbackFlow
+        }
+
+        val firestore = FirebaseFirestore.getInstance()
+        val registration = firestore.collection("config").document("appSettings")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("FirebaseService", "Erro ao observar categorias", error)
+                    return@addSnapshotListener
+                }
+
+                val rawCategories = snapshot?.get("categories") as? List<*> ?: emptyList<Any?>()
+                val parsed = rawCategories.mapNotNull { raw ->
+                    val map = raw as? Map<*, *> ?: return@mapNotNull null
+                    val id = map["id"] as? String ?: return@mapNotNull null
+                    val name = map["name"] as? String ?: return@mapNotNull null
+                    if (name.isBlank()) return@mapNotNull null
+                    CategoryDefinition(
+                        id = id,
+                        name = name.trim(),
+                        displayOrder = (map["displayOrder"] as? Number)?.toInt() ?: 0,
+                        isActive = map["isActive"] as? Boolean ?: true
+                    )
+                }.sortedWith(compareBy<CategoryDefinition> { it.displayOrder }.thenBy { it.name })
+
+                trySend(parsed.ifEmpty { CategoryDefinition.defaults })
+            }
+
+        awaitClose { registration.remove() }
+    }
+
+    suspend fun saveCategories(categories: List<CategoryDefinition>): Boolean {
+        if (!isFirebaseConfigured() || !hasManagementAccess()) return false
+        val normalized = categories
+            .filter { it.name.isNotBlank() }
+            .mapIndexed { index, category ->
+                mapOf(
+                    "id" to category.id,
+                    "name" to category.name.trim(),
+                    "displayOrder" to index,
+                    "isActive" to category.isActive
+                )
+            }
+        if (normalized.isEmpty()) return false
+        return try {
+            FirebaseFirestore.getInstance()
+                .collection("config")
+                .document("appSettings")
+                .set(
+                    mapOf("categories" to normalized),
+                    com.google.firebase.firestore.SetOptions.merge()
+                )
+                .await()
+            true
+        } catch (e: Exception) {
+            lastError = e.message
+            Log.e("FirebaseService", "Erro ao salvar categorias", e)
+            false
+        }
+    }
+
+    suspend fun renameProductsCategory(oldName: String, newName: String): Boolean {
+        if (!isFirebaseConfigured() || !hasManagementAccess()) return false
+        if (oldName.trim().equals(newName.trim(), ignoreCase = true)) return true
+        return try {
+            val firestore = FirebaseFirestore.getInstance()
+            val products = firestore.collection("products")
+                .whereEqualTo("category", oldName.trim())
+                .get()
+                .await()
+            products.documents.chunked(450).forEach { chunk ->
+                val batch = firestore.batch()
+                chunk.forEach { document ->
+                    batch.update(document.reference, "category", newName.trim())
+                }
+                batch.commit().await()
+            }
+            true
+        } catch (e: Exception) {
+            lastError = e.message
+            Log.e("FirebaseService", "Erro ao renomear categoria nos produtos", e)
+            false
+        }
+    }
+
 
     suspend fun syncAllDynamicTabs(tabs: List<com.example.data.DynamicTab>) {
         if (!isFirebaseConfigured()) return

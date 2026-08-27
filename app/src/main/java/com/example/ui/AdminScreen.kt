@@ -27,7 +27,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import com.example.data.Product
-import com.example.data.ProductStandards
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
@@ -63,6 +62,7 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val adminScrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
     val allProducts by viewModel.allProducts.collectAsStateWithLifecycle()
+    val activeCategoryNames by viewModel.activeCategoryNames.collectAsStateWithLifecycle()
     val exportProducts: () -> Unit = {
         scope.launch {
             val path = com.example.util.PdfExporter.exportProductsToPdf(context, allProducts)
@@ -222,7 +222,8 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         OfficialCategoryDropdown(
                             selectedCategory = productCategory,
                             onCategorySelected = { productCategory = it },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            categories = activeCategoryNames
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         val manualLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -259,7 +260,7 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         var isAdding by remember { mutableStateOf(false) }
                 Button(
                     onClick = {
-                        if (productName.isNotBlank() && productCode.isNotBlank() && ProductStandards.isOfficialCategory(productCategory)) {
+                        if (productName.isNotBlank() && productCode.isNotBlank() && productCategory in activeCategoryNames) {
                             scope.launch {
                                 isAdding = true
                                 val success = viewModel.addProductSuspend(
@@ -313,6 +314,7 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             AdminProductList(
                 products = allProducts,
                 viewModel = viewModel,
+                categories = activeCategoryNames,
                 onScrollToTop = {
                     scope.launch { adminScrollState.animateScrollTo(0) }
                 }
@@ -345,6 +347,7 @@ private fun AdminPanelSectionHeader(
 fun AdminProductList(
     products: List<Product>,
     viewModel: MainViewModel,
+    categories: List<String>,
     onScrollToTop: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -383,7 +386,7 @@ fun AdminProductList(
             onClick = { searchQuery = "" },
             label = { Text("Todos") }
         )
-        ProductStandards.officialCategories.forEach { category ->
+        categories.forEach { category ->
             FilterChip(
                 selected = searchQuery == category,
                 onClick = { searchQuery = category },
@@ -434,7 +437,7 @@ fun AdminProductList(
                 modifier = Modifier.padding(vertical = 8.dp)
             )
             categoryProducts.forEach { product ->
-                AdminProductItem(product, viewModel)
+                AdminProductItem(product, viewModel, categories)
             }
         }
         if (pageCount > 0) {
@@ -501,12 +504,12 @@ fun AdminProductList(
 }
 
 @Composable
-fun AdminProductItem(product: Product, viewModel: MainViewModel) {
+fun AdminProductItem(product: Product, viewModel: MainViewModel, categories: List<String>) {
     var isEditing by remember { mutableStateOf(false) }
     var editCode by remember(product.code) { mutableStateOf(product.code) }
     var editName by remember(product.name) { mutableStateOf(product.name) }
-    var editCategory by remember(product.category) {
-        mutableStateOf(product.category.takeIf { ProductStandards.isOfficialCategory(it) }.orEmpty())
+    var editCategory by remember(product.category, categories) {
+        mutableStateOf(product.category.takeIf { it in categories }.orEmpty())
     }
     var editImageUrl by remember(product.imageUrl) { mutableStateOf(product.imageUrl ?: "") }
     val context = LocalContext.current
@@ -596,7 +599,7 @@ fun AdminProductItem(product: Product, viewModel: MainViewModel) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                if (editCategory.isBlank() && !ProductStandards.isOfficialCategory(product.category)) {
+                if (editCategory.isBlank() && product.category !in categories) {
                     Text(
                         text = "Categoria atual (legado): ${product.category}",
                         style = MaterialTheme.typography.bodySmall,
@@ -608,7 +611,8 @@ fun AdminProductItem(product: Product, viewModel: MainViewModel) {
                     selectedCategory = editCategory,
                     onCategorySelected = { editCategory = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = if (editCategory.isBlank()) "Nova categoria (opcional)" else "Categoria"
+                    label = if (editCategory.isBlank()) "Nova categoria (opcional)" else "Categoria",
+                    categories = categories
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(

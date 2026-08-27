@@ -21,7 +21,8 @@ fun OfficialCategoryDropdown(
     selectedCategory: String,
     onCategorySelected: (String) -> Unit,
     modifier: Modifier = Modifier,
-    label: String = "Categoria"
+    label: String = "Categoria",
+    categories: List<String> = ProductStandards.officialCategories
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -45,7 +46,7 @@ fun OfficialCategoryDropdown(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
-            ProductStandards.officialCategories.forEach { category ->
+            categories.forEach { category ->
                 DropdownMenuItem(
                     text = { Text(category) },
                     onClick = {

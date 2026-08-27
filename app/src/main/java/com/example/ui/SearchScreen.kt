@@ -111,6 +111,7 @@ import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.example.data.Product
+import com.example.data.ProductStandards
 import com.example.data.AppNotification
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.FilterQuality
@@ -207,6 +208,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val newProductsCount by viewModel.newProductsCount.collectAsStateWithLifecycle()
     val homeSettings by viewModel.homeSettings.collectAsStateWithLifecycle()
+    val activeCategoryNames by viewModel.activeCategoryNames.collectAsStateWithLifecycle()
 
     var showProductSearchSheet by remember { mutableStateOf(false) }
     var showMostUsedSheet by remember { mutableStateOf(false) }
@@ -413,7 +415,13 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
             ) {
                 if (homeSettings.showCategories) {
                     item {
-                        CategorySection(viewModel, appTheme, textPreferences, onCategoryClick = { selectedCategory = it })
+                        CategorySection(
+                            viewModel = viewModel,
+                            appTheme = appTheme,
+                            textPreferences = textPreferences,
+                            categories = activeCategoryNames,
+                            onCategoryClick = { selectedCategory = it }
+                        )
                     }
                 }
 
@@ -730,23 +738,25 @@ fun CategorySection(
     viewModel: MainViewModel,
     appTheme: String,
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
+    categories: List<String> = ProductStandards.officialCategories,
     onCategoryClick: (String) -> Unit = {}
 ) {
-    val categories = listOf(
-        Pair("Açougue", MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer),
-        Pair("Cafeteria", MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer),
-        Pair("Frios", MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer),
-        Pair("Hortifruti", MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer),
-        Pair("Mercearia", MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer),
-        Pair("Padaria", MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer)
+    val categoryColors = listOf(
+        MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer,
+        MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer,
+        MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer,
+        MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer,
+        MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer,
+        MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
     )
-    
+
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.padding(bottom = 8.dp)
     ) {
-        itemsIndexed(categories) { index, (category, colors) ->
+        itemsIndexed(categories) { index, category ->
+            val colors = categoryColors[index % categoryColors.size]
             val dynamicColors = getDynamicThemeColor(index, appTheme, colors.first, colors.second)
             Box(
                 modifier = Modifier

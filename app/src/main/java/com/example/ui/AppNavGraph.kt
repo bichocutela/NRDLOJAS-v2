@@ -215,6 +215,7 @@ fun LoginDrawerContent(
     var loginStatus by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     val categories by viewModel.productsCountByCategory.collectAsState()
+    val activeCategoryNames by viewModel.activeCategoryNames.collectAsState()
     var expandedCategory by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -357,9 +358,7 @@ fun LoginDrawerContent(
         )
         Spacer(modifier = Modifier.height(16.dp))
         
-        val allCategoriesList = remember { com.example.data.ProductStandards.officialCategories }
-
-        allCategoriesList.forEach { categoryName ->
+        activeCategoryNames.forEach { categoryName ->
             CategoryItem(
                 category = categoryName,
                 viewModel = viewModel,

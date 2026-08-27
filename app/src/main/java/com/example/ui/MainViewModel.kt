@@ -8,6 +8,7 @@ import com.example.api.GenerateContentRequest
 import com.example.api.Part
 import com.example.api.RetrofitClient
 import com.example.data.Product
+import com.example.data.CategoryDefinition
 import com.example.data.FirebaseService
 import com.example.data.HomeSettings
 import com.example.data.ProductRepository
@@ -77,6 +78,22 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             carouselIntervalSeconds = (remote.carouselIntervalSeconds ?: localCarouselIntervalSeconds).coerceIn(3, 30)
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeSettings())
+
+    private val remoteCategories = FirebaseService.observeCategories()
+        .onStart { emit(CategoryDefinition.defaults) }
+        .catch { emit(CategoryDefinition.defaults) }
+
+    val categoryDefinitions: StateFlow<List<CategoryDefinition>> = remoteCategories
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CategoryDefinition.defaults)
+
+    val activeCategoryNames: StateFlow<List<String>> = categoryDefinitions
+        .map { definitions ->
+            definitions
+                .filter { it.isActive }
+                .sortedWith(compareBy<CategoryDefinition> { it.displayOrder }.thenBy { it.name })
+                .map { it.name }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CategoryDefinition.defaults.map { it.name })
 
     val favorites = repository.favorites.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val mostUsed = homeSettings
@@ -252,6 +269,102 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     fun searchProducts(query: String) = repository.searchProducts(query)
     fun searchProductsByCategory(category: String, query: String) = repository.searchProductsByCategory(category, query)
 
+    suspend fun addCategory(name: String): Boolean {
+        val cleanName = name.trim().replace(Regex("\\s+"), " ")
+        if (cleanName.isBlank()) {
+            _syncMessage.emit("Informe um nome para a categoria.")
+            return false
+        }
+        if (categoryDefinitions.value.any { it.name.equals(cleanName, ignoreCase = true) }) {
+            _syncMessage.emit("Essa categoria já existe.")
+            return false
+        }
+        val existingIds = categoryDefinitions.value.map { it.id }.toSet()
+        val baseId = ProductStandards.categoryId(cleanName)
+        var id = baseId
+        var suffix = 2
+        while (id in existingIds) {
+            id = "$baseId-$suffix"
+            suffix += 1
+        }
+        val updated = categoryDefinitions.value + CategoryDefinition(
+            id = id,
+            name = cleanName,
+            displayOrder = categoryDefinitions.value.size,
+            isActive = true
+        )
+        return saveCategoryDefinitions(updated, "Categoria adicionada para todos os usuários.")
+    }
+
+    suspend fun renameCategory(category: CategoryDefinition, newName: String): Boolean {
+        val cleanName = newName.trim().replace(Regex("\\s+"), " ")
+        if (cleanName.isBlank()) {
+            _syncMessage.emit("Informe um nome para a categoria.")
+            return false
+        }
+        if (categoryDefinitions.value.any { it.id != category.id && it.name.equals(cleanName, ignoreCase = true) }) {
+            _syncMessage.emit("Essa categoria já existe.")
+            return false
+        }
+        if (category.name == cleanName) return true
+
+        val productsToRename = repository.getProductsByCategory(category.name).first()
+        val updated = categoryDefinitions.value.map {
+            if (it.id == category.id) it.copy(name = cleanName) else it
+        }
+        val saved = FirebaseService.saveCategories(updated)
+        if (!saved) {
+            _syncMessage.emit("Não foi possível salvar o novo nome da categoria.")
+            return false
+        }
+        val renamed = FirebaseService.renameProductsCategory(category.name, cleanName)
+        if (!renamed) {
+            FirebaseService.saveCategories(categoryDefinitions.value)
+            _syncMessage.emit("Não foi possível atualizar os produtos dessa categoria.")
+            return false
+        }
+        productsToRename.forEach { product ->
+            repository.updateProduct(product.copy(category = cleanName))
+        }
+        _syncMessage.emit("Categoria renomeada para todos os usuários.")
+        return true
+    }
+
+    suspend fun setCategoryActive(category: CategoryDefinition, isActive: Boolean): Boolean {
+        if (!isActive && categoryDefinitions.value.count { it.isActive } <= 1) {
+            _syncMessage.emit("Mantenha pelo menos uma categoria ativa.")
+            return false
+        }
+        val updated = categoryDefinitions.value.map {
+            if (it.id == category.id) it.copy(isActive = isActive) else it
+        }
+        return saveCategoryDefinitions(
+            updated,
+            if (isActive) "Categoria ativada para todos os usuários." else "Categoria ocultada da seleção."
+        )
+    }
+
+    suspend fun moveCategory(category: CategoryDefinition, direction: Int): Boolean {
+        val ordered = categoryDefinitions.value.sortedWith(compareBy<CategoryDefinition> { it.displayOrder }.thenBy { it.name }).toMutableList()
+        val index = ordered.indexOfFirst { it.id == category.id }
+        val targetIndex = index + direction
+        if (index < 0 || targetIndex !in ordered.indices) return false
+        val moved = ordered.removeAt(index)
+        ordered.add(targetIndex, moved)
+        return saveCategoryDefinitions(ordered, "Ordem das categorias atualizada para todos.")
+    }
+
+    private suspend fun saveCategoryDefinitions(categories: List<CategoryDefinition>, successMessage: String): Boolean {
+        val ordered = categories.mapIndexed { index, category -> category.copy(displayOrder = index) }
+        if (ordered.none { it.isActive }) {
+            _syncMessage.emit("Mantenha pelo menos uma categoria ativa.")
+            return false
+        }
+        val saved = FirebaseService.saveCategories(ordered)
+        _syncMessage.emit(if (saved) successMessage else "Não foi possível salvar as categorias.")
+        return saved
+    }
+
     suspend fun checkDuplicateCode(code: String, currentId: Int? = null): Product? {
         val normalizedCode = code.trim()
         val existingProduct = repository.getProductByCodeSync(normalizedCode)
@@ -264,8 +377,8 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     suspend fun updateProductSuspend(oldProduct: Product, newProduct: Product): Boolean {
         val normalizedCode = newProduct.code.trim()
         val requestedCategory = newProduct.category.trim()
-        if (requestedCategory != oldProduct.category && !ProductStandards.isOfficialCategory(requestedCategory)) {
-            _syncMessage.emit("Selecione uma das categorias oficiais para alterar a categoria do produto.")
+        if (requestedCategory != oldProduct.category && requestedCategory !in activeCategoryNames.value) {
+            _syncMessage.emit("Selecione uma categoria ativa para alterar a categoria do produto.")
             return false
         }
         val normalizedName = ProductStandards.normalizeProductName(newProduct.name)
@@ -387,8 +500,8 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         suspend fun addProductSuspend(name: String, code: String, category: String, unit: String, imageUrl: String? = null): Boolean {
         val normalizedCode = code.trim()
         val normalizedCategory = category.trim()
-        if (!ProductStandards.isOfficialCategory(normalizedCategory)) {
-            _syncMessage.emit("Selecione uma das categorias oficiais para adicionar o produto.")
+        if (normalizedCategory !in activeCategoryNames.value) {
+            _syncMessage.emit("Selecione uma categoria ativa para adicionar o produto.")
             return false
         }
         val normalizedName = ProductStandards.normalizeProductName(name)
@@ -463,8 +576,8 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             try {
                 repository.cleanDuplicates()
                 val remoteProducts = FirebaseService.getAllProducts()
-                val officialCategories = ProductStandards.officialCategories.toSet()
-                val legacyProducts = remoteProducts.filter { it.category !in officialCategories }
+                val recognizedCategories = (categoryDefinitions.value.map { it.name } + ProductStandards.officialCategories).toSet()
+                val legacyProducts = remoteProducts.filter { it.category !in recognizedCategories }
                 val legacyCounts = legacyProducts.groupingBy { it.category.ifBlank { "(vazia)" } }.eachCount()
                 if (legacyProducts.isNotEmpty()) {
                     android.util.Log.i("ProductMigration", "Categorias antes: $legacyCounts; total=${remoteProducts.size}")
@@ -473,7 +586,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                     }
                 }
                 val migratedProducts = remoteProducts.map { product ->
-                    if (product.category !in officialCategories) product.copy(category = "Mercearia") else product
+                    if (product.category !in recognizedCategories) product.copy(category = "Mercearia") else product
                 }
                 android.util.Log.i(
                     "ProductMigration",
