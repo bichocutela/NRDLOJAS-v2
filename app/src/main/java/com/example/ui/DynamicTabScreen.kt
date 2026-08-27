@@ -50,7 +50,11 @@ fun DynamicTabScreen(tab: DynamicTab, onNavigateBack: () -> Unit) {
                     )
                 }
                 "video" -> {
-                    Text("Funcionalidade de vídeo será integrada futuramente. URL: ${tab.content}", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Esta aba usa um tipo não suportado. Edite-a no Painel Mestre para Texto ou Imagem.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
                 else -> {
                     Text("Tipo não suportado.", color = MaterialTheme.colorScheme.error)

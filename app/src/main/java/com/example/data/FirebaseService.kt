@@ -1228,9 +1228,9 @@ object FirebaseService {
     }
 
 
-    suspend fun syncAllDynamicTabs(tabs: List<com.example.data.DynamicTab>) {
-        if (!isFirebaseConfigured()) return
-        try {
+    suspend fun syncAllDynamicTabs(tabs: List<com.example.data.DynamicTab>): Boolean {
+        if (!isFirebaseConfigured() || !hasManagementAccess()) return false
+        return try {
             val firestore = FirebaseFirestore.getInstance()
             val batch = firestore.batch()
             tabs.forEach { tab ->
@@ -1244,19 +1244,23 @@ object FirebaseService {
                 ))
             }
             batch.commit().await()
+            true
         } catch (e: Exception) {
             Log.e("FirebaseService", "Error syncing dynamic tabs", e)
+            false
         }
     }
 
-    suspend fun deleteDynamicTab(tab: com.example.data.DynamicTab) {
-        if (!isFirebaseConfigured()) return
-        try {
+    suspend fun deleteDynamicTab(tab: com.example.data.DynamicTab): Boolean {
+        if (!isFirebaseConfigured() || !hasManagementAccess()) return false
+        return try {
             val firestore = FirebaseFirestore.getInstance()
             firestore.collection("dynamic_tabs").document(tab.id.toString())
                 .delete().await()
+            true
         } catch (e: Exception) {
             Log.e("FirebaseService", "Error deleting dynamic tab", e)
+            false
         }
     }
 

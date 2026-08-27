@@ -45,7 +45,8 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     private val _latestProduct = MutableStateFlow<Map<String, Any>?>(null)
     val latestProduct = _latestProduct.asStateFlow()
     
-    private var isSyncingTabs = false
+    private val _isSyncingTabs = MutableStateFlow(false)
+    val isSyncingTabs: StateFlow<Boolean> = _isSyncingTabs.asStateFlow()
     private val _syncMessage = MutableSharedFlow<String>()
     val syncMessage = _syncMessage.asSharedFlow()
     private val _isSyncing = MutableStateFlow(false)
@@ -139,7 +140,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                 }
                 val remoteIds = remoteTabs.map { it.id }.toSet()
                 val tabsToDelete = localTabs.filter { it.id !in remoteIds }
-                if (tabsToDelete.isNotEmpty() && !isSyncingTabs) {
+                if (tabsToDelete.isNotEmpty() && !_isSyncingTabs.value) {
                     tabsToDelete.forEach { repository.deleteTab(it) }
                 }
             }
@@ -791,20 +792,49 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun insertTab(tab: com.example.data.DynamicTab) = viewModelScope.launch {
-        isSyncingTabs = true
-        val existingIds = repository.getAllTabs().first().map { it.id }.toSet()
-        repository.insertTab(tab)
-        val tabs = repository.getAllTabs().first { list -> list.any { it.id !in existingIds } }
-        FirebaseService.syncAllDynamicTabs(tabs)
-        isSyncingTabs = false
+        if (_isSyncingTabs.value) return@launch
+        _isSyncingTabs.value = true
+        try {
+            repository.insertTab(tab.copy(displayOrder = repository.getAllTabs().first().size))
+            val saved = FirebaseService.syncAllDynamicTabs(repository.getAllTabs().first())
+            _syncMessage.emit(if (saved) "Aba criada para todos os usuários." else "A aba foi criada localmente, mas não foi publicada na nuvem.")
+        } finally {
+            _isSyncingTabs.value = false
+        }
     }
 
     fun updateTab(tab: com.example.data.DynamicTab) = viewModelScope.launch {
-        isSyncingTabs = true
-        repository.updateTab(tab)
-        val tabs = repository.getAllTabs().first { list -> list.any { it == tab } }
-        FirebaseService.syncAllDynamicTabs(tabs)
-        isSyncingTabs = false
+        if (_isSyncingTabs.value) return@launch
+        _isSyncingTabs.value = true
+        try {
+            repository.updateTab(tab)
+            val saved = FirebaseService.syncAllDynamicTabs(repository.getAllTabs().first())
+            _syncMessage.emit(if (saved) "Aba atualizada para todos os usuários." else "A aba foi atualizada localmente, mas não foi publicada na nuvem.")
+        } finally {
+            _isSyncingTabs.value = false
+        }
+    }
+
+    fun moveTab(tab: com.example.data.DynamicTab, direction: Int) = viewModelScope.launch {
+        if (_isSyncingTabs.value) return@launch
+        val current = repository.getAllTabs().first()
+            .sortedWith(compareBy<com.example.data.DynamicTab> { it.displayOrder }.thenBy { it.id })
+        val index = current.indexOfFirst { it.id == tab.id }
+        val targetIndex = index + direction
+        if (index < 0 || targetIndex !in current.indices) return@launch
+
+        _isSyncingTabs.value = true
+        try {
+            val reordered = current.toMutableList().apply {
+                val moved = removeAt(index)
+                add(targetIndex, moved)
+            }.mapIndexed { order, item -> item.copy(displayOrder = order) }
+            reordered.forEach { repository.updateTab(it) }
+            val saved = FirebaseService.syncAllDynamicTabs(reordered)
+            _syncMessage.emit(if (saved) "Ordem das abas atualizada para todos." else "A ordem foi atualizada localmente, mas não foi publicada na nuvem.")
+        } finally {
+            _isSyncingTabs.value = false
+        }
     }
 
     fun deleteProduct(product: Product) {
@@ -818,10 +848,17 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     }
 
     fun deleteTab(tab: com.example.data.DynamicTab) = viewModelScope.launch {
-        isSyncingTabs = true
-        repository.deleteTab(tab)
-        FirebaseService.deleteDynamicTab(tab)
-        isSyncingTabs = false
+        if (_isSyncingTabs.value) return@launch
+        _isSyncingTabs.value = true
+        try {
+            val deleted = FirebaseService.deleteDynamicTab(tab)
+            if (deleted) {
+                repository.deleteTab(tab)
+            }
+            _syncMessage.emit(if (deleted) "Aba excluída para todos os usuários." else "Não foi possível excluir a aba na nuvem; os dados foram preservados.")
+        } finally {
+            _isSyncingTabs.value = false
+        }
     }
 
 

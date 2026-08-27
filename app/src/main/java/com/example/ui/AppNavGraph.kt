@@ -327,7 +327,8 @@ fun LoginDrawerContent(
         Spacer(modifier = Modifier.height(16.dp))
         
         val dynamicTabs by viewModel.dynamicTabs.collectAsState()
-        if (dynamicTabs.isNotEmpty()) {
+        val supportedDynamicTabs = dynamicTabs.filter { it.type == "text" || it.type == "image" }
+        if (supportedDynamicTabs.isNotEmpty()) {
             Text(
                 text = "Abas Adicionais",
                 style = MaterialTheme.typography.titleLarge,
@@ -335,7 +336,7 @@ fun LoginDrawerContent(
                 modifier = Modifier.align(Alignment.Start)
             )
             Spacer(modifier = Modifier.height(8.dp))
-            dynamicTabs.sortedBy { it.displayOrder }.forEach { tab ->
+            supportedDynamicTabs.sortedWith(compareBy<com.example.data.DynamicTab> { it.displayOrder }.thenBy { it.id }).forEach { tab ->
                 TextButton(
                     onClick = {
                         onGoToDynamicTab(tab.id)

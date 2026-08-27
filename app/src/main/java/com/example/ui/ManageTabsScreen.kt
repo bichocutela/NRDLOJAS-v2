@@ -25,8 +25,10 @@ import com.example.data.DynamicTab
 @Composable
 fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val tabs by viewModel.dynamicTabs.collectAsState()
+    val isSyncingTabs by viewModel.isSyncingTabs.collectAsState()
     var showDialog by remember { mutableStateOf(false) }
     var editingTab by remember { mutableStateOf<DynamicTab?>(null) }
+    var tabToDelete by remember { mutableStateOf<DynamicTab?>(null) }
     
     var title by remember { mutableStateOf("") }
     var type by remember { mutableStateOf("text") } // "text", "image", "video"
@@ -44,13 +46,17 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = {
+            FloatingActionButton(
+                onClick = {
                 title = ""
                 type = "text"
                 content = ""
                 editingTab = null
                 showDialog = true
-            }) {
+                },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ) {
                 Icon(Icons.Default.Add, contentDescription = "Nova Aba")
             }
         }
@@ -58,7 +64,7 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
         LazyColumn(
             modifier = Modifier.padding(innerPadding).fillMaxSize()
         ) {
-            items(tabs.sortedBy { it.displayOrder }) { tab ->
+            items(tabs.sortedWith(compareBy<DynamicTab> { it.displayOrder }.thenBy { it.id })) { tab ->
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
@@ -68,32 +74,42 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(tab.title, style = MaterialTheme.typography.titleMedium)
-                            Text("Tipo: ${tab.type}", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "Tipo: ${if (tab.type == "video") "Vídeo legado não suportado" else tab.type}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (tab.type == "video") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                        IconButton(onClick = {
-                            if (tab.displayOrder > 0) {
-                                viewModel.updateTab(tab.copy(displayOrder = tab.displayOrder - 1))
-                            }
-                        }) {
+                        val orderedTabs = tabs.sortedWith(compareBy<DynamicTab> { it.displayOrder }.thenBy { it.id })
+                        val tabIndex = orderedTabs.indexOfFirst { it.id == tab.id }
+                        IconButton(
+                            onClick = { viewModel.moveTab(tab, -1) },
+                            enabled = !isSyncingTabs && tabIndex > 0
+                        ) {
                             Icon(Icons.Default.ArrowUpward, contentDescription = "Mover para cima")
                         }
-                        IconButton(onClick = {
-                            viewModel.updateTab(tab.copy(displayOrder = tab.displayOrder + 1))
-                        }) {
+                        IconButton(
+                            onClick = { viewModel.moveTab(tab, 1) },
+                            enabled = !isSyncingTabs && tabIndex >= 0 && tabIndex < orderedTabs.lastIndex
+                        ) {
                             Icon(Icons.Default.ArrowDownward, contentDescription = "Mover para baixo")
                         }
-                        IconButton(onClick = {
-                            title = tab.title
-                            type = tab.type
-                            content = tab.content
-                            editingTab = tab
-                            showDialog = true
-                        }) {
+                        IconButton(
+                            onClick = {
+                                title = tab.title
+                                type = tab.type.takeIf { it == "text" || it == "image" } ?: "text"
+                                content = tab.content
+                                editingTab = tab
+                                showDialog = true
+                            },
+                            enabled = !isSyncingTabs
+                        ) {
                             Icon(Icons.Default.Edit, contentDescription = "Editar")
                         }
-                        IconButton(onClick = {
-                            viewModel.deleteTab(tab)
-                        }) {
+                        IconButton(
+                            onClick = { tabToDelete = tab },
+                            enabled = !isSyncingTabs
+                        ) {
                             Icon(Icons.Default.Delete, contentDescription = "Excluir")
                         }
                     }
@@ -125,10 +141,6 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 RadioButton(selected = type == "image", onClick = { type = "image" })
                                 Text("Imagem")
                             }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                RadioButton(selected = type == "video", onClick = { type = "video" })
-                                Text("Vídeo")
-                            }
                         }
                         
                         Spacer(modifier = Modifier.height(8.dp))
@@ -136,13 +148,10 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             value = content,
                             onValueChange = { content = it },
                             label = { 
-                                Text(
-                                    when (type) {
-                                        "image" -> "URL da Imagem"
-                                        "video" -> "URL do Vídeo (YouTube, etc)"
-                                        else -> "Conteúdo (Texto)"
-                                    }
+                                                                    Text(
+                                    if (type == "image") "URL da Imagem" else "Conteúdo (Texto)"
                                 )
+
                             },
                             modifier = Modifier.fillMaxWidth(),
                             minLines = 3
@@ -150,7 +159,8 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = {
+                    TextButton(
+                        onClick = {
                         if (title.isNotBlank() && content.isNotBlank()) {
                             if (editingTab != null) {
                                 viewModel.updateTab(editingTab!!.copy(title = title, type = type, content = content))
@@ -160,12 +170,43 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             }
                             showDialog = false
                         }
-                    }) {
-                        Text("Salvar")
+                        },
+                        enabled = !isSyncingTabs
+                    ) {
+                        Text(if (isSyncingTabs) "Salvando..." else "Salvar")
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showDialog = false }) {
+                        Text("Cancelar")
+                    }
+                }
+            )
+        }
+
+        tabToDelete?.let { selectedTab ->
+            AlertDialog(
+                onDismissRequest = { if (!isSyncingTabs) tabToDelete = null },
+                title = { Text("Excluir aba?") },
+                text = {
+                    Text("A aba \"${selectedTab.title}\" será removida para todos os usuários. Essa ação não poderá ser desfeita automaticamente.")
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            tabToDelete = null
+                            viewModel.deleteTab(selectedTab)
+                        },
+                        enabled = !isSyncingTabs
+                    ) {
+                        Text("Excluir", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { tabToDelete = null },
+                        enabled = !isSyncingTabs
+                    ) {
                         Text("Cancelar")
                     }
                 }

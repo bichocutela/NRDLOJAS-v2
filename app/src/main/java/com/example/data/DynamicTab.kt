@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 data class DynamicTab(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val title: String,
-    val type: String, // "text", "image", "video"
-    val content: String, // Text, Image URL, or Video URL
+    val type: String, // "text" ou "image"
+    val content: String, // Texto ou URL da imagem
     val displayOrder: Int = 0
 )
