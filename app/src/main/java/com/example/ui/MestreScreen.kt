@@ -186,10 +186,70 @@ fun MestreScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             MestreSectionHeader(
-                title = "Fila de sugestões",
-                description = "Analise pendências e marque solicitações como corrigidas"
+                title = "Pendências",
+                description = "Analise sugestões dos usuários e marque solicitações como corrigidas"
             )
             Spacer(modifier = Modifier.height(8.dp))
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Sugestões dos usuários", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        Text(
+                            suggestions.count { it.status == ProductSuggestion.STATUS_PENDING }.toString(),
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.FilterList, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        listOf("all" to "Todas", "pending" to "Pendentes", "fixed" to "Corrigidas").forEach { (filterKey, filterLabel) ->
+                            FilterChip(
+                                selected = suggestionFilter == filterKey,
+                                onClick = { suggestionFilter = filterKey },
+                                label = { Text(filterLabel, maxLines = 1) }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val filteredSuggestions = suggestions
+                        .filter { suggestion ->
+                            suggestionFilter == "all" ||
+                                (suggestionFilter == "pending" && suggestion.status == ProductSuggestion.STATUS_PENDING) ||
+                                (suggestionFilter == "fixed" && suggestion.status == ProductSuggestion.STATUS_FIXED)
+                        }
+                        .sortedBy { if (it.status == ProductSuggestion.STATUS_PENDING) 0 else 1 }
+                    if (filteredSuggestions.isEmpty()) {
+                        Text(
+                            if (suggestionFilter == "pending") "Nenhuma pendência no momento."
+                            else if (suggestionFilter == "fixed") "Nenhuma sugestão corrigida."
+                            else "Nenhuma sugestão recebida.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } else {
+                        filteredSuggestions.forEach { suggestion ->
+                            SuggestionManagementItem(suggestion) { status ->
+                                coroutineScope.launch {
+                                    val updated = FirebaseService.updateSuggestionStatus(suggestion.id, status)
+                                    snackbarHostState.showSnackbar(
+                                        if (updated) "Sugestão marcada como $status." else "Não foi possível atualizar a sugestão."
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
 
             MestreSectionHeader(
                 title = "Manutenção e sincronização",
@@ -290,7 +350,7 @@ fun MestreScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             MestreSectionHeader(
-                title = "Histórico e restauração",
+                title = "Segurança operacional",
                 description = "Crie pontos de retorno do catálogo antes de mudanças importantes"
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -347,66 +407,11 @@ fun MestreScreen(
             }
             Spacer(modifier = Modifier.height(16.dp))
 
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Sugestões dos usuários", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        Text(
-                            suggestions.count { it.status == ProductSuggestion.STATUS_PENDING }.toString(),
-                            color = MaterialTheme.colorScheme.error,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.FilterList, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        listOf("all" to "Todas", "pending" to "Pendentes", "fixed" to "Corrigidas").forEach { (filterKey, filterLabel) ->
-                            FilterChip(
-                                selected = suggestionFilter == filterKey,
-                                onClick = { suggestionFilter = filterKey },
-                                label = { Text(filterLabel, maxLines = 1) }
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    val filteredSuggestions = suggestions
-                        .filter { suggestion ->
-                            suggestionFilter == "all" ||
-                                (suggestionFilter == "pending" && suggestion.status == ProductSuggestion.STATUS_PENDING) ||
-                                (suggestionFilter == "fixed" && suggestion.status == ProductSuggestion.STATUS_FIXED)
-                        }
-                        .sortedBy { if (it.status == ProductSuggestion.STATUS_PENDING) 0 else 1 }
-                    if (filteredSuggestions.isEmpty()) {
-                        Text(
-                            if (suggestionFilter == "pending") "Nenhuma pendência no momento."
-                            else if (suggestionFilter == "fixed") "Nenhuma sugestão corrigida."
-                            else "Nenhuma sugestão recebida.",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    } else {
-                        filteredSuggestions.forEach { suggestion ->
-                            SuggestionManagementItem(suggestion) { status ->
-                                coroutineScope.launch {
-                                    val updated = FirebaseService.updateSuggestionStatus(suggestion.id, status)
-                                    snackbarHostState.showSnackbar(
-                                        if (updated) "Sugestão marcada como $status." else "Não foi possível atualizar a sugestão."
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
+            MestreSectionHeader(
+                title = "Configurações globais",
+                description = "Defina o comportamento geral exibido para todos os usuários"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
 
             MestreSectionHeader(
                 title = "Configurações da Home",
@@ -926,8 +931,8 @@ fun MestreScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             MestreSectionHeader(
-                title = "Ferramentas administrativas",
-                description = "Gerencie abas, produtos e conteúdo visual do aplicativo"
+                title = "Catálogo e conteúdo",
+                description = "Gerencie abas, produtos e importações do catálogo"
             )
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedCard(
