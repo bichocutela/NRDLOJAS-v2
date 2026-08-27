@@ -675,8 +675,13 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                 return@launch
             }
             try {
-                repository.cleanDuplicates()
+                val localProducts = repository.getAllProductsSync()
                 val remoteProducts = FirebaseService.getAllProducts()
+                if (remoteProducts.isEmpty() && localProducts.isNotEmpty()) {
+                    _syncMessage.emit("Sincronização interrompida: a nuvem retornou um catálogo vazio. Os dados locais foram preservados.")
+                    return@launch
+                }
+                repository.cleanDuplicates()
                 val recognizedCategories = (categoryDefinitions.value.map { it.name } + ProductStandards.officialCategories).toSet()
                 val legacyProducts = remoteProducts.filter { it.category !in recognizedCategories }
                 val legacyCounts = legacyProducts.groupingBy { it.category.ifBlank { "(vazia)" } }.eachCount()
@@ -694,7 +699,6 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                     "Categorias depois: ${migratedProducts.groupingBy { it.category }.eachCount()}; total=${migratedProducts.size}; migrados=${legacyProducts.size}"
                 )
                 
-                    val localProducts = repository.getAllProductsSync()
                     val remoteIds = migratedProducts.map { it.code }.toSet()
                     val toDelete = localProducts.filter { it.code !in remoteIds }
                     
@@ -716,7 +720,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                         repository.insertProducts(missingOrUpdated)
                     }
             } catch (e: Exception) {
-                // Ignore
+                _syncMessage.emit("Não foi possível sincronizar o catálogo. Os dados locais foram preservados.")
             } finally {
                 _isSyncing.value = false
             }

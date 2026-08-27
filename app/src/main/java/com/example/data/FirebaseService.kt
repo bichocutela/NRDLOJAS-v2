@@ -245,6 +245,58 @@ object FirebaseService {
         }
     }
 
+    suspend fun getMaintenanceSummary(
+        localProductCount: Int,
+        localCategoryCounts: List<CategoryCount>
+    ): MaintenanceSummary {
+        if (!isFirebaseConfigured()) {
+            return MaintenanceSummary(
+                localProductCount = localProductCount,
+                localCategoryCounts = localCategoryCounts,
+                checkedAt = System.currentTimeMillis(),
+                remoteAvailable = false
+            )
+        }
+        return try {
+            val firestore = FirebaseFirestore.getInstance()
+            val productSnapshot = firestore.collection("products").get().await()
+            val categoryCounts = productSnapshot.documents
+                .map { it.getString("category").orEmpty().ifBlank { "Sem categoria" } }
+                .groupingBy { it }
+                .eachCount()
+                .map { CategoryCount(it.key, it.value) }
+                .sortedByDescending { it.count }
+            val dynamicTabCount = firestore.collection("dynamic_tabs").get().await().size()
+            val pendingSuggestionCount = firestore.collection("suggestions")
+                .whereEqualTo("status", ProductSuggestion.STATUS_PENDING)
+                .get()
+                .await()
+                .size()
+            MaintenanceSummary(
+                localProductCount = localProductCount,
+                remoteProductCount = productSnapshot.size(),
+                localCategoryCounts = localCategoryCounts,
+                remoteCategoryCounts = categoryCounts,
+                dynamicTabCount = dynamicTabCount,
+                pendingSuggestionCount = pendingSuggestionCount,
+                lastRemoteProductUpdate = productSnapshot.documents
+                    .mapNotNull { it.getLong("timestamp") }
+                    .maxOrNull(),
+                checkedAt = System.currentTimeMillis(),
+                remoteAvailable = true
+            )
+        } catch (e: Exception) {
+            lastError = e.message
+            Log.e("FirebaseService", "Erro ao gerar diagnóstico de manutenção", e)
+            MaintenanceSummary(
+                localProductCount = localProductCount,
+                localCategoryCounts = localCategoryCounts,
+                checkedAt = System.currentTimeMillis(),
+                remoteAvailable = false
+            )
+        }
+    }
+
     fun observeProducts(): Flow<List<com.example.data.Product>> = callbackFlow {
         if (!isFirebaseConfigured()) {
             close()

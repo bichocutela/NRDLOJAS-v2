@@ -34,6 +34,7 @@ import com.example.data.AppearanceSettings
 import com.example.data.AssistantSettings
 import com.example.data.CategoryDefinition
 import com.example.data.FirebaseService
+import com.example.data.MaintenanceSummary
 import com.example.data.ProductImportParser
 import com.example.data.NotificationSettings
 import com.example.data.ProductImportResult
@@ -50,6 +51,14 @@ fun MestreScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val allProducts by viewModel.allProducts.collectAsStateWithLifecycle()
+    val localCategoryCounts = remember(allProducts) {
+        allProducts
+            .groupingBy { it.category.ifBlank { "Sem categoria" } }
+            .eachCount()
+            .map { com.example.data.CategoryCount(it.key, it.value) }
+            .sortedByDescending { it.count }
+    }
     val homeSettings by viewModel.homeSettings.collectAsStateWithLifecycle()
     var draftHomeSettings by remember(homeSettings) { mutableStateOf(homeSettings) }
     var isSavingHomeSettings by remember { mutableStateOf(false) }
@@ -67,6 +76,9 @@ fun MestreScreen(
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
     var draftAppearanceSettings by remember(appearanceSettings) { mutableStateOf(appearanceSettings) }
     var isSavingAppearanceSettings by remember { mutableStateOf(false) }
+    var maintenanceSummary by remember { mutableStateOf<MaintenanceSummary?>(null) }
+    var isLoadingMaintenance by remember { mutableStateOf(false) }
+    var showSyncConfirmation by remember { mutableStateOf(false) }
     var editingCategory by remember { mutableStateOf<CategoryDefinition?>(null) }
     var categoryName by remember { mutableStateOf("") }
     val suggestions by FirebaseService.observeSuggestions().collectAsStateWithLifecycle(initialValue = emptyList())
@@ -137,22 +149,100 @@ fun MestreScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            Button(
-                onClick = { viewModel.syncProductsFromFirebase() },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isSyncing
-            ) {
-                if (isSyncing) {
-                    androidx.compose.material3.CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp), 
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Sincronizando...")
-                } else {
-                    Icon(Icons.Default.Sync, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Sincronizar Banco de Dados")
+            MestreSectionHeader(
+                title = "Manutenção e sincronização",
+                description = "Confira o estado do catálogo remoto antes de sincronizar"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    val summary = maintenanceSummary
+                    if (summary == null) {
+                        Text(
+                            "Nenhum diagnóstico realizado nesta sessão.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            if (summary.remoteAvailable) "Conexão remota disponível" else "Não foi possível consultar a nuvem",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = if (summary.remoteAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        MaintenanceMetricRow("Produtos locais", summary.localProductCount.toString())
+                        MaintenanceMetricRow("Produtos na nuvem", summary.remoteProductCount.toString())
+                        val productDifference = summary.remoteProductCount - summary.localProductCount
+                        val differenceLabel = when {
+                            productDifference == 0 -> "Nenhuma diferença"
+                            productDifference > 0 -> "+$productDifference na nuvem"
+                            else -> "$productDifference na nuvem"
+                        }
+                        MaintenanceMetricRow("Diferença de produtos", differenceLabel)
+                        MaintenanceMetricRow("Abas dinâmicas", summary.dynamicTabCount.toString())
+                        MaintenanceMetricRow("Sugestões pendentes", summary.pendingSuggestionCount.toString())
+                        val lastUpdate = summary.lastRemoteProductUpdate?.let {
+                            SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(it))
+                        } ?: "Não informado"
+                        MaintenanceMetricRow("Última atualização de produto", lastUpdate)
+                        MaintenanceMetricRow(
+                            "Diagnóstico verificado em",
+                            SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(summary.checkedAt))
+                        )
+                        if (summary.localCategoryCounts.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Categorias locais", style = MaterialTheme.typography.titleSmall)
+                            summary.localCategoryCounts.take(4).forEach { count ->
+                                MaintenanceMetricRow(count.category, count.count.toString())
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                isLoadingMaintenance = true
+                                try {
+                                    maintenanceSummary = FirebaseService.getMaintenanceSummary(
+                                        localProductCount = allProducts.size,
+                                        localCategoryCounts = localCategoryCounts
+                                    )
+                                } finally {
+                                    isLoadingMaintenance = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isLoadingMaintenance && !isSyncing
+                    ) {
+                        if (isLoadingMaintenance) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Consultando...")
+                        } else {
+                            Icon(Icons.Default.Sync, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Atualizar diagnóstico")
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { showSyncConfirmation = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isSyncing && !isLoadingMaintenance
+                    ) {
+                        if (isSyncing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Sincronizando...")
+                        } else {
+                            Icon(Icons.Default.Sync, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Sincronizar Banco de Dados")
+                        }
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -807,6 +897,45 @@ fun MestreScreen(
                 )
             }
 
+            if (showSyncConfirmation) {
+                AlertDialog(
+                    onDismissRequest = { showSyncConfirmation = false },
+                    title = { Text("Sincronizar catálogo?") },
+                    text = {
+                        val difference = maintenanceSummary?.let {
+                            it.remoteProductCount - it.localProductCount
+                        }
+                        Text(
+                            when {
+                                maintenanceSummary == null ->
+                                    "A rotina existente consultará o catálogo remoto e atualizará os dados locais. Continue somente se a conexão estiver disponível."
+                                difference == 0 ->
+                                    "O diagnóstico não encontrou diferença na quantidade de produtos. A sincronização ainda poderá atualizar nomes, categorias e imagens."
+                                difference != null ->
+                                    "O diagnóstico encontrou uma diferença de ${kotlin.math.abs(difference)} produto(s) entre a nuvem e este aparelho. A sincronização atualizará o catálogo local usando os dados remotos."
+                                else ->
+                                    "A sincronização atualizará o catálogo local usando os dados remotos."
+                            }
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showSyncConfirmation = false
+                                viewModel.syncProductsFromFirebase()
+                            }
+                        ) {
+                            Text("Continuar")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showSyncConfirmation = false }) {
+                            Text("Cancelar")
+                        }
+                    }
+                )
+            }
+
             if (showCategoryDialog) {
                 AlertDialog(
                     onDismissRequest = { showCategoryDialog = false },
@@ -906,6 +1035,17 @@ fun MestreScreen(
                 description = "Peça ao assistente no chat: 'Modifique o texto na tela inicial'."
             )
         }
+    }
+}
+
+@Composable
+private fun MaintenanceMetricRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
     }
 }
 
