@@ -365,6 +365,37 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         return saved
     }
 
+    suspend fun updateSelectedProductsCategory(products: List<Product>, category: String): Boolean {
+        val cleanCategory = category.trim()
+        if (products.isEmpty() || cleanCategory !in activeCategoryNames.value) {
+            _syncMessage.emit("Selecione produtos e uma categoria ativa.")
+            return false
+        }
+        val saved = FirebaseService.updateProductsCategory(products.map { it.code }, cleanCategory)
+        if (!saved) {
+            _syncMessage.emit("Não foi possível alterar os produtos selecionados.")
+            return false
+        }
+        repository.insertProducts(products.map { it.copy(category = cleanCategory) })
+        _syncMessage.emit("${products.size} produto(s) atualizado(s) com sucesso.")
+        return true
+    }
+
+    suspend fun deleteSelectedProducts(products: List<Product>): Boolean {
+        if (products.isEmpty()) {
+            _syncMessage.emit("Selecione pelo menos um produto.")
+            return false
+        }
+        val deleted = FirebaseService.deleteProducts(products.map { it.code })
+        if (!deleted) {
+            _syncMessage.emit("Não foi possível excluir os produtos selecionados.")
+            return false
+        }
+        repository.deleteProducts(products)
+        _syncMessage.emit("${products.size} produto(s) excluído(s) com sucesso.")
+        return true
+    }
+
     suspend fun checkDuplicateCode(code: String, currentId: Int? = null): Product? {
         val normalizedCode = code.trim()
         val existingProduct = repository.getProductByCodeSync(normalizedCode)

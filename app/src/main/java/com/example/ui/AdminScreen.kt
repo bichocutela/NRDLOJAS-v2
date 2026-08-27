@@ -352,9 +352,19 @@ fun AdminProductList(
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var pageIndex by remember { mutableStateOf(0) }
+    var selectedCodes by remember { mutableStateOf(emptySet<String>()) }
+    var showBulkCategoryDialog by remember { mutableStateOf(false) }
+    var showBulkDeleteDialog by remember { mutableStateOf(false) }
+    var bulkCategory by remember { mutableStateOf(categories.firstOrNull().orEmpty()) }
+    var isBulkWorking by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
     val pageSize = 50
     LaunchedEffect(searchQuery, products.size) {
         pageIndex = 0
+    }
+    LaunchedEffect(products) {
+        val availableCodes = products.map { it.code }.toSet()
+        selectedCodes = selectedCodes.intersect(availableCodes)
     }
     
     Text("Gerenciar produtos", style = MaterialTheme.typography.headlineSmall)
@@ -414,6 +424,7 @@ fun AdminProductList(
             .drop(currentPage * pageSize)
             .take(pageSize)
     }
+    val selectedProducts = products.filter { it.code in selectedCodes }
 
     if (searchQuery.isBlank()) {
         Text(
@@ -428,6 +439,66 @@ fun AdminProductList(
             modifier = Modifier.padding(vertical = 16.dp)
         )
     } else {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "${selectedProducts.size} selecionado(s)",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    TextButton(
+                        onClick = {
+                            val pageCodes = productsToRender.map { it.code }.toSet()
+                            selectedCodes = if (pageCodes.isNotEmpty() && pageCodes.all { it in selectedCodes }) {
+                                selectedCodes - pageCodes
+                            } else {
+                                selectedCodes + pageCodes
+                            }
+                        }
+                    ) {
+                        Text(
+                            if (productsToRender.isNotEmpty() && productsToRender.all { it.code in selectedCodes }) {
+                                "Limpar página"
+                            } else {
+                                "Selecionar página"
+                            }
+                        )
+                    }
+                }
+                if (selectedProducts.isNotEmpty()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                bulkCategory = categories.firstOrNull().orEmpty()
+                                showBulkCategoryDialog = true
+                            },
+                            enabled = categories.isNotEmpty() && !isBulkWorking,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Alterar categoria", maxLines = 1)
+                        }
+                        Button(
+                            onClick = { showBulkDeleteDialog = true },
+                            enabled = !isBulkWorking,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Excluir", maxLines = 1)
+                        }
+                    }
+                }
+            }
+        }
+
         val groupedProducts = productsToRender.groupBy { it.category }
         groupedProducts.forEach { (category, categoryProducts) ->
             Text(
@@ -437,7 +508,15 @@ fun AdminProductList(
                 modifier = Modifier.padding(vertical = 8.dp)
             )
             categoryProducts.forEach { product ->
-                AdminProductItem(product, viewModel, categories)
+                AdminProductItem(
+                    product = product,
+                    viewModel = viewModel,
+                    categories = categories,
+                    isSelected = product.code in selectedCodes,
+                    onSelectionChanged = { selected ->
+                        selectedCodes = if (selected) selectedCodes + product.code else selectedCodes - product.code
+                    }
+                )
             }
         }
         if (pageCount > 0) {
@@ -501,10 +580,93 @@ fun AdminProductList(
             }
         }
     }
+
+    if (showBulkCategoryDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!isBulkWorking) showBulkCategoryDialog = false },
+            title = { Text("Alterar categoria") },
+            text = {
+                Column {
+                    Text("Escolha a categoria para ${selectedProducts.size} produto(s).")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OfficialCategoryDropdown(
+                        selectedCategory = bulkCategory,
+                        onCategorySelected = { bulkCategory = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        categories = categories
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            isBulkWorking = true
+                            val success = viewModel.updateSelectedProductsCategory(selectedProducts, bulkCategory)
+                            isBulkWorking = false
+                            if (success) {
+                                selectedCodes = emptySet()
+                                showBulkCategoryDialog = false
+                            }
+                        }
+                    },
+                    enabled = !isBulkWorking && bulkCategory.isNotBlank()
+                ) {
+                    Text(if (isBulkWorking) "Salvando..." else "Salvar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showBulkCategoryDialog = false },
+                    enabled = !isBulkWorking
+                ) { Text("Cancelar") }
+            }
+        )
+    }
+
+    if (showBulkDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!isBulkWorking) showBulkDeleteDialog = false },
+            title = { Text("Excluir produtos selecionados?") },
+            text = {
+                Text("Esta ação removerá ${selectedProducts.size} produto(s) para todos os usuários e não poderá ser desfeita.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            isBulkWorking = true
+                            val success = viewModel.deleteSelectedProducts(selectedProducts)
+                            isBulkWorking = false
+                            if (success) {
+                                selectedCodes = emptySet()
+                                showBulkDeleteDialog = false
+                            }
+                        }
+                    },
+                    enabled = !isBulkWorking && selectedProducts.isNotEmpty()
+                ) {
+                    Text(if (isBulkWorking) "Excluindo..." else "Excluir", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showBulkDeleteDialog = false },
+                    enabled = !isBulkWorking
+                ) { Text("Cancelar") }
+            }
+        )
+    }
 }
 
 @Composable
-fun AdminProductItem(product: Product, viewModel: MainViewModel, categories: List<String>) {
+fun AdminProductItem(
+    product: Product,
+    viewModel: MainViewModel,
+    categories: List<String>,
+    isSelected: Boolean,
+    onSelectionChanged: (Boolean) -> Unit
+) {
     var isEditing by remember { mutableStateOf(false) }
     var editCode by remember(product.code) { mutableStateOf(product.code) }
     var editName by remember(product.name) { mutableStateOf(product.name) }
@@ -542,6 +704,10 @@ fun AdminProductItem(product: Product, viewModel: MainViewModel, categories: Lis
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = onSelectionChanged
+                )
                 if (product.imageUrl != null) {
                     AsyncImage(
                         model = product.imageUrl,

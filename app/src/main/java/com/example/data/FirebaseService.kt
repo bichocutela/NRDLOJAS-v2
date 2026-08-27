@@ -622,6 +622,44 @@ object FirebaseService {
         }
     }
 
+    suspend fun updateProductsCategory(codes: List<String>, category: String): Boolean {
+        if (!isFirebaseConfigured() || !hasManagementAccess() || codes.isEmpty() || category.isBlank()) return false
+        return try {
+            val firestore = FirebaseFirestore.getInstance()
+            codes.map { it.trim() }.filter { it.isNotBlank() }.distinct().chunked(450).forEach { chunk ->
+                val batch = firestore.batch()
+                chunk.forEach { code ->
+                    batch.update(firestore.collection("products").document(code), "category", category.trim())
+                }
+                batch.commit().await()
+            }
+            true
+        } catch (e: Exception) {
+            lastError = e.message
+            Log.e("FirebaseService", "Erro ao alterar categorias em lote", e)
+            false
+        }
+    }
+
+    suspend fun deleteProducts(codes: List<String>): Boolean {
+        if (!isFirebaseConfigured() || !hasManagementAccess() || codes.isEmpty()) return false
+        return try {
+            val firestore = FirebaseFirestore.getInstance()
+            codes.map { it.trim() }.filter { it.isNotBlank() }.distinct().chunked(450).forEach { chunk ->
+                val batch = firestore.batch()
+                chunk.forEach { code ->
+                    batch.delete(firestore.collection("products").document(code))
+                }
+                batch.commit().await()
+            }
+            true
+        } catch (e: Exception) {
+            lastError = e.message
+            Log.e("FirebaseService", "Erro ao excluir produtos em lote", e)
+            false
+        }
+    }
+
 
     suspend fun syncAllDynamicTabs(tabs: List<com.example.data.DynamicTab>) {
         if (!isFirebaseConfigured()) return
