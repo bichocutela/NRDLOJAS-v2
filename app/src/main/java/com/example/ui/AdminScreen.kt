@@ -36,6 +36,7 @@ import androidx.compose.runtime.*
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
@@ -453,7 +454,7 @@ fun AdminProductList(
                     Text(
                         "${selectedProducts.size} selecionado(s)",
                         style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = Color.White
                     )
                     TextButton(
                         onClick = {
@@ -470,7 +471,8 @@ fun AdminProductList(
                                 "Limpar página"
                             } else {
                                 "Selecionar página"
-                            }
+                            },
+                            color = Color.White
                         )
                     }
                 }
@@ -482,17 +484,22 @@ fun AdminProductList(
                                 showBulkCategoryDialog = true
                             },
                             enabled = categories.isNotEmpty() && !isBulkWorking,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Alterar categoria", maxLines = 1)
+                            Text("Alterar categoria", maxLines = 1, color = Color.White)
                         }
                         Button(
                             onClick = { showBulkDeleteDialog = true },
                             enabled = !isBulkWorking,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = Color.White
+                            ),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Excluir", maxLines = 1)
+                            Text("Excluir", maxLines = 1, color = Color.White)
                         }
                     }
                 }
