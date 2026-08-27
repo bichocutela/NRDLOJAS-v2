@@ -3,6 +3,7 @@ package com.example.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.filled.Pending
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -30,10 +32,12 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 import com.example.data.AppearanceSettings
 import com.example.data.AssistantSettings
 import com.example.data.CategoryDefinition
 import com.example.data.CatalogSnapshot
+import com.example.data.ThemeBackground
 import com.example.data.FirebaseService
 import com.example.data.MaintenanceSummary
 import com.example.data.ProductImportParser
@@ -78,7 +82,19 @@ fun MestreScreen(
     val appearanceSettings by FirebaseService.observeAppearanceSettings()
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
     var draftAppearanceSettings by remember(appearanceSettings) { mutableStateOf(appearanceSettings) }
+    var draftThemeBackgrounds by remember(appearanceSettings.themeBackgrounds) {
+        mutableStateOf(appearanceSettings.themeBackgrounds)
+    }
     var isSavingAppearanceSettings by remember { mutableStateOf(false) }
+    var expandedBackgroundThemes by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showThemeBackgroundDialog by remember { mutableStateOf(false) }
+    var editingBackgroundTheme by remember { mutableStateOf<String?>(null) }
+    var editingBackground by remember { mutableStateOf<ThemeBackground?>(null) }
+    var backgroundLabelInput by remember { mutableStateOf("") }
+    var backgroundUrlInput by remember { mutableStateOf("") }
+    var backgroundInputError by remember { mutableStateOf<String?>(null) }
+    var isUploadingThemeBackground by remember { mutableStateOf(false) }
+    var backgroundToDelete by remember { mutableStateOf<Pair<String, ThemeBackground>?>(null) }
     var maintenanceSummary by remember { mutableStateOf<MaintenanceSummary?>(null) }
     var isLoadingMaintenance by remember { mutableStateOf(false) }
     var showSyncConfirmation by remember { mutableStateOf(false) }
@@ -89,6 +105,29 @@ fun MestreScreen(
     var suggestionFilter by remember { mutableStateOf("all") }
     val coroutineScope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val themeBackgroundLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        val themeKey = editingBackgroundTheme
+        if (uri == null || themeKey == null) return@rememberLauncherForActivityResult
+        coroutineScope.launch {
+            isUploadingThemeBackground = true
+            backgroundInputError = null
+            try {
+                val uploadedUrl = FirebaseService.uploadImageToStorage(
+                    uri,
+                    "theme_backgrounds/$themeKey/${UUID.randomUUID()}.jpg"
+                )
+                if (uploadedUrl.isNullOrBlank()) {
+                    backgroundInputError = FirebaseService.lastError ?: "Não foi possível enviar a imagem."
+                } else {
+                    backgroundUrlInput = uploadedUrl
+                }
+            } finally {
+                isUploadingThemeBackground = false
+            }
+        }
+    }
     var importResult by remember { mutableStateOf<ProductImportResult?>(null) }
     var showImportDialog by remember { mutableStateOf(false) }
     var isParsingImport by remember { mutableStateOf(false) }
@@ -673,6 +712,19 @@ fun MestreScreen(
             var expandedRemoteTheme by remember { mutableStateOf(false) }
             var expandedRemoteMode by remember { mutableStateOf(false) }
 
+            fun openBackgroundEditor(themeKey: String, background: ThemeBackground?) {
+                editingBackgroundTheme = themeKey
+                editingBackground = background
+                backgroundLabelInput = background?.label.orEmpty()
+                backgroundUrlInput = background?.url.orEmpty()
+                backgroundInputError = null
+                showThemeBackgroundDialog = true
+            }
+
+            fun updateBackgrounds(themeKey: String, backgrounds: List<ThemeBackground>) {
+                draftThemeBackgrounds = draftThemeBackgrounds + (themeKey to backgrounds)
+            }
+
             MestreSectionHeader(
                 title = "Aparência global",
                 description = "Personalize o visual para todos os usuários"
@@ -748,12 +800,107 @@ fun MestreScreen(
                             }
                         }
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "Fundos por tema",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                    Text(
+                        "O fundo padrão permanece disponível. Ative no máximo um fundo personalizado por tema; se todos estiverem desativados, o padrão volta a aparecer.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
+                    themeOptions.forEach { (themeKey, themeLabel) ->
+                        val backgrounds = draftThemeBackgrounds[themeKey].orEmpty()
+                        val expanded = themeKey in expandedBackgroundThemes
+                        OutlinedCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                expandedBackgroundThemes = if (expanded) {
+                                    expandedBackgroundThemes - themeKey
+                                } else {
+                                    expandedBackgroundThemes + themeKey
+                                }
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(themeLabel, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                                    Text(
+                                        if (backgrounds.any { it.isActive }) "Fundo personalizado ativo"
+                                        else "Fundo padrão ativo",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Text(if (expanded) "−" else "+", style = MaterialTheme.typography.titleLarge)
+                            }
+                        }
+                        if (expanded) {
+                            Column(modifier = Modifier.padding(start = 8.dp, top = 6.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "Padrão do aplicativo",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    TextButton(
+                                        onClick = {
+                                            updateBackgrounds(themeKey, backgrounds.map { it.copy(isActive = false) })
+                                        },
+                                        enabled = backgrounds.any { it.isActive }
+                                    ) {
+                                        Text("Usar fundo padrão")
+                                    }
+                                }
+                                backgrounds.forEach { background ->
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    ThemeBackgroundItem(
+                                        background = background,
+                                        onActiveChange = { isActive ->
+                                            updateBackgrounds(
+                                                themeKey,
+                                                backgrounds.map {
+                                                    if (it.id == background.id) it.copy(isActive = isActive)
+                                                    else if (isActive) it.copy(isActive = false) else it
+                                                }
+                                            )
+                                        },
+                                        onEdit = { openBackgroundEditor(themeKey, background) },
+                                        onDelete = { backgroundToDelete = themeKey to background }
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                OutlinedButton(
+                                    onClick = { openBackgroundEditor(themeKey, null) },
+                                    enabled = backgrounds.size < 5,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(if (backgrounds.size < 5) "Adicionar fundo a $themeLabel" else "Limite de 5 fundos atingido")
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                     Button(
                         onClick = {
                             coroutineScope.launch {
                                 isSavingAppearanceSettings = true
-                                val saved = FirebaseService.saveAppearanceSettings(draftAppearanceSettings)
+                                val saved = FirebaseService.saveAppearanceSettings(
+                                    draftAppearanceSettings.copy(themeBackgrounds = draftThemeBackgrounds)
+                                )
                                 isSavingAppearanceSettings = false
                                 snackbarHostState.showSnackbar(
                                     if (saved) "Aparência global publicada para todos."
@@ -773,7 +920,7 @@ fun MestreScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Publicando...")
                         } else {
-                            Text("Publicar aparência")
+                            Text("Salvar aparência e fundos")
                         }
                     }
                 }
@@ -1065,6 +1212,132 @@ fun MestreScreen(
                 )
             }
 
+            if (showThemeBackgroundDialog) {
+                AlertDialog(
+                    onDismissRequest = { showThemeBackgroundDialog = false },
+                    title = {
+                        Text(if (editingBackground == null) "Adicionar fundo ao tema" else "Editar fundo do tema")
+                    },
+                    text = {
+                        Column {
+                            OutlinedTextField(
+                                value = backgroundLabelInput,
+                                onValueChange = { backgroundLabelInput = it },
+                                label = { Text("Nome do fundo") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = backgroundUrlInput,
+                                onValueChange = {
+                                    backgroundUrlInput = it
+                                    backgroundInputError = null
+                                },
+                                label = { Text("URL da imagem") },
+                                placeholder = { Text("https://...") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text(
+                                "Use uma imagem acessível por link HTTP/HTTPS. O fundo padrão continuará disponível.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = { themeBackgroundLauncher.launch("image/*") },
+                                enabled = !isUploadingThemeBackground,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (isUploadingThemeBackground) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Enviando imagem...")
+                                } else {
+                                    Icon(Icons.Default.Add, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Escolher imagem do aparelho")
+                                }
+                            }
+                            backgroundInputError?.let { error ->
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                val normalizedUrl = com.example.util.ImageUrlHelper.normalizeUrl(backgroundUrlInput)
+                                val themeKey = editingBackgroundTheme
+                                val current = themeKey?.let { draftThemeBackgrounds[it].orEmpty() }.orEmpty()
+                                when {
+                                    themeKey == null -> backgroundInputError = "Tema inválido."
+                                    normalizedUrl.isBlank() || !(normalizedUrl.startsWith("https://") || normalizedUrl.startsWith("http://")) ->
+                                        backgroundInputError = "Informe uma URL HTTP/HTTPS válida."
+                                    editingBackground == null && current.size >= 5 ->
+                                        backgroundInputError = "Cada tema pode ter até 5 fundos personalizados."
+                                    else -> {
+                                        val updated = if (editingBackground == null) {
+                                            current + ThemeBackground(
+                                                id = UUID.randomUUID().toString(),
+                                                label = backgroundLabelInput.trim().ifBlank { "Fundo personalizado" },
+                                                url = normalizedUrl,
+                                                isActive = current.none { it.isActive }
+                                            )
+                                        } else {
+                                            current.map { background ->
+                                                if (background.id == editingBackground!!.id) {
+                                                    background.copy(
+                                                        label = backgroundLabelInput.trim().ifBlank { "Fundo personalizado" },
+                                                        url = normalizedUrl
+                                                    )
+                                                } else {
+                                                    background
+                                                }
+                                            }
+                                        }
+                                        updateBackgrounds(themeKey!!, updated)
+                                        showThemeBackgroundDialog = false
+                                    }
+                                }
+                            }
+                        ) {
+                            Text("Salvar")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showThemeBackgroundDialog = false }) {
+                            Text("Cancelar")
+                        }
+                    }
+                )
+            }
+
+            backgroundToDelete?.let { (themeKey, background) ->
+                AlertDialog(
+                    onDismissRequest = { backgroundToDelete = null },
+                    title = { Text("Excluir fundo?") },
+                    text = { Text("O fundo \"${background.label}\" será removido do rascunho deste tema. Para refletir a exclusão nos usuários, ainda será necessário salvar a aparência.") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                updateBackgrounds(themeKey, draftThemeBackgrounds[themeKey].orEmpty().filterNot { it.id == background.id })
+                                backgroundToDelete = null
+                            }
+                        ) {
+                            Text("Excluir")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { backgroundToDelete = null }) {
+                            Text("Cancelar")
+                        }
+                    }
+                )
+            }
+
             if (showUrlDialog) {
                 AlertDialog(
                     onDismissRequest = { showUrlDialog = false },
@@ -1125,6 +1398,48 @@ fun MestreScreen(
                 title = "Edição de Código e Textos",
                 description = "Peça ao assistente no chat: 'Modifique o texto na tela inicial'."
             )
+        }
+    }
+}
+
+@Composable
+private fun ThemeBackgroundItem(
+    background: ThemeBackground,
+    onActiveChange: (Boolean) -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 10.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            coil.compose.AsyncImage(
+                model = background.url,
+                contentDescription = "Prévia de ${background.label}",
+                modifier = Modifier
+                    .size(width = 72.dp, height = 44.dp)
+                    .clip(RoundedCornerShape(6.dp)),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(background.label, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    background.url,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
+            Switch(checked = background.isActive, onCheckedChange = onActiveChange)
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Default.Edit, contentDescription = "Editar ${background.label}")
+            }
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Default.Delete, contentDescription = "Excluir ${background.label}")
+            }
         }
     }
 }

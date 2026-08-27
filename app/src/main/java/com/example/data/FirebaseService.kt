@@ -801,6 +801,30 @@ object FirebaseService {
         return email == "admin@nrdlojas.com" || email == "mestre@nrdlojas.com"
     }
 
+    private fun parseThemeBackgrounds(raw: Any?): Map<String, List<ThemeBackground>> {
+        val rawMap = raw as? Map<*, *> ?: return emptyMap()
+        return SupportedThemeKeys.mapNotNull { themeKey ->
+            val items = (rawMap[themeKey] as? List<*>)
+                ?.mapNotNull { item ->
+                    val map = item as? Map<*, *> ?: return@mapNotNull null
+                    val id = map["id"] as? String ?: return@mapNotNull null
+                    val url = (map["url"] as? String)
+                        ?.trim()
+                        ?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+                        ?: return@mapNotNull null
+                    ThemeBackground(
+                        id = id,
+                        label = (map["label"] as? String)?.trim().orEmpty().ifBlank { "Fundo personalizado" },
+                        url = url,
+                        isActive = map["isActive"] as? Boolean ?: false
+                    )
+                }
+                .orEmpty()
+                .take(5)
+            if (items.isNullOrEmpty()) null else themeKey to items
+        }.toMap()
+    }
+
     fun observeAppearanceSettings(): Flow<AppearanceSettings> = callbackFlow {
         if (!isFirebaseConfigured()) {
             trySend(AppearanceSettings())
@@ -824,7 +848,8 @@ object FirebaseService {
                             ?: "multicolor",
                         appearanceMode = snapshot?.getString("appearanceMode")
                             ?.takeIf { it in setOf("system", "light", "dark") }
-                            ?: "system"
+                            ?: "system",
+                        themeBackgrounds = parseThemeBackgrounds(snapshot?.get("appearanceThemeBackgrounds"))
                     )
                 )
             }
@@ -836,8 +861,30 @@ object FirebaseService {
         val safeTheme = settings.theme.takeIf {
             it in setOf("multicolor", "red", "gold", "green", "blue", "orange")
         } ?: "multicolor"
-        val safeMode = settings.appearanceMode.takeIf { it in setOf("system", "light", "dark") } ?: "system"
+                val safeMode = settings.appearanceMode.takeIf {
+            it in setOf("system", "light", "dark")
+        } ?: "system"
+        val safeBackgrounds = SupportedThemeKeys.associateWith { themeKey ->
+            var activeFound = false
+            settings.themeBackgrounds[themeKey]
+                .orEmpty()
+                .filter { background ->
+                    background.url.startsWith("https://") || background.url.startsWith("http://")
+                }
+                .take(5)
+                .map { background ->
+                    val isActive = background.isActive && !activeFound
+                    if (isActive) activeFound = true
+                    mapOf(
+                        "id" to background.id.ifBlank { UUID.randomUUID().toString() },
+                        "label" to background.label.trim().take(80).ifBlank { "Fundo personalizado" },
+                        "url" to background.url.trim(),
+                        "isActive" to isActive
+                    )
+                }
+        }
         return try {
+
             FirebaseFirestore.getInstance()
                 .collection("config")
                 .document("appSettings")
@@ -845,7 +892,8 @@ object FirebaseService {
                     mapOf(
                         "appearanceOverrideLocalTheme" to settings.overrideLocalTheme,
                         "appearanceTheme" to safeTheme,
-                        "appearanceMode" to safeMode
+                        "appearanceMode" to safeMode,
+                        "appearanceThemeBackgrounds" to safeBackgrounds
                     ),
                     com.google.firebase.firestore.SetOptions.merge()
                 )

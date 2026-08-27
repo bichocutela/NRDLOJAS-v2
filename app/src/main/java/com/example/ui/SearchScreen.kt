@@ -110,6 +110,8 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import com.example.data.AppearanceSettings
+import com.example.data.FirebaseService
 import com.example.data.Product
 import com.example.data.ProductStandards
 import com.example.data.AppNotification
@@ -182,8 +184,10 @@ fun StylizedText(
 @Composable
 fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
     val bannerImageUri by viewModel.userPreferences.bannerImageUri.collectAsState(initial = null)
-    
-val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
+    val localAppTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
+    val remoteAppearance by FirebaseService.observeAppearanceSettings()
+        .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
+    val appTheme = if (remoteAppearance.overrideLocalTheme) remoteAppearance.theme else localAppTheme
     
     val normalizedTheme = remember(appTheme) { 
         when (appTheme.trim().lowercase()) {
@@ -280,6 +284,7 @@ val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(i
             ) {
                 ThemeBanner(
                     appTheme = normalizedTheme,
+                    backgroundUrl = remoteAppearance.activeBackgroundFor(normalizedTheme)?.url,
                     modifier = Modifier.fillMaxSize()
                 )
 
@@ -1227,7 +1232,11 @@ fun generateBarcodeBitmap(data: String, profile: String = "Padrão"): ImageBitma
 
 
 @Composable
-fun ThemeBanner(appTheme: String, modifier: Modifier = Modifier) {
+fun ThemeBanner(
+    appTheme: String,
+    backgroundUrl: String? = null,
+    modifier: Modifier = Modifier
+) {
     val normalizedTheme = when (appTheme.trim().lowercase()) {
         "multicolor" -> "multicolor"
         "gold" -> "gold"
@@ -1237,7 +1246,9 @@ fun ThemeBanner(appTheme: String, modifier: Modifier = Modifier) {
         else -> "red"
     }
 
-    val imageModel: Any = if (normalizedTheme == "multicolor") {
+    val imageModel: Any = backgroundUrl?.takeIf {
+        it.startsWith("https://") || it.startsWith("http://")
+    } ?: if (normalizedTheme == "multicolor") {
         R.drawable.theme_multicolor_header
     } else {
         "file:///android_asset/themes/theme_${normalizedTheme}.jpg"
