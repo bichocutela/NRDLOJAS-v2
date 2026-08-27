@@ -26,16 +26,23 @@ Quando a assinatura muda, o NRD mantém os produtos atuais na tela, guarda a nov
 
 O carregamento inicial continua exibindo progresso. A consulta automática não substitui a lista durante a navegação, e a preparação dos grupos ocorre fora da thread principal para evitar travamentos. Um retorno HTTP 401/403 apaga a sessão local e solicita novo login.
 
+## Ofertas Novas
+
+O botão **Ofertas Novas** fica no cabeçalho do painel. Ele permanece neutro quando não há alterações registradas no dia e recebe destaque visual e contador quando o NRD detecta alterações. Ao abrir, o balão permite filtrar por loja e lista os produtos adicionados, alterados ou excluídos. Para mudanças de preço e validade, mostra o valor anterior e o atual; para exclusões, preserva a última informação conhecida.
+
+O histórico não usa DataStore para guardar milhares de linhas. O NRD armazena localmente um snapshot técnico comprimido, limitado a 15.000 linhas, e até 5.000 eventos diários. A identidade da linha usa produto, loja e período de validade; preço não faz parte da identidade, evitando classificar uma simples redução de preço como produto novo. A primeira carga autenticada após a instalação da funcionalidade estabelece a linha de base e não marca todo o catálogo como novo. As próximas consultas, feitas enquanto o painel está aberto, calculam o delta fora da thread principal e não duplicam respostas idênticas.
+
+O histórico contém apenas dados comerciais mínimos — código, nome, categoria, loja, preços, validade, imagem e link — e é apagado quando o funcionário toca em **Sair**. CPF, senha e token continuam sem persistência.
+
 ## Lojas, ordenação e sessão
 
 Os códigos de filial são apresentados com nomes amigáveis por meio de `StoreCatalog`, mantendo o código entre parênteses para conferência. A tela permite escolher uma loja favorita no cabeçalho; a preferência é persistida no DataStore e passa a ser o filtro padrão na abertura do painel. O botão **Sair** limpa o token Nossa Gente da sessão atual e retorna ao login. Por decisão de compatibilidade, o token não é persistido; depois de fechar e reabrir o aplicativo, o funcionário precisa autenticar novamente.
 
 Na lista de uma categoria, a chave **Ordenar** permite escolher nome, data de validade, ordem de adição, maior ou menor desconto e preço menor ou maior. A ordenação é feita localmente sobre os grupos já carregados, sem nova consulta à API.
 
-O `PromotionNotificationWorker` verifica a cada 15 minutos, com rede disponível, se o conjunto de ofertas da loja favorita mudou. Na primeira execução ele cria apenas uma linha de base; depois, uma alteração gera uma notificação no canal **Ofertas da loja favorita**. O serviço FCM também aceita o tipo `PROMOTION_UPDATED` e ignora payloads de outra loja quando há favorita configurada.
+O `PromotionNotificationWorker` e o consumidor FCM existentes não constituem uma notificação ponta a ponta para promoções: após a decisão de não persistir o token, o Worker em segundo plano não consegue autenticar com segurança quando o app está fechado. O novo botão **Ofertas Novas** funciona durante a sessão autenticada e com o painel aberto, aproveitando a verificação de 60 segundos já existente.
 
-Essa atualização é um fallback controlado.
- Para sincronização realmente instantânea quando uma promoção ou produto em oferta mudar, o backend do Nossa Gente precisa publicar um evento/webhook ou alimentar um canal compartilhado de eventos. O APK não expõe webhook e o endpoint `/promocoes` exige token; por isso não é seguro colocar uma credencial administrativa no NRD nem depender do token de outro funcionário.
+Para sincronização realmente instantânea ou alertas com o app fechado, o backend do Nossa Gente precisa publicar um evento/webhook ou alimentar um canal compartilhado de eventos com autorização própria. O APK não expõe webhook e o endpoint `/promocoes` exige token; por isso não é seguro colocar uma credencial administrativa no NRD nem persistir a senha/token de um funcionário.
 
 ## Configuração
 

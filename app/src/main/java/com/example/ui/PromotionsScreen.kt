@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -83,6 +84,9 @@ import com.example.data.NossaGenteApi
 import com.example.data.NossaGenteLoginResult
 import com.example.data.NossaGentePromotionsResult
 import com.example.data.Promotion
+import com.example.data.PromotionChange
+import com.example.data.PromotionChangeStore
+import com.example.data.PromotionChangeType
 import com.example.data.StoreCatalog
 import com.example.data.UserPreferences
 import kotlinx.coroutines.Dispatchers
@@ -233,6 +237,9 @@ fun PromotionsScreen(
     var offerGroups by remember { mutableStateOf<List<OfferGroup>>(emptyList()) }
     var loadedFingerprint by remember { mutableStateOf<String?>(null) }
     var pendingUpdate by remember { mutableStateOf<PendingPromotionUpdate?>(null) }
+    var dailyChanges by remember { mutableStateOf<List<PromotionChange>>(emptyList()) }
+    var dailyChangesLimited by remember { mutableStateOf(false) }
+    var showNewOffers by rememberSaveable { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
     var isChecking by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -245,6 +252,7 @@ fun PromotionsScreen(
     var visibleOfferCount by rememberSaveable { mutableStateOf(INITIAL_OFFER_PAGE) }
     val context = LocalContext.current
     val userPreferences = remember { UserPreferences(context) }
+    val promotionChangeStore = remember { PromotionChangeStore(context) }
     val sortOption = OfferSortOption.values().firstOrNull { it.name == sortOptionName }
         ?: OfferSortOption.ADDED
     var enlargedImageUrl by remember { mutableStateOf<String?>(null) }
@@ -278,6 +286,9 @@ fun PromotionsScreen(
             when (val result = api.fetchPromotions()) {
                 is NossaGentePromotionsResult.Success -> {
                     val nextPromotions = result.promotions
+                    val changeState = promotionChangeStore.compareAndSave(nextPromotions)
+                    dailyChanges = changeState.changes
+                    dailyChangesLimited = changeState.limitedBySafetyCap
                     val nextOfferGroups = withContext(Dispatchers.Default) {
                         buildOfferGroups(nextPromotions)
                     }
@@ -378,6 +389,24 @@ fun PromotionsScreen(
         }
     }
 
+    val changeStoreOptions = remember(dailyChanges) {
+        listOf(ALL_STORES_LABEL) + dailyChanges
+            .map { it.storeCode }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
+    }
+
+    if (showNewOffers) {
+        NewOffersDialog(
+            changes = dailyChanges,
+            storeOptions = changeStoreOptions,
+            limitedBySafetyCap = dailyChangesLimited,
+            onDismiss = { showNewOffers = false },
+            onImageClick = { enlargedImageUrl = it }
+        )
+    }
+
     if (enlargedImageUrl != null) {
         PromotionImageDialog(
             imageUrl = enlargedImageUrl!!,
@@ -388,7 +417,23 @@ fun PromotionsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (selectedCategory == null) "Promoção" else selectedCategory.orEmpty()) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (selectedCategory == null) "Promoção" else selectedCategory.orEmpty(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        NewOffersButton(
+                            changeCount = dailyChanges.size,
+                            highlighted = dailyChanges.isNotEmpty(),
+                            enabled = !dailyChangesLimited,
+                            onClick = { showNewOffers = true }
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(
                         onClick = {
@@ -408,7 +453,14 @@ fun PromotionsScreen(
                             scope.launch { userPreferences.setFavoriteStoreCode(code) }
                         }
                     )
-                    TextButton(onClick = onLogout) {
+                            TextButton(
+                        onClick = {
+                            scope.launch {
+                                promotionChangeStore.clear()
+                                onLogout()
+                            }
+                        }
+                    ) {
                         Text("Sair")
                     }
                     IconButton(
@@ -1332,3 +1384,282 @@ private fun String?.toNumericPrice(): Double? = this
         if (raw.contains(",")) raw.replace(".", "").replace(",", ".") else raw.replace(",", "")
     }
     ?.toDoubleOrNull()
+
+
+@Composable
+private fun NewOffersButton(
+    changeCount: Int,
+    highlighted: Boolean,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    val containerColor = if (highlighted) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0f)
+    }
+    val contentColor = if (highlighted) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        color = containerColor,
+        contentColor = contentColor,
+        shape = RoundedCornerShape(14.dp),
+        tonalElevation = if (highlighted) 2.dp else 0.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.LocalOffer, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(
+                "Ofertas novas",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (highlighted) FontWeight.Bold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (changeCount > 0) {
+                Spacer(Modifier.width(4.dp))
+                Surface(
+                    color = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (highlighted) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    shape = CircleShape
+                ) {
+                    Text(
+                        changeCount.coerceAtMost(999).toString(),
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NewOffersDialog(
+    changes: List<PromotionChange>,
+    storeOptions: List<String>,
+    limitedBySafetyCap: Boolean,
+    onDismiss: () -> Unit,
+    onImageClick: (String) -> Unit
+) {
+    var selectedStore by rememberSaveable { mutableStateOf(ALL_STORES_LABEL) }
+    val filteredChanges = remember(changes, selectedStore) {
+        val selected = if (selectedStore == ALL_STORES_LABEL) changes
+        else changes.filter { it.storeCode == selectedStore }
+        selected.sortedWith(compareBy<PromotionChange> { it.type.displayOrder() }.thenBy { it.productName.lowercase() })
+    }
+    val addedCount = filteredChanges.count { it.type == PromotionChangeType.ADDED }
+    val changedCount = filteredChanges.count { it.type == PromotionChangeType.CHANGED }
+    val removedCount = filteredChanges.count { it.type == PromotionChangeType.REMOVED }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.9f),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 12.dp, end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Ofertas novas", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (filteredChanges.isEmpty()) "Nenhuma alteração registrada hoje"
+                            else "Alterações encontradas hoje",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Fechar ofertas novas")
+                    }
+                }
+                var storeMenuExpanded by remember { mutableStateOf(false) }
+                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    OutlinedButton(
+                        onClick = { storeMenuExpanded = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Storefront, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (selectedStore == ALL_STORES_LABEL) "Todas as lojas" else "Loja: ${StoreCatalog.labelFor(selectedStore)}",
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Icon(Icons.Default.ExpandMore, contentDescription = "Escolher loja")
+                    }
+                    DropdownMenu(
+                        expanded = storeMenuExpanded,
+                        onDismissRequest = { storeMenuExpanded = false }
+                    ) {
+                        storeOptions.forEach { store ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(if (store == ALL_STORES_LABEL) store else StoreCatalog.labelFor(store))
+                                },
+                                onClick = {
+                                    selectedStore = store
+                                    storeMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+                if (limitedBySafetyCap) {
+                    Text(
+                        "A lista de alterações foi limitada para manter o app estável.",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                Text(
+                    "${filteredChanges.size} alteração(ões) • $addedCount adicionada(s) • $changedCount alterada(s) • $removedCount removida(s)",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (filteredChanges.isEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Default.LocalOffer, contentDescription = null, modifier = Modifier.size(48.dp))
+                        Spacer(Modifier.height(12.dp))
+                        Text("Nenhuma oferta nova para esta loja hoje.")
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "O botão ficará destacado quando uma próxima consulta encontrar alterações.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(filteredChanges, key = { it.stableKey }) { change ->
+                            PromotionChangeCard(change = change, onImageClick = onImageClick)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PromotionChangeCard(
+    change: PromotionChange,
+    onImageClick: (String) -> Unit
+) {
+    val badgeColor = when (change.type) {
+        PromotionChangeType.ADDED -> MaterialTheme.colorScheme.primaryContainer
+        PromotionChangeType.CHANGED -> MaterialTheme.colorScheme.secondaryContainer
+        PromotionChangeType.REMOVED -> MaterialTheme.colorScheme.errorContainer
+    }
+    val badgeContentColor = when (change.type) {
+        PromotionChangeType.ADDED -> MaterialTheme.colorScheme.onPrimaryContainer
+        PromotionChangeType.CHANGED -> MaterialTheme.colorScheme.onSecondaryContainer
+        PromotionChangeType.REMOVED -> MaterialTheme.colorScheme.onErrorContainer
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.Top) {
+            if (!change.imageUrl.isNullOrBlank()) {
+                ProductImage(
+                    imageUrl = change.imageUrl,
+                    contentDescription = "Imagem de ${change.productName}",
+                    modifier = Modifier.size(78.dp),
+                    onClick = onImageClick
+                )
+                Spacer(Modifier.width(10.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Surface(color = badgeColor, contentColor = badgeContentColor, shape = RoundedCornerShape(6.dp)) {
+                    Text(
+                        change.type.displayLabel(),
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(Modifier.height(5.dp))
+                Text(
+                    change.productName,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "${StoreCatalog.labelFor(change.storeCode)} • código ${change.productCode}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (change.priceChanged) {
+                    Text(
+                        "Preço: ${change.oldOfferPrice ?: "—"} → ${change.newOfferPrice ?: "removido"}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else if (change.type == PromotionChangeType.ADDED) {
+                    Text(
+                        "Preço: ${change.newOfferPrice ?: "não informado"}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else if (change.type == PromotionChangeType.REMOVED) {
+                    Text("Oferta removida da consulta atual", style = MaterialTheme.typography.bodySmall)
+                }
+                if (change.validityChanged || change.type == PromotionChangeType.ADDED) {
+                    val oldValidity = listOfNotNull(change.oldValidFrom, change.oldValidTo).joinToString(" até ")
+                    val newValidity = listOfNotNull(change.newValidFrom, change.newValidTo).joinToString(" até ")
+                    Text(
+                        "Validade: ${if (oldValidity.isBlank()) "—" else oldValidity} → ${if (newValidity.isBlank()) "removida" else newValidity}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                if (change.type == PromotionChangeType.CHANGED && !change.priceChanged && !change.validityChanged) {
+                    Text("Dados da oferta alterados", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+private fun PromotionChangeType.displayOrder(): Int = when (this) {
+    PromotionChangeType.ADDED -> 0
+    PromotionChangeType.CHANGED -> 1
+    PromotionChangeType.REMOVED -> 2
+}
+
+private fun PromotionChangeType.displayLabel(): String = when (this) {
+    PromotionChangeType.ADDED -> "ADICIONADO"
+    PromotionChangeType.CHANGED -> "ALTERADO"
+    PromotionChangeType.REMOVED -> "EXCLUÍDO"
+}
