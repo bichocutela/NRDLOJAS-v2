@@ -935,8 +935,11 @@ object FirebaseService {
         awaitClose { registration.remove() }
     }
 
-    suspend fun getNotificationSettings(): NotificationSettings {
-        if (!isFirebaseConfigured()) return NotificationSettings()
+    suspend fun getNotificationSettings(): NotificationSettings =
+        getNotificationSettingsOrNull() ?: NotificationSettings()
+
+    suspend fun getNotificationSettingsOrNull(): NotificationSettings? {
+        if (!isFirebaseConfigured()) return null
         return try {
             val snapshot = FirebaseFirestore.getInstance()
                 .collection("config")
@@ -953,7 +956,7 @@ object FirebaseService {
             )
         } catch (e: Exception) {
             Log.e("FirebaseService", "Erro ao ler política de notificações", e)
-            NotificationSettings()
+            null
         }
     }
 

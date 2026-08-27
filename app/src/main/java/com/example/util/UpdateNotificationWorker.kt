@@ -10,6 +10,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.BuildConfig
+import com.example.data.FirebaseService
 import com.example.data.UserPreferences
 import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
@@ -24,13 +25,21 @@ class UpdateNotificationWorker(
             is ReleaseCheckResult.Success -> {
                 val currentVersion = BuildConfig.VERSION_NAME
                 val preferences = UserPreferences(applicationContext)
-                val lastNotifiedTag = preferences.lastNotifiedUpdateTag.first()
-
-                if (UpdateChecker.isRemoteVersionNewer(currentVersion, releaseResult.tagName) &&
-                    lastNotifiedTag != releaseResult.tagName
-                ) {
-                    NotificationHelper.showUpdateNotification(applicationContext, releaseResult.tagName)
-                    preferences.setLastNotifiedUpdateTag(releaseResult.tagName)
+                val localNotificationsEnabled = preferences.notificationsEnabled.first()
+                val remoteSettings = FirebaseService.getNotificationSettingsOrNull()
+                if (!localNotificationsEnabled || remoteSettings?.enabled != true || !remoteSettings.appUpdateEnabled) {
+                    android.util.Log.d(
+                        "UpdateNotificationWorker",
+                        "Notificação de atualização bloqueada pela política efetiva"
+                    )
+                } else {
+                    val lastNotifiedTag = preferences.lastNotifiedUpdateTag.first()
+                    if (UpdateChecker.isRemoteVersionNewer(currentVersion, releaseResult.tagName) &&
+                        lastNotifiedTag != releaseResult.tagName
+                    ) {
+                        NotificationHelper.showUpdateNotification(applicationContext, releaseResult.tagName)
+                        preferences.setLastNotifiedUpdateTag(releaseResult.tagName)
+                    }
                 }
                 Result.success()
             }

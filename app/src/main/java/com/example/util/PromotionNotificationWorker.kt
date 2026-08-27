@@ -10,6 +10,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.data.AppNotification
+import com.example.data.FirebaseService
 import com.example.data.NossaGenteApi
 import com.example.data.NossaGentePromotionsResult
 import com.example.data.StoreCatalog
@@ -25,6 +26,11 @@ class PromotionNotificationWorker(
 
     override suspend fun doWork(): Result {
         val preferences = UserPreferences(applicationContext)
+        val localNotificationsEnabled = preferences.notificationsEnabled.first()
+        val remoteSettings = FirebaseService.getNotificationSettingsOrNull()
+        val shouldNotify = localNotificationsEnabled &&
+            remoteSettings?.enabled == true &&
+            remoteSettings.promotionUpdatedEnabled
         val favoriteStoreCode = preferences.favoriteStoreCode.first()?.trim().orEmpty()
         if (favoriteStoreCode.isBlank()) return Result.success()
 
@@ -47,22 +53,29 @@ class PromotionNotificationWorker(
                     val offerCount = favoritePromotions.sumOf { it.products.size }
                     val title = "Nova oferta em $storeName"
                     val body = "$offerCount oferta(s) disponível(is) na sua loja favorita."
-                    preferences.addNotification(
-                        AppNotification(
-                            id = System.currentTimeMillis(),
-                            type = TYPE_PROMOTION_UPDATED,
-                            title = title,
-                            body = body,
-                            read = false,
-                            timestamp = System.currentTimeMillis(),
+                    if (shouldNotify) {
+                        preferences.addNotification(
+                            AppNotification(
+                                id = System.currentTimeMillis(),
+                                type = TYPE_PROMOTION_UPDATED,
+                                title = title,
+                                body = body,
+                                read = false,
+                                timestamp = System.currentTimeMillis(),
+                            )
                         )
-                    )
-                    NotificationHelper.showNotification(
-                        applicationContext,
-                        TYPE_PROMOTION_UPDATED,
-                        title,
-                        body,
-                    )
+                        NotificationHelper.showNotification(
+                            applicationContext,
+                            TYPE_PROMOTION_UPDATED,
+                            title,
+                            body,
+                        )
+                    } else {
+                        android.util.Log.d(
+                            "PromotionNotificationWorker",
+                            "Notificação de promoção bloqueada pela política efetiva"
+                        )
+                    }
                     preferences.setLastNotifiedPromotionFingerprint(fingerprint)
                 }
                 Result.success()
