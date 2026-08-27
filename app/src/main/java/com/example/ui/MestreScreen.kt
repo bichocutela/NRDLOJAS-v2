@@ -33,6 +33,7 @@ import java.util.Locale
 import com.example.data.AppearanceSettings
 import com.example.data.AssistantSettings
 import com.example.data.CategoryDefinition
+import com.example.data.CatalogSnapshot
 import com.example.data.FirebaseService
 import com.example.data.MaintenanceSummary
 import com.example.data.ProductImportParser
@@ -51,6 +52,8 @@ fun MestreScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val catalogSnapshots by viewModel.catalogSnapshots.collectAsStateWithLifecycle()
+    val isLoadingCatalogHistory by viewModel.isLoadingCatalogHistory.collectAsStateWithLifecycle()
     val allProducts by viewModel.allProducts.collectAsStateWithLifecycle()
     val localCategoryCounts = remember(allProducts) {
         allProducts
@@ -79,6 +82,7 @@ fun MestreScreen(
     var maintenanceSummary by remember { mutableStateOf<MaintenanceSummary?>(null) }
     var isLoadingMaintenance by remember { mutableStateOf(false) }
     var showSyncConfirmation by remember { mutableStateOf(false) }
+    var snapshotToRestore by remember { mutableStateOf<CatalogSnapshot?>(null) }
     var editingCategory by remember { mutableStateOf<CategoryDefinition?>(null) }
     var categoryName by remember { mutableStateOf("") }
     val suggestions by FirebaseService.observeSuggestions().collectAsStateWithLifecycle(initialValue = emptyList())
@@ -102,6 +106,7 @@ fun MestreScreen(
     }
     
     LaunchedEffect(Unit) {
+        viewModel.refreshCatalogHistory()
         viewModel.syncMessage.collect { message ->
             snackbarHostState.showSnackbar(message)
         }
@@ -212,7 +217,7 @@ fun MestreScreen(
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !isLoadingMaintenance && !isSyncing
+                        enabled = !isLoadingMaintenance && !isLoadingCatalogHistory && !isSyncing
                     ) {
                         if (isLoadingMaintenance) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -228,7 +233,7 @@ fun MestreScreen(
                     Button(
                         onClick = { showSyncConfirmation = true },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !isSyncing && !isLoadingMaintenance
+                        enabled = !isSyncing && !isLoadingMaintenance && !isLoadingCatalogHistory
                     ) {
                         if (isSyncing) {
                             CircularProgressIndicator(
@@ -242,6 +247,64 @@ fun MestreScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Sincronizar Banco de Dados")
                         }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            MestreSectionHeader(
+                title = "Histórico e restauração",
+                description = "Crie pontos de retorno do catálogo antes de mudanças importantes"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "O histórico mantém até 20 snapshots remotos. Restaurar uma versão cria primeiro um backup automático do catálogo atual.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { viewModel.createCatalogSnapshot() },
+                            enabled = !isLoadingCatalogHistory && !isSyncing,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Inventory, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Criar snapshot")
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.refreshCatalogHistory() },
+                            enabled = !isLoadingCatalogHistory && !isSyncing
+                        ) {
+                            Icon(Icons.Default.Sync, contentDescription = "Atualizar histórico")
+                        }
+                    }
+                    if (isLoadingCatalogHistory) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Consultando histórico...", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    if (!isLoadingCatalogHistory && catalogSnapshots.isEmpty()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            "Nenhum snapshot disponível ou a nuvem não está acessível.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    catalogSnapshots.forEach { snapshot ->
+                        Spacer(modifier = Modifier.height(10.dp))
+                        CatalogSnapshotItem(
+                            snapshot = snapshot,
+                            enabled = !isLoadingCatalogHistory,
+                            onRestore = { snapshotToRestore = it }
+                        )
                     }
                 }
             }
@@ -897,6 +960,34 @@ fun MestreScreen(
                 )
             }
 
+            if (snapshotToRestore != null) {
+                val selectedSnapshot = snapshotToRestore!!
+                AlertDialog(
+                    onDismissRequest = { snapshotToRestore = null },
+                    title = { Text("Restaurar catálogo?") },
+                    text = {
+                        Text(
+                            "A versão de ${formatCatalogHistoryDate(selectedSnapshot.createdAt)} contém ${selectedSnapshot.productCount} produto(s). O catálogo remoto atual será salvo em um backup automático antes da substituição. Essa operação pode alterar o catálogo de todos os aparelhos."
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                snapshotToRestore = null
+                                viewModel.restoreCatalogSnapshot(selectedSnapshot.id)
+                            }
+                        ) {
+                            Text("Restaurar")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { snapshotToRestore = null }) {
+                            Text("Cancelar")
+                        }
+                    }
+                )
+            }
+
             if (showSyncConfirmation) {
                 AlertDialog(
                     onDismissRequest = { showSyncConfirmation = false },
@@ -1036,6 +1127,55 @@ fun MestreScreen(
             )
         }
     }
+}
+
+@Composable
+private fun CatalogSnapshotItem(
+    snapshot: CatalogSnapshot,
+    enabled: Boolean,
+    onRestore: (CatalogSnapshot) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    formatCatalogHistoryDate(snapshot.createdAt),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                )
+                Text(
+                    "${snapshot.productCount} produto(s) · ${catalogHistoryReason(snapshot.reason)}${if (snapshot.restoredAt != null) " · restaurado" else ""}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (snapshot.createdBy.isNotBlank()) {
+                    Text(
+                        "Por: ${snapshot.createdBy}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            TextButton(onClick = { onRestore(snapshot) }, enabled = enabled) {
+                Text("Restaurar")
+            }
+        }
+    }
+}
+
+private fun formatCatalogHistoryDate(timestamp: Long): String =
+    SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(timestamp))
+
+private fun catalogHistoryReason(reason: String): String = when (reason) {
+    "pre_restoration" -> "backup automático"
+    else -> "manual"
 }
 
 @Composable

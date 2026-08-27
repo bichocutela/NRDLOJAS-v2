@@ -10,6 +10,7 @@ import com.example.api.RetrofitClient
 import com.example.data.Product
 import com.example.data.AssistantSettings
 import com.example.data.CategoryDefinition
+import com.example.data.CatalogSnapshot
 import com.example.data.ProductImportCommitResult
 import com.example.data.ProductImportRow
 import com.example.data.FirebaseService
@@ -49,6 +50,10 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     val syncMessage = _syncMessage.asSharedFlow()
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing = _isSyncing.asStateFlow()
+    private val _catalogSnapshots = MutableStateFlow<List<CatalogSnapshot>>(emptyList())
+    val catalogSnapshots: StateFlow<List<CatalogSnapshot>> = _catalogSnapshots.asStateFlow()
+    private val _isLoadingCatalogHistory = MutableStateFlow(false)
+    val isLoadingCatalogHistory: StateFlow<Boolean> = _isLoadingCatalogHistory.asStateFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
@@ -665,6 +670,58 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         }
     }
     
+    fun refreshCatalogHistory() {
+        viewModelScope.launch {
+            _isLoadingCatalogHistory.value = true
+            try {
+                _catalogSnapshots.value = FirebaseService.getCatalogSnapshots()
+            } finally {
+                _isLoadingCatalogHistory.value = false
+            }
+        }
+    }
+
+    fun createCatalogSnapshot() {
+        viewModelScope.launch {
+            _isLoadingCatalogHistory.value = true
+            try {
+                val snapshot = FirebaseService.createCatalogSnapshot()
+                if (snapshot != null) {
+                    _catalogSnapshots.value = listOf(snapshot) + _catalogSnapshots.value
+                    _syncMessage.emit("Snapshot criado com ${snapshot.productCount} produto(s).")
+                } else {
+                    _syncMessage.emit("Não foi possível criar o snapshot do catálogo.")
+                }
+            } finally {
+                _isLoadingCatalogHistory.value = false
+            }
+        }
+    }
+
+    fun restoreCatalogSnapshot(snapshotId: String) {
+        viewModelScope.launch {
+            _isLoadingCatalogHistory.value = true
+            try {
+                val result = FirebaseService.restoreCatalogSnapshot(snapshotId)
+                result.restoredProducts?.let { repository.insertProducts(it) }
+                if (result.success) {
+                    val restoredCodes = result.restoredProducts.orEmpty().map { it.code }.toSet()
+                    val currentProducts = repository.getAllProductsSync()
+                    val staleProducts = currentProducts.filter { it.code !in restoredCodes }
+                    if (staleProducts.isNotEmpty()) {
+                        repository.deleteProducts(staleProducts)
+                    }
+                }
+                _syncMessage.emit(result.message)
+                if (result.success) {
+                    _catalogSnapshots.value = FirebaseService.getCatalogSnapshots()
+                }
+            } finally {
+                _isLoadingCatalogHistory.value = false
+            }
+        }
+    }
+
     fun syncProductsFromFirebase() {
         viewModelScope.launch {
             _isSyncing.value = true

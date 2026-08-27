@@ -297,6 +297,222 @@ object FirebaseService {
         }
     }
 
+    suspend fun createCatalogSnapshot(reason: String = "manual"): CatalogSnapshot? {
+        if (!isFirebaseConfigured() || !hasManagementAccess()) return null
+        return try {
+            val firestore = FirebaseFirestore.getInstance()
+            val productSnapshot = firestore.collection("products").get().await()
+            val products = productSnapshot.documents.mapNotNull { productFromDocument(it) }
+            if (products.size != productSnapshot.documents.size) {
+                lastError = "O catálogo remoto contém documentos inválidos."
+                return null
+            }
+            createCatalogSnapshotFromProducts(firestore, products, reason)?.also {
+                runCatching { pruneCatalogHistory(firestore) }
+                    .onFailure { Log.w("FirebaseService", "Não foi possível podar snapshots antigos", it) }
+            }
+        } catch (e: Exception) {
+            lastError = e.message
+            Log.e("FirebaseService", "Erro ao criar snapshot do catálogo", e)
+            null
+        }
+    }
+
+    suspend fun getCatalogSnapshots(): List<CatalogSnapshot> {
+        if (!isFirebaseConfigured() || !hasManagementAccess()) return emptyList()
+        return try {
+            FirebaseFirestore.getInstance()
+                .collection("catalog_history")
+                .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(MAX_CATALOG_HISTORY_ITEMS.toLong())
+                .get()
+                .await()
+                .documents
+                .mapNotNull { document ->
+                    val createdAt = document.getLong("createdAt") ?: return@mapNotNull null
+                    CatalogSnapshot(
+                        id = document.id,
+                        createdAt = createdAt,
+                        productCount = document.getLong("productCount")?.toInt() ?: 0,
+                        createdBy = document.getString("createdBy") ?: "desconhecido",
+                        reason = document.getString("reason") ?: "manual",
+                        restoredAt = document.getLong("restoredAt")
+                    )
+                }
+        } catch (e: Exception) {
+            lastError = e.message
+            Log.e("FirebaseService", "Erro ao listar histórico do catálogo", e)
+            emptyList()
+        }
+    }
+
+    suspend fun restoreCatalogSnapshot(snapshotId: String): CatalogRestoreResult {
+        if (!isFirebaseConfigured() || !hasManagementAccess()) {
+            return CatalogRestoreResult(false, message = "A restauração exige acesso de Mestre ou Admin.")
+        }
+        if (snapshotId.isBlank()) {
+            return CatalogRestoreResult(false, message = "Snapshot inválido.")
+        }
+        return try {
+            val firestore = FirebaseFirestore.getInstance()
+            val snapshotRef = firestore.collection("catalog_history").document(snapshotId)
+            val metadata = snapshotRef.get().await()
+            if (!metadata.exists()) {
+                return CatalogRestoreResult(false, message = "Histórico não encontrado.")
+            }
+            val expectedCount = metadata.getLong("productCount")?.toInt() ?: -1
+            if (expectedCount !in 0..MAX_CATALOG_HISTORY_PRODUCTS) {
+                return CatalogRestoreResult(false, message = "Histórico fora do limite seguro de restauração.")
+            }
+            val targetProducts = snapshotRef.collection("products").get().await()
+                .documents.mapNotNull { productFromDocument(it) }
+            if (targetProducts.size != expectedCount || targetProducts.map { it.code }.toSet().size != targetProducts.size) {
+                return CatalogRestoreResult(false, message = "Histórico incompleto ou com códigos duplicados. Nenhuma alteração foi feita.")
+            }
+
+            val currentSnapshot = firestore.collection("products").get().await()
+            val currentProducts = currentSnapshot.documents.mapNotNull { productFromDocument(it) }
+            if (currentProducts.size != currentSnapshot.documents.size ||
+                currentProducts.size > MAX_CATALOG_HISTORY_PRODUCTS ||
+                currentProducts.map { it.code }.toSet().size != currentProducts.size
+            ) {
+                return CatalogRestoreResult(false, message = "O catálogo atual contém dados fora do limite seguro. Nenhuma alteração foi feita.")
+            }
+
+            val safetySnapshot = createCatalogSnapshotFromProducts(firestore, currentProducts, "pre_restoration")
+            if (safetySnapshot == null) {
+                return CatalogRestoreResult(false, message = "Não foi possível criar um backup de segurança. Nenhuma alteração foi feita.")
+            }
+
+            val targetCodes = targetProducts.map { it.code }.toSet()
+            currentSnapshot.documents
+                .filter { document -> document.getString("code") !in targetCodes }
+                .chunked(400)
+                .forEach { chunk ->
+                    val batch = firestore.batch()
+                    chunk.forEach { batch.delete(it.reference) }
+                    batch.commit().await()
+                }
+            targetProducts.chunked(400).forEach { chunk ->
+                val batch = firestore.batch()
+                chunk.forEach { product ->
+                    batch.set(
+                        firestore.collection("products").document(product.code),
+                        productToMap(product)
+                    )
+                }
+                batch.commit().await()
+            }
+            val restoredAt = System.currentTimeMillis()
+            snapshotRef.update(
+                mapOf(
+                    "restoredAt" to restoredAt,
+                    "restoredBy" to com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email.orEmpty()
+                )
+            ).await()
+            runCatching { pruneCatalogHistory(firestore, setOf(snapshotRef.id, safetySnapshot.id)) }
+                .onFailure { Log.w("FirebaseService", "Não foi possível podar snapshots antigos após restauração", it) }
+            CatalogRestoreResult(
+                success = true,
+                restoredProductCount = targetProducts.size,
+                message = "Catálogo restaurado com ${targetProducts.size} produto(s). Backup de segurança criado.",
+                restoredProducts = targetProducts
+            )
+        } catch (e: Exception) {
+            lastError = e.message
+            Log.e("FirebaseService", "Erro ao restaurar snapshot do catálogo", e)
+            CatalogRestoreResult(false, message = "Falha na restauração. Os dados podem exigir nova sincronização.")
+        }
+    }
+
+    private suspend fun createCatalogSnapshotFromProducts(
+        firestore: FirebaseFirestore,
+        products: List<Product>,
+        reason: String
+    ): CatalogSnapshot? {
+        if (products.size > MAX_CATALOG_HISTORY_PRODUCTS) {
+            lastError = "O catálogo excede o limite seguro de $MAX_CATALOG_HISTORY_PRODUCTS produtos."
+            return null
+        }
+        val createdAt = System.currentTimeMillis()
+        val snapshotRef = firestore.collection("catalog_history").document(UUID.randomUUID().toString())
+        val createdBy = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email.orEmpty()
+        return try {
+            snapshotRef.set(
+                mapOf(
+                    "createdAt" to createdAt,
+                    "productCount" to products.size,
+                    "createdBy" to createdBy,
+                    "reason" to reason
+                )
+            ).await()
+            products.chunked(400).forEach { chunk ->
+                val batch = firestore.batch()
+                chunk.forEach { product ->
+                    batch.set(snapshotRef.collection("products").document(), productToMap(product))
+                }
+                batch.commit().await()
+            }
+            CatalogSnapshot(
+                id = snapshotRef.id,
+                createdAt = createdAt,
+                productCount = products.size,
+                createdBy = createdBy,
+                reason = reason
+            )
+        } catch (e: Exception) {
+            runCatching { snapshotRef.delete().await() }
+            throw e
+        }
+    }
+
+    private suspend fun pruneCatalogHistory(
+        firestore: FirebaseFirestore,
+        protectedIds: Set<String> = emptySet()
+    ) {
+        val documents = firestore.collection("catalog_history")
+            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.ASCENDING)
+            .get()
+            .await()
+            .documents
+        val excessCount = (documents.size - MAX_CATALOG_HISTORY_ITEMS).coerceAtLeast(0)
+        documents.filterNot { it.id in protectedIds }.take(excessCount).forEach { document ->
+            document.reference.collection("products").get().await().documents
+                .chunked(400)
+                .forEach { chunk ->
+                    val batch = firestore.batch()
+                    chunk.forEach { batch.delete(it.reference) }
+                    batch.commit().await()
+                }
+            document.reference.delete().await()
+        }
+    }
+
+    private fun productFromDocument(document: com.google.firebase.firestore.DocumentSnapshot): Product? {
+        val code = document.getString("code")?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val name = document.getString("name") ?: return null
+        return Product(
+            code = code,
+            name = name,
+            searchName = document.getString("searchName") ?: name,
+            category = document.getString("category") ?: "",
+            unit = document.getString("unit") ?: "un",
+            imageUrl = document.getString("imageUrl"),
+            searchCount = document.getLong("searchCount")?.toInt() ?: 0
+        )
+    }
+
+    private fun productToMap(product: Product): Map<String, Any?> = mapOf(
+        "code" to product.code,
+        "name" to product.name,
+        "searchName" to product.searchName,
+        "category" to product.category,
+        "unit" to product.unit,
+        "imageUrl" to product.imageUrl,
+        "searchCount" to product.searchCount,
+        "timestamp" to System.currentTimeMillis()
+    )
+
     fun observeProducts(): Flow<List<com.example.data.Product>> = callbackFlow {
         if (!isFirebaseConfigured()) {
             close()
