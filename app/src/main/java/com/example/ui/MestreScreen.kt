@@ -9,8 +9,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.ColorLens
-import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inventory
@@ -1261,29 +1259,6 @@ fun MestreScreen(
                 )
             }
 
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Text("Recursos administrativos", style = MaterialTheme.typography.titleMedium, modifier = Modifier.align(Alignment.Start))
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            InfoCard(
-                icon = Icons.Default.ViewCarousel,
-                title = "Adicionar Novas Abas",
-                description = "Peça ao assistente no chat: 'Crie uma nova aba chamada X com a função Y'."
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            InfoCard(
-                icon = Icons.Default.ColorLens,
-                title = "Fundo e Tema do App",
-                description = "Peça ao assistente no chat: 'Altere a cor de fundo para Z e o tema para escuro'."
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            InfoCard(
-                icon = Icons.Default.Code,
-                title = "Edição de Código e Textos",
-                description = "Peça ao assistente no chat: 'Modifique o texto na tela inicial'."
-            )
         }
     }
 }
@@ -1549,27 +1524,6 @@ private fun MestreSectionHeader(title: String, description: String) {
         Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
-
-@Composable
-fun InfoCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, description: String) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(title, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
 
 @Composable
 private fun SuggestionManagementItem(
