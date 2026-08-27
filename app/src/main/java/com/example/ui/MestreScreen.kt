@@ -1003,83 +1003,6 @@ fun MestreScreen(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            var showConfirmDialog by remember { mutableStateOf(false) }
-            var bannerUrlInput by remember { mutableStateOf("") }
-            var showUrlDialog by remember { mutableStateOf(false) }
-            var selectedUri by remember { mutableStateOf<android.net.Uri?>(null) }
-            val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
-                contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
-            ) { uri: android.net.Uri? ->
-                uri?.let {
-                    selectedUri = it
-                    showConfirmDialog = true
-                }
-            }
-            if (showConfirmDialog && selectedUri != null) {
-                AlertDialog(
-                    onDismissRequest = { showConfirmDialog = false },
-                    title = { Text("Alterar Fundo") },
-                    text = { Text("Tem certeza que deseja alterar a imagem de fundo de todos os usuários?") },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            showConfirmDialog = false
-                            coroutineScope.launch {
-                                try {
-                                    val url = com.example.data.FirebaseService.uploadBanner(selectedUri!!)
-                                    if (url != null) {
-                                        com.example.util.NotificationHelper.showToast(context, "Fundo alterado com sucesso para todos!", android.widget.Toast.LENGTH_SHORT)
-                                    } else {
-                                        val error = com.example.data.FirebaseService.lastError ?: "Firebase offline ou erro desconhecido"
-                                        com.example.util.NotificationHelper.showToast(context, "Erro: $error", android.widget.Toast.LENGTH_LONG)
-                                    }
-                                } catch (e: Exception) {
-                                    com.example.util.NotificationHelper.showToast(context, "Erro exception: ${e.message}", android.widget.Toast.LENGTH_LONG)
-                                }
-                            }
-                        }) {
-                            Text("Confirmar")
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showConfirmDialog = false }) {
-                            Text("Cancelar")
-                        }
-                    }
-                )
-            }
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { launcher.launch("image/*") }
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.ColorLens, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text("Alterar Fundo do App (Hero Banner)", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        Text("Escolha uma imagem da galeria.", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { showUrlDialog = true }
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.ColorLens, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text("Alterar Fundo por URL", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        Text("Forneça um link (ex: Google Drive).", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
             
             if (showImportDialog && importResult != null) {
                 ImportPreviewDialog(
@@ -1338,43 +1261,6 @@ fun MestreScreen(
                 )
             }
 
-            if (showUrlDialog) {
-                AlertDialog(
-                    onDismissRequest = { showUrlDialog = false },
-                    title = { Text("URL da Imagem") },
-                    text = {
-                        OutlinedTextField(
-                            value = bannerUrlInput,
-                            onValueChange = { bannerUrlInput = it },
-                            label = { Text("Cole o link aqui") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            showUrlDialog = false
-                            if (bannerUrlInput.isNotBlank()) {
-                                coroutineScope.launch {
-                                    try {
-                                        val url = com.example.data.FirebaseService.setBannerUrlDirectly(com.example.util.ImageUrlHelper.normalizeUrl(bannerUrlInput))
-                                        viewModel.userPreferences.setBannerImageUri(url)
-                                        com.example.util.NotificationHelper.showToast(context, "Fundo alterado com sucesso para todos!", android.widget.Toast.LENGTH_SHORT)
-                                    } catch (e: Exception) {
-                                        com.example.util.NotificationHelper.showToast(context, "Erro: ${e.message}", android.widget.Toast.LENGTH_LONG)
-                                    }
-                                }
-                            }
-                        }) {
-                            Text("Salvar")
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showUrlDialog = false }) {
-                            Text("Cancelar")
-                        }
-                    }
-                )
-            }
             HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
             
