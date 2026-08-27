@@ -77,10 +77,12 @@ class NossaGenteApi(@Suppress("UNUSED_PARAMETER") context: Context) {
             ?: return@withContext NossaGentePromotionsResult.Unauthorized
         try {
             val request = Request.Builder()
-                .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/promocoes?limit=10")
+                .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/promocoes?limit=10&_sync=${System.currentTimeMillis()}")
                 .get()
                 .header("Accept", "application/json")
                 .header("X-Requested-With", "XMLHttpRequest")
+                .header("Cache-Control", "no-cache, no-store")
+                .header("Pragma", "no-cache")
                 .header("Authorization", "Bearer $token")
                 .build()
             client.newCall(request).execute().use { response ->
@@ -93,6 +95,9 @@ class NossaGenteApi(@Suppress("UNUSED_PARAMETER") context: Context) {
                     return@withContext NossaGentePromotionsResult.Error("Não foi possível carregar as promoções agora.")
                 }
                 val promotions = parsePromotions(body)
+                if (body.isBlank() || (promotions.isEmpty() && !isEmptyPromotionsPayload(body))) {
+                    return@withContext NossaGentePromotionsResult.Error("O Nossa Gente respondeu em um formato inesperado. Tente novamente.")
+                }
                 NossaGentePromotionsResult.Success(
                     promotions = promotions,
                     fingerprint = fingerprintPromotions(promotions)
@@ -126,6 +131,13 @@ class NossaGenteApi(@Suppress("UNUSED_PARAMETER") context: Context) {
             else -> "Não foi possível autenticar agora."
         }
     }
+
+    private fun isEmptyPromotionsPayload(raw: String): Boolean = runCatching {
+        val trimmed = raw.trim()
+        if (trimmed == "[]") return@runCatching true
+        val rootObject = if (trimmed.startsWith("[")) return@runCatching false else JSONObject(trimmed)
+        firstArray(rootObject, "data", "promocoes", "promotions", "items", "results")?.length() == 0
+    }.getOrDefault(false)
 
     private fun parsePromotions(raw: String): List<Promotion> {
         val trimmed = raw.trim()
@@ -300,7 +312,10 @@ internal fun fingerprintPromotionsForTest(promotions: List<Promotion>): String {
                             { it.name },
                             { it.storeCode.orEmpty() },
                             { it.offerPrice.orEmpty() },
-                            { it.regularPrice.orEmpty() }
+                            { it.regularPrice.orEmpty() },
+                            { it.discount.orEmpty() },
+                            { it.imageUrl.orEmpty() },
+                            { it.linkUrl.orEmpty() }
                         )
                     )
                     .forEach { product ->

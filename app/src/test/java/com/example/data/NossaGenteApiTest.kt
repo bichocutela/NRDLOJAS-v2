@@ -36,6 +36,25 @@ class NossaGenteApiTest {
     }
 
     @Test
+    fun fingerprintIgnoresOrderOfEquivalentProducts() {
+        val first = Promotion(
+            id = "higiene-123",
+            title = "PRODUTO TESTE",
+            description = "HIGIENE",
+            imageUrl = "https://example.com/product.jpg",
+            validFrom = "2026-08-25",
+            validTo = "2026-08-31",
+            products = listOf(
+                PromotionProduct("123", "PRODUTO TESTE", "R$ 8,50", "R$ 10,00", "15%", "0031", "https://example.com/product.jpg", "https://example.com/product"),
+                PromotionProduct("456", "OUTRO PRODUTO", "R$ 5,00", "R$ 6,00", "17%", "0038", "https://example.com/other.jpg", "https://example.com/other")
+            )
+        )
+        val reordered = first.copy(products = first.products.reversed())
+
+        assertEquals(fingerprintPromotionsForTest(first.let(::listOf)), fingerprintPromotionsForTest(reordered.let(::listOf)))
+    }
+
+    @Test
     fun fingerprintChangesWhenOfferPriceChanges() {
         val base = listOf(
             Promotion(
