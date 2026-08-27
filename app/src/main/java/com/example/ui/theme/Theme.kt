@@ -105,8 +105,8 @@ private fun getThemeColorScheme(themeName: String, darkTheme: Boolean) = when (t
         DefaultLightColorScheme.copy(
             primary = Color(0xFFD4AF37),
             primaryContainer = Color(0xFFB8952B),
-            onPrimary = Color.White,
-            onPrimaryContainer = Color.White
+            onPrimary = TextPrimary,
+            onPrimaryContainer = TextPrimary
         )
     }
     "green" -> if (darkTheme) {
@@ -120,8 +120,8 @@ private fun getThemeColorScheme(themeName: String, darkTheme: Boolean) = when (t
         DefaultLightColorScheme.copy(
             primary = Color(0xFF388E3C),
             primaryContainer = Color(0xFF2E7D32),
-            onPrimary = Color.White,
-            onPrimaryContainer = Color.White
+            onPrimary = Color.Black,
+            onPrimaryContainer = Color.Black
         )
     }
     "blue" -> if (darkTheme) {
@@ -150,8 +150,8 @@ private fun getThemeColorScheme(themeName: String, darkTheme: Boolean) = when (t
         DefaultLightColorScheme.copy(
             primary = Color(0xFFFF9800),
             primaryContainer = Color(0xFFF57C00),
-            onPrimary = Color.White,
-            onPrimaryContainer = Color.White
+            onPrimary = TextPrimary,
+            onPrimaryContainer = TextPrimary
         )
     }
     else -> DefaultLightColorScheme.takeIf { !darkTheme } ?: DefaultDarkColorScheme
@@ -174,10 +174,10 @@ fun MyApplicationTheme(
 
 val MulticolorPalette = listOf(
     Pair(Color(0xFFE62325), Color.White),
-    Pair(Color(0xFF388E3C), Color.White),
+    Pair(Color(0xFF388E3C), Color.Black),
     Pair(Color(0xFF1976D2), Color.White),
-    Pair(Color(0xFFF57C00), Color.White),
-    Pair(Color(0xFFB8860B), Color.White)
+    Pair(Color(0xFFF57C00), TextPrimary),
+    Pair(Color(0xFFB8860B), TextPrimary)
 )
 
 fun getDynamicThemeColor(index: Int, appTheme: String, defaultColor: Color, defaultOnColor: Color): Pair<Color, Color> {
