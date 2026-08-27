@@ -533,6 +533,63 @@ object FirebaseService {
         return email == "admin@nrdlojas.com" || email == "mestre@nrdlojas.com"
     }
 
+    fun observeAppearanceSettings(): Flow<AppearanceSettings> = callbackFlow {
+        if (!isFirebaseConfigured()) {
+            trySend(AppearanceSettings())
+            close()
+            return@callbackFlow
+        }
+
+        val registration = FirebaseFirestore.getInstance()
+            .collection("config")
+            .document("appSettings")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("FirebaseService", "Erro ao observar aparência", error)
+                    return@addSnapshotListener
+                }
+                trySend(
+                    AppearanceSettings(
+                        overrideLocalTheme = snapshot?.getBoolean("appearanceOverrideLocalTheme") ?: false,
+                        theme = snapshot?.getString("appearanceTheme")
+                            ?.takeIf { it in setOf("multicolor", "red", "gold", "green", "blue", "orange") }
+                            ?: "multicolor",
+                        appearanceMode = snapshot?.getString("appearanceMode")
+                            ?.takeIf { it in setOf("system", "light", "dark") }
+                            ?: "system"
+                    )
+                )
+            }
+        awaitClose { registration.remove() }
+    }
+
+    suspend fun saveAppearanceSettings(settings: AppearanceSettings): Boolean {
+        if (!isFirebaseConfigured() || !hasManagementAccess()) return false
+        val safeTheme = settings.theme.takeIf {
+            it in setOf("multicolor", "red", "gold", "green", "blue", "orange")
+        } ?: "multicolor"
+        val safeMode = settings.appearanceMode.takeIf { it in setOf("system", "light", "dark") } ?: "system"
+        return try {
+            FirebaseFirestore.getInstance()
+                .collection("config")
+                .document("appSettings")
+                .set(
+                    mapOf(
+                        "appearanceOverrideLocalTheme" to settings.overrideLocalTheme,
+                        "appearanceTheme" to safeTheme,
+                        "appearanceMode" to safeMode
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge()
+                )
+                .await()
+            true
+        } catch (e: Exception) {
+            lastError = e.message
+            Log.e("FirebaseService", "Erro ao salvar aparência", e)
+            false
+        }
+    }
+
     fun observeNotificationSettings(): Flow<NotificationSettings> = callbackFlow {
         if (!isFirebaseConfigured()) {
             trySend(NotificationSettings())

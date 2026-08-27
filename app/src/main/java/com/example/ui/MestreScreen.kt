@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.data.AppearanceSettings
 import com.example.data.AssistantSettings
 import com.example.data.CategoryDefinition
 import com.example.data.FirebaseService
@@ -62,6 +63,10 @@ fun MestreScreen(
         .collectAsStateWithLifecycle(initialValue = AssistantSettings())
     var draftAssistantSettings by remember(assistantSettings) { mutableStateOf(assistantSettings) }
     var isSavingAssistantSettings by remember { mutableStateOf(false) }
+    val appearanceSettings by FirebaseService.observeAppearanceSettings()
+        .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
+    var draftAppearanceSettings by remember(appearanceSettings) { mutableStateOf(appearanceSettings) }
+    var isSavingAppearanceSettings by remember { mutableStateOf(false) }
     var editingCategory by remember { mutableStateOf<CategoryDefinition?>(null) }
     var categoryName by remember { mutableStateOf("") }
     val suggestions by FirebaseService.observeSuggestions().collectAsStateWithLifecycle(initialValue = emptyList())
@@ -493,6 +498,129 @@ fun MestreScreen(
                             Text("Publicando...")
                         } else {
                             Text("Publicar Assistente")
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val themeOptions = listOf(
+                "multicolor" to "Multicolorido",
+                "red" to "Vermelho",
+                "gold" to "Dourado",
+                "green" to "Verde",
+                "blue" to "Azul",
+                "orange" to "Laranja"
+            )
+            val appearanceModeOptions = listOf(
+                "system" to "Seguir sistema",
+                "light" to "Claro",
+                "dark" to "Escuro"
+            )
+            var expandedRemoteTheme by remember { mutableStateOf(false) }
+            var expandedRemoteMode by remember { mutableStateOf(false) }
+
+            MestreSectionHeader(
+                title = "Aparência global",
+                description = "Personalize o visual para todos os usuários"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    NotificationSettingSwitch(
+                        label = "Aplicar aparência para todos",
+                        checked = draftAppearanceSettings.overrideLocalTheme,
+                        onCheckedChange = {
+                            draftAppearanceSettings = draftAppearanceSettings.copy(overrideLocalTheme = it)
+                        }
+                    )
+                    Text(
+                        "Desativado, cada usuário mantém sua própria escolha em Configurações.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ExposedDropdownMenuBox(
+                        expanded = expandedRemoteTheme,
+                        onExpandedChange = { expandedRemoteTheme = !expandedRemoteTheme }
+                    ) {
+                        OutlinedTextField(
+                            value = themeOptions.find { it.first == draftAppearanceSettings.theme }?.second ?: "Multicolorido",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Tema global") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRemoteTheme) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expandedRemoteTheme,
+                            onDismissRequest = { expandedRemoteTheme = false }
+                        ) {
+                            themeOptions.forEach { (themeKey, themeLabel) ->
+                                DropdownMenuItem(
+                                    text = { Text(themeLabel) },
+                                    onClick = {
+                                        draftAppearanceSettings = draftAppearanceSettings.copy(theme = themeKey)
+                                        expandedRemoteTheme = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ExposedDropdownMenuBox(
+                        expanded = expandedRemoteMode,
+                        onExpandedChange = { expandedRemoteMode = !expandedRemoteMode }
+                    ) {
+                        OutlinedTextField(
+                            value = appearanceModeOptions.find { it.first == draftAppearanceSettings.appearanceMode }?.second ?: "Seguir sistema",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Modo de aparência") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRemoteMode) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expandedRemoteMode,
+                            onDismissRequest = { expandedRemoteMode = false }
+                        ) {
+                            appearanceModeOptions.forEach { (modeKey, modeLabel) ->
+                                DropdownMenuItem(
+                                    text = { Text(modeLabel) },
+                                    onClick = {
+                                        draftAppearanceSettings = draftAppearanceSettings.copy(appearanceMode = modeKey)
+                                        expandedRemoteMode = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                isSavingAppearanceSettings = true
+                                val saved = FirebaseService.saveAppearanceSettings(draftAppearanceSettings)
+                                isSavingAppearanceSettings = false
+                                snackbarHostState.showSnackbar(
+                                    if (saved) "Aparência global publicada para todos."
+                                    else "Não foi possível publicar a aparência global."
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isSavingAppearanceSettings
+                    ) {
+                        if (isSavingAppearanceSettings) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Publicando...")
+                        } else {
+                            Text("Publicar aparência")
                         }
                     }
                 }

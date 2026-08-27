@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalDensity
 
 import androidx.room.Room
 import com.example.data.AppDatabase
+import com.example.data.AppearanceSettings
 import com.example.data.ProductRepository
 import com.example.data.UserPreferences
 import com.example.ui.AppNavGraph
@@ -138,6 +139,14 @@ class MainActivity : ComponentActivity() {
             val fontScale by userPreferences.fontScale.collectAsState(initial = 1.0f)
             val appTheme by userPreferences.appTheme.collectAsState(initial = "multicolor")
             val appearanceMode by userPreferences.appearanceMode.collectAsState(initial = "system")
+            val remoteAppearance by com.example.data.FirebaseService.observeAppearanceSettings()
+                .collectAsState(initial = AppearanceSettings())
+            val effectiveAppTheme = if (remoteAppearance.overrideLocalTheme) remoteAppearance.theme else appTheme
+            val effectiveAppearanceMode = if (remoteAppearance.overrideLocalTheme) {
+                remoteAppearance.appearanceMode
+            } else {
+                appearanceMode
+            }
             val latestFirebase by viewModel.latestProduct.collectAsState(null)
             val latestLocal by viewModel.latestProductLocal.collectAsState(null)
             val lastNotifiedCode by userPreferences.lastNotifiedProductCode.collectAsState("___LOADING___")
@@ -159,7 +168,10 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                MyApplicationTheme(appTheme = appTheme, appearanceMode = appearanceMode) {
+                MyApplicationTheme(
+                    appTheme = effectiveAppTheme,
+                    appearanceMode = effectiveAppearanceMode
+                ) {
 
                 var showSplash by remember { mutableStateOf(true) }
                 
