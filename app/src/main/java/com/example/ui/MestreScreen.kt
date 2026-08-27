@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.data.AssistantSettings
 import com.example.data.CategoryDefinition
 import com.example.data.FirebaseService
 import com.example.data.ProductImportParser
@@ -57,6 +58,10 @@ fun MestreScreen(
         .collectAsStateWithLifecycle(initialValue = NotificationSettings())
     var draftNotificationSettings by remember(notificationSettings) { mutableStateOf(notificationSettings) }
     var isSavingNotificationSettings by remember { mutableStateOf(false) }
+    val assistantSettings by FirebaseService.observeAssistantSettings()
+        .collectAsStateWithLifecycle(initialValue = AssistantSettings())
+    var draftAssistantSettings by remember(assistantSettings) { mutableStateOf(assistantSettings) }
+    var isSavingAssistantSettings by remember { mutableStateOf(false) }
     var editingCategory by remember { mutableStateOf<CategoryDefinition?>(null) }
     var categoryName by remember { mutableStateOf("") }
     val suggestions by FirebaseService.observeSuggestions().collectAsStateWithLifecycle(initialValue = emptyList())
@@ -417,6 +422,84 @@ fun MestreScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             MestreSectionHeader(
+                title = "Assistente IA",
+                description = "Defina os limites e a mensagem inicial do assistente"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    AssistantSettingSwitch(
+                        label = "Permitir uso do Assistente IA",
+                        checked = draftAssistantSettings.enabled,
+                        onCheckedChange = { draftAssistantSettings = draftAssistantSettings.copy(enabled = it) }
+                    )
+                    AssistantSettingSwitch(
+                        label = "Restringir respostas ao catálogo",
+                        checked = draftAssistantSettings.catalogOnly,
+                        onCheckedChange = { draftAssistantSettings = draftAssistantSettings.copy(catalogOnly = it) }
+                    )
+                    Text(
+                        "Quando ativo, a IA recebe apenas os produtos mais relacionados à pergunta.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = draftAssistantSettings.welcomeMessage,
+                        onValueChange = {
+                            draftAssistantSettings = draftAssistantSettings.copy(welcomeMessage = it.take(160))
+                        },
+                        label = { Text("Mensagem inicial") },
+                        supportingText = { Text("Até 160 caracteres") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 3
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Produtos enviados como contexto: ${draftAssistantSettings.maxContextProducts}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Slider(
+                        value = draftAssistantSettings.maxContextProducts.toFloat(),
+                        onValueChange = {
+                            draftAssistantSettings = draftAssistantSettings.copy(maxContextProducts = it.toInt())
+                        },
+                        valueRange = 5f..50f,
+                        steps = 44
+                    )
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                isSavingAssistantSettings = true
+                                val saved = FirebaseService.saveAssistantSettings(draftAssistantSettings)
+                                isSavingAssistantSettings = false
+                                snackbarHostState.showSnackbar(
+                                    if (saved) "Configurações do Assistente publicadas para todos."
+                                    else "Não foi possível publicar as configurações do Assistente."
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isSavingAssistantSettings
+                    ) {
+                        if (isSavingAssistantSettings) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Publicando...")
+                        } else {
+                            Text("Publicar Assistente")
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            MestreSectionHeader(
                 title = "Ferramentas administrativas",
                 description = "Gerencie abas, produtos e conteúdo visual do aplicativo"
             )
@@ -695,6 +778,22 @@ fun MestreScreen(
                 description = "Peça ao assistente no chat: 'Modifique o texto na tela inicial'."
             )
         }
+    }
+}
+
+@Composable
+private fun AssistantSettingSwitch(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

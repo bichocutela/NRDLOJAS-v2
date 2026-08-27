@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 fun AssistantScreen(viewModel: MainViewModel) {
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
     val chatInput by viewModel.chatInput.collectAsStateWithLifecycle()
+    val assistantSettings by viewModel.assistantSettings.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -48,7 +49,7 @@ fun AssistantScreen(viewModel: MainViewModel) {
                 .padding(top = 48.dp, start = 16.dp, end = 16.dp, bottom = 8.dp)
         ) {
             Text(
-                text = "Assistente IA",
+                text = if (assistantSettings.enabled) "Assistente IA" else "Assistente IA desativado",
                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.primary
             )
@@ -62,6 +63,22 @@ fun AssistantScreen(viewModel: MainViewModel) {
             contentPadding = PaddingValues(16.dp),
             reverseLayout = true
         ) {
+            if (chatMessages.isEmpty()) {
+                item {
+                    Text(
+                        text = if (assistantSettings.enabled) {
+                            assistantSettings.welcomeMessage
+                        } else {
+                            "O Assistente IA está desativado pelo Mestre."
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
             items(chatMessages.reversed()) { message ->
                 ChatMessageItem(message = message)
             }
@@ -77,10 +94,16 @@ fun AssistantScreen(viewModel: MainViewModel) {
             OutlinedTextField(
                 value = chatInput,
                 onValueChange = viewModel::updateChatInput,
+                enabled = assistantSettings.enabled,
                 modifier = Modifier
                     .weight(1f)
                     .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(24.dp)),
-                placeholder = { Text("Qual o código do pão francês?") },
+                placeholder = {
+                    Text(
+                        if (assistantSettings.enabled) "Digite uma dúvida sobre produtos..."
+                        else "Assistente desativado"
+                    )
+                },
                 shape = RoundedCornerShape(24.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -93,6 +116,7 @@ fun AssistantScreen(viewModel: MainViewModel) {
             
             IconButton(
                 onClick = { viewModel.sendChatMessage() },
+                enabled = assistantSettings.enabled && chatInput.isNotBlank(),
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
                     .background(MaterialTheme.colorScheme.primary)

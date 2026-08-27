@@ -8,6 +8,7 @@ import com.example.api.GenerateContentRequest
 import com.example.api.Part
 import com.example.api.RetrofitClient
 import com.example.data.Product
+import com.example.data.AssistantSettings
 import com.example.data.CategoryDefinition
 import com.example.data.ProductImportCommitResult
 import com.example.data.ProductImportRow
@@ -84,6 +85,13 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     private val remoteCategories = FirebaseService.observeCategories()
         .onStart { emit(CategoryDefinition.defaults) }
         .catch { emit(CategoryDefinition.defaults) }
+
+    private val remoteAssistantSettings = FirebaseService.observeAssistantSettings()
+        .onStart { emit(AssistantSettings()) }
+        .catch { emit(AssistantSettings()) }
+
+    val assistantSettings: StateFlow<AssistantSettings> = remoteAssistantSettings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AssistantSettings())
 
     val categoryDefinitions: StateFlow<List<CategoryDefinition>> = remoteCategories
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CategoryDefinition.defaults)
@@ -221,7 +229,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
 
 
     fun sendChatMessage() {
-        val query = _chatInput.value
+        val query = _chatInput.value.trim()
         if (query.isBlank()) return
 
         _chatInput.value = ""
@@ -231,19 +239,31 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
 
         viewModelScope.launch {
             try {
-                val allProducts = repository.searchProductsSync("")
-                
-                val contextString = allProducts.joinToString("\n") { 
-                    "${it.name} (${it.category}) - Código: ${it.code} - Vendido por: ${it.unit}"
+                val settings = assistantSettings.value
+                if (!settings.enabled) {
+                    val disabledMessages = _chatMessages.value.toMutableList()
+                    disabledMessages.add(ChatMessage("O Assistente IA está desativado pelo Mestre.", false))
+                    _chatMessages.value = disabledMessages
+                    return@launch
                 }
 
+                val relatedProducts = repository.searchProductsSync(query)
+                    .take(settings.maxContextProducts.coerceIn(5, 50))
+                val contextString = relatedProducts.joinToString("\n") {
+                    "${it.name} (${it.category}) - Código: ${it.code} - Vendido por: ${it.unit}"
+                }.ifBlank { "Nenhum produto relacionado foi encontrado no catálogo." }
+
+                val scopeInstruction = if (settings.catalogOnly) {
+                    "Responda somente com base no catálogo abaixo. Não invente códigos e diga quando não encontrar."
+                } else {
+                    "Priorize o catálogo abaixo. Quando a pergunta não for sobre produtos, responda de forma breve e deixe claro quando não houver informação no catálogo."
+                }
                 val systemPrompt = """
                     Você é um assistente de um supermercado para ajudar operadores de caixa e repositores a encontrar códigos de produtos.
                     Sempre responda de forma amigável, direta e curta.
-                    Quando o usuário perguntar sobre um produto, forneça o código dele usando a lista abaixo.
-                    Se o produto não estiver na lista, diga que não encontrou.
-                    
-                    Lista de produtos:
+                    $scopeInstruction
+
+                    Produtos mais relacionados à pergunta:
                     $contextString
                 """.trimIndent()
 

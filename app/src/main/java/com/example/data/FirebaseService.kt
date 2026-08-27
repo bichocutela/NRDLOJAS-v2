@@ -610,6 +610,89 @@ object FirebaseService {
         }
     }
 
+    fun observeAssistantSettings(): Flow<AssistantSettings> = callbackFlow {
+        if (!isFirebaseConfigured()) {
+            trySend(AssistantSettings())
+            close()
+            return@callbackFlow
+        }
+
+        val registration = FirebaseFirestore.getInstance()
+            .collection("config")
+            .document("appSettings")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("FirebaseService", "Erro ao observar configurações do Assistente", error)
+                    return@addSnapshotListener
+                }
+                trySend(
+                    AssistantSettings(
+                        enabled = snapshot?.getBoolean("assistantEnabled") ?: true,
+                        catalogOnly = snapshot?.getBoolean("assistantCatalogOnly") ?: true,
+                        welcomeMessage = snapshot?.getString("assistantWelcomeMessage")
+                            ?.trim()
+                            ?.takeIf { it.isNotBlank() }
+                            ?: AssistantSettings().welcomeMessage,
+                        maxContextProducts = snapshot?.getLong("assistantMaxContextProducts")
+                            ?.toInt()
+                            ?.coerceIn(5, 50)
+                            ?: 25
+                    )
+                )
+            }
+        awaitClose { registration.remove() }
+    }
+
+    suspend fun getAssistantSettings(): AssistantSettings {
+        if (!isFirebaseConfigured()) return AssistantSettings()
+        return try {
+            val snapshot = FirebaseFirestore.getInstance()
+                .collection("config")
+                .document("appSettings")
+                .get()
+                .await()
+            AssistantSettings(
+                enabled = snapshot.getBoolean("assistantEnabled") ?: true,
+                catalogOnly = snapshot.getBoolean("assistantCatalogOnly") ?: true,
+                welcomeMessage = snapshot.getString("assistantWelcomeMessage")
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                    ?: AssistantSettings().welcomeMessage,
+                maxContextProducts = snapshot.getLong("assistantMaxContextProducts")
+                    ?.toInt()
+                    ?.coerceIn(5, 50)
+                    ?: 25
+            )
+        } catch (e: Exception) {
+            Log.e("FirebaseService", "Erro ao ler configurações do Assistente", e)
+            AssistantSettings()
+        }
+    }
+
+    suspend fun saveAssistantSettings(settings: AssistantSettings): Boolean {
+        if (!isFirebaseConfigured() || !hasManagementAccess()) return false
+        return try {
+            FirebaseFirestore.getInstance()
+                .collection("config")
+                .document("appSettings")
+                .set(
+                    mapOf(
+                        "assistantEnabled" to settings.enabled,
+                        "assistantCatalogOnly" to settings.catalogOnly,
+                        "assistantWelcomeMessage" to settings.welcomeMessage.trim().take(160),
+                        "assistantMaxContextProducts" to settings.maxContextProducts.coerceIn(5, 50)
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge()
+                )
+                .await()
+            true
+        } catch (e: Exception) {
+            lastError = e.message
+            Log.e("FirebaseService", "Erro ao salvar configurações do Assistente", e)
+            false
+        }
+    }
+
     fun observeCategories(): Flow<List<CategoryDefinition>> = callbackFlow {
         if (!isFirebaseConfigured()) {
             trySend(CategoryDefinition.defaults)
