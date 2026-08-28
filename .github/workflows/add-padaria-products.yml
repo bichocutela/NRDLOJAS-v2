@@ -12,14 +12,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Inserir sem duplicar e notificar
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           set -euo pipefail
           PROJECT_ID="appcodigo-7f245"
-          API_KEY="AIzaSyCGEkru0ZzdYtsK08AEWrivt0X_lWwJQiQ"
           BASE="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/products"
+          NOTIFY_BASE="https://kkayksyzksexoarpfxyj.supabase.co/functions/v1/notify-padaria-product-once?key=nrd-padaria-notify-20260828-G4p8Zk2"
+
+          notify() {
+            local code="$1"
+            local status
+            status=$(curl --retry 4 --retry-delay 2 -sS -o /tmp/notify.json -w '%{http_code}' "${NOTIFY_BASE}&code=${code}")
+            if [ "$status" = "200" ]; then
+              echo "NOTIFIED $code"
+            else
+              echo "NOTIFY_ERROR $code HTTP_$status $(cat /tmp/notify.json)"
+            fi
+          }
+
+          # Estes três entraram na execução anterior, mas o push não saiu naquela tentativa.
+          notify 257165
+          sleep 1
+          notify 257149
+          sleep 1
+          notify 257127
+          sleep 2
 
           cat > /tmp/products.tsv <<'EOF'
           257169	Brioche carne de sol c/ queijo coalho.
@@ -33,15 +49,17 @@ jobs:
           255345	Pão rústico.
           EOF
 
-          AUTH_JSON=$(curl -fsS -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}" \
-            -H 'Content-Type: application/json' \
-            -d '{"returnSecureToken":true}' || true)
-          FIREBASE_TOKEN=$(printf '%s' "$AUTH_JSON" | jq -r '.idToken // empty')
-
           : > /tmp/result.txt
           while IFS=$'\t' read -r CODE NAME; do
             [ -z "$CODE" ] && continue
-            STATUS=$(curl -sS -o /tmp/existing.json -w '%{http_code}' "${BASE}/${CODE}")
+
+            STATUS=""
+            for attempt in 1 2 3 4 5 6; do
+              STATUS=$(curl -sS -o /tmp/existing.json -w '%{http_code}' "${BASE}/${CODE}")
+              [ "$STATUS" != "429" ] && break
+              sleep $((attempt * 2))
+            done
+
             if [ "$STATUS" = "200" ]; then
               echo "SKIPPED $CODE $NAME" | tee -a /tmp/result.txt
               continue
@@ -53,37 +71,24 @@ jobs:
 
             SEARCH_NAME=$(printf '%s' "$NAME" | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null | tr '[:upper:]' '[:lower:]' || printf '%s' "$NAME" | tr '[:upper:]' '[:lower:]')
             TS=$(date +%s%3N)
-            PAYLOAD=$(jq -n \
-              --arg code "$CODE" \
-              --arg name "$NAME" \
-              --arg searchName "$SEARCH_NAME" \
-              --arg ts "$TS" \
+            PAYLOAD=$(jq -n --arg code "$CODE" --arg name "$NAME" --arg searchName "$SEARCH_NAME" --arg ts "$TS" \
               '{fields:{code:{stringValue:$code},name:{stringValue:$name},searchName:{stringValue:$searchName},category:{stringValue:"Padaria"},unit:{stringValue:"UN"},imageUrl:{nullValue:null},searchCount:{integerValue:"0"},timestamp:{integerValue:$ts}}}')
 
-            WRITE_STATUS=$(curl -sS -o /tmp/write.json -w '%{http_code}' -X PATCH "${BASE}/${CODE}" \
-              -H 'Content-Type: application/json' \
-              --data "$PAYLOAD")
+            WRITE_STATUS=""
+            for attempt in 1 2 3 4 5 6; do
+              WRITE_STATUS=$(curl -sS -o /tmp/write.json -w '%{http_code}' -X PATCH "${BASE}/${CODE}" -H 'Content-Type: application/json' --data "$PAYLOAD")
+              [ "$WRITE_STATUS" != "429" ] && break
+              sleep $((attempt * 2))
+            done
+
             if [ "$WRITE_STATUS" != "200" ]; then
               echo "ERROR_WRITE $CODE HTTP_$WRITE_STATUS $(cat /tmp/write.json)" | tee -a /tmp/result.txt
               continue
             fi
-            echo "ADDED $CODE $NAME" | tee -a /tmp/result.txt
 
-            if [ -n "$FIREBASE_TOKEN" ] && [ -n "${SUPABASE_URL:-}" ] && [ -n "${SUPABASE_ANON_KEY:-}" ]; then
-              NOTIFY_STATUS=$(curl -sS -o /tmp/notify.json -w '%{http_code}' -X POST "${SUPABASE_URL}/functions/v1/send-fcm" \
-                -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-                -H "apikey: ${SUPABASE_ANON_KEY}" \
-                -H "x-firebase-token: ${FIREBASE_TOKEN}" \
-                -H 'Content-Type: application/json' \
-                --data "$(jq -n --arg body "$NAME" '{title:"Produto adicionado",body:$body,topic:"products"}')")
-              if [ "$NOTIFY_STATUS" = "200" ]; then
-                echo "NOTIFIED $CODE $NAME" | tee -a /tmp/result.txt
-              else
-                echo "NOTIFY_ERROR $CODE HTTP_$NOTIFY_STATUS $(cat /tmp/notify.json)" | tee -a /tmp/result.txt
-              fi
-            else
-              echo "NOTIFY_ERROR $CODE Firebase_anonymous_auth_or_Supabase_secret_unavailable" | tee -a /tmp/result.txt
-            fi
+            echo "ADDED $CODE $NAME" | tee -a /tmp/result.txt
+            notify "$CODE" | tee -a /tmp/result.txt
+            sleep 2
           done < /tmp/products.tsv
 
           echo '--- RESULTADO FINAL ---'
