@@ -10,6 +10,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okio.source
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import com.example.BuildConfig
 import java.util.UUID
 import android.webkit.MimeTypeMap
@@ -20,8 +21,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.channels.awaitClose
 import android.util.Log
+import java.util.concurrent.atomic.AtomicBoolean
 
 object FirebaseService {
+    private const val APPEARANCE_MANIFEST_PATH = "config/appearance-settings.json"
     var lastError: String? = null
     private var appContext: android.content.Context? = null
     suspend fun publishProductEvent(type: String, productName: String, oldName: String? = null, productCode: String) {
@@ -832,6 +835,16 @@ object FirebaseService {
             return@callbackFlow
         }
 
+        // O manifesto público permite que usuários comuns recebam os fundos mesmo
+        // quando as regras antigas do Firestore não aceitam o novo campo aninhado.
+        val publicManifestLoaded = AtomicBoolean(false)
+        val publicManifestJob = launch {
+            fetchPublicAppearanceSettings()?.let { settings ->
+                publicManifestLoaded.set(true)
+                trySend(settings)
+            }
+        }
+
         val registration = FirebaseFirestore.getInstance()
             .collection("config")
             .document("appSettings")
@@ -840,28 +853,41 @@ object FirebaseService {
                     Log.e("FirebaseService", "Erro ao observar aparência", error)
                     return@addSnapshotListener
                 }
-                trySend(
-                    AppearanceSettings(
-                        overrideLocalTheme = snapshot?.getBoolean("appearanceOverrideLocalTheme") ?: false,
-                        theme = snapshot?.getString("appearanceTheme")
-                            ?.takeIf { it in setOf("multicolor", "red", "gold", "green", "blue", "orange") }
-                            ?: "multicolor",
-                        appearanceMode = snapshot?.getString("appearanceMode")
-                            ?.takeIf { it in setOf("system", "light", "dark") }
-                            ?: "system",
-                        themeBackgrounds = parseThemeBackgrounds(snapshot?.get("appearanceThemeBackgrounds"))
+                // O manifesto é a fonte pública da configuração de fundos. O
+                // Firestore continua sendo observado para compatibilidade e tempo real.
+                if (!publicManifestLoaded.get()) {
+                    trySend(
+                        AppearanceSettings(
+                            overrideLocalTheme = snapshot?.getBoolean("appearanceOverrideLocalTheme") ?: false,
+                            theme = snapshot?.getString("appearanceTheme")
+                                ?.takeIf { it in SupportedThemeKeys }
+                                ?: "multicolor",
+                            appearanceMode = snapshot?.getString("appearanceMode")
+                                ?.takeIf { it in setOf("system", "light", "dark") }
+                                ?: "system",
+                            themeBackgrounds = parseThemeBackgrounds(snapshot?.get("appearanceThemeBackgrounds"))
+                        )
                     )
-                )
+                }
             }
-        awaitClose { registration.remove() }
+        awaitClose {
+            publicManifestJob.cancel()
+            registration.remove()
+        }
     }
 
     suspend fun saveAppearanceSettings(settings: AppearanceSettings): Boolean {
-        if (!isFirebaseConfigured() || !hasManagementAccess()) return false
-        val safeTheme = settings.theme.takeIf {
-            it in setOf("multicolor", "red", "gold", "green", "blue", "orange")
-        } ?: "multicolor"
-                val safeMode = settings.appearanceMode.takeIf {
+        lastError = null
+        if (!isFirebaseConfigured()) {
+            lastError = "Firebase não configurado."
+            return false
+        }
+        if (!hasManagementAccess()) {
+            lastError = "Usuário sem permissão para publicar a aparência."
+            return false
+        }
+        val safeTheme = settings.theme.takeIf { it in SupportedThemeKeys } ?: "multicolor"
+        val safeMode = settings.appearanceMode.takeIf {
             it in setOf("system", "light", "dark")
         } ?: "system"
         val safeBackgrounds = SupportedThemeKeys.associateWith { themeKey ->
@@ -869,7 +895,8 @@ object FirebaseService {
             settings.themeBackgrounds[themeKey]
                 .orEmpty()
                 .filter { background ->
-                    background.url.startsWith("https://") || background.url.startsWith("http://")
+                    val url = background.url.trim()
+                    url.startsWith("https://") || url.startsWith("http://")
                 }
                 .take(5)
                 .map { background ->
@@ -883,8 +910,21 @@ object FirebaseService {
                     )
                 }
         }
-        return try {
 
+        val manifest = buildAppearanceManifest(
+            overrideLocalTheme = settings.overrideLocalTheme,
+            theme = safeTheme,
+            appearanceMode = safeMode,
+            themeBackgrounds = safeBackgrounds
+        )
+        val publicManifestSaved = runCatching {
+            uploadPublicAppearanceManifest(manifest)
+        }.onFailure { error ->
+            lastError = error.message
+            Log.e("FirebaseService", "Erro ao publicar manifesto público de aparência", error)
+        }.getOrDefault(false)
+
+        val firestoreSaved = try {
             FirebaseFirestore.getInstance()
                 .collection("config")
                 .document("appSettings")
@@ -901,9 +941,138 @@ object FirebaseService {
             true
         } catch (e: Exception) {
             lastError = e.message
-            Log.e("FirebaseService", "Erro ao salvar aparência", e)
+            Log.e("FirebaseService", "Erro ao salvar aparência no Firestore", e)
             false
         }
+
+        if (publicManifestSaved || firestoreSaved) {
+            lastError = null
+            return true
+        }
+        if (lastError.isNullOrBlank()) {
+            lastError = "Não foi possível publicar a aparência nos serviços remotos."
+        }
+        return false
+    }
+
+    private fun buildAppearanceManifest(
+        overrideLocalTheme: Boolean,
+        theme: String,
+        appearanceMode: String,
+        themeBackgrounds: Map<String, List<Map<String, Any>>>
+    ): String {
+        val backgroundsJson = org.json.JSONObject()
+        themeBackgrounds.forEach { (themeKey, backgrounds) ->
+            val itemsJson = org.json.JSONArray()
+            backgrounds.forEach { background ->
+                itemsJson.put(org.json.JSONObject(background))
+            }
+            backgroundsJson.put(themeKey, itemsJson)
+        }
+        return org.json.JSONObject()
+            .put("appearanceOverrideLocalTheme", overrideLocalTheme)
+            .put("appearanceTheme", theme)
+            .put("appearanceMode", appearanceMode)
+            .put("appearanceThemeBackgrounds", backgroundsJson)
+            .toString()
+    }
+
+    private suspend fun uploadPublicAppearanceManifest(manifest: String): Boolean = withContext(Dispatchers.IO) {
+        val supabaseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
+        val supabaseKey = BuildConfig.SUPABASE_ANON_KEY
+        if (supabaseUrl.isBlank() || supabaseKey.isBlank()) {
+            lastError = "Supabase não configurado."
+            return@withContext false
+        }
+        val firebaseToken = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            ?.getIdToken(false)?.await()?.token
+        if (firebaseToken.isNullOrBlank()) {
+            lastError = "Sessão Firebase indisponível para publicar a aparência."
+            return@withContext false
+        }
+
+        val requestBody = okhttp3.MultipartBody.Builder()
+            .setType(okhttp3.MultipartBody.FORM)
+            .addFormDataPart("path", APPEARANCE_MANIFEST_PATH)
+            .addFormDataPart(
+                "file",
+                "appearance-settings.json",
+                manifest.toRequestBody("application/json; charset=utf-8".toMediaType())
+            )
+            .build()
+        val request = Request.Builder()
+            .url("$supabaseUrl/functions/v1/upload-image")
+            .post(requestBody)
+            .addHeader("Authorization", "Bearer $supabaseKey")
+            .addHeader("x-firebase-token", firebaseToken)
+            .build()
+
+        okHttpClient.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                lastError = "Falha ao publicar a configuração remota da aparência."
+                Log.e("SupabaseStorage", "Falha no manifesto de aparência: HTTP ${response.code}; corpo=$body")
+                return@withContext false
+            }
+            val publicUrl = runCatching { org.json.JSONObject(body).optString("url") }.getOrNull()
+            if (publicUrl.isNullOrBlank()) {
+                lastError = "Resposta inválida do servidor de aparência."
+                return@withContext false
+            }
+            true
+        }
+    }
+
+    private suspend fun fetchPublicAppearanceSettings(): AppearanceSettings? = withContext(Dispatchers.IO) {
+        val supabaseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
+        if (supabaseUrl.isBlank()) return@withContext null
+        val request = Request.Builder()
+            .url("$supabaseUrl/storage/v1/object/public/nrdlojas-images/$APPEARANCE_MANIFEST_PATH?ts=${System.currentTimeMillis()}")
+            .get()
+            .header("Cache-Control", "no-cache")
+            .build()
+        runCatching {
+            okHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                parsePublicAppearanceManifest(response.body?.string().orEmpty())
+            }
+        }.onFailure { error ->
+            Log.w("FirebaseService", "Manifesto público de aparência indisponível", error)
+        }.getOrNull()
+    }
+
+    private fun parsePublicAppearanceManifest(raw: String): AppearanceSettings? = runCatching {
+        val root = org.json.JSONObject(raw)
+        AppearanceSettings(
+            overrideLocalTheme = root.optBoolean("appearanceOverrideLocalTheme", false),
+            theme = root.optString("appearanceTheme").takeIf { it in SupportedThemeKeys } ?: "multicolor",
+            appearanceMode = root.optString("appearanceMode")
+                .takeIf { it in setOf("system", "light", "dark") }
+                ?: "system",
+            themeBackgrounds = parseThemeBackgroundsJson(root.optJSONObject("appearanceThemeBackgrounds"))
+        )
+    }.getOrNull()
+
+    private fun parseThemeBackgroundsJson(raw: org.json.JSONObject?): Map<String, List<ThemeBackground>> {
+        if (raw == null) return emptyMap()
+        return SupportedThemeKeys.mapNotNull { themeKey ->
+            val array = raw.optJSONArray(themeKey) ?: return@mapNotNull null
+            val items = (0 until array.length()).mapNotNull { index ->
+                val item = array.optJSONObject(index) ?: return@mapNotNull null
+                val id = item.optString("id").trim().takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
+                val url = item.optString("url").trim().takeIf {
+                    it.startsWith("https://") || it.startsWith("http://")
+                } ?: return@mapNotNull null
+                ThemeBackground(
+                    id = id,
+                    label = item.optString("label").trim().ifBlank { "Fundo personalizado" },
+                    url = url,
+                    isActive = item.optBoolean("isActive", false)
+                )
+            }.take(5)
+            if (items.isEmpty()) null else themeKey to items
+        }.toMap()
     }
 
     fun observeNotificationSettings(): Flow<NotificationSettings> = callbackFlow {

@@ -907,7 +907,7 @@ fun MestreScreen(
                                 isSavingAppearanceSettings = false
                                 snackbarHostState.showSnackbar(
                                     if (saved) "Aparência global publicada para todos."
-                                    else "Não foi possível publicar a aparência global."
+                                    else FirebaseService.lastError ?: "Não foi possível publicar a aparência global."
                                 )
                             }
                         },
