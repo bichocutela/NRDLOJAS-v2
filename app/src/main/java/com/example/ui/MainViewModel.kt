@@ -68,6 +68,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
 
     private val _newProductsCount = MutableStateFlow(0)
     val newProductsCount: StateFlow<Int> = _newProductsCount.asStateFlow()
+    private val recentlyCountedProducts = mutableMapOf<String, Long>()
 
     private val remoteHomeSettings = FirebaseService.observeHomeSettings()
         .onStart { emit(RemoteHomeSettings()) }
@@ -172,15 +173,21 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                         val local = localProducts.find { it.code == remote.code }
                         if (local == null) {
                             remote
-                        } else if (local.name != remote.name || local.imageUrl != remote.imageUrl || local.category != remote.category || local.unit != remote.unit) {
-                            remote.copy(id = local.id, searchCount = local.searchCount, lastSearchedAt = local.lastSearchedAt, isFavorite = local.isFavorite)
+                        } else if (local.name != remote.name || local.imageUrl != remote.imageUrl || local.category != remote.category || local.unit != remote.unit || local.searchCount != remote.searchCount) {
+                            remote.copy(id = local.id, lastSearchedAt = local.lastSearchedAt, isFavorite = local.isFavorite)
                         } else {
                             null
                         }
                     }
                     if (missingOrUpdated.isNotEmpty() && !_isSyncing.value) {
                         repository.insertProducts(missingOrUpdated)
-            }
+                    }
+                    remoteProducts.forEach { remote ->
+                        val local = localProducts.find { it.code == remote.code }
+                        if (local != null && local.searchCount != remote.searchCount) {
+                            repository.updateGlobalUsageCount(remote.code, remote.searchCount)
+                        }
+                    }
             }
         }
         viewModelScope.launch {
@@ -206,8 +213,13 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     }
 
     fun onProductSearched(product: Product) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        val lastCountedAt = recentlyCountedProducts[product.code]
+        if (lastCountedAt != null && now - lastCountedAt < GLOBAL_VIEW_DEBOUNCE_MS) return
+        recentlyCountedProducts[product.code] = now
         viewModelScope.launch {
             repository.registerSearch(product)
+            FirebaseService.registerGlobalProductView(product.code)
         }
     }
 
@@ -768,14 +780,20 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                         val local = localProducts.find { it.code == remote.code }
                         if (local == null) {
                             remote
-                        } else if (local.name != remote.name || local.imageUrl != remote.imageUrl || local.category != remote.category || local.unit != remote.unit) {
-                            remote.copy(id = local.id, searchCount = local.searchCount, lastSearchedAt = local.lastSearchedAt, isFavorite = local.isFavorite)
+                        } else if (local.name != remote.name || local.imageUrl != remote.imageUrl || local.category != remote.category || local.unit != remote.unit || local.searchCount != remote.searchCount) {
+                            remote.copy(id = local.id, lastSearchedAt = local.lastSearchedAt, isFavorite = local.isFavorite)
                         } else {
                             null
                         }
                     }
                     if (missingOrUpdated.isNotEmpty()) {
                         repository.insertProducts(missingOrUpdated)
+                    }
+                    migratedProducts.forEach { remote ->
+                        val local = localProducts.find { it.code == remote.code }
+                        if (local != null && local.searchCount != remote.searchCount) {
+                            repository.updateGlobalUsageCount(remote.code, remote.searchCount)
+                        }
                     }
             } catch (e: Exception) {
                 _syncMessage.emit("Não foi possível sincronizar o catálogo. Os dados locais foram preservados.")
@@ -787,6 +805,10 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
 
     fun clearNewProductsCount() {
         _newProductsCount.value = 0
+    }
+
+    private companion object {
+        const val GLOBAL_VIEW_DEBOUNCE_MS = 60_000L
     }
     val dynamicTabs: kotlinx.coroutines.flow.StateFlow<List<com.example.data.DynamicTab>> = repository.getAllTabs()
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())

@@ -4,6 +4,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import android.net.Uri
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FieldValue
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -27,6 +28,27 @@ object FirebaseService {
     private const val APPEARANCE_MANIFEST_PATH = "config/appearance-settings.json"
     var lastError: String? = null
     private var appContext: android.content.Context? = null
+
+    suspend fun registerGlobalProductView(productCode: String): Boolean {
+        if (!isFirebaseConfigured() || productCode.isBlank()) return false
+        return try {
+            FirebaseFirestore.getInstance()
+                .collection("products")
+                .document(productCode)
+                .update(
+                    mapOf(
+                        "searchCount" to FieldValue.increment(1L),
+                        "lastViewedAt" to FieldValue.serverTimestamp()
+                    )
+                )
+                .await()
+            true
+        } catch (error: Exception) {
+            Log.e("ProductUsage", "Erro ao registrar consulta global: $productCode", error)
+            false
+        }
+    }
+
     suspend fun publishProductEvent(type: String, productName: String, oldName: String? = null, productCode: String) {
         if (!isFirebaseConfigured()) {
             Log.w("FirebaseService", "Evento FCM ignorado: Firebase não configurado; type=$type")

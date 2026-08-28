@@ -51,12 +51,11 @@ class ProductRepository(
     }
 
     suspend fun registerSearch(product: Product) {
-        dao.updateProduct(
-            product.copy(
-                searchCount = product.searchCount + 1,
-                lastSearchedAt = System.currentTimeMillis()
-            )
-        )
+        dao.registerProductView(product.code, System.currentTimeMillis())
+    }
+
+    suspend fun updateGlobalUsageCount(code: String, searchCount: Int) {
+        dao.updateGlobalUsageCount(code, searchCount)
     }
 
     suspend fun insertProducts(products: List<Product>) {
