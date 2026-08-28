@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import java.util.UUID
 import com.example.data.AppearanceSettings
 import com.example.data.AssistantSettings
@@ -90,6 +91,10 @@ fun MestreScreen(
     var editingBackground by remember { mutableStateOf<ThemeBackground?>(null) }
     var backgroundLabelInput by remember { mutableStateOf("") }
     var backgroundUrlInput by remember { mutableStateOf("") }
+    var backgroundStartDateInput by remember { mutableStateOf("") }
+    var backgroundEndDateInput by remember { mutableStateOf("") }
+    var showStartDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
     var backgroundInputError by remember { mutableStateOf<String?>(null) }
     var isUploadingThemeBackground by remember { mutableStateOf(false) }
     var backgroundToDelete by remember { mutableStateOf<Pair<String, ThemeBackground>?>(null) }
@@ -720,9 +725,21 @@ fun MestreScreen(
                 editingBackground = background
                 backgroundLabelInput = background?.label.orEmpty()
                 backgroundUrlInput = background?.url.orEmpty()
+                backgroundStartDateInput = background?.startDate.orEmpty()
+                backgroundEndDateInput = background?.endDate.orEmpty()
+                showStartDatePicker = false
+                showEndDatePicker = false
                 backgroundInputError = null
                 showThemeBackgroundDialog = true
             }
+
+            fun pickerDateToIsoDate(millis: Long?): String? = millis?.let {
+                SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }.format(Date(it))
+            }
+
+            fun dateToPickerMillis(value: String): Long? = ThemeBackground.parseDate(value)?.time
 
             fun updateBackgrounds(themeKey: String, backgrounds: List<ThemeBackground>) {
                 draftThemeBackgrounds = draftThemeBackgrounds + (themeKey to backgrounds)
@@ -836,7 +853,7 @@ fun MestreScreen(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(themeLabel, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
                                     Text(
-                                        if (backgrounds.any { it.isActive }) "Fundo personalizado ativo"
+                                        if (backgrounds.any { it.isAvailableOn() }) "Fundo personalizado ativo"
                                         else "Fundo padrão ativo",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1138,6 +1155,60 @@ fun MestreScreen(
                 )
             }
 
+            if (showStartDatePicker) {
+                val datePickerState = rememberDatePickerState(
+                    initialSelectedDateMillis = dateToPickerMillis(backgroundStartDateInput)
+                )
+                DatePickerDialog(
+                    onDismissRequest = { showStartDatePicker = false },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                backgroundStartDateInput = pickerDateToIsoDate(datePickerState.selectedDateMillis).orEmpty()
+                                backgroundInputError = null
+                                showStartDatePicker = false
+                            }
+                        ) {
+                            Text("Usar data")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showStartDatePicker = false }) {
+                            Text("Cancelar")
+                        }
+                    }
+                ) {
+                    DatePicker(state = datePickerState)
+                }
+            }
+
+            if (showEndDatePicker) {
+                val datePickerState = rememberDatePickerState(
+                    initialSelectedDateMillis = dateToPickerMillis(backgroundEndDateInput)
+                )
+                DatePickerDialog(
+                    onDismissRequest = { showEndDatePicker = false },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                backgroundEndDateInput = pickerDateToIsoDate(datePickerState.selectedDateMillis).orEmpty()
+                                backgroundInputError = null
+                                showEndDatePicker = false
+                            }
+                        ) {
+                            Text("Usar data")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showEndDatePicker = false }) {
+                            Text("Cancelar")
+                        }
+                    }
+                ) {
+                    DatePicker(state = datePickerState)
+                }
+            }
+
             if (showThemeBackgroundDialog) {
                 AlertDialog(
                     onDismissRequest = { showThemeBackgroundDialog = false },
@@ -1170,6 +1241,46 @@ fun MestreScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                "Período de ativação (opcional)",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                            )
+                            Text(
+                                "Sem início, começa agora. Sem fim, permanece até ser desativado. Após o fim, o fundo padrão volta automaticamente.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedButton(
+                                onClick = { showStartDatePicker = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    if (backgroundStartDateInput.isBlank()) "Definir data de início"
+                                    else "Início: ${formatThemeBackgroundDate(backgroundStartDateInput)}"
+                                )
+                            }
+                            if (backgroundStartDateInput.isNotBlank()) {
+                                TextButton(onClick = { backgroundStartDateInput = "" }) {
+                                    Text("Limpar data de início")
+                                }
+                            }
+                            OutlinedButton(
+                                onClick = { showEndDatePicker = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    if (backgroundEndDateInput.isBlank()) "Definir data de fim"
+                                    else "Fim: ${formatThemeBackgroundDate(backgroundEndDateInput)}"
+                                )
+                            }
+                            if (backgroundEndDateInput.isNotBlank()) {
+                                TextButton(onClick = { backgroundEndDateInput = "" }) {
+                                    Text("Limpar data de fim")
+                                }
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
                             OutlinedButton(
                                 onClick = { themeBackgroundLauncher.launch("image/*") },
@@ -1195,29 +1306,41 @@ fun MestreScreen(
                     confirmButton = {
                         TextButton(
                             onClick = {
-                                val normalizedUrl = com.example.util.ImageUrlHelper.normalizeUrl(backgroundUrlInput)
-                                val themeKey = editingBackgroundTheme
-                                val current = themeKey?.let { draftThemeBackgrounds[it].orEmpty() }.orEmpty()
-                                when {
-                                    themeKey == null -> backgroundInputError = "Tema inválido."
-                                    normalizedUrl.isBlank() || !(normalizedUrl.startsWith("https://") || normalizedUrl.startsWith("http://")) ->
-                                        backgroundInputError = "Informe uma URL HTTP/HTTPS válida."
-                                    editingBackground == null && current.size >= 5 ->
-                                        backgroundInputError = "Cada tema pode ter até 5 fundos personalizados."
-                                    else -> {
+                                    val normalizedUrl = com.example.util.ImageUrlHelper.normalizeUrl(backgroundUrlInput)
+                                    val normalizedStartDate = ThemeBackground.normalizeDate(backgroundStartDateInput)
+                                    val normalizedEndDate = ThemeBackground.normalizeDate(backgroundEndDateInput)
+                                    val themeKey = editingBackgroundTheme
+                                    val current = themeKey?.let { draftThemeBackgrounds[it].orEmpty() }.orEmpty()
+                                    when {
+                                        themeKey == null -> backgroundInputError = "Tema inválido."
+                                        normalizedUrl.isBlank() || !(normalizedUrl.startsWith("https://") || normalizedUrl.startsWith("http://")) ->
+                                            backgroundInputError = "Informe uma URL HTTP/HTTPS válida."
+                                        backgroundStartDateInput.isNotBlank() && normalizedStartDate == null ->
+                                            backgroundInputError = "Informe uma data de início válida."
+                                        backgroundEndDateInput.isNotBlank() && normalizedEndDate == null ->
+                                            backgroundInputError = "Informe uma data de fim válida."
+                                        normalizedStartDate != null && normalizedEndDate != null && normalizedEndDate < normalizedStartDate ->
+                                            backgroundInputError = "A data de fim não pode ser anterior à data de início."
+                                        editingBackground == null && current.size >= 5 ->
+                                            backgroundInputError = "Cada tema pode ter até 5 fundos personalizados."
+                                        else -> {
                                         val updated = if (editingBackground == null) {
                                             current + ThemeBackground(
                                                 id = UUID.randomUUID().toString(),
                                                 label = backgroundLabelInput.trim().ifBlank { "Fundo personalizado" },
                                                 url = normalizedUrl,
-                                                isActive = current.none { it.isActive }
+                                                isActive = current.none { it.isActive },
+                                                startDate = normalizedStartDate,
+                                                endDate = normalizedEndDate
                                             )
                                         } else {
                                             current.map { background ->
                                                 if (background.id == editingBackground!!.id) {
                                                     background.copy(
                                                         label = backgroundLabelInput.trim().ifBlank { "Fundo personalizado" },
-                                                        url = normalizedUrl
+                                                        url = normalizedUrl,
+                                                        startDate = normalizedStartDate,
+                                                        endDate = normalizedEndDate
                                                     )
                                                 } else {
                                                     background
@@ -1268,6 +1391,30 @@ fun MestreScreen(
     }
 }
 
+private fun formatThemeBackgroundDate(value: String): String =
+    ThemeBackground.formatDisplayDate(value) ?: value
+
+private fun backgroundScheduleStatus(background: ThemeBackground): String {
+    if (!background.isActive) return "Desativado manualmente"
+
+    val today = ThemeBackground.todayIsoDate()
+    val start = ThemeBackground.normalizeDate(background.startDate)
+    val end = ThemeBackground.normalizeDate(background.endDate)
+    return when {
+        start != null && today < start ->
+            "Agendado para ${formatThemeBackgroundDate(background.startDate.orEmpty())}"
+        end != null && today > end ->
+            "Período encerrado — fundo padrão ativo"
+        start != null && end != null ->
+            "Ativo de ${formatThemeBackgroundDate(background.startDate.orEmpty())} a ${formatThemeBackgroundDate(background.endDate.orEmpty())} (inclusive)"
+        start != null ->
+            "Ativo desde ${formatThemeBackgroundDate(background.startDate.orEmpty())} — sem data de fim"
+        end != null ->
+            "Ativo até ${formatThemeBackgroundDate(background.endDate.orEmpty())} (inclusive)"
+        else -> "Sem datas — permanece ativo até desativar"
+    }
+}
+
 @Composable
 private fun ThemeBackgroundItem(
     background: ThemeBackground,
@@ -1291,6 +1438,11 @@ private fun ThemeBackgroundItem(
             Spacer(modifier = Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(background.label, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    backgroundScheduleStatus(background),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Text(
                     background.url,
                     style = MaterialTheme.typography.labelSmall,

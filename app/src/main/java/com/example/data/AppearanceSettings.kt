@@ -6,6 +6,6 @@ data class AppearanceSettings(
     val appearanceMode: String = "system",
     val themeBackgrounds: Map<String, List<ThemeBackground>> = emptyMap()
 ) {
-    fun activeBackgroundFor(themeKey: String): ThemeBackground? =
-        themeBackgrounds[themeKey]?.firstOrNull { it.isActive && it.url.isNotBlank() }
+    fun activeBackgroundFor(themeKey: String, date: String = ThemeBackground.todayIsoDate()): ThemeBackground? =
+        themeBackgrounds[themeKey]?.firstOrNull { it.isAvailableOn(date) }
 }

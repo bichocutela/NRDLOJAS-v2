@@ -819,13 +819,20 @@ object FirebaseService {
                         id = id,
                         label = (map["label"] as? String)?.trim().orEmpty().ifBlank { "Fundo personalizado" },
                         url = url,
-                        isActive = map["isActive"] as? Boolean ?: false
+                        isActive = map["isActive"] as? Boolean ?: false,
+                        startDate = normalizePersistedThemeBackgroundDate(map["startDate"] as? String),
+                        endDate = normalizePersistedThemeBackgroundDate(map["endDate"] as? String)
                     )
                 }
                 .orEmpty()
                 .take(5)
             if (items.isNullOrEmpty()) null else themeKey to items
         }.toMap()
+    }
+
+    private fun normalizePersistedThemeBackgroundDate(value: String?): String? {
+        val trimmed = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        return ThemeBackground.normalizeDate(trimmed) ?: trimmed
     }
 
     fun observeAppearanceSettings(): Flow<AppearanceSettings> = callbackFlow {
@@ -890,6 +897,19 @@ object FirebaseService {
         val safeMode = settings.appearanceMode.takeIf {
             it in setOf("system", "light", "dark")
         } ?: "system"
+        val hasInvalidDateWindow = settings.themeBackgrounds.values.flatten().any { background ->
+            val startInput = background.startDate?.trim()?.takeIf { it.isNotBlank() }
+            val endInput = background.endDate?.trim()?.takeIf { it.isNotBlank() }
+            val startDate = ThemeBackground.normalizeDate(startInput)
+            val endDate = ThemeBackground.normalizeDate(endInput)
+            (startInput != null && startDate == null) ||
+                (endInput != null && endDate == null) ||
+                (startDate != null && endDate != null && endDate < startDate)
+        }
+        if (hasInvalidDateWindow) {
+            lastError = "Revise o período do fundo: use datas válidas e não informe fim anterior ao início."
+            return false
+        }
         val safeBackgrounds = SupportedThemeKeys.associateWith { themeKey ->
             var activeFound = false
             settings.themeBackgrounds[themeKey]
@@ -902,12 +922,17 @@ object FirebaseService {
                 .map { background ->
                     val isActive = background.isActive && !activeFound
                     if (isActive) activeFound = true
-                    mapOf(
+                    val startDate = ThemeBackground.normalizeDate(background.startDate)
+                    val endDate = ThemeBackground.normalizeDate(background.endDate)
+                    linkedMapOf<String, Any>(
                         "id" to background.id.ifBlank { UUID.randomUUID().toString() },
                         "label" to background.label.trim().take(80).ifBlank { "Fundo personalizado" },
                         "url" to background.url.trim(),
                         "isActive" to isActive
-                    )
+                    ).apply {
+                        if (startDate != null) put("startDate", startDate)
+                        if (endDate != null) put("endDate", endDate)
+                    }
                 }
         }
 
@@ -1068,7 +1093,9 @@ object FirebaseService {
                     id = id,
                     label = item.optString("label").trim().ifBlank { "Fundo personalizado" },
                     url = url,
-                    isActive = item.optBoolean("isActive", false)
+                    isActive = item.optBoolean("isActive", false),
+                    startDate = normalizePersistedThemeBackgroundDate(item.optString("startDate")),
+                    endDate = normalizePersistedThemeBackgroundDate(item.optString("endDate"))
                 )
             }.take(5)
             if (items.isEmpty()) null else themeKey to items
