@@ -825,7 +825,6 @@ object FirebaseService {
                     )
                 }
                 .orEmpty()
-                .take(5)
             if (items.isNullOrEmpty()) null else themeKey to items
         }.toMap()
     }
@@ -918,7 +917,6 @@ object FirebaseService {
                     val url = background.url.trim()
                     url.startsWith("https://") || url.startsWith("http://")
                 }
-                .take(5)
                 .map { background ->
                     val isActive = background.isActive && !activeFound
                     if (isActive) activeFound = true
@@ -1097,7 +1095,7 @@ object FirebaseService {
                     startDate = normalizePersistedThemeBackgroundDate(item.optString("startDate")),
                     endDate = normalizePersistedThemeBackgroundDate(item.optString("endDate"))
                 )
-            }.take(5)
+            }
             if (items.isEmpty()) null else themeKey to items
         }.toMap()
     }

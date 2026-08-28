@@ -903,12 +903,11 @@ fun MestreScreen(
                                 Spacer(modifier = Modifier.height(6.dp))
                                 OutlinedButton(
                                     onClick = { openBackgroundEditor(themeKey, null) },
-                                    enabled = backgrounds.size < 5,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = null)
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text(if (backgrounds.size < 5) "Adicionar fundo a $themeLabel" else "Limite de 5 fundos atingido")
+                                    Text("Adicionar fundo a $themeLabel")
                                 }
                             }
                         }
@@ -1321,8 +1320,6 @@ fun MestreScreen(
                                             backgroundInputError = "Informe uma data de fim válida."
                                         normalizedStartDate != null && normalizedEndDate != null && normalizedEndDate < normalizedStartDate ->
                                             backgroundInputError = "A data de fim não pode ser anterior à data de início."
-                                        editingBackground == null && current.size >= 5 ->
-                                            backgroundInputError = "Cada tema pode ter até 5 fundos personalizados."
                                         else -> {
                                         val updated = if (editingBackground == null) {
                                             current + ThemeBackground(
