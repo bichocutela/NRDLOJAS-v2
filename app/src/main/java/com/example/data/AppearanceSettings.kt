@@ -7,5 +7,7 @@ data class AppearanceSettings(
     val themeBackgrounds: Map<String, List<ThemeBackground>> = emptyMap()
 ) {
     fun activeBackgroundFor(themeKey: String, date: String = ThemeBackground.todayIsoDate()): ThemeBackground? =
-        themeBackgrounds[themeKey]?.firstOrNull { it.isAvailableOn(date) }
+        themeBackgrounds[themeKey]
+            ?.filter { it.isAvailableOn(date) }
+            ?.maxByOrNull { ThemeBackground.normalizeDate(it.startDate).orEmpty() }
 }

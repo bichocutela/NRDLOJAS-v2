@@ -13,17 +13,14 @@ data class ThemeBackground(
     val startDate: String? = null,
     val endDate: String? = null
 ) {
-    /**
-     * O fundo fica disponível somente quando está marcado como ativo e dentro da
-     * janela opcional. Sem início, começa imediatamente; sem fim, não expira.
-     */
+    /** O fundo só participa do agendamento quando está ativo e possui início válido. */
     fun isAvailableOn(date: String = todayIsoDate()): Boolean {
         if (!isActive || url.isBlank()) return false
 
-        val start = normalizeDate(startDate) ?: if (startDate.isNullOrBlank()) null else return false
+        val start = normalizeDate(startDate) ?: return false
         val end = normalizeDate(endDate) ?: if (endDate.isNullOrBlank()) null else return false
 
-        return (start == null || date >= start) && (end == null || date <= end)
+        return date >= start && (end == null || date <= end)
     }
 
     fun hasStartedBy(date: String = todayIsoDate()): Boolean =

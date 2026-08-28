@@ -910,7 +910,6 @@ object FirebaseService {
             return false
         }
         val safeBackgrounds = SupportedThemeKeys.associateWith { themeKey ->
-            var activeFound = false
             settings.themeBackgrounds[themeKey]
                 .orEmpty()
                 .filter { background ->
@@ -918,15 +917,13 @@ object FirebaseService {
                     url.startsWith("https://") || url.startsWith("http://")
                 }
                 .map { background ->
-                    val isActive = background.isActive && !activeFound
-                    if (isActive) activeFound = true
                     val startDate = ThemeBackground.normalizeDate(background.startDate)
                     val endDate = ThemeBackground.normalizeDate(background.endDate)
                     linkedMapOf<String, Any>(
                         "id" to background.id.ifBlank { UUID.randomUUID().toString() },
                         "label" to background.label.trim().take(80).ifBlank { "Fundo personalizado" },
                         "url" to background.url.trim(),
-                        "isActive" to isActive
+                        "isActive" to (background.isActive && startDate != null)
                     ).apply {
                         if (startDate != null) put("startDate", startDate)
                         if (endDate != null) put("endDate", endDate)

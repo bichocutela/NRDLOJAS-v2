@@ -892,7 +892,7 @@ fun MestreScreen(
                                                 themeKey,
                                                 backgrounds.map {
                                                     if (it.id == background.id) it.copy(isActive = isActive)
-                                                    else if (isActive) it.copy(isActive = false) else it
+                                                    else it
                                                 }
                                             )
                                         },
@@ -1326,7 +1326,7 @@ fun MestreScreen(
                                                 id = UUID.randomUUID().toString(),
                                                 label = backgroundLabelInput.trim().ifBlank { "Fundo personalizado" },
                                                 url = normalizedUrl,
-                                                isActive = current.none { it.isActive },
+                                                isActive = false,
                                                 startDate = normalizedStartDate,
                                                 endDate = normalizedEndDate
                                             )
@@ -1336,6 +1336,7 @@ fun MestreScreen(
                                                     background.copy(
                                                         label = backgroundLabelInput.trim().ifBlank { "Fundo personalizado" },
                                                         url = normalizedUrl,
+                                                        isActive = background.isActive && normalizedStartDate != null,
                                                         startDate = normalizedStartDate,
                                                         endDate = normalizedEndDate
                                                     )
@@ -1392,6 +1393,9 @@ private fun formatThemeBackgroundDate(value: String): String =
     ThemeBackground.formatDisplayDate(value) ?: value
 
 private fun backgroundScheduleStatus(background: ThemeBackground): String {
+    if (ThemeBackground.normalizeDate(background.startDate) == null) {
+        return "Defina a data de início para liberar"
+    }
     if (!background.isActive) return "Desativado manualmente"
 
     val today = ThemeBackground.todayIsoDate()
@@ -1404,11 +1408,7 @@ private fun backgroundScheduleStatus(background: ThemeBackground): String {
             "Período encerrado — fundo padrão ativo"
         start != null && end != null ->
             "Ativo de ${formatThemeBackgroundDate(background.startDate.orEmpty())} a ${formatThemeBackgroundDate(background.endDate.orEmpty())} (inclusive)"
-        start != null ->
-            "Ativo desde ${formatThemeBackgroundDate(background.startDate.orEmpty())} — sem data de fim"
-        end != null ->
-            "Ativo até ${formatThemeBackgroundDate(background.endDate.orEmpty())} (inclusive)"
-        else -> "Sem datas — permanece ativo até desativar"
+        else -> "Ativo desde ${formatThemeBackgroundDate(background.startDate.orEmpty())} — sem data de fim"
     }
 }
 
@@ -1448,7 +1448,11 @@ private fun ThemeBackgroundItem(
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
-            Switch(checked = background.isActive, onCheckedChange = onActiveChange)
+            Switch(
+                checked = background.isActive,
+                onCheckedChange = onActiveChange,
+                enabled = ThemeBackground.normalizeDate(background.startDate) != null
+            )
             IconButton(onClick = onEdit) {
                 Icon(Icons.Default.Edit, contentDescription = "Editar ${background.label}")
             }
