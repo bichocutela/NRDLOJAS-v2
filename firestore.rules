@@ -2,15 +2,41 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /products/{productId} {
-      allow read, write: if true;
+
+    // Compatibilidade imediata com as contas administrativas atuais e
+    // preparação para migrar o papel para custom claims sem nova troca de regras.
+    function isManager() {
+      return request.auth != null && (
+        request.auth.token.role == 'admin' ||
+        request.auth.token.role == 'mestre' ||
+        request.auth.token.email == 'admin@nrdlojas.com' ||
+        request.auth.token.email == 'mestre@nrdlojas.com'
+      );
     }
 
+    // Usuários do app precisam ler o catálogo, mas somente Admin/Mestre podem
+    // criar, apagar ou alterar dados de produto.
+    match /products/{productId} {
+      allow read: if true;
+      allow create, delete: if isManager();
+
+      // A única escrita pública permitida é o contador global de visualização,
+      // usado pela seção "Mais Utilizados". Nenhum campo de catálogo pode mudar.
+      allow update: if isManager() || (
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['searchCount', 'lastViewedAt']) &&
+        request.resource.data.searchCount is int &&
+        resource.data.searchCount is int &&
+        request.resource.data.searchCount == resource.data.searchCount + 1 &&
+        request.resource.data.lastViewedAt == request.time
+      );
+    }
+
+    // Configurações globais podem ser consumidas por todos os aparelhos,
+    // mas somente perfis administrativos autenticados podem publicá-las.
     match /config/{document} {
       allow read: if true;
-      allow write: if request.auth != null
-        && (request.auth.token.email == 'admin@nrdlojas.com'
-            || request.auth.token.email == 'mestre@nrdlojas.com');
+      allow write: if isManager();
     }
   }
 }
