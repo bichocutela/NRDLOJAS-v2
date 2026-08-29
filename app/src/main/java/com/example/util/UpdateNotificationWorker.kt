@@ -33,10 +33,7 @@ class UpdateNotificationWorker(
                         "Notificação de atualização bloqueada pela política efetiva"
                     )
                 } else {
-                    val lastNotifiedTag = preferences.lastNotifiedUpdateTag.first()
-                    if (UpdateChecker.isRemoteVersionNewer(currentVersion, releaseResult.tagName) &&
-                        lastNotifiedTag != releaseResult.tagName
-                    ) {
+                    if (UpdateChecker.isRemoteVersionNewer(currentVersion, releaseResult.tagName)) {
                         NotificationHelper.showUpdateNotification(applicationContext, releaseResult.tagName)
                         preferences.setLastNotifiedUpdateTag(releaseResult.tagName)
                     }
@@ -62,14 +59,14 @@ class UpdateNotificationWorker(
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
-            val request = PeriodicWorkRequestBuilder<UpdateNotificationWorker>(24, TimeUnit.HOURS)
+            val request = PeriodicWorkRequestBuilder<UpdateNotificationWorker>(12, TimeUnit.HOURS)
                 .setConstraints(constraints)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.MINUTES)
                 .build()
 
             WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
                 UNIQUE_WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.UPDATE,
                 request,
             )
         }
