@@ -3,10 +3,14 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
     // Compatibilidade imediata com as contas administrativas atuais e
     // preparação para migrar o papel para custom claims sem nova troca de regras.
     function isManager() {
-      return request.auth != null && (
+      return isSignedIn() && (
         request.auth.token.role == 'admin' ||
         request.auth.token.role == 'mestre' ||
         request.auth.token.email == 'admin@nrdlojas.com' ||
@@ -14,14 +18,12 @@ service cloud.firestore {
       );
     }
 
-    // Usuários do app precisam ler o catálogo, mas somente Admin/Mestre podem
-    // criar, apagar ou alterar dados de produto.
+    // Catálogo público para consulta. Criação, remoção e alterações de conteúdo
+    // ficam restritas a Admin/Mestre. O único update público permitido é o
+    // incremento unitário do contador global de visualização.
     match /products/{productId} {
       allow read: if true;
       allow create, delete: if isManager();
-
-      // A única escrita pública permitida é o contador global de visualização,
-      // usado pela seção "Mais Utilizados". Nenhum campo de catálogo pode mudar.
       allow update: if isManager() || (
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['searchCount', 'lastViewedAt']) &&
@@ -32,11 +34,79 @@ service cloud.firestore {
       );
     }
 
-    // Configurações globais podem ser consumidas por todos os aparelhos,
-    // mas somente perfis administrativos autenticados podem publicá-las.
+    // Configurações globais precisam ser lidas por todos os aparelhos, mas só
+    // podem ser publicadas por perfis administrativos autenticados.
     match /config/{document} {
       allow read: if true;
       allow write: if isManager();
+    }
+
+    // Abas dinâmicas fazem parte da navegação pública do aplicativo.
+    match /dynamic_tabs/{tabId} {
+      allow read: if true;
+      allow write: if isManager();
+    }
+
+    // Documento legado/auxiliar observado pelos clientes.
+    match /latest_product/{document} {
+      allow read: if true;
+      allow write: if isManager();
+    }
+
+    // Histórico e snapshots do catálogo são exclusivamente administrativos.
+    match /catalog_history/{snapshotId} {
+      allow read, write: if isManager();
+
+      match /products/{snapshotProductId} {
+        allow read, write: if isManager();
+      }
+    }
+
+    // Sugestões podem ser enviadas por usuários do aplicativo sem login, mas a
+    // criação é estritamente limitada aos campos e ao estado inicial esperados.
+    // Alterações de status são administrativas. Exclusão pelo próprio usuário só
+    // é aceita quando há Firebase Auth real e o UID do documento pertence a ele;
+    // sugestões anônimas antigas continuam removíveis por Admin/Mestre.
+    match /suggestions/{suggestionId} {
+      allow read: if true;
+
+      allow create: if
+        request.resource.data.keys().hasOnly([
+          'text',
+          'submittedBy',
+          'submittedByUid',
+          'installationId',
+          'appVersion',
+          'createdAt',
+          'status'
+        ]) &&
+        request.resource.data.text is string &&
+        request.resource.data.text.size() > 0 &&
+        request.resource.data.text.size() <= 1000 &&
+        request.resource.data.submittedBy is string &&
+        request.resource.data.submittedBy.size() <= 200 &&
+        request.resource.data.submittedByUid is string &&
+        request.resource.data.submittedByUid.size() <= 200 &&
+        request.resource.data.installationId is string &&
+        request.resource.data.installationId.size() > 0 &&
+        request.resource.data.installationId.size() <= 200 &&
+        request.resource.data.appVersion is string &&
+        request.resource.data.appVersion.size() <= 64 &&
+        request.resource.data.createdAt is int &&
+        request.resource.data.status == 'pending';
+
+      allow update: if isManager();
+
+      allow delete: if isManager() || (
+        isSignedIn() &&
+        resource.data.status == 'fixed' &&
+        resource.data.submittedByUid == request.auth.uid
+      );
+    }
+
+    // Qualquer coleção não declarada acima permanece bloqueada por padrão.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
