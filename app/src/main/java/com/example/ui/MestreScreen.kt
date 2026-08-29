@@ -40,6 +40,8 @@ import com.example.data.ProductImportParser
 import com.example.data.NotificationSettings
 import com.example.data.ProductImportResult
 
+private const val NEW_CATEGORY_ACTION_KEY = "__new_category__"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MestreScreen(
@@ -100,6 +102,7 @@ fun MestreScreen(
     var snapshotToRestore by remember { mutableStateOf<CatalogSnapshot?>(null) }
     var editingCategory by remember { mutableStateOf<CategoryDefinition?>(null) }
     var categoryName by remember { mutableStateOf("") }
+    var categoryActionInProgress by remember { mutableStateOf<String?>(null) }
     val suggestions by FirebaseService.observeSuggestions().collectAsStateWithLifecycle(initialValue = emptyList())
     val coroutineScope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -186,13 +189,11 @@ fun MestreScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             MestreSuggestionsSection(suggestions = suggestions) { suggestion, status ->
-                coroutineScope.launch {
-                    val updated = FirebaseService.updateSuggestionStatus(suggestion.id, status)
-                    snackbarHostState.showSnackbar(
-                        if (updated) "Sugestão marcada como $status."
-                        else "Não foi possível atualizar a sugestão."
-                    )
-                }
+                val updated = FirebaseService.updateSuggestionStatus(suggestion.id, status)
+                val statusLabel = if (status == "fixed") "corrigida" else "pendente"
+                val message = if (updated) "Sugestão marcada como $statusLabel."
+                else "Não foi possível atualizar a sugestão. Tente novamente."
+                coroutineScope.launch { snackbarHostState.showSnackbar(message) }
             }
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -454,7 +455,8 @@ fun MestreScreen(
                             categoryName = ""
                             showCategoryDialog = true
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = categoryActionInProgress == null
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
@@ -468,11 +470,31 @@ fun MestreScreen(
                                 category = category,
                                 isFirst = index == 0,
                                 isLast = index == categoryDefinitions.lastIndex,
+                                enabled = categoryActionInProgress == null,
+                                isUpdating = categoryActionInProgress == category.id,
                                 onMoveUp = {
-                                    coroutineScope.launch { viewModel.moveCategory(category, -1) }
+                                    if (categoryActionInProgress == null) {
+                                        categoryActionInProgress = category.id
+                                        coroutineScope.launch {
+                                            try {
+                                                viewModel.moveCategory(category, -1)
+                                            } finally {
+                                                categoryActionInProgress = null
+                                            }
+                                        }
+                                    }
                                 },
                                 onMoveDown = {
-                                    coroutineScope.launch { viewModel.moveCategory(category, 1) }
+                                    if (categoryActionInProgress == null) {
+                                        categoryActionInProgress = category.id
+                                        coroutineScope.launch {
+                                            try {
+                                                viewModel.moveCategory(category, 1)
+                                            } finally {
+                                                categoryActionInProgress = null
+                                            }
+                                        }
+                                    }
                                 },
                                 onEdit = {
                                     editingCategory = category
@@ -480,7 +502,16 @@ fun MestreScreen(
                                     showCategoryDialog = true
                                 },
                                 onActiveChange = { isActive ->
-                                    coroutineScope.launch { viewModel.setCategoryActive(category, isActive) }
+                                    if (categoryActionInProgress == null) {
+                                        categoryActionInProgress = category.id
+                                        coroutineScope.launch {
+                                            try {
+                                                viewModel.setCategoryActive(category, isActive)
+                                            } finally {
+                                                categoryActionInProgress = null
+                                            }
+                                        }
+                                    }
                                 }
                             )
                             if (index < categoryDefinitions.lastIndex) {
@@ -1058,7 +1089,11 @@ fun MestreScreen(
 
             if (showCategoryDialog) {
                 AlertDialog(
-                    onDismissRequest = { showCategoryDialog = false },
+                    onDismissRequest = {
+                        if (categoryActionInProgress == null) {
+                            showCategoryDialog = false
+                        }
+                    },
                     title = { Text(if (editingCategory == null) "Nova categoria" else "Renomear categoria") },
                     text = {
                         OutlinedTextField(
@@ -1066,28 +1101,46 @@ fun MestreScreen(
                             onValueChange = { categoryName = it },
                             label = { Text("Nome da categoria") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = categoryActionInProgress == null
                         )
                     },
                     confirmButton = {
                         TextButton(
                             onClick = {
-                                coroutineScope.launch {
-                                    val saved = editingCategory?.let {
-                                        viewModel.renameCategory(it, categoryName)
-                                    } ?: viewModel.addCategory(categoryName)
-                                    if (saved) {
-                                        showCategoryDialog = false
+                                if (categoryActionInProgress == null) {
+                                    val actionKey = editingCategory?.id ?: NEW_CATEGORY_ACTION_KEY
+                                    categoryActionInProgress = actionKey
+                                    coroutineScope.launch {
+                                        try {
+                                            val saved = editingCategory?.let {
+                                                viewModel.renameCategory(it, categoryName)
+                                            } ?: viewModel.addCategory(categoryName)
+                                            if (saved) {
+                                                showCategoryDialog = false
+                                            }
+                                        } finally {
+                                            categoryActionInProgress = null
+                                        }
                                     }
                                 }
                             },
-                            enabled = categoryName.isNotBlank()
+                            enabled = categoryName.isNotBlank() && categoryActionInProgress == null
                         ) {
-                            Text("Salvar")
+                            if (categoryActionInProgress != null) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Salvando...")
+                            } else {
+                                Text("Salvar")
+                            }
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showCategoryDialog = false }) {
+                        TextButton(
+                            onClick = { showCategoryDialog = false },
+                            enabled = categoryActionInProgress == null
+                        ) {
                             Text("Cancelar")
                         }
                     }
@@ -1564,6 +1617,8 @@ private fun CategoryManagementRow(
     category: CategoryDefinition,
     isFirst: Boolean,
     isLast: Boolean,
+    enabled: Boolean,
+    isUpdating: Boolean,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
     onEdit: () -> Unit,
@@ -1581,18 +1636,22 @@ private fun CategoryManagementRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        IconButton(onClick = onMoveUp, enabled = !isFirst) {
+        if (isUpdating) {
+            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+        }
+        IconButton(onClick = onMoveUp, enabled = enabled && !isFirst) {
             Icon(Icons.Default.ArrowUpward, contentDescription = "Mover ${category.name} para cima")
         }
-        IconButton(onClick = onMoveDown, enabled = !isLast) {
+        IconButton(onClick = onMoveDown, enabled = enabled && !isLast) {
             Icon(Icons.Default.ArrowDownward, contentDescription = "Mover ${category.name} para baixo")
         }
-        IconButton(onClick = onEdit) {
+        IconButton(onClick = onEdit, enabled = enabled) {
             Icon(Icons.Default.Edit, contentDescription = "Renomear ${category.name}")
         }
         Switch(
             checked = category.isActive,
-            onCheckedChange = onActiveChange
+            onCheckedChange = onActiveChange,
+            enabled = enabled
         )
     }
 }

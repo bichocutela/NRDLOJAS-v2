@@ -17,6 +17,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
@@ -27,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,16 +37,19 @@ import com.example.data.ProductSuggestion
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 private const val SUGGESTIONS_PAGE_SIZE = 10
 
 @Composable
 internal fun MestreSuggestionsSection(
     suggestions: List<ProductSuggestion>,
-    onStatusChange: (ProductSuggestion, String) -> Unit
+    onStatusChange: suspend (ProductSuggestion, String) -> Unit
 ) {
     var suggestionFilter by remember { mutableStateOf("all") }
     var suggestionPage by remember { mutableIntStateOf(0) }
+    var updatingSuggestionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val coroutineScope = rememberCoroutineScope()
 
     MestreSectionHeader(
         title = "Pendências",
@@ -135,8 +140,21 @@ internal fun MestreSuggestionsSection(
                 filteredSuggestions
                     .subList(pagination.fromIndex, pagination.toIndex)
                     .forEach { suggestion ->
-                        SuggestionManagementItem(suggestion) { status ->
-                            onStatusChange(suggestion, status)
+                        val isUpdating = suggestion.id in updatingSuggestionIds
+                        SuggestionManagementItem(
+                            suggestion = suggestion,
+                            isUpdating = isUpdating
+                        ) { status ->
+                            if (suggestion.id !in updatingSuggestionIds) {
+                                updatingSuggestionIds = updatingSuggestionIds + suggestion.id
+                                coroutineScope.launch {
+                                    try {
+                                        onStatusChange(suggestion, status)
+                                    } finally {
+                                        updatingSuggestionIds = updatingSuggestionIds - suggestion.id
+                                    }
+                                }
+                            }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                     }
@@ -172,6 +190,7 @@ internal fun MestreSuggestionsSection(
 @Composable
 private fun SuggestionManagementItem(
     suggestion: ProductSuggestion,
+    isUpdating: Boolean,
     onStatusChange: (String) -> Unit
 ) {
     val dateText = if (suggestion.createdAt > 0L) {
@@ -187,6 +206,10 @@ private fun SuggestionManagementItem(
             Text("Enviada por: ${suggestion.submittedBy}", style = MaterialTheme.typography.bodySmall)
             Text(dateText, style = MaterialTheme.typography.bodySmall)
             Spacer(modifier = Modifier.height(8.dp))
+            if (isUpdating) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -194,7 +217,7 @@ private fun SuggestionManagementItem(
             ) {
                 Button(
                     onClick = { onStatusChange(ProductSuggestion.STATUS_PENDING) },
-                    enabled = isFixed,
+                    enabled = isFixed && !isUpdating,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -207,7 +230,7 @@ private fun SuggestionManagementItem(
                 }
                 Button(
                     onClick = { onStatusChange(ProductSuggestion.STATUS_FIXED) },
-                    enabled = !isFixed,
+                    enabled = !isFixed && !isUpdating,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
