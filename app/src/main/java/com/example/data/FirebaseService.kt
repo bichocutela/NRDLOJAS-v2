@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.channels.awaitClose
 import android.util.Log
-import java.util.concurrent.atomic.AtomicBoolean
 
 object FirebaseService {
     private const val APPEARANCE_MANIFEST_PATH = "config/appearance-settings.json"
@@ -863,13 +862,25 @@ object FirebaseService {
             return@callbackFlow
         }
 
-        // O manifesto público permite que usuários comuns recebam os fundos mesmo
-        // quando as regras antigas do Firestore não aceitam o novo campo aninhado.
-        val publicManifestLoaded = AtomicBoolean(false)
+        val appearanceStateLock = Any()
+        var publicManifestSettings: AppearanceSettings? = null
+        var firestoreSettings: AppearanceSettings? = null
+
+        fun emitMostRecentSettings() {
+            val settings = synchronized(appearanceStateLock) {
+                mostRecentAppearanceSettings(publicManifestSettings, firestoreSettings)
+            }
+            settings?.let { trySend(it) }
+        }
+
+        // O manifesto público é a fonte canônica. O Firestore mantém o tempo real
+        // e a revisão impede que uma cópia antiga substitua uma publicação nova.
         val publicManifestJob = launch {
             fetchPublicAppearanceSettings()?.let { settings ->
-                publicManifestLoaded.set(true)
-                trySend(settings)
+                synchronized(appearanceStateLock) {
+                    publicManifestSettings = settings
+                }
+                emitMostRecentSettings()
             }
         }
 
@@ -881,22 +892,20 @@ object FirebaseService {
                     Log.e("FirebaseService", "Erro ao observar aparência", error)
                     return@addSnapshotListener
                 }
-                // O manifesto é a fonte pública da configuração de fundos. O
-                // Firestore continua sendo observado para compatibilidade e tempo real.
-                if (!publicManifestLoaded.get()) {
-                    trySend(
-                        AppearanceSettings(
-                            overrideLocalTheme = snapshot?.getBoolean("appearanceOverrideLocalTheme") ?: false,
-                            theme = snapshot?.getString("appearanceTheme")
-                                ?.takeIf { it in SupportedThemeKeys }
-                                ?: "multicolor",
-                            appearanceMode = snapshot?.getString("appearanceMode")
-                                ?.takeIf { it in setOf("system", "light", "dark") }
-                                ?: "system",
-                            themeBackgrounds = parseThemeBackgrounds(snapshot?.get("appearanceThemeBackgrounds"))
-                        )
+                synchronized(appearanceStateLock) {
+                    firestoreSettings = AppearanceSettings(
+                        overrideLocalTheme = snapshot?.getBoolean("appearanceOverrideLocalTheme") ?: false,
+                        theme = snapshot?.getString("appearanceTheme")
+                            ?.takeIf { it in SupportedThemeKeys }
+                            ?: "multicolor",
+                        appearanceMode = snapshot?.getString("appearanceMode")
+                            ?.takeIf { it in setOf("system", "light", "dark") }
+                            ?: "system",
+                        themeBackgrounds = parseThemeBackgrounds(snapshot?.get("appearanceThemeBackgrounds")),
+                        revision = snapshot?.getLong("appearanceRevision") ?: 0L
                     )
                 }
+                emitMostRecentSettings()
             }
         awaitClose {
             publicManifestJob.cancel()
@@ -918,6 +927,7 @@ object FirebaseService {
         val safeMode = settings.appearanceMode.takeIf {
             it in setOf("system", "light", "dark")
         } ?: "system"
+        val revision = System.currentTimeMillis()
         val hasInvalidDateWindow = settings.themeBackgrounds.values.flatten().any { background ->
             val startInput = background.startDate?.trim()?.takeIf { it.isNotBlank() }
             val endInput = background.endDate?.trim()?.takeIf { it.isNotBlank() }
@@ -957,7 +967,8 @@ object FirebaseService {
             overrideLocalTheme = settings.overrideLocalTheme,
             theme = safeTheme,
             appearanceMode = safeMode,
-            themeBackgrounds = safeBackgrounds
+            themeBackgrounds = safeBackgrounds,
+            revision = revision
         )
         val publicManifestSaved = runCatching {
             uploadPublicAppearanceManifest(manifest)
@@ -966,7 +977,14 @@ object FirebaseService {
             Log.e("FirebaseService", "Erro ao publicar manifesto público de aparência", error)
         }.getOrDefault(false)
 
-        val firestoreSaved = try {
+        if (!publicManifestSaved) {
+            if (lastError.isNullOrBlank()) {
+                lastError = "Não foi possível publicar a aparência para os usuários."
+            }
+            return false
+        }
+
+        try {
             FirebaseFirestore.getInstance()
                 .collection("config")
                 .document("appSettings")
@@ -975,33 +993,28 @@ object FirebaseService {
                         "appearanceOverrideLocalTheme" to settings.overrideLocalTheme,
                         "appearanceTheme" to safeTheme,
                         "appearanceMode" to safeMode,
-                        "appearanceThemeBackgrounds" to safeBackgrounds
+                        "appearanceThemeBackgrounds" to safeBackgrounds,
+                        "appearanceRevision" to revision
                     ),
                     com.google.firebase.firestore.SetOptions.merge()
                 )
                 .await()
-            true
         } catch (e: Exception) {
-            lastError = e.message
-            Log.e("FirebaseService", "Erro ao salvar aparência no Firestore", e)
-            false
+            // O manifesto já foi publicado e continua sendo a fonte canônica.
+            // A próxima abertura ainda receberá a configuração correta.
+            Log.w("FirebaseService", "Aparência publicada; espelho em tempo real indisponível", e)
         }
 
-        if (publicManifestSaved || firestoreSaved) {
-            lastError = null
-            return true
-        }
-        if (lastError.isNullOrBlank()) {
-            lastError = "Não foi possível publicar a aparência nos serviços remotos."
-        }
-        return false
+        lastError = null
+        return true
     }
 
     private fun buildAppearanceManifest(
         overrideLocalTheme: Boolean,
         theme: String,
         appearanceMode: String,
-        themeBackgrounds: Map<String, List<Map<String, Any>>>
+        themeBackgrounds: Map<String, List<Map<String, Any>>>,
+        revision: Long
     ): String {
         val backgroundsJson = org.json.JSONObject()
         themeBackgrounds.forEach { (themeKey, backgrounds) ->
@@ -1016,6 +1029,7 @@ object FirebaseService {
             .put("appearanceTheme", theme)
             .put("appearanceMode", appearanceMode)
             .put("appearanceThemeBackgrounds", backgroundsJson)
+            .put("appearanceRevision", revision)
             .toString()
     }
 
@@ -1091,7 +1105,8 @@ object FirebaseService {
             appearanceMode = root.optString("appearanceMode")
                 .takeIf { it in setOf("system", "light", "dark") }
                 ?: "system",
-            themeBackgrounds = parseThemeBackgroundsJson(root.optJSONObject("appearanceThemeBackgrounds"))
+            themeBackgrounds = parseThemeBackgroundsJson(root.optJSONObject("appearanceThemeBackgrounds")),
+            revision = root.optLong("appearanceRevision", 0L)
         )
     }.getOrNull()
 

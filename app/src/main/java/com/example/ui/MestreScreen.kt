@@ -827,7 +827,7 @@ fun MestreScreen(
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                     )
                     Text(
-                        "O fundo padrão permanece disponível. Ative no máximo um fundo personalizado por tema; se todos estiverem desativados, o padrão volta a aparecer.",
+                        "O fundo padrão permanece disponível. Você pode ativar vários fundos por tema quando cada um tiver data de início; o período define qual aparece ao longo do ano.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
