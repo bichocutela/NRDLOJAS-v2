@@ -94,10 +94,6 @@ class MainActivity : ComponentActivity() {
                 notificationsEnabled = notificationsEnabled
             )
         }
-        lifecycleScope.launch {
-            com.example.data.DeviceInstallationService.register(this@MainActivity)
-        }
-
         val crashLog = CrashReporter.getCrashLog(this)
         if (crashLog != null) {
             Thread {
