@@ -44,6 +44,8 @@ import com.example.data.NotificationSettings
 import com.example.data.ProductImportResult
 import com.example.data.ProductSuggestion
 
+private const val SUGGESTIONS_PAGE_SIZE = 10
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MestreScreen(
@@ -106,6 +108,7 @@ fun MestreScreen(
     var categoryName by remember { mutableStateOf("") }
     val suggestions by FirebaseService.observeSuggestions().collectAsStateWithLifecycle(initialValue = emptyList())
     var suggestionFilter by remember { mutableStateOf("all") }
+    var suggestionPage by remember { mutableIntStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
     val themeBackgroundLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -219,7 +222,10 @@ fun MestreScreen(
                         listOf("all" to "Todas", "pending" to "Pendentes", "fixed" to "Corrigidas").forEach { (filterKey, filterLabel) ->
                             FilterChip(
                                 selected = suggestionFilter == filterKey,
-                                onClick = { suggestionFilter = filterKey },
+                                onClick = {
+                                    suggestionFilter = filterKey
+                                    suggestionPage = 0
+                                },
                                 label = { Text(filterLabel, maxLines = 1) }
                             )
                         }
@@ -232,6 +238,16 @@ fun MestreScreen(
                                 (suggestionFilter == "fixed" && suggestion.status == ProductSuggestion.STATUS_FIXED)
                         }
                         .sortedBy { if (it.status == ProductSuggestion.STATUS_PENDING) 0 else 1 }
+                    val pagination = calculatePaginationWindow(
+                        totalItems = filteredSuggestions.size,
+                        requestedPage = suggestionPage,
+                        pageSize = SUGGESTIONS_PAGE_SIZE
+                    )
+                    LaunchedEffect(suggestionFilter, filteredSuggestions.size) {
+                        if (suggestionPage != pagination.pageIndex) {
+                            suggestionPage = pagination.pageIndex
+                        }
+                    }
                     if (filteredSuggestions.isEmpty()) {
                         Text(
                             if (suggestionFilter == "pending") "Nenhuma pendência no momento."
@@ -240,16 +256,48 @@ fun MestreScreen(
                             style = MaterialTheme.typography.bodyMedium
                         )
                     } else {
-                        filteredSuggestions.forEach { suggestion ->
-                            SuggestionManagementItem(suggestion) { status ->
-                                coroutineScope.launch {
-                                    val updated = FirebaseService.updateSuggestionStatus(suggestion.id, status)
-                                    snackbarHostState.showSnackbar(
-                                        if (updated) "Sugestão marcada como $status." else "Não foi possível atualizar a sugestão."
-                                    )
+                        Text(
+                            "Exibindo ${pagination.fromIndex + 1}–${pagination.toIndex} de ${filteredSuggestions.size}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        filteredSuggestions
+                            .subList(pagination.fromIndex, pagination.toIndex)
+                            .forEach { suggestion ->
+                                SuggestionManagementItem(suggestion) { status ->
+                                    coroutineScope.launch {
+                                        val updated = FirebaseService.updateSuggestionStatus(suggestion.id, status)
+                                        snackbarHostState.showSnackbar(
+                                            if (updated) "Sugestão marcada como $status." else "Não foi possível atualizar a sugestão."
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        if (pagination.pageCount > 1) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TextButton(
+                                    onClick = { suggestionPage = pagination.pageIndex - 1 },
+                                    enabled = pagination.pageIndex > 0
+                                ) {
+                                    Text("Anterior")
+                                }
+                                Text(
+                                    "Página ${pagination.pageIndex + 1} de ${pagination.pageCount}",
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                                TextButton(
+                                    onClick = { suggestionPage = pagination.pageIndex + 1 },
+                                    enabled = pagination.pageIndex < pagination.pageCount - 1
+                                ) {
+                                    Text("Próxima")
                                 }
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
                 }
