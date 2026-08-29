@@ -89,6 +89,10 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             val notificationsEnabled = userPreferences.notificationsEnabled.first()
             FcmTopicSubscription.reconcile(notificationsEnabled)
+            FcmTopicSubscription.reconcileMasterUpdates(
+                isMaster = FcmTopicSubscription.isMasterAuthenticated(),
+                notificationsEnabled = notificationsEnabled
+            )
         }
 
         val crashLog = CrashReporter.getCrashLog(this)

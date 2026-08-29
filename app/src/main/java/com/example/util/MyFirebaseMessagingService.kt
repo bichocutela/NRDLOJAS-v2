@@ -121,6 +121,10 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             val remoteNotificationsEnabled = FirebaseService.getNotificationSettings().enabled
             val effectiveNotificationsEnabled = notificationsEnabled && remoteNotificationsEnabled
             FcmTopicSubscription.reconcile(effectiveNotificationsEnabled)
+            FcmTopicSubscription.reconcileMasterUpdates(
+                isMaster = FcmTopicSubscription.isMasterAuthenticated(),
+                notificationsEnabled = effectiveNotificationsEnabled
+            )
             val installationId = preferences.getOrCreateInstallationId()
             FcmTopicSubscription.reconcileSuggestionTopic(effectiveNotificationsEnabled, installationId)
         }

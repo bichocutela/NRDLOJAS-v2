@@ -21,6 +21,13 @@ class UpdateNotificationWorker(
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
+        if (FcmTopicSubscription.isMasterAuthenticated()) {
+            android.util.Log.d(
+                "UpdateNotificationWorker",
+                "Verificação periódica ignorada: Mestre usa o canal imediato de atualizações"
+            )
+            return Result.success()
+        }
         return when (val releaseResult = UpdateChecker.checkLatestRelease()) {
             is ReleaseCheckResult.Success -> {
                 val currentVersion = BuildConfig.VERSION_NAME

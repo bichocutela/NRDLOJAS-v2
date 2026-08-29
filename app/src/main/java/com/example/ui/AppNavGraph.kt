@@ -44,6 +44,11 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
             val authenticatedRole = managementRoleForEmail(auth.currentUser?.email)
             isLoggedIn = authenticatedRole != null
             userRole = authenticatedRole ?: "user"
+            scope.launch {
+                com.example.util.FcmTopicSubscription.reconcileMasterUpdates(
+                    isMaster = authenticatedRole == "mestre"
+                )
+            }
         }
         firebaseAuth.addAuthStateListener(listener)
         onDispose { firebaseAuth.removeAuthStateListener(listener) }
@@ -78,6 +83,9 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
                         }
                     },
                     onLogout = {
+                        scope.launch {
+                            com.example.util.FcmTopicSubscription.reconcileMasterUpdates(isMaster = false)
+                        }
                         firebaseAuth.signOut()
                         isLoggedIn = false
                         userRole = "user"

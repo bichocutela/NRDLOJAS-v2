@@ -1,13 +1,19 @@
 package com.example.util
 
 import android.util.Log
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.tasks.await
 
 object FcmTopicSubscription {
     private const val TAG = "FcmTopicSubscription"
     private const val PRODUCTS_TOPIC = "products"
+    private const val MASTER_UPDATES_TOPIC = "master_updates"
     private const val SUGGESTION_TOPIC_PREFIX = "suggestion_"
+
+    fun isMasterAuthenticated(): Boolean =
+        FirebaseAuth.getInstance().currentUser?.email
+            ?.equals("mestre@nrdlojas.com", ignoreCase = true) == true
 
     fun suggestionTopicForInstallation(installationId: String): String =
         "$SUGGESTION_TOPIC_PREFIX${installationId.replace("-", "")}".take(900)
@@ -30,6 +36,21 @@ object FcmTopicSubscription {
 
     suspend fun subscribeToSuggestionTopic(installationId: String) {
         reconcileSuggestionTopic(enabled = true, installationId = installationId)
+    }
+
+    suspend fun reconcileMasterUpdates(isMaster: Boolean, notificationsEnabled: Boolean = true) {
+        val shouldSubscribe = isMaster && notificationsEnabled
+        val operation = if (shouldSubscribe) "subscribe" else "unsubscribe"
+        try {
+            if (shouldSubscribe) {
+                FirebaseMessaging.getInstance().subscribeToTopic(MASTER_UPDATES_TOPIC).await()
+            } else {
+                FirebaseMessaging.getInstance().unsubscribeFromTopic(MASTER_UPDATES_TOPIC).await()
+            }
+            Log.d(TAG, "Operação concluída: $operation no tópico de atualizações do Mestre")
+        } catch (error: Exception) {
+            Log.e(TAG, "Falha na operação $operation no tópico de atualizações do Mestre", error)
+        }
     }
 
     suspend fun reconcile(notificationsEnabled: Boolean) {
