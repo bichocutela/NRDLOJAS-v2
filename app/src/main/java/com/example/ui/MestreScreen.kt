@@ -15,9 +15,6 @@ import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Pending
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,9 +39,6 @@ import com.example.data.MaintenanceSummary
 import com.example.data.ProductImportParser
 import com.example.data.NotificationSettings
 import com.example.data.ProductImportResult
-import com.example.data.ProductSuggestion
-
-private const val SUGGESTIONS_PAGE_SIZE = 10
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,8 +101,6 @@ fun MestreScreen(
     var editingCategory by remember { mutableStateOf<CategoryDefinition?>(null) }
     var categoryName by remember { mutableStateOf("") }
     val suggestions by FirebaseService.observeSuggestions().collectAsStateWithLifecycle(initialValue = emptyList())
-    var suggestionFilter by remember { mutableStateOf("all") }
-    var suggestionPage by remember { mutableIntStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
     val themeBackgroundLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -193,113 +185,13 @@ fun MestreScreen(
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            MestreSectionHeader(
-                title = "Pendências",
-                description = "Analise sugestões dos usuários e marque solicitações como corrigidas"
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Sugestões dos usuários", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        Text(
-                            suggestions.count { it.status == ProductSuggestion.STATUS_PENDING }.toString(),
-                            color = MaterialTheme.colorScheme.error,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.FilterList, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        listOf("all" to "Todas", "pending" to "Pendentes", "fixed" to "Corrigidas").forEach { (filterKey, filterLabel) ->
-                            FilterChip(
-                                selected = suggestionFilter == filterKey,
-                                onClick = {
-                                    suggestionFilter = filterKey
-                                    suggestionPage = 0
-                                },
-                                label = { Text(filterLabel, maxLines = 1) }
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    val filteredSuggestions = suggestions
-                        .filter { suggestion ->
-                            suggestionFilter == "all" ||
-                                (suggestionFilter == "pending" && suggestion.status == ProductSuggestion.STATUS_PENDING) ||
-                                (suggestionFilter == "fixed" && suggestion.status == ProductSuggestion.STATUS_FIXED)
-                        }
-                        .sortedBy { if (it.status == ProductSuggestion.STATUS_PENDING) 0 else 1 }
-                    val pagination = calculatePaginationWindow(
-                        totalItems = filteredSuggestions.size,
-                        requestedPage = suggestionPage,
-                        pageSize = SUGGESTIONS_PAGE_SIZE
+            MestreSuggestionsSection(suggestions = suggestions) { suggestion, status ->
+                coroutineScope.launch {
+                    val updated = FirebaseService.updateSuggestionStatus(suggestion.id, status)
+                    snackbarHostState.showSnackbar(
+                        if (updated) "Sugestão marcada como $status."
+                        else "Não foi possível atualizar a sugestão."
                     )
-                    LaunchedEffect(suggestionFilter, filteredSuggestions.size) {
-                        if (suggestionPage != pagination.pageIndex) {
-                            suggestionPage = pagination.pageIndex
-                        }
-                    }
-                    if (filteredSuggestions.isEmpty()) {
-                        Text(
-                            if (suggestionFilter == "pending") "Nenhuma pendência no momento."
-                            else if (suggestionFilter == "fixed") "Nenhuma sugestão corrigida."
-                            else "Nenhuma sugestão recebida.",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    } else {
-                        Text(
-                            "Exibindo ${pagination.fromIndex + 1}–${pagination.toIndex} de ${filteredSuggestions.size}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        filteredSuggestions
-                            .subList(pagination.fromIndex, pagination.toIndex)
-                            .forEach { suggestion ->
-                                SuggestionManagementItem(suggestion) { status ->
-                                    coroutineScope.launch {
-                                        val updated = FirebaseService.updateSuggestionStatus(suggestion.id, status)
-                                        snackbarHostState.showSnackbar(
-                                            if (updated) "Sugestão marcada como $status." else "Não foi possível atualizar a sugestão."
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                            }
-                        if (pagination.pageCount > 1) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                TextButton(
-                                    onClick = { suggestionPage = pagination.pageIndex - 1 },
-                                    enabled = pagination.pageIndex > 0
-                                ) {
-                                    Text("Anterior")
-                                }
-                                Text(
-                                    "Página ${pagination.pageIndex + 1} de ${pagination.pageCount}",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                TextButton(
-                                    onClick = { suggestionPage = pagination.pageIndex + 1 },
-                                    enabled = pagination.pageIndex < pagination.pageCount - 1
-                                ) {
-                                    Text("Próxima")
-                                }
-                            }
-                        }
-                    }
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -1722,65 +1614,11 @@ private fun HomeSettingSwitch(
 }
 
 @Composable
-private fun MestreSectionHeader(title: String, description: String) {
+internal fun MestreSectionHeader(title: String, description: String) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
     ) {
         Text(title, style = MaterialTheme.typography.titleLarge)
         Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun SuggestionManagementItem(
-    suggestion: ProductSuggestion,
-    onStatusChange: (String) -> Unit
-) {
-    val dateText = if (suggestion.createdAt > 0L) {
-        SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(suggestion.createdAt))
-    } else {
-        "Data não informada"
-    }
-    val isFixed = suggestion.status == ProductSuggestion.STATUS_FIXED
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(suggestion.text, style = MaterialTheme.typography.bodyLarge)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text("Enviada por: ${suggestion.submittedBy}", style = MaterialTheme.typography.bodySmall)
-            Text(dateText, style = MaterialTheme.typography.bodySmall)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = { onStatusChange(ProductSuggestion.STATUS_PENDING) },
-                    enabled = isFixed,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                ) {
-                    Icon(Icons.Default.Pending, contentDescription = null)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Pendente", maxLines = 1)
-                }
-                Button(
-                    onClick = { onStatusChange(ProductSuggestion.STATUS_FIXED) },
-                    enabled = !isFixed,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                ) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Corrigido", maxLines = 1)
-                }
-            }
-        }
     }
 }
