@@ -3,6 +3,7 @@ package com.example.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -24,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -43,6 +45,9 @@ import com.example.data.ProductImportParser
 import com.example.data.NotificationSettings
 import com.example.data.ProductImportResult
 import com.example.data.ProductSuggestion
+import com.example.data.DeviceInstallation
+import com.example.data.DeviceInstallationPage
+import com.example.data.DeviceInstallationService
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,6 +103,15 @@ fun MestreScreen(
     var backgroundInputError by remember { mutableStateOf<String?>(null) }
     var isUploadingThemeBackground by remember { mutableStateOf(false) }
     var backgroundToDelete by remember { mutableStateOf<Pair<String, ThemeBackground>?>(null) }
+    var showInstalledBasePasswordDialog by remember { mutableStateOf(false) }
+    var showInstalledBaseDialog by remember { mutableStateOf(false) }
+    var installedBasePassword by remember { mutableStateOf("") }
+    var installedBasePasswordError by remember { mutableStateOf<String?>(null) }
+    var isUnlockingInstalledBase by remember { mutableStateOf(false) }
+    var installedBasePage by remember { mutableStateOf<DeviceInstallationPage?>(null) }
+    var installedBasePageTokens by remember { mutableStateOf<List<String?>>(listOf(null)) }
+    var installedBasePageIndex by remember { mutableStateOf(0) }
+    var isLoadingInstalledBase by remember { mutableStateOf(false) }
     var maintenanceSummary by remember { mutableStateOf<MaintenanceSummary?>(null) }
     var isLoadingMaintenance by remember { mutableStateOf(false) }
     var showSyncConfirmation by remember { mutableStateOf(false) }
@@ -154,6 +168,148 @@ fun MestreScreen(
         }
     }
 
+    fun loadInstalledBasePage(pageToken: String?, pageIndex: Int) {
+        coroutineScope.launch {
+            isLoadingInstalledBase = true
+            installedBasePage = DeviceInstallationService.loadPage(pageToken = pageToken, pageSize = 25)
+            installedBasePageIndex = pageIndex
+            isLoadingInstalledBase = false
+            if (installedBasePage == null) {
+                snackbarHostState.showSnackbar("Não foi possível carregar a base instalada.")
+            }
+        }
+    }
+
+    if (showInstalledBasePasswordDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isUnlockingInstalledBase) showInstalledBasePasswordDialog = false
+            },
+            title = { Text("Verificação necessária") },
+            text = {
+                Column {
+                    Text("Confirme a senha da conta Mestre para abrir a Base instalada.")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = installedBasePassword,
+                        onValueChange = {
+                            installedBasePassword = it
+                            installedBasePasswordError = null
+                        },
+                        label = { Text("Senha") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        isError = installedBasePasswordError != null,
+                        supportingText = {
+                            installedBasePasswordError?.let { Text(it) }
+                        },
+                        singleLine = true,
+                        enabled = !isUnlockingInstalledBase
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            isUnlockingInstalledBase = true
+                            val authenticated = DeviceInstallationService.reauthenticateMaster(installedBasePassword)
+                            isUnlockingInstalledBase = false
+                            if (authenticated) {
+                                installedBasePassword = ""
+                                installedBasePasswordError = null
+                                showInstalledBasePasswordDialog = false
+                                showInstalledBaseDialog = true
+                                installedBasePageTokens = listOf(null)
+                                loadInstalledBasePage(pageToken = null, pageIndex = 0)
+                            } else {
+                                installedBasePasswordError = "Senha incorreta ou sessão Mestre inválida."
+                            }
+                        }
+                    },
+                    enabled = installedBasePassword.isNotBlank() && !isUnlockingInstalledBase
+                ) {
+                    Text(if (isUnlockingInstalledBase) "Verificando..." else "Verificar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showInstalledBasePasswordDialog = false },
+                    enabled = !isUnlockingInstalledBase
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (showInstalledBaseDialog) {
+        AlertDialog(
+            onDismissRequest = { showInstalledBaseDialog = false },
+            title = {
+                Text("Base instalada · " + (installedBasePage?.total ?: 0))
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
+                    if (isLoadingInstalledBase) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(160.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    } else {
+                        val page = installedBasePage
+                        if (page == null || page.items.isEmpty()) {
+                            Text("Nenhum aparelho registrado nesta página.")
+                        } else {
+                            androidx.compose.foundation.lazy.LazyColumn(
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(page.items.size, key = { page.items[it].id }) { index ->
+                                    DeviceInstallationBubble(page.items[index])
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = {
+                                val previousIndex = (installedBasePageIndex - 1).coerceAtLeast(0)
+                                loadInstalledBasePage(installedBasePageTokens[previousIndex], previousIndex)
+                            },
+                            enabled = installedBasePageIndex > 0 && !isLoadingInstalledBase
+                        ) {
+                            Text("Anterior")
+                        }
+                        Text("Página " + (installedBasePageIndex + 1), style = MaterialTheme.typography.labelMedium)
+                        TextButton(
+                            onClick = {
+                                val nextToken = installedBasePage?.nextPageToken ?: return@TextButton
+                                val nextIndex = installedBasePageIndex + 1
+                                installedBasePageTokens = installedBasePageTokens.take(nextIndex) + nextToken
+                                loadInstalledBasePage(nextToken, nextIndex)
+                            },
+                            enabled = installedBasePage?.nextPageToken != null && !isLoadingInstalledBase
+                        ) {
+                            Text("Próxima")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showInstalledBaseDialog = false }) {
+                    Text("Fechar")
+                }
+            }
+        )
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -189,6 +345,37 @@ fun MestreScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(24.dp))
+
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    installedBasePassword = ""
+                    installedBasePasswordError = null
+                    showInstalledBasePasswordDialog = true
+                }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Inventory,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Base instalada", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Consulta protegida de aparelhos registrados",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
 
             MestreSectionHeader(
                 title = "Pendências",
@@ -1391,6 +1578,43 @@ fun MestreScreen(
 
 private fun formatThemeBackgroundDate(value: String): String =
     ThemeBackground.formatDisplayDate(value) ?: value
+
+@Composable
+private fun DeviceInstallationBubble(device: DeviceInstallation) {
+    val place = listOfNotNull(device.city, device.state).filter { it.isNotBlank() }.joinToString(" - ")
+        .ifBlank { "Cidade e estado não informados" }
+    val coordinates = if (device.latitude != null && device.longitude != null) {
+        String.format(Locale.US, "%.4f, %.4f", device.latitude, device.longitude)
+    } else {
+        "Localização não autorizada"
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                device.deviceName.ifBlank { "Aparelho Android" },
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                listOf(device.manufacturer, device.model).filter { it.isNotBlank() }.joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text("Instalado: " + formatDeviceInstallationDate(device.installedAt), style = MaterialTheme.typography.bodySmall)
+            Text("Último acesso: " + formatDeviceInstallationDate(device.lastSeenAt), style = MaterialTheme.typography.bodySmall)
+            Text(place, style = MaterialTheme.typography.bodySmall)
+            Text(coordinates, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+private fun formatDeviceInstallationDate(timestamp: Long): String {
+    if (timestamp <= 0L) return "Não informado"
+    return SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(timestamp))
+}
 
 private fun backgroundScheduleStatus(background: ThemeBackground): String {
     if (ThemeBackground.normalizeDate(background.startDate) == null) {
