@@ -5,7 +5,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.ui.draw.alpha
-import android.content.Context
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -17,8 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import kotlinx.coroutines.tasks.await
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import android.widget.Toast
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -28,7 +25,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
+import com.google.firebase.auth.FirebaseAuth
 
 @Composable
 fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = false) {
@@ -37,9 +34,20 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val nossaGenteApi = remember { com.example.data.NossaGenteApi(context) }
-    val sharedPref = remember { context.getSharedPreferences("admin_prefs", Context.MODE_PRIVATE) }
-    var isLoggedIn by remember { mutableStateOf(sharedPref.getBoolean("is_logged_in", false)) }
-    var userRole by remember { mutableStateOf(sharedPref.getString("user_role", "admin") ?: "admin") }
+    val firebaseAuth = remember { FirebaseAuth.getInstance() }
+    val initialRole = remember(firebaseAuth) { managementRoleForEmail(firebaseAuth.currentUser?.email) }
+    var isLoggedIn by remember { mutableStateOf(initialRole != null) }
+    var userRole by remember { mutableStateOf(initialRole ?: "user") }
+
+    DisposableEffect(firebaseAuth) {
+        val listener = FirebaseAuth.AuthStateListener { auth ->
+            val authenticatedRole = managementRoleForEmail(auth.currentUser?.email)
+            isLoggedIn = authenticatedRole != null
+            userRole = authenticatedRole ?: "user"
+        }
+        firebaseAuth.addAuthStateListener(listener)
+        onDispose { firebaseAuth.removeAuthStateListener(listener) }
+    }
 
     LaunchedEffect(openAboutFromNotification) {
         if (openAboutFromNotification) {
@@ -58,10 +66,6 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
                     isLoggedIn = isLoggedIn,
                     userRole = userRole,
                     onLoginSuccess = { role ->
-                        sharedPref.edit()
-                            .putBoolean("is_logged_in", true)
-                            .putString("user_role", role)
-                            .apply()
                         isLoggedIn = true
                         userRole = role
                         scope.launch { drawerState.close() }
@@ -74,8 +78,9 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
                         }
                     },
                     onLogout = {
-                        sharedPref.edit().putBoolean("is_logged_in", false).apply()
+                        firebaseAuth.signOut()
                         isLoggedIn = false
+                        userRole = "user"
                         scope.launch { drawerState.close() }
                         navController.navigate("search") {
                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -131,26 +136,54 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
                     AssistantScreen(viewModel)
                 }
                 composable("admin") {
-                    AdminScreen(viewModel, onNavigateBack = {
-                        navController.popBackStack()
-                    })
+                    ProtectedManagementRoute(
+                        isLoggedIn = isLoggedIn,
+                        userRole = userRole,
+                        allowedRoles = setOf("admin", "mestre"),
+                        onDenied = { navController.navigateToSearch() }
+                    ) {
+                        AdminScreen(viewModel, onNavigateBack = {
+                            navController.popBackStack()
+                        })
+                    }
                 }
                 composable("mestre") {
-                    MestreScreen(
-                        viewModel = viewModel,
-                        onNavigateToAdmin = { navController.navigate("admin") },
-                        onNavigateToManageTabs = { navController.navigate("manage_tabs") },
-                        onNavigateToManageProducts = { navController.navigate("manage_products") },
-                        onNavigateBack = {
-                            navController.popBackStack()
-                        }
-                    )
+                    ProtectedManagementRoute(
+                        isLoggedIn = isLoggedIn,
+                        userRole = userRole,
+                        allowedRoles = setOf("mestre"),
+                        onDenied = { navController.navigateToSearch() }
+                    ) {
+                        MestreScreen(
+                            viewModel = viewModel,
+                            onNavigateToAdmin = { navController.navigate("admin") },
+                            onNavigateToManageTabs = { navController.navigate("manage_tabs") },
+                            onNavigateToManageProducts = { navController.navigate("manage_products") },
+                            onNavigateBack = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
                 }
                 composable("manage_tabs") {
-                    ManageTabsScreen(viewModel = viewModel, onNavigateBack = { navController.popBackStack() })
+                    ProtectedManagementRoute(
+                        isLoggedIn = isLoggedIn,
+                        userRole = userRole,
+                        allowedRoles = setOf("mestre"),
+                        onDenied = { navController.navigateToSearch() }
+                    ) {
+                        ManageTabsScreen(viewModel = viewModel, onNavigateBack = { navController.popBackStack() })
+                    }
                 }
                 composable("manage_products") {
-                    ManageProductsScreen(viewModel = viewModel, onNavigateBack = { navController.popBackStack() })
+                    ProtectedManagementRoute(
+                        isLoggedIn = isLoggedIn,
+                        userRole = userRole,
+                        allowedRoles = setOf("mestre"),
+                        onDenied = { navController.navigateToSearch() }
+                    ) {
+                        ManageProductsScreen(viewModel = viewModel, onNavigateBack = { navController.popBackStack() })
+                    }
                 }
                 composable("promotions_login") {
                     PromotionsLoginScreen(
@@ -194,6 +227,34 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
                 }
             }
         }
+    }
+}
+
+internal fun managementRoleForEmail(email: String?): String? = when (email?.trim()?.lowercase()) {
+    "admin@nrdlojas.com" -> "admin"
+    "mestre@nrdlojas.com" -> "mestre"
+    else -> null
+}
+
+@Composable
+private fun ProtectedManagementRoute(
+    isLoggedIn: Boolean,
+    userRole: String,
+    allowedRoles: Set<String>,
+    onDenied: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    if (isLoggedIn && userRole in allowedRoles) {
+        content()
+    } else {
+        LaunchedEffect(isLoggedIn, userRole) { onDenied() }
+    }
+}
+
+private fun androidx.navigation.NavHostController.navigateToSearch() {
+    navigate("search") {
+        popUpTo(graph.findStartDestination().id) { inclusive = false }
+        launchSingleTop = true
     }
 }
 
@@ -256,16 +317,28 @@ fun LoginDrawerContent(
                     val inputUser = username.trim().lowercase()
                     scope.launch {
                         try {
-                            if ((inputUser == "admin" || inputUser == "mestre") && password == "nrdlojas") {
-                                val email = if (inputUser == "admin") "admin@nrdlojas.com" else "mestre@nrdlojas.com"
-                                val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                            val email = when (inputUser) {
+                                "admin" -> "admin@nrdlojas.com"
+                                "mestre" -> "mestre@nrdlojas.com"
+                                else -> null
+                            }
+                            if (email != null && password.isNotBlank()) {
+                                val auth = FirebaseAuth.getInstance()
                                 auth.signInWithEmailAndPassword(email, password).await()
-                                onLoginSuccess(inputUser)
+                                val authenticatedRole = managementRoleForEmail(auth.currentUser?.email)
+                                if (authenticatedRole != null) {
+                                    password = ""
+                                    loginStatus = null
+                                    onLoginSuccess(authenticatedRole)
+                                } else {
+                                    auth.signOut()
+                                    loginStatus = "Usuário sem acesso administrativo"
+                                }
                             } else {
                                 loginStatus = "Usuário ou senha incorretos"
                             }
-                        } catch (e: Exception) {
-                            loginStatus = "Erro ao autenticar: ${e.localizedMessage}"
+                        } catch (_: Exception) {
+                            loginStatus = "Usuário ou senha incorretos"
                         } finally {
                             isLoading = false
                         }
@@ -468,4 +541,3 @@ fun CategoryItem(
         }
     }
 }
-
