@@ -90,12 +90,6 @@ class UserPreferences(private val context: Context) {
     val onboardingShown: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[ONBOARDING_SHOWN] ?: false
     }
-    val installationLocationConsentAnswered: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[INSTALLATION_LOCATION_CONSENT_ANSWERED] ?: false
-    }
-    val installationLocationEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[INSTALLATION_LOCATION_ENABLED] ?: false
-    }
 
     suspend fun setVibrateOnClick(enabled: Boolean) {
         context.dataStore.edit { it[VIBRATE_ON_CLICK] = enabled }
@@ -198,13 +192,6 @@ class UserPreferences(private val context: Context) {
         context.dataStore.edit { it[ONBOARDING_SHOWN] = shown }
     }
 
-    suspend fun setInstallationLocationConsent(answered: Boolean, enabled: Boolean) {
-        context.dataStore.edit {
-            it[INSTALLATION_LOCATION_CONSENT_ANSWERED] = answered
-            it[INSTALLATION_LOCATION_ENABLED] = enabled
-        }
-    }
-
     suspend fun getOrCreateInstallationId(): String {
         val existing = context.dataStore.data.first()[INSTALLATION_ID]
         if (!existing.isNullOrBlank()) return existing
@@ -237,8 +224,6 @@ class UserPreferences(private val context: Context) {
         val APPEARANCE_MODE = stringPreferencesKey("appearance_mode")
         val ONBOARDING_SHOWN = booleanPreferencesKey("onboarding_shown")
         val INSTALLATION_ID = stringPreferencesKey("installation_id")
-        val INSTALLATION_LOCATION_CONSENT_ANSWERED = booleanPreferencesKey("installation_location_consent_answered")
-        val INSTALLATION_LOCATION_ENABLED = booleanPreferencesKey("installation_location_enabled")
     }
 
     private fun encodeNotifications(items: List<AppNotification>): String {

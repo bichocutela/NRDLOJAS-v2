@@ -1581,13 +1581,6 @@ private fun formatThemeBackgroundDate(value: String): String =
 
 @Composable
 private fun DeviceInstallationBubble(device: DeviceInstallation) {
-    val place = listOfNotNull(device.city, device.state).filter { it.isNotBlank() }.joinToString(" - ")
-        .ifBlank { "Cidade e estado não informados" }
-    val coordinates = if (device.latitude != null && device.longitude != null) {
-        String.format(Locale.US, "%.4f, %.4f", device.latitude, device.longitude)
-    } else {
-        "Localização não autorizada"
-    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
@@ -1605,8 +1598,6 @@ private fun DeviceInstallationBubble(device: DeviceInstallation) {
             Spacer(modifier = Modifier.height(6.dp))
             Text("Instalado: " + formatDeviceInstallationDate(device.installedAt), style = MaterialTheme.typography.bodySmall)
             Text("Último acesso: " + formatDeviceInstallationDate(device.lastSeenAt), style = MaterialTheme.typography.bodySmall)
-            Text(place, style = MaterialTheme.typography.bodySmall)
-            Text(coordinates, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

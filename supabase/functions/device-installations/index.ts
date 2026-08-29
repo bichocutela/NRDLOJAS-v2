@@ -15,7 +15,6 @@ type Identity = { uid: string; email: string };
 type FirebaseField = {
   stringValue?: string;
   timestampValue?: string;
-  doubleValue?: number;
   integerValue?: string;
 };
 
@@ -75,10 +74,6 @@ function cleanString(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
-function optionalCoordinate(value: unknown, min: number, max: number): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max ? value : null;
-}
-
 function stringField(fields: Record<string, FirebaseField>, key: string) {
   return fields[key]?.stringValue ?? "";
 }
@@ -106,21 +101,15 @@ async function registerInstallation(
   });
   const existing = existingResponse.ok ? await existingResponse.json() : null;
   const now = new Date().toISOString();
-  const latitude = optionalCoordinate(body.latitude, -90, 90);
-  const longitude = optionalCoordinate(body.longitude, -180, 180);
   const fields: Record<string, FirebaseField> = {
     manufacturer: { stringValue: cleanString(body.manufacturer, 80) || "Não informado" },
     model: { stringValue: cleanString(body.model, 120) || "Não informado" },
     deviceName: { stringValue: cleanString(body.deviceName, 180) || "Aparelho Android" },
     androidVersion: { stringValue: cleanString(body.androidVersion, 40) },
     appVersion: { stringValue: cleanString(body.appVersion, 40) },
-    city: { stringValue: cleanString(body.city, 120) },
-    state: { stringValue: cleanString(body.state, 120) },
     installedAt: { timestampValue: existing?.fields?.installedAt?.timestampValue ?? now },
     lastSeenAt: { timestampValue: now },
   };
-  if (latitude != null) fields.latitude = { doubleValue: latitude };
-  if (longitude != null) fields.longitude = { doubleValue: longitude };
   const write = await fetch(documentUrl, {
     method: "PATCH",
     headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
@@ -178,10 +167,6 @@ async function listInstallations(
       deviceName: stringField(fields, "deviceName"),
       installedAt: timestampMillis(fields, "installedAt"),
       lastSeenAt: timestampMillis(fields, "lastSeenAt"),
-      city: stringField(fields, "city"),
-      state: stringField(fields, "state"),
-      latitude: fields.latitude?.doubleValue ?? null,
-      longitude: fields.longitude?.doubleValue ?? null,
     };
   });
   return json({

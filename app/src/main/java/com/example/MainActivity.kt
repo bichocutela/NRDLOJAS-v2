@@ -9,9 +9,6 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -98,8 +95,7 @@ class MainActivity : ComponentActivity() {
             )
         }
         lifecycleScope.launch {
-            val includeLocation = userPreferences.installationLocationEnabled.first()
-            com.example.data.DeviceInstallationService.register(this@MainActivity, includeLocation)
+            com.example.data.DeviceInstallationService.register(this@MainActivity)
         }
 
         val crashLog = CrashReporter.getCrashLog(this)
@@ -161,16 +157,7 @@ class MainActivity : ComponentActivity() {
             val latestFirebase by viewModel.latestProduct.collectAsState(null)
             val latestLocal by viewModel.latestProductLocal.collectAsState(null)
             val lastNotifiedCode by userPreferences.lastNotifiedProductCode.collectAsState("___LOADING___")
-            val installationLocationConsentAnswered by userPreferences.installationLocationConsentAnswered.collectAsState(initial = true)
             val context = androidx.compose.ui.platform.LocalContext.current
-            val locationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-                androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
-            ) { granted ->
-                lifecycleScope.launch {
-                    userPreferences.setInstallationLocationConsent(answered = true, enabled = granted)
-                    com.example.data.DeviceInstallationService.register(this@MainActivity, includeLocation = granted)
-                }
-            }
             
 
             val currentDensity = LocalDensity.current
@@ -207,42 +194,6 @@ class MainActivity : ComponentActivity() {
                     Box(modifier = Modifier.fillMaxSize()) {
                         AppNavGraph(viewModel, openAboutFromNotification)
 
-                        if (!showSplash && !installationLocationConsentAnswered) {
-                            AlertDialog(
-                                onDismissRequest = {},
-                                title = { Text("Cidade aproximada") },
-                                text = {
-                                    Text(
-                                        "Você permite compartilhar a cidade aproximada e o modelo do aparelho para melhorar o aplicativo? Não coletamos endereço."
-                                    )
-                                },
-                                confirmButton = {
-                                    TextButton(
-                                        onClick = {
-                                            locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
-                                        }
-                                    ) {
-                                        Text("Permitir")
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(
-                                        onClick = {
-                                            lifecycleScope.launch {
-                                                userPreferences.setInstallationLocationConsent(answered = true, enabled = false)
-                                                com.example.data.DeviceInstallationService.register(
-                                                    this@MainActivity,
-                                                    includeLocation = false
-                                                )
-                                            }
-                                        }
-                                    ) {
-                                        Text("Agora não")
-                                    }
-                                }
-                            )
-                        }
-                        
                         androidx.compose.material3.SnackbarHost(
                             hostState = snackbarHostState,
                             modifier = Modifier.align(Alignment.BottomCenter)
