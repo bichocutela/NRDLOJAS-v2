@@ -9,6 +9,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 
 object CatalogHistoryBackend {
@@ -24,7 +25,7 @@ object CatalogHistoryBackend {
 
         val token = try {
             FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
         if (token.isNullOrBlank()) {
@@ -62,6 +63,53 @@ object CatalogHistoryBackend {
         }
     }
 
+    private fun productsJson(products: List<Product>): JSONArray = JSONArray().apply {
+        products.forEach { product ->
+            put(JSONObject().apply {
+                put("code", product.code)
+                put("name", product.name)
+                put("searchName", product.searchName)
+                put("category", product.category)
+                put("unit", product.unit)
+                put("imageUrl", product.imageUrl ?: JSONObject.NULL)
+                put("searchCount", product.searchCount)
+            })
+        }
+    }
+
+    suspend fun getMaintenanceSummary(
+        localProductCount: Int,
+        localCategoryCounts: List<CategoryCount>
+    ): MaintenanceSummary {
+        val json = call("DIAGNOSE") ?: return MaintenanceSummary(
+            localProductCount = localProductCount,
+            localCategoryCounts = localCategoryCounts,
+            checkedAt = System.currentTimeMillis(),
+            remoteAvailable = false
+        )
+
+        val remoteCategories = buildList {
+            val array = json.optJSONArray("remoteCategoryCounts") ?: JSONArray()
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val category = item.optString("category").trim()
+                if (category.isNotBlank()) add(CategoryCount(category, item.optInt("count", 0)))
+            }
+        }.sortedByDescending { it.count }
+
+        return MaintenanceSummary(
+            localProductCount = localProductCount,
+            remoteProductCount = json.optInt("remoteProductCount", 0),
+            localCategoryCounts = localCategoryCounts,
+            remoteCategoryCounts = remoteCategories,
+            dynamicTabCount = json.optInt("dynamicTabCount", 0),
+            pendingSuggestionCount = json.optInt("pendingSuggestionCount", 0),
+            lastRemoteProductUpdate = if (json.isNull("lastRemoteProductUpdate")) null else json.optLong("lastRemoteProductUpdate"),
+            checkedAt = json.optLong("checkedAt", System.currentTimeMillis()),
+            remoteAvailable = true
+        )
+    }
+
     suspend fun listSnapshots(): List<CatalogSnapshot> {
         val json = call("LIST") ?: return emptyList()
         val array = json.optJSONArray("snapshots") ?: return emptyList()
@@ -82,8 +130,8 @@ object CatalogHistoryBackend {
         }
     }
 
-    suspend fun createSnapshot(): CatalogSnapshot? {
-        val json = call("CREATE") ?: return null
+    suspend fun createSnapshot(products: List<Product>): CatalogSnapshot? {
+        val json = call("CREATE", JSONObject().put("products", productsJson(products))) ?: return null
         val item = json.optJSONObject("snapshot") ?: return null
         return CatalogSnapshot(
             id = item.optString("id"),
@@ -95,8 +143,11 @@ object CatalogHistoryBackend {
         )
     }
 
-    suspend fun restoreSnapshot(snapshotId: String): CatalogRestoreResult {
-        val json = call("RESTORE", JSONObject().put("snapshotId", snapshotId))
+    suspend fun restoreSnapshot(snapshotId: String, currentProducts: List<Product>): CatalogRestoreResult {
+        val payload = JSONObject()
+            .put("snapshotId", snapshotId)
+            .put("currentProducts", productsJson(currentProducts))
+        val json = call("RESTORE", payload)
             ?: return CatalogRestoreResult(
                 success = false,
                 message = FirebaseService.lastError ?: "Não foi possível restaurar o backup."
