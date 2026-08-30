@@ -1,0 +1,113 @@
+name: Aplicar ajuste avançado de preview
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/apply_preview_stretch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Aplicar alterações cirúrgicas
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path, old, new, count=None):
+              p = Path(path)
+              s = p.read_text()
+              n = s.count(old)
+              if n == 0:
+                  raise SystemExit(f'Padrão não encontrado em {path}: {old[:100]!r}')
+              if count is not None and n != count:
+                  raise SystemExit(f'Contagem inesperada em {path}: {n}, esperado {count}')
+              p.write_text(s.replace(old, new))
+
+          # 1) Modelo persistente
+          replace(
+              'app/src/main/java/com/example/data/ThemeBackground.kt',
+              '    val imageScale: Float = 1f,\n    val imageOffsetX: Float = 0f,\n    val imageOffsetY: Float = 0f\n',
+              '    val imageScale: Float = 1f,\n    val imageOffsetX: Float = 0f,\n    val imageOffsetY: Float = 0f,\n    val imageStretchX: Float = 1f,\n    val imageStretchY: Float = 1f\n',
+              1
+          )
+
+          # 2) Firestore + manifesto público
+          fs = Path('app/src/main/java/com/example/data/FirebaseService.kt')
+          s = fs.read_text()
+          s = s.replace(
+              '                        imageOffsetY = ((map["imageOffsetY"] as? Number)?.toFloat() ?: 0f).coerceIn(-1f, 1f)\n',
+              '                        imageOffsetY = ((map["imageOffsetY"] as? Number)?.toFloat() ?: 0f).coerceIn(-1f, 1f),\n                        imageStretchX = ((map["imageStretchX"] as? Number)?.toFloat() ?: 1f).coerceIn(0.5f, 2.5f),\n                        imageStretchY = ((map["imageStretchY"] as? Number)?.toFloat() ?: 1f).coerceIn(0.5f, 2.5f)\n'
+          )
+          s = s.replace(
+              '                        "imageOffsetY" to background.imageOffsetY.coerceIn(-1f, 1f)\n',
+              '                        "imageOffsetY" to background.imageOffsetY.coerceIn(-1f, 1f),\n                        "imageStretchX" to background.imageStretchX.coerceIn(0.5f, 2.5f),\n                        "imageStretchY" to background.imageStretchY.coerceIn(0.5f, 2.5f)\n'
+          )
+          s = s.replace(
+              '                    imageOffsetY = item.optDouble("imageOffsetY", 0.0).toFloat().coerceIn(-1f, 1f)\n',
+              '                    imageOffsetY = item.optDouble("imageOffsetY", 0.0).toFloat().coerceIn(-1f, 1f),\n                    imageStretchX = item.optDouble("imageStretchX", 1.0).toFloat().coerceIn(0.5f, 2.5f),\n                    imageStretchY = item.optDouble("imageStretchY", 1.0).toFloat().coerceIn(0.5f, 2.5f)\n'
+          )
+          fs.write_text(s)
+
+          # 3) ThemeBanner e chamada da Home
+          search = Path('app/src/main/java/com/example/ui/SearchScreen.kt')
+          s = search.read_text()
+          if 'import androidx.compose.ui.graphics.graphicsLayer' not in s:
+              s = s.replace('import androidx.compose.ui.graphics.Color\n', 'import androidx.compose.ui.graphics.Color\nimport androidx.compose.ui.graphics.graphicsLayer\n')
+          s = s.replace(
+              '                    imageOffsetY = activeThemeBackground?.imageOffsetY ?: 0f,\n                    modifier = Modifier.fillMaxSize()\n',
+              '                    imageOffsetY = activeThemeBackground?.imageOffsetY ?: 0f,\n                    imageStretchX = activeThemeBackground?.imageStretchX ?: 1f,\n                    imageStretchY = activeThemeBackground?.imageStretchY ?: 1f,\n                    modifier = Modifier.fillMaxSize()\n',
+              1
+          )
+          s = s.replace(
+              '    imageOffsetX: Float = 0f,\n    imageOffsetY: Float = 0f,\n    modifier: Modifier = Modifier\n',
+              '    imageOffsetX: Float = 0f,\n    imageOffsetY: Float = 0f,\n    imageStretchX: Float = 1f,\n    imageStretchY: Float = 1f,\n    modifier: Modifier = Modifier\n',
+              1
+          )
+          old = '''        val safeScale = imageScale.coerceIn(0.5f, 3f)\n        val safeOffsetX = imageOffsetX.coerceIn(-1f, 1f)\n        val safeOffsetY = imageOffsetY.coerceIn(-1f, 1f)\n        AsyncImage(\n            model = imageModel,\n            contentDescription = "Banner do tema $normalizedTheme",\n            modifier = Modifier\n                .fillMaxSize()\n                .offset(x = maxWidth * safeOffsetX, y = maxHeight * safeOffsetY)\n                .scale(safeScale),\n            contentScale = ContentScale.FillWidth,\n            alignment = Alignment.TopCenter\n        )\n'''
+          new = '''        val safeScale = imageScale.coerceIn(0.5f, 3f)\n        val safeOffsetX = imageOffsetX.coerceIn(-1f, 1f)\n        val safeOffsetY = imageOffsetY.coerceIn(-1f, 1f)\n        val safeStretchX = imageStretchX.coerceIn(0.5f, 2.5f)\n        val safeStretchY = imageStretchY.coerceIn(0.5f, 2.5f)\n        AsyncImage(\n            model = imageModel,\n            contentDescription = "Banner do tema $normalizedTheme",\n            modifier = Modifier\n                .fillMaxSize()\n                .graphicsLayer {\n                    scaleX = safeScale * safeStretchX\n                    scaleY = safeScale * safeStretchY\n                    translationX = size.width * safeOffsetX\n                    translationY = size.height * safeOffsetY\n                },\n            contentScale = ContentScale.FillWidth,\n            alignment = Alignment.TopCenter\n        )\n'''
+          if old not in s:
+              raise SystemExit('Bloco ThemeBanner não encontrado')
+          s = s.replace(old, new, 1)
+          search.write_text(s)
+
+          # 4) Editor do Mestre
+          mestre = Path('app/src/main/java/com/example/ui/MestreScreen.kt')
+          s = mestre.read_text()
+          if 'import androidx.compose.material.icons.filled.Lock\n' not in s:
+              s = s.replace('import androidx.compose.material.icons.filled.MoreVert\n', 'import androidx.compose.material.icons.filled.MoreVert\nimport androidx.compose.material.icons.filled.Lock\nimport androidx.compose.material.icons.filled.LockOpen\n')
+          s = s.replace(
+              '''                var previewOffsetY by remember(background.id, background.imageOffsetY) {\n                    mutableFloatStateOf(background.imageOffsetY.coerceIn(-1f, 1f))\n                }\n''',
+              '''                var previewOffsetY by remember(background.id, background.imageOffsetY) {\n                    mutableFloatStateOf(background.imageOffsetY.coerceIn(-1f, 1f))\n                }\n                var previewStretchX by remember(background.id, background.imageStretchX) {\n                    mutableFloatStateOf(background.imageStretchX.coerceIn(0.5f, 2.5f))\n                }\n                var previewStretchY by remember(background.id, background.imageStretchY) {\n                    mutableFloatStateOf(background.imageStretchY.coerceIn(0.5f, 2.5f))\n                }\n                var previewUnlocked by remember(background.id) { mutableStateOf(false) }\n''',
+              1
+          )
+          old = '''                            Spacer(modifier = Modifier.height(14.dp))\n                            androidx.compose.foundation.layout.BoxWithConstraints(\n                                modifier = Modifier.fillMaxWidth()\n                            ) {\n                                val previewHeight = maxWidth / 3f\n                                Box(\n                                    modifier = Modifier\n                                        .fillMaxWidth()\n                                        .height(previewHeight)\n                                        .clip(\n                                            RoundedCornerShape(\n                                                bottomStart = 32.dp,\n                                                bottomEnd = 32.dp\n                                            )\n                                        )\n                                        .background(Color.White)\n                                ) {\n                                    ThemeBanner(\n                                        appTheme = themeKey,\n                                        backgroundUrl = background.url,\n                                        imageScale = previewScale,\n                                        imageOffsetX = previewOffsetX,\n                                        imageOffsetY = previewOffsetY,\n                                        modifier = Modifier.fillMaxSize()\n                                    )\n                                }\n                            }\n                            Spacer(modifier = Modifier.height(12.dp))\n                            Text("Zoom: ${(previewScale * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)\n                            Slider(\n                                value = previewScale,\n                                onValueChange = { previewScale = it },\n                                valueRange = 0.5f..3f\n                            )\n                            Text("Horizontal: ${(previewOffsetX * 100).toInt()}", style = MaterialTheme.typography.labelLarge)\n                            Slider(\n                                value = previewOffsetX,\n                                onValueChange = { previewOffsetX = it },\n                                valueRange = -1f..1f\n                            )\n                            Text("Vertical: ${(previewOffsetY * 100).toInt()}", style = MaterialTheme.typography.labelLarge)\n                            Slider(\n                                value = previewOffsetY,\n                                onValueChange = { previewOffsetY = it },\n                                valueRange = -1f..1f\n                            )\n'''
+          new = '''                            Spacer(modifier = Modifier.height(14.dp))\n                            Row(\n                                modifier = Modifier.fillMaxWidth(),\n                                horizontalArrangement = Arrangement.SpaceBetween,\n                                verticalAlignment = Alignment.CenterVertically\n                            ) {\n                                Column(modifier = Modifier.weight(1f)) {\n                                    Text(\n                                        if (previewUnlocked) "Ajustes liberados" else "Ajustes protegidos",\n                                        style = MaterialTheme.typography.titleSmall\n                                    )\n                                    Text(\n                                        if (previewUnlocked) "Cadeado aberto: você pode mover e esticar." else "Abra o cadeado para alterar o enquadramento.",\n                                        style = MaterialTheme.typography.bodySmall,\n                                        color = MaterialTheme.colorScheme.onSurfaceVariant\n                                    )\n                                }\n                                IconButton(onClick = { previewUnlocked = !previewUnlocked }) {\n                                    Icon(\n                                        imageVector = if (previewUnlocked) Icons.Default.LockOpen else Icons.Default.Lock,\n                                        contentDescription = if (previewUnlocked) "Bloquear ajustes" else "Desbloquear ajustes",\n                                        tint = MaterialTheme.colorScheme.primary\n                                    )\n                                }\n                            }\n                            Spacer(modifier = Modifier.height(10.dp))\n                            Text("Imagem original — sem corte", style = MaterialTheme.typography.labelLarge)\n                            Box(\n                                modifier = Modifier\n                                    .fillMaxWidth()\n                                    .height(180.dp)\n                                    .clip(RoundedCornerShape(16.dp))\n                                    .background(MaterialTheme.colorScheme.surfaceVariant),\n                                contentAlignment = Alignment.Center\n                            ) {\n                                coil.compose.AsyncImage(\n                                    model = background.url,\n                                    contentDescription = "Imagem original de ${background.label}",\n                                    modifier = Modifier.fillMaxSize(),\n                                    contentScale = androidx.compose.ui.layout.ContentScale.Fit\n                                )\n                            }\n                            Spacer(modifier = Modifier.height(12.dp))\n                            Text("Resultado na Home", style = MaterialTheme.typography.labelLarge)\n                            androidx.compose.foundation.layout.BoxWithConstraints(\n                                modifier = Modifier.fillMaxWidth()\n                            ) {\n                                val previewHeight = maxWidth / 3f\n                                Box(\n                                    modifier = Modifier\n                                        .fillMaxWidth()\n                                        .height(previewHeight)\n                                        .clip(\n                                            RoundedCornerShape(\n                                                bottomStart = 32.dp,\n                                                bottomEnd = 32.dp\n                                            )\n                                        )\n                                        .background(Color.White)\n                                ) {\n                                    ThemeBanner(\n                                        appTheme = themeKey,\n                                        backgroundUrl = background.url,\n                                        imageScale = previewScale,\n                                        imageOffsetX = previewOffsetX,\n                                        imageOffsetY = previewOffsetY,\n                                        imageStretchX = previewStretchX,\n                                        imageStretchY = previewStretchY,\n                                        modifier = Modifier.fillMaxSize()\n                                    )\n                                }\n                            }\n                            Spacer(modifier = Modifier.height(12.dp))\n                            Text("Zoom: ${(previewScale * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)\n                            Slider(\n                                value = previewScale,\n                                onValueChange = { previewScale = it },\n                                valueRange = 0.5f..3f,\n                                enabled = previewUnlocked\n                            )\n                            Text("Mover horizontal: ${(previewOffsetX * 100).toInt()}", style = MaterialTheme.typography.labelLarge)\n                            Slider(\n                                value = previewOffsetX,\n                                onValueChange = { previewOffsetX = it },\n                                valueRange = -1f..1f,\n                                enabled = previewUnlocked\n                            )\n                            Text("Mover vertical: ${(previewOffsetY * 100).toInt()}", style = MaterialTheme.typography.labelLarge)\n                            Slider(\n                                value = previewOffsetY,\n                                onValueChange = { previewOffsetY = it },\n                                valueRange = -1f..1f,\n                                enabled = previewUnlocked\n                            )\n                            Text("Esticar largura (esquerda + direita): ${(previewStretchX * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)\n                            Slider(\n                                value = previewStretchX,\n                                onValueChange = { previewStretchX = it },\n                                valueRange = 0.5f..2.5f,\n                                enabled = previewUnlocked\n                            )\n                            Text("Esticar altura (cima + baixo): ${(previewStretchY * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)\n                            Slider(\n                                value = previewStretchY,\n                                onValueChange = { previewStretchY = it },\n                                valueRange = 0.5f..2.5f,\n                                enabled = previewUnlocked\n                            )\n'''
+          if old not in s:
+              raise SystemExit('Bloco principal do preview não encontrado')
+          s = s.replace(old, new, 1)
+          s = s.replace(
+              '''                                    previewScale = 1f\n                                    previewOffsetX = 0f\n                                    previewOffsetY = 0f\n''',
+              '''                                    previewScale = 1f\n                                    previewOffsetX = 0f\n                                    previewOffsetY = 0f\n                                    previewStretchX = 1f\n                                    previewStretchY = 1f\n''',
+              1
+          )
+          s = s.replace(
+              '''                                                    imageScale = previewScale,\n                                                    imageOffsetX = previewOffsetX,\n                                                    imageOffsetY = previewOffsetY\n''',
+              '''                                                    imageScale = previewScale,\n                                                    imageOffsetX = previewOffsetX,\n                                                    imageOffsetY = previewOffsetY,\n                                                    imageStretchX = previewStretchX,\n                                                    imageStretchY = previewStretchY\n''',
+              1
+          )
+          mestre.write_text(s)
+
+      - name: Commit e push
+        run: |
+          git config user.name "bicho cutela"
+          git config user.email "haydendanex@gmail.com"
+          git add app/src/main/java/com/example/data/ThemeBackground.kt app/src/main/java/com/example/data/FirebaseService.kt app/src/main/java/com/example/ui/SearchScreen.kt app/src/main/java/com/example/ui/MestreScreen.kt
+          git diff --cached --quiet && exit 0
+          git commit -m "Adiciona esticamento e cadeado ao preview de fundos"
+          git push
