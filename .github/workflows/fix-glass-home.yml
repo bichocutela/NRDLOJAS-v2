@@ -16,70 +16,71 @@ jobs:
         with:
           fetch-depth: 0
       - name: Aplicar correção cirúrgica
-        shell: python
         run: |
+          python3 - <<'PY'
           from pathlib import Path
           path = Path('app/src/main/java/com/example/ui/SearchScreen.kt')
           text = path.read_text(encoding='utf-8')
 
           old_brush = '''    val glassActionBrush = remember(glassAccentPalette) {
-        Brush.verticalGradient(glassAccentPalette)
-    }
-'''
+              Brush.verticalGradient(glassAccentPalette)
+          }
+          '''
           new_brush = '''    val glassSessionAccent = remember(glassAccentColor) {
-        if (glassAccentColor == "multicolor") {
-            listOf(
-                Color(0xFFE5252A), Color(0xFF2E9D44), Color(0xFFF28C18),
-                Color(0xFF2474D2), Color(0xFFC99A14)
-            ).random()
-        } else {
-            glassAccentPalette.first()
-        }
-    }
-    val glassActionBrush = remember(glassSessionAccent, isDarkGlass) {
-        Brush.verticalGradient(
-            listOf(
-                glassSessionAccent.copy(alpha = if (isDarkGlass) 0.82f else 0.88f),
-                glassSessionAccent.copy(alpha = if (isDarkGlass) 0.62f else 0.68f)
-            )
-        )
-    }
-'''
+              if (glassAccentColor == "multicolor") {
+                  listOf(
+                      Color(0xFFE5252A), Color(0xFF2E9D44), Color(0xFFF28C18),
+                      Color(0xFF2474D2), Color(0xFFC99A14)
+                  ).random()
+              } else {
+                  glassAccentPalette.first()
+              }
+          }
+          val glassActionBrush = remember(glassSessionAccent, isDarkGlass) {
+              Brush.verticalGradient(
+                  listOf(
+                      glassSessionAccent.copy(alpha = if (isDarkGlass) 0.82f else 0.88f),
+                      glassSessionAccent.copy(alpha = if (isDarkGlass) 0.62f else 0.68f)
+                  )
+              )
+          }
+          '''
           if old_brush not in text:
               raise SystemExit('Bloco glassActionBrush não encontrado')
           text = text.replace(old_brush, new_brush, 1)
 
           old_category = '''            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else dynamicColors.first)
-                    .border(
-                        1.dp,
-                        if (glass.enabled) glass.border else Color.Transparent,
-                        RoundedCornerShape(16.dp)
-                    )
-'''
+                      modifier = Modifier
+                          .clip(RoundedCornerShape(16.dp))
+                          .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else dynamicColors.first)
+                          .border(
+                              1.dp,
+                              if (glass.enabled) glass.border else Color.Transparent,
+                              RoundedCornerShape(16.dp)
+                          )
+          '''
           new_category = '''            val categoryGlassFill = if (glass.enabled) {
-                dynamicColors.first.copy(alpha = if (MaterialTheme.colorScheme.background.luminance() < 0.35f) 0.28f else 0.18f)
-            } else dynamicColors.first
-            val categoryGlassBorder = if (glass.enabled) {
-                dynamicColors.first.copy(alpha = 0.78f)
-            } else Color.Transparent
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(categoryGlassFill)
-                    .border(
-                        1.dp,
-                        categoryGlassBorder,
-                        RoundedCornerShape(16.dp)
-                    )
-'''
+                      dynamicColors.first.copy(alpha = if (MaterialTheme.colorScheme.background.luminance() < 0.35f) 0.28f else 0.18f)
+                  } else dynamicColors.first
+                  val categoryGlassBorder = if (glass.enabled) {
+                      dynamicColors.first.copy(alpha = 0.78f)
+                  } else Color.Transparent
+                  Box(
+                      modifier = Modifier
+                          .clip(RoundedCornerShape(16.dp))
+                          .background(categoryGlassFill)
+                          .border(
+                              1.dp,
+                              categoryGlassBorder,
+                              RoundedCornerShape(16.dp)
+                          )
+          '''
           if old_category not in text:
               raise SystemExit('Bloco de categorias não encontrado')
           text = text.replace(old_category, new_category, 1)
 
           path.write_text(text, encoding='utf-8')
+          PY
       - name: Commit e push
         run: |
           git config user.name "github-actions[bot]"
