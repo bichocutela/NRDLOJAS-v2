@@ -2,11 +2,9 @@ package com.example.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,9 +17,7 @@ import com.example.ui.theme.getDynamicThemeColor
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.data.Product
-import com.example.data.ProductStandards
 import kotlinx.coroutines.launch
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,12 +30,13 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     var editingProduct by remember { mutableStateOf<Product?>(null) }
     var duplicateErrorProduct by remember { mutableStateOf<Product?>(null) }
     var showDuplicateErrorDialog by remember { mutableStateOf(false) }
-    
+    var isSaving by remember { mutableStateOf(false) }
+
     var name by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
     var imageUrl by remember { mutableStateOf("") }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -64,7 +61,12 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             itemsIndexed(products) { index, product ->
-                val dynColors = getDynamicThemeColor(index, appTheme, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+                val dynColors = getDynamicThemeColor(
+                    index,
+                    appTheme,
+                    MaterialTheme.colorScheme.primaryContainer,
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                )
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, dynColors.first),
@@ -78,26 +80,31 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(product.name, style = MaterialTheme.typography.titleMedium)
                             Text(
-                            "Código ${product.code} • ${product.category}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                                "Código ${product.code} • ${product.category}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                        IconButton(onClick = {
-                            name = product.name
-                            code = product.code
-                            category = product.category.takeIf { it in activeCategoryNames }.orEmpty()
-                            imageUrl = product.imageUrl ?: ""
-                            editingProduct = product
-                            showDialog = true
-                        }) {
+                        IconButton(
+                            onClick = {
+                                if (!isSaving) {
+                                    name = product.name
+                                    code = product.code
+                                    category = product.category.takeIf { it in activeCategoryNames }.orEmpty()
+                                    imageUrl = product.imageUrl ?: ""
+                                    editingProduct = product
+                                    showDialog = true
+                                }
+                            },
+                            enabled = !isSaving
+                        ) {
                             Icon(Icons.Default.Edit, contentDescription = "Editar")
                         }
                     }
                 }
             }
         }
-        
+
         if (showDuplicateErrorDialog && duplicateErrorProduct != null) {
             AlertDialog(
                 onDismissRequest = { showDuplicateErrorDialog = false },
@@ -113,7 +120,7 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
 
         if (showDialog && editingProduct != null) {
             AlertDialog(
-                onDismissRequest = { showDialog = false },
+                onDismissRequest = { if (!isSaving) showDialog = false },
                 title = { Text("Editar Produto") },
                 text = {
                     Column {
@@ -121,14 +128,16 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             value = name,
                             onValueChange = { name = it },
                             label = { Text("Nome do Produto") },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isSaving
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = code,
                             onValueChange = { code = it },
                             label = { Text("Código") },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isSaving
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         if (category.isBlank() && editingProduct!!.category !in activeCategoryNames) {
@@ -144,43 +153,64 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             onCategorySelected = { category = it },
                             modifier = Modifier.fillMaxWidth(),
                             label = if (category.isBlank()) "Nova categoria (opcional)" else "Categoria",
-                            categories = activeCategoryNames
+                            categories = activeCategoryNames,
+                            enabled = !isSaving
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = imageUrl,
                             onValueChange = { imageUrl = it },
                             label = { Text("URL da Imagem (Opcional)") },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isSaving
                         )
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = {
-                        if (name.isNotBlank() && code.isNotBlank()) {
-                            coroutineScope.launch {
-                                val existingProduct = viewModel.checkDuplicateCode(code, editingProduct!!.id)
-                                if (existingProduct != null) {
-                                    duplicateErrorProduct = existingProduct
-                                    showDuplicateErrorDialog = true
-                                } else {
-                                    val newProduct = editingProduct!!.copy(
-                                        name = name,
-                                        code = code,
-                                        category = category.ifBlank { editingProduct!!.category },
-                                        imageUrl = imageUrl.takeIf { it.isNotBlank() }
-                                    )
-                                    viewModel.updateProduct(editingProduct!!, newProduct)
-                                    showDialog = false
+                    TextButton(
+                        onClick = {
+                            if (name.isNotBlank() && code.isNotBlank() && !isSaving) {
+                                coroutineScope.launch {
+                                    val currentProduct = editingProduct ?: return@launch
+                                    val existingProduct = viewModel.checkDuplicateCode(code, currentProduct.id)
+                                    if (existingProduct != null) {
+                                        duplicateErrorProduct = existingProduct
+                                        showDuplicateErrorDialog = true
+                                        return@launch
+                                    }
+
+                                    isSaving = true
+                                    try {
+                                        val newProduct = currentProduct.copy(
+                                            name = name,
+                                            code = code,
+                                            category = category.ifBlank { currentProduct.category },
+                                            imageUrl = imageUrl.takeIf { it.isNotBlank() }
+                                        )
+                                        val success = viewModel.updateProductSuspend(currentProduct, newProduct)
+                                        if (success) {
+                                            showDialog = false
+                                            editingProduct = null
+                                        }
+                                    } finally {
+                                        isSaving = false
+                                    }
                                 }
                             }
+                        },
+                        enabled = !isSaving && name.isNotBlank() && code.isNotBlank()
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Salvando...")
+                        } else {
+                            Text("Salvar alterações")
                         }
-                    }) {
-                        Text("Salvar alterações")
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showDialog = false }) {
+                    TextButton(onClick = { showDialog = false }, enabled = !isSaving) {
                         Text("Cancelar")
                     }
                 }
