@@ -45,43 +45,22 @@ jobs:
                   raise SystemExit('MestreScreen: import âncora não encontrado')
               text = text.replace(anchor, anchor + 'import com.example.data.CatalogHistoryBackend\n', 1)
 
-          old_call = 'FirebaseService.getMaintenanceSummary('
-          if old_call not in text:
-              raise SystemExit('MestreScreen: chamada antiga do diagnóstico não encontrada')
-          text = text.replace(old_call, 'CatalogHistoryBackend.getMaintenanceSummary(', 1)
+          simple = [
+              ('FirebaseService.getMaintenanceSummary(', 'CatalogHistoryBackend.getMaintenanceSummary('),
+              ('MaintenanceMetricRow("Produtos na nuvem", summary.remoteProductCount.toString())',
+               'MaintenanceMetricRow("Produtos na nuvem", if (summary.remoteAvailable) summary.remoteProductCount.toString() else "Não disponível")'),
+              ('val differenceLabel = when {',
+               'val differenceLabel = if (!summary.remoteAvailable) "Não calculada" else when {'),
+              ('MaintenanceMetricRow("Abas dinâmicas", summary.dynamicTabCount.toString())',
+               'MaintenanceMetricRow("Abas dinâmicas", if (summary.remoteAvailable) summary.dynamicTabCount.toString() else "Não disponível")'),
+              ('MaintenanceMetricRow("Sugestões pendentes", summary.pendingSuggestionCount.toString())',
+               'MaintenanceMetricRow("Sugestões pendentes", if (summary.remoteAvailable) summary.pendingSuggestionCount.toString() else "Não disponível")'),
+          ]
+          for old, new in simple:
+              if old not in text:
+                  raise SystemExit(f'MestreScreen: trecho não encontrado: {old}')
+              text = text.replace(old, new, 1)
 
-          old_metrics = '''MaintenanceMetricRow("Produtos locais", summary.localProductCount.toString())
-                        MaintenanceMetricRow("Produtos na nuvem", summary.remoteProductCount.toString())
-                        val productDifference = summary.remoteProductCount - summary.localProductCount
-                        val differenceLabel = when {
-                            productDifference == 0 -> "Nenhuma diferença"
-                            productDifference > 0 -> "+$productDifference na nuvem"
-                            else -> "$productDifference na nuvem"
-                        }
-                        MaintenanceMetricRow("Diferença de produtos", differenceLabel)
-                        MaintenanceMetricRow("Abas dinâmicas", summary.dynamicTabCount.toString())
-                        MaintenanceMetricRow("Sugestões pendentes", summary.pendingSuggestionCount.toString())'''
-          new_metrics = '''MaintenanceMetricRow("Produtos locais", summary.localProductCount.toString())
-                        if (summary.remoteAvailable) {
-                            MaintenanceMetricRow("Produtos na nuvem", summary.remoteProductCount.toString())
-                            val productDifference = summary.remoteProductCount - summary.localProductCount
-                            val differenceLabel = when {
-                                productDifference == 0 -> "Nenhuma diferença"
-                                productDifference > 0 -> "+$productDifference na nuvem"
-                                else -> "$productDifference na nuvem"
-                            }
-                            MaintenanceMetricRow("Diferença de produtos", differenceLabel)
-                            MaintenanceMetricRow("Abas dinâmicas", summary.dynamicTabCount.toString())
-                            MaintenanceMetricRow("Sugestões pendentes", summary.pendingSuggestionCount.toString())
-                        } else {
-                            MaintenanceMetricRow("Produtos na nuvem", "Não disponível")
-                            MaintenanceMetricRow("Diferença de produtos", "Não calculada")
-                            MaintenanceMetricRow("Abas dinâmicas", "Não disponível")
-                            MaintenanceMetricRow("Sugestões pendentes", "Não disponível")
-                        }'''
-          if old_metrics not in text:
-              raise SystemExit('MestreScreen: bloco de métricas não encontrado')
-          text = text.replace(old_metrics, new_metrics, 1)
           screen.write_text(text, encoding='utf-8')
           PY
 
