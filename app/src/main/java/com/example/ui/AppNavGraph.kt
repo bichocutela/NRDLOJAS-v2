@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import kotlinx.coroutines.tasks.await
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -25,6 +26,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 import com.google.firebase.auth.FirebaseAuth
+import com.example.ui.theme.LocalGlassSoftStyle
 
 @Composable
 fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = false) {
@@ -37,6 +39,7 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
     val initialRole = remember(firebaseAuth) { managementRoleForEmail(firebaseAuth.currentUser?.email) }
     var isLoggedIn by remember { mutableStateOf(initialRole != null) }
     var userRole by remember { mutableStateOf(initialRole ?: "user") }
+    val glassSoftStyle = LocalGlassSoftStyle.current
 
     DisposableEffect(firebaseAuth) {
         val listener = FirebaseAuth.AuthStateListener { auth ->
@@ -118,6 +121,7 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
         }
     ) {
         Scaffold(
+            containerColor = if (glassSoftStyle.enabled) Color.Transparent else MaterialTheme.colorScheme.background
         ) { innerPadding ->
             NavHost(
                 navController = navController,

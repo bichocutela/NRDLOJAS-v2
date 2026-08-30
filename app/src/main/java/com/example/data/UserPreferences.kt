@@ -203,7 +203,9 @@ class UserPreferences(private val context: Context) {
     }
 
     suspend fun setGlassAccentColor(color: String) {
-        val safe = color.takeIf { it in setOf("multicolor", "red", "green", "orange", "blue", "gold") } ?: "multicolor"
+        val safe = color.takeIf {
+            it in setOf("multicolor", "blue", "green", "purple", "pink", "orange", "cyan", "red", "gold")
+        } ?: "multicolor"
         context.dataStore.edit { it[GLASS_ACCENT_COLOR] = safe }
     }
 

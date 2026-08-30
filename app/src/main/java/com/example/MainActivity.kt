@@ -50,6 +50,8 @@ import com.example.ui.AppNavGraph
 import com.example.ui.MainViewModel
 import com.example.ui.MainViewModelFactory
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.theme.GlassSoftBackground
+import com.example.ui.theme.LocalGlassSoftStyle
 
 import com.example.util.FcmTopicSubscription
 import com.example.util.NotificationHelper
@@ -146,6 +148,8 @@ class MainActivity : ComponentActivity() {
             val appTheme by userPreferences.appTheme.collectAsState(initial = "multicolor")
             val appearanceMode by userPreferences.appearanceMode.collectAsState(initial = "system")
             val glassAccentColor by userPreferences.glassAccentColor.collectAsState(initial = "multicolor")
+            val glassTransparency by userPreferences.glassTransparency.collectAsState(initial = 0.55f)
+            val glassType by userPreferences.glassType.collectAsState(initial = "soft")
             val hasLocalThemeChoice by applicationContext.dataStore.data
                 .map { preferences -> preferences[UserPreferences.APP_THEME] != null }
                 .collectAsState(initial = false)
@@ -186,8 +190,11 @@ class MainActivity : ComponentActivity() {
                 }
 
                 MyApplicationTheme(
-                    appTheme = if (effectiveAppTheme == "glass") glassAccentColor else effectiveAppTheme,
-                    appearanceMode = effectiveAppearanceMode
+                    appTheme = effectiveAppTheme,
+                    appearanceMode = effectiveAppearanceMode,
+                    glassAccentColor = glassAccentColor,
+                    glassTransparency = glassTransparency,
+                    glassType = glassType
                 ) {
 
                 var showSplash by remember { mutableStateOf(true) }
@@ -197,11 +204,12 @@ class MainActivity : ComponentActivity() {
                     showSplash = false
                 }
                 
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
+                GlassSoftBackground(modifier = Modifier.fillMaxSize()) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = if (LocalGlassSoftStyle.current.enabled) Color.Transparent else MaterialTheme.colorScheme.background
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize()) {
                         AppNavGraph(viewModel, openAboutFromNotification)
 
                         androidx.compose.material3.SnackbarHost(
@@ -225,9 +233,10 @@ class MainActivity : ComponentActivity() {
                                     contentDescription = "Logo",
                                     modifier = Modifier.size(150.dp)
                                 )
-                            }
                         }
                     }
+                }
+                }
                 }
             }
             }
