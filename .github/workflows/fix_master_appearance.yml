@@ -1,0 +1,58 @@
+name: Corrigir gestão de fundos do Mestre
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Liberar gestão de fundos independente do tema global
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/example/ui/MestreScreen.kt')
+          s = p.read_text()
+
+          old_intro = '''            MestrePageIntro(\n                description = "Personalize o visual para todos os usuários",\n                hasUnsavedChanges = appearanceHasChanges\n            )'''
+          new_intro = '''            MestrePageIntro(\n                description = "Gerencie os fundos disponíveis para cada tema. Tema e modo de aparência continuam sendo escolhas individuais em Configurações.",\n                hasUnsavedChanges = appearanceHasChanges\n            )'''
+          if old_intro not in s:
+              raise SystemExit('Introdução da aparência não encontrada')
+          s = s.replace(old_intro, new_intro, 1)
+
+          old_card = '''                        OutlinedCard(\n                            modifier = Modifier.fillMaxWidth(),\n                            enabled = draftAppearanceSettings.overrideLocalTheme,\n                            onClick = {'''
+          if old_card not in s:
+              raise SystemExit('Card de fundo condicionado não encontrado')
+          s = s.replace(old_card, '''                        OutlinedCard(\n                            modifier = Modifier.fillMaxWidth(),\n                            enabled = true,\n                            onClick = {''', 1)
+
+          old_default = 'enabled = draftAppearanceSettings.overrideLocalTheme && backgrounds.any { it.isActive }'
+          if old_default not in s:
+              raise SystemExit('Botão de fundo padrão condicionado não encontrado')
+          s = s.replace(old_default, 'enabled = backgrounds.any { it.isActive }', 1)
+
+          old_item = '''                                        enabled = draftAppearanceSettings.overrideLocalTheme,\n                                        onActiveChange = { isActive ->'''
+          if old_item not in s:
+              raise SystemExit('Item de fundo condicionado não encontrado')
+          s = s.replace(old_item, '''                                        enabled = true,\n                                        onActiveChange = { isActive ->''', 1)
+
+          old_add = '''                                    enabled = draftAppearanceSettings.overrideLocalTheme\n                                ) {\n                                    Icon(Icons.Default.Add, contentDescription = null)\n                                    Spacer(modifier = Modifier.width(6.dp))\n                                    Text("Adicionar fundo a $themeLabel")'''
+          if old_add not in s:
+              raise SystemExit('Botão adicionar fundo condicionado não encontrado')
+          s = s.replace(old_add, '''                                    enabled = true\n                                ) {\n                                    Icon(Icons.Default.Add, contentDescription = null)\n                                    Spacer(modifier = Modifier.width(6.dp))\n                                    Text("Adicionar fundo a $themeLabel")''', 1)
+
+          p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/ui/MestreScreen.kt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Libera gestão de fundos no painel Mestre"
+          git push
