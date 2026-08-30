@@ -1,0 +1,62 @@
+name: Adicionar preview real dos fundos
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Adicionar preview real da Home
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/example/ui/MestreScreen.kt')
+          s = p.read_text()
+
+          old = '    var backgroundToDelete by remember { mutableStateOf<Pair<String, ThemeBackground>?>(null) }\n'
+          new = old + '    var backgroundToPreview by remember { mutableStateOf<Pair<String, ThemeBackground>?>(null) }\n'
+          if old not in s:
+              raise SystemExit('Estado de exclusão de fundo não encontrado')
+          s = s.replace(old, new, 1)
+
+          old = '''                                        onEdit = { openBackgroundEditor(themeKey, background) },\n                                        onDelete = { backgroundToDelete = themeKey to background }\n                                    )'''
+          new = '''                                        onPreview = { backgroundToPreview = themeKey to background },\n                                        onEdit = { openBackgroundEditor(themeKey, background) },\n                                        onDelete = { backgroundToDelete = themeKey to background }\n                                    )'''
+          if old not in s:
+              raise SystemExit('Chamada ThemeBackgroundItem não encontrada')
+          s = s.replace(old, new, 1)
+
+          anchor = '''            backgroundToDelete?.let { (themeKey, background) ->\n                AlertDialog('''
+          preview = '''            backgroundToPreview?.let { (themeKey, background) ->\n                androidx.compose.ui.window.Dialog(\n                    onDismissRequest = { backgroundToPreview = null }\n                ) {\n                    Surface(\n                        modifier = Modifier.fillMaxWidth(),\n                        shape = RoundedCornerShape(24.dp),\n                        color = MaterialTheme.colorScheme.surface\n                    ) {\n                        Column(modifier = Modifier.padding(16.dp)) {\n                            Text(\n                                \"Prévia real na Home\",\n                                style = MaterialTheme.typography.titleLarge,\n                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold\n                            )\n                            Spacer(modifier = Modifier.height(4.dp))\n                            Text(\n                                \"${background.label} • ${themeOptions.find { it.first == themeKey }?.second ?: themeKey}\",\n                                style = MaterialTheme.typography.bodySmall,\n                                color = MaterialTheme.colorScheme.onSurfaceVariant\n                            )\n                            Spacer(modifier = Modifier.height(14.dp))\n                            androidx.compose.foundation.layout.BoxWithConstraints(\n                                modifier = Modifier.fillMaxWidth()\n                            ) {\n                                val previewHeight = maxWidth / 3f\n                                Box(\n                                    modifier = Modifier\n                                        .fillMaxWidth()\n                                        .height(previewHeight)\n                                        .clip(\n                                            RoundedCornerShape(\n                                                bottomStart = 32.dp,\n                                                bottomEnd = 32.dp\n                                            )\n                                        )\n                                        .background(Color.White)\n                                ) {\n                                    ThemeBanner(\n                                        appTheme = themeKey,\n                                        backgroundUrl = background.url,\n                                        modifier = Modifier.fillMaxSize()\n                                    )\n                                }\n                            }\n                            Spacer(modifier = Modifier.height(12.dp))\n                            Text(\n                                \"Esta prévia usa o mesmo componente, proporção e recorte do banner exibido na Home. Nada é aplicado ao fechar esta janela.\",\n                                style = MaterialTheme.typography.bodySmall,\n                                color = MaterialTheme.colorScheme.onSurfaceVariant\n                            )\n                            Spacer(modifier = Modifier.height(8.dp))\n                            Button(\n                                onClick = { backgroundToPreview = null },\n                                modifier = Modifier.fillMaxWidth()\n                            ) {\n                                Text(\"Fechar prévia\")\n                            }\n                        }\n                    }\n                }\n            }\n\n'''
+          if anchor not in s:
+              raise SystemExit('Âncora do diálogo de exclusão não encontrada')
+          s = s.replace(anchor, preview + anchor, 1)
+
+          old = '''private fun ThemeBackgroundItem(\n    background: ThemeBackground,\n    enabled: Boolean,\n    onActiveChange: (Boolean) -> Unit,\n    onEdit: () -> Unit,\n    onDelete: () -> Unit\n) {'''
+          new = '''private fun ThemeBackgroundItem(\n    background: ThemeBackground,\n    enabled: Boolean,\n    onActiveChange: (Boolean) -> Unit,\n    onPreview: () -> Unit,\n    onEdit: () -> Unit,\n    onDelete: () -> Unit\n) {'''
+          if old not in s:
+              raise SystemExit('Assinatura ThemeBackgroundItem não encontrada')
+          s = s.replace(old, new, 1)
+
+          old = '''                modifier = Modifier\n                    .size(width = 72.dp, height = 44.dp)\n                    .clip(RoundedCornerShape(6.dp)),'''
+          new = '''                modifier = Modifier\n                    .size(width = 72.dp, height = 44.dp)\n                    .clip(RoundedCornerShape(6.dp))\n                    .clickable(enabled = enabled, onClick = onPreview),'''
+          if old not in s:
+              raise SystemExit('Miniatura do fundo não encontrada')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/ui/MestreScreen.kt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Adiciona preview real dos fundos na Home"
+          git push
