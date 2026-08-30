@@ -1,5 +1,10 @@
 package com.example.data
 
+internal object LocalAppearanceChoiceState {
+    @Volatile
+    var themeChosen: Boolean = false
+}
+
 class AppearanceSettings(
     overrideLocalTheme: Boolean = false,
     val theme: String = "multicolor",
