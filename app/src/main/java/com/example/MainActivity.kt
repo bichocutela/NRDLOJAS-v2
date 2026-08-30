@@ -145,6 +145,7 @@ class MainActivity : ComponentActivity() {
             val largeText by userPreferences.largeText.collectAsState(initial = false)
             val appTheme by userPreferences.appTheme.collectAsState(initial = "multicolor")
             val appearanceMode by userPreferences.appearanceMode.collectAsState(initial = "system")
+            val glassAccentColor by userPreferences.glassAccentColor.collectAsState(initial = "multicolor")
             val hasLocalThemeChoice by applicationContext.dataStore.data
                 .map { preferences -> preferences[UserPreferences.APP_THEME] != null }
                 .collectAsState(initial = false)
@@ -185,7 +186,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 MyApplicationTheme(
-                    appTheme = effectiveAppTheme,
+                    appTheme = if (effectiveAppTheme == "glass") glassAccentColor else effectiveAppTheme,
                     appearanceMode = effectiveAppearanceMode
                 ) {
 

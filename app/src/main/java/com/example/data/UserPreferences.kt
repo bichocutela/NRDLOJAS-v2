@@ -88,6 +88,18 @@ class UserPreferences(private val context: Context) {
         preferences[APPEARANCE_MODE] ?: "system"
     }
 
+    val glassAccentColor: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[GLASS_ACCENT_COLOR] ?: "multicolor"
+    }
+
+    val glassTransparency: Flow<Float> = context.dataStore.data.map { preferences ->
+        preferences[GLASS_TRANSPARENCY] ?: 0.55f
+    }
+
+    val glassType: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[GLASS_TYPE] ?: "soft"
+    }
+
     val onboardingShown: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[ONBOARDING_SHOWN] ?: false
     }
@@ -190,6 +202,20 @@ class UserPreferences(private val context: Context) {
         context.dataStore.edit { it[APPEARANCE_MODE] = mode }
     }
 
+    suspend fun setGlassAccentColor(color: String) {
+        val safe = color.takeIf { it in setOf("multicolor", "red", "green", "orange", "blue", "gold") } ?: "multicolor"
+        context.dataStore.edit { it[GLASS_ACCENT_COLOR] = safe }
+    }
+
+    suspend fun setGlassTransparency(value: Float) {
+        context.dataStore.edit { it[GLASS_TRANSPARENCY] = value.coerceIn(0.20f, 0.90f) }
+    }
+
+    suspend fun setGlassType(type: String) {
+        val safe = type.takeIf { it in setOf("soft", "frosted", "crystal") } ?: "soft"
+        context.dataStore.edit { it[GLASS_TYPE] = safe }
+    }
+
     suspend fun setOnboardingShown(shown: Boolean) {
         context.dataStore.edit { it[ONBOARDING_SHOWN] = shown }
     }
@@ -224,6 +250,9 @@ class UserPreferences(private val context: Context) {
         val LAST_NOTIFIED_PROMOTION_FINGERPRINT = stringPreferencesKey("last_notified_promotion_fingerprint")
         val APP_THEME = stringPreferencesKey("app_theme")
         val APPEARANCE_MODE = stringPreferencesKey("appearance_mode")
+        val GLASS_ACCENT_COLOR = stringPreferencesKey("glass_accent_color")
+        val GLASS_TRANSPARENCY = floatPreferencesKey("glass_transparency")
+        val GLASS_TYPE = stringPreferencesKey("glass_type")
         val ONBOARDING_SHOWN = booleanPreferencesKey("onboarding_shown")
         val INSTALLATION_ID = stringPreferencesKey("installation_id")
     }

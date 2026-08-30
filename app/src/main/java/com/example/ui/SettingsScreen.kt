@@ -36,6 +36,9 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val uppercaseBold by viewModel.userPreferences.uppercaseBold.collectAsState(initial = false)
     val appTheme by viewModel.userPreferences.appTheme.collectAsState(initial = "multicolor")
     val appearanceMode by viewModel.userPreferences.appearanceMode.collectAsState(initial = "system")
+    val glassAccentColor by viewModel.userPreferences.glassAccentColor.collectAsState(initial = "multicolor")
+    val glassTransparency by viewModel.userPreferences.glassTransparency.collectAsState(initial = 0.55f)
+    val glassType by viewModel.userPreferences.glassType.collectAsState(initial = "soft")
     
     val notificationsEnabled by viewModel.userPreferences.notificationsEnabled.collectAsState(initial = true)
     val notificationsProductAddedEnabled by viewModel.userPreferences.notificationsProductAddedEnabled.collectAsState(initial = true)
@@ -168,7 +171,8 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 "gold" to "Dourado",
                 "green" to "Verde",
                 "blue" to "Azul",
-                "orange" to "Laranja"
+                "orange" to "Laranja",
+                "glass" to "Glass Soft Suave"
             )
             
             ExposedDropdownMenuBox(
@@ -196,6 +200,98 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 expandedThemeMenu = false
                             }
                         )
+                    }
+                }
+            }
+
+            if (appTheme == "glass") {
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("Personalizar Glass Soft Suave", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Esses ajustes aparecem somente neste tema.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        var expandedGlassColorMenu by remember { mutableStateOf(false) }
+                        val glassColorOptions = listOf(
+                            "multicolor" to "Multicolorido",
+                            "red" to "Vermelho",
+                            "green" to "Verde",
+                            "orange" to "Laranja",
+                            "blue" to "Azul",
+                            "gold" to "Dourado"
+                        )
+                        ExposedDropdownMenuBox(
+                            expanded = expandedGlassColorMenu,
+                            onExpandedChange = { expandedGlassColorMenu = !expandedGlassColorMenu }
+                        ) {
+                            OutlinedTextField(
+                                value = glassColorOptions.find { it.first == glassAccentColor }?.second ?: "Multicolorido",
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Cor do vidro") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedGlassColorMenu) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = expandedGlassColorMenu,
+                                onDismissRequest = { expandedGlassColorMenu = false }
+                            ) {
+                                glassColorOptions.forEach { (key, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            coroutineScope.launch { viewModel.userPreferences.setGlassAccentColor(key) }
+                                            expandedGlassColorMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Text("Transparência do vidro: ${(glassTransparency * 100).toInt()}%", style = MaterialTheme.typography.titleSmall)
+                        Slider(
+                            value = glassTransparency,
+                            onValueChange = { coroutineScope.launch { viewModel.userPreferences.setGlassTransparency(it) } },
+                            valueRange = 0.20f..0.90f,
+                            steps = 13
+                        )
+                        Text(
+                            "Menor valor deixa o vidro mais sólido; maior valor deixa o fundo mais aparente.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Text("Tipo de vidro", style = MaterialTheme.typography.titleSmall)
+                        val glassTypes = listOf(
+                            "soft" to "Suave",
+                            "frosted" to "Fosco",
+                            "crystal" to "Cristal"
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            glassTypes.forEach { (key, label) ->
+                                val selected = glassType == key
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = { coroutineScope.launch { viewModel.userPreferences.setGlassType(key) } },
+                                    label = { Text(label) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
                     }
                 }
             }
