@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
@@ -48,6 +49,7 @@ private const val NEW_CATEGORY_ACTION_KEY = "__new_category__"
 
 private enum class MestrePanelPage(val title: String) {
     DASHBOARD("Painel Mestre"),
+    SUGGESTIONS("Pendências"),
     CONTENT("Conteúdo e catálogo"),
     CATEGORIES("Categorias"),
     SETTINGS("Configuração do aplicativo"),
@@ -130,6 +132,7 @@ fun MestreScreen(
     var isLoadingMaintenance by remember { mutableStateOf(false) }
     var showSyncConfirmation by remember { mutableStateOf(false) }
     var snapshotToRestore by remember { mutableStateOf<CatalogSnapshot?>(null) }
+    var showAllCatalogBackups by rememberSaveable { mutableStateOf(false) }
     var editingCategory by remember { mutableStateOf<CategoryDefinition?>(null) }
     var categoryName by remember { mutableStateOf("") }
     var categoryActionInProgress by remember { mutableStateOf<String?>(null) }
@@ -266,19 +269,30 @@ fun MestreScreen(
                 )
                 Spacer(modifier = Modifier.height(24.dp))
 
-                MestreSuggestionsSection(suggestions = suggestions) { suggestion, status ->
-                    val updated = FirebaseService.updateSuggestionStatus(suggestion.id, status)
-                    val statusLabel = if (status == "fixed") "corrigida" else "pendente"
-                    val message = if (updated) "Sugestão marcada como $statusLabel."
-                    else "Não foi possível atualizar a sugestão. Tente novamente."
-                    coroutineScope.launch { snackbarHostState.showSnackbar(message) }
-                }
+                MestreSuggestionsPreview(
+                    suggestions = suggestions,
+                    onViewAll = { openPage(MestrePanelPage.SUGGESTIONS) }
+                )
                 Spacer(modifier = Modifier.height(20.dp))
                 MestrePanelAreaNavigation(
                     onOpenCatalog = { openPage(MestrePanelPage.CONTENT) },
                     onOpenSettings = { openPage(MestrePanelPage.SETTINGS) },
                     onOpenAdvanced = { openPage(MestrePanelPage.ADVANCED) }
                 )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            if (currentPage == MestrePanelPage.SUGGESTIONS) {
+                MestreSuggestionsSection(
+                    suggestions = suggestions,
+                    showHeader = false
+                ) { suggestion, status ->
+                    val updated = FirebaseService.updateSuggestionStatus(suggestion.id, status)
+                    val statusLabel = if (status == "fixed") "corrigida" else "pendente"
+                    val message = if (updated) "Sugestão marcada como $statusLabel."
+                    else "Não foi possível atualizar a sugestão. Tente novamente."
+                    coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+                }
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
@@ -444,12 +458,14 @@ fun MestreScreen(
                     if (!isLoadingCatalogHistory && catalogSnapshots.isEmpty()) {
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            "Nenhum snapshot disponível ou a nuvem não está acessível.",
+                            "Nenhum backup disponível ou a nuvem não está acessível.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    catalogSnapshots.forEach { snapshot ->
+                    val orderedSnapshots = catalogSnapshots.sortedByDescending { it.createdAt }
+                    val visibleSnapshots = if (showAllCatalogBackups) orderedSnapshots else orderedSnapshots.take(3)
+                    visibleSnapshots.forEach { snapshot ->
                         Spacer(modifier = Modifier.height(10.dp))
                         CatalogSnapshotItem(
                             snapshot = snapshot,
@@ -457,17 +473,26 @@ fun MestreScreen(
                             onRestore = { snapshotToRestore = it }
                         )
                     }
+                    if (orderedSnapshots.size > 3) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        TextButton(
+                            onClick = { showAllCatalogBackups = !showAllCatalogBackups },
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Text(
+                                if (showAllCatalogBackups) "Mostrar apenas recentes"
+                                else "Ver todos os ${orderedSnapshots.size} backups"
+                            )
+                        }
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
             }
 
             if (currentPage == MestrePanelPage.HOME_SETTINGS) {
-            MestreSectionHeader(
-                title = "Configurações da Home",
-                description = "Escolha o que aparece para todos os usuários"
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            MestrePageIntro("Escolha o que aparece para todos os usuários")
+            Spacer(modifier = Modifier.height(12.dp))
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -548,11 +573,8 @@ fun MestreScreen(
             }
 
             if (currentPage == MestrePanelPage.CATEGORIES) {
-            MestreSectionHeader(
-                title = "Categorias",
-                description = "Organize os grupos exibidos e usados no catálogo"
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            MestrePageIntro("Organize os grupos exibidos e usados no catálogo")
+            Spacer(modifier = Modifier.height(12.dp))
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Button(
@@ -630,11 +652,8 @@ fun MestreScreen(
             }
 
             if (currentPage == MestrePanelPage.NOTIFICATION_SETTINGS) {
-            MestreSectionHeader(
-                title = "Notificações globais",
-                description = "Controle o que pode ser recebido pelos usuários"
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            MestrePageIntro("Controle o que pode ser recebido pelos usuários")
+            Spacer(modifier = Modifier.height(12.dp))
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     NotificationSettingSwitch(
@@ -707,11 +726,8 @@ fun MestreScreen(
             }
 
             if (currentPage == MestrePanelPage.ASSISTANT_SETTINGS) {
-            MestreSectionHeader(
-                title = "Assistente IA",
-                description = "Defina os limites e a mensagem inicial do assistente"
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            MestrePageIntro("Defina os limites e a mensagem inicial do assistente")
+            Spacer(modifier = Modifier.height(12.dp))
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     AssistantSettingSwitch(
@@ -787,11 +803,8 @@ fun MestreScreen(
             }
 
             if (currentPage == MestrePanelPage.APPEARANCE_SETTINGS) {
-            MestreSectionHeader(
-                title = "Aparência global",
-                description = "Personalize o visual para todos os usuários"
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            MestrePageIntro("Personalize o visual para todos os usuários")
+            Spacer(modifier = Modifier.height(12.dp))
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     NotificationSettingSwitch(
@@ -1410,6 +1423,7 @@ private fun ThemeBackgroundItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 10.dp, end = 4.dp),
@@ -1426,6 +1440,9 @@ private fun ThemeBackgroundItem(
             Spacer(modifier = Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(background.label, style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(3.dp))
+                BackgroundStatusBadge(background)
+                Spacer(modifier = Modifier.height(3.dp))
                 Text(
                     backgroundScheduleStatus(background),
                     style = MaterialTheme.typography.labelSmall,
@@ -1437,13 +1454,68 @@ private fun ThemeBackgroundItem(
                 onCheckedChange = onActiveChange,
                 enabled = ThemeBackground.normalizeDate(background.startDate) != null
             )
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, contentDescription = "Editar ${background.label}")
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Excluir ${background.label}")
+            Box {
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "Ações de ${background.label}")
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Editar") },
+                        onClick = {
+                            menuExpanded = false
+                            onEdit()
+                        },
+                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Excluir", color = MaterialTheme.colorScheme.error) },
+                        onClick = {
+                            menuExpanded = false
+                            onDelete()
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun BackgroundStatusBadge(background: ThemeBackground) {
+    val today = ThemeBackground.todayIsoDate()
+    val start = ThemeBackground.normalizeDate(background.startDate)
+    val end = ThemeBackground.normalizeDate(background.endDate)
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val (label, colors) = when {
+        start == null -> "Sem data" to (MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer)
+        !background.isActive -> "Desativado" to (MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant)
+        today < start -> "Agendado" to (MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer)
+        end != null && today > end -> "Encerrado" to (MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant)
+        else -> "Ativo" to (
+            (if (isDark) Color(0xFF1B5E20) else Color(0xFFE8F5E9)) to
+                (if (isDark) Color(0xFFC8E6C9) else Color(0xFF1B5E20))
+            )
+    }
+    Surface(
+        color = colors.first,
+        contentColor = colors.second,
+        shape = RoundedCornerShape(50)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+        )
     }
 }
 
@@ -1615,6 +1687,7 @@ private fun CategoryManagementRow(
     onEdit: () -> Unit,
     onActiveChange: (Boolean) -> Unit
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -1630,20 +1703,47 @@ private fun CategoryManagementRow(
         if (isUpdating) {
             CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
         }
-        IconButton(onClick = onMoveUp, enabled = enabled && !isFirst) {
-            Icon(Icons.Default.ArrowUpward, contentDescription = "Mover ${category.name} para cima")
-        }
-        IconButton(onClick = onMoveDown, enabled = enabled && !isLast) {
-            Icon(Icons.Default.ArrowDownward, contentDescription = "Mover ${category.name} para baixo")
-        }
-        IconButton(onClick = onEdit, enabled = enabled) {
-            Icon(Icons.Default.Edit, contentDescription = "Renomear ${category.name}")
-        }
         Switch(
             checked = category.isActive,
             onCheckedChange = onActiveChange,
             enabled = enabled
         )
+        Box {
+            IconButton(onClick = { menuExpanded = true }, enabled = enabled) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Ações de ${category.name}")
+            }
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Mover para cima") },
+                    onClick = {
+                        menuExpanded = false
+                        onMoveUp()
+                    },
+                    enabled = !isFirst,
+                    leadingIcon = { Icon(Icons.Default.ArrowUpward, contentDescription = null) }
+                )
+                DropdownMenuItem(
+                    text = { Text("Mover para baixo") },
+                    onClick = {
+                        menuExpanded = false
+                        onMoveDown()
+                    },
+                    enabled = !isLast,
+                    leadingIcon = { Icon(Icons.Default.ArrowDownward, contentDescription = null) }
+                )
+                DropdownMenuItem(
+                    text = { Text("Renomear") },
+                    onClick = {
+                        menuExpanded = false
+                        onEdit()
+                    },
+                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
+                )
+            }
+        }
     }
 }
 
@@ -1671,6 +1771,16 @@ internal fun MestreSectionHeader(title: String, description: String) {
         Text(title, style = MaterialTheme.typography.titleMedium)
         Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+@Composable
+private fun MestrePageIntro(description: String) {
+    Text(
+        text = description,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth()
+    )
 }
 
 @Composable

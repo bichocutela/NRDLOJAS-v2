@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Pending
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -33,6 +34,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.ProductSuggestion
 import java.text.SimpleDateFormat
@@ -45,6 +47,7 @@ private const val SUGGESTIONS_PAGE_SIZE = 10
 @Composable
 internal fun MestreSuggestionsSection(
     suggestions: List<ProductSuggestion>,
+    showHeader: Boolean = true,
     onStatusChange: suspend (ProductSuggestion, String) -> Unit
 ) {
     var suggestionFilter by remember { mutableStateOf("all") }
@@ -52,11 +55,13 @@ internal fun MestreSuggestionsSection(
     var updatingSuggestionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val coroutineScope = rememberCoroutineScope()
 
-    MestreSectionHeader(
-        title = "Pendências",
-        description = "Analise sugestões dos usuários e marque solicitações como corrigidas"
-    )
-    Spacer(modifier = Modifier.height(8.dp))
+    if (showHeader) {
+        MestreSectionHeader(
+            title = "Pendências",
+            description = "Analise sugestões dos usuários e marque solicitações como corrigidas"
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+    }
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -189,16 +194,92 @@ internal fun MestreSuggestionsSection(
 }
 
 @Composable
+internal fun MestreSuggestionsPreview(
+    suggestions: List<ProductSuggestion>,
+    onViewAll: () -> Unit
+) {
+    val pendingSuggestions = suggestions
+        .filter { it.status == ProductSuggestion.STATUS_PENDING }
+        .sortedByDescending { it.createdAt }
+
+    MestreSectionHeader(
+        title = "Pendências recentes",
+        description = "Acompanhe as solicitações que precisam da sua atenção"
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Sugestões dos usuários", style = MaterialTheme.typography.titleSmall)
+                Badge(containerColor = if (pendingSuggestions.isEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) {
+                    Text(pendingSuggestions.size.toString())
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            if (pendingSuggestions.isEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Nenhuma pendência no momento.", style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                pendingSuggestions.take(3).forEachIndexed { index, suggestion ->
+                    SuggestionPreviewItem(suggestion)
+                    if (index < minOf(2, pendingSuggestions.lastIndex)) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
+            if (suggestions.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(onClick = onViewAll, modifier = Modifier.align(Alignment.End)) {
+                    Text(if (pendingSuggestions.isEmpty()) "Ver histórico" else "Ver todas")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SuggestionPreviewItem(suggestion: ProductSuggestion) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                suggestion.text,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                "${suggestion.submittedBy} · ${formatSuggestionDate(suggestion.createdAt)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
 private fun SuggestionManagementItem(
     suggestion: ProductSuggestion,
     isUpdating: Boolean,
     onStatusChange: (String) -> Unit
 ) {
-    val dateText = if (suggestion.createdAt > 0L) {
-        SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(suggestion.createdAt))
-    } else {
-        "Data não informada"
-    }
+    val dateText = formatSuggestionDate(suggestion.createdAt)
     val isFixed = suggestion.status == ProductSuggestion.STATUS_FIXED
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -248,4 +329,10 @@ private fun SuggestionManagementItem(
             }
         }
     }
+}
+
+private fun formatSuggestionDate(timestamp: Long): String = if (timestamp > 0L) {
+    SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(timestamp))
+} else {
+    "Data não informada"
 }
