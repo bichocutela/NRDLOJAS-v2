@@ -599,42 +599,103 @@ fun CategoryItem(
     accentColor: Color? = null,
     onExpandToggle: () -> Unit
 ) {
-    val count = viewModel.productsCountByCategory.collectAsState().value.firstOrNull { it.category == category }?.count ?: 0
+    val productsFlow = remember(category) { viewModel.getProductsByCategory(category) }
+    val products by if (isExpanded) {
+        productsFlow.collectAsState(initial = emptyList())
+    } else {
+        remember { mutableStateOf(emptyList()) }
+    }
     val glass = rememberGlassVisualStyle(viewModel)
     val shape = RoundedCornerShape(18.dp)
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(vertical = if (glass.enabled) 4.dp else 0.dp)
+            .clip(shape)
             .then(
                 if (glass.enabled) Modifier
                     .background(glass.fill.copy(alpha = glass.alpha), shape)
                     .border(1.dp, glass.border, shape)
                 else Modifier
             )
-            .padding(vertical = if (glass.enabled) 2.dp else 0.dp)
     ) {
         TextButton(
             onClick = onExpandToggle,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(shape),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            colors = ButtonDefaults.textButtonColors(
+                containerColor = Color.Transparent,
+                contentColor = if (glass.enabled) glass.highlight else (accentColor ?: MaterialTheme.colorScheme.primary)
+            )
         ) {
-            Text(
-                text = category,
-                modifier = Modifier.weight(1f),
-                color = if (glass.enabled) glass.highlight else (accentColor ?: MaterialTheme.colorScheme.primary),
-                style = if (accentBrush != null) MaterialTheme.typography.titleMedium.merge(TextStyle(brush = accentBrush)) else MaterialTheme.typography.titleMedium
-            )
-            Icon(
-                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                contentDescription = null,
-                tint = if (glass.enabled) glass.highlight else (accentColor ?: MaterialTheme.colorScheme.primary)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = category,
+                    style = if (!glass.enabled && accentBrush != null) {
+                        MaterialTheme.typography.titleMedium.merge(TextStyle(brush = accentBrush))
+                    } else MaterialTheme.typography.titleMedium,
+                    color = when {
+                        glass.enabled -> glass.highlight
+                        accentBrush != null -> Color.Unspecified
+                        else -> LocalContentColor.current
+                    }
+                )
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (isExpanded) "Recolher" else "Expandir",
+                    tint = if (glass.enabled) glass.highlight else (accentColor ?: LocalContentColor.current)
+                )
+            }
         }
+
         if (isExpanded) {
-            Text(
-                text = "$count produtos",
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+            ) {
+                if (products.isEmpty()) {
+                    Text(
+                        "Carregando...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                } else {
+                    products.forEach { product ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = product.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = product.code,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (glass.enabled) glass.highlight else MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        HorizontalDivider(
+                            color = if (glass.enabled) glass.border.copy(alpha = 0.45f)
+                            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+            }
         }
     }
 }
