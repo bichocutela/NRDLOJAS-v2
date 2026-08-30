@@ -1,0 +1,34 @@
+name: Corrigir enquadramento original da Home
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix_home_banner_fit.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trocar FillWidth por Fit no ThemeBanner
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('app/src/main/java/com/example/ui/SearchScreen.kt')
+          s = p.read_text()
+          old = '            contentScale = ContentScale.FillWidth,\n            alignment = Alignment.TopCenter\n'
+          new = '            contentScale = ContentScale.Fit,\n            alignment = Alignment.Center\n'
+          if old not in s:
+              raise SystemExit('Bloco do ThemeBanner não encontrado')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+      - name: Commit e push
+        run: |
+          git config user.name "bicho cutela"
+          git config user.email "haydendanex@gmail.com"
+          git add app/src/main/java/com/example/ui/SearchScreen.kt
+          git commit -m "Usa imagem original inteira no banner da Home"
+          git push
