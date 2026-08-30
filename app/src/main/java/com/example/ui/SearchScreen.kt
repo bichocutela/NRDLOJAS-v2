@@ -89,6 +89,7 @@ import com.example.R
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
@@ -288,6 +289,8 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                     imageScale = activeThemeBackground?.imageScale ?: 1f,
                     imageOffsetX = activeThemeBackground?.imageOffsetX ?: 0f,
                     imageOffsetY = activeThemeBackground?.imageOffsetY ?: 0f,
+                    imageStretchX = activeThemeBackground?.imageStretchX ?: 1f,
+                    imageStretchY = activeThemeBackground?.imageStretchY ?: 1f,
                     modifier = Modifier.fillMaxSize()
                 )
 
@@ -1227,6 +1230,8 @@ fun ThemeBanner(
     imageScale: Float = 1f,
     imageOffsetX: Float = 0f,
     imageOffsetY: Float = 0f,
+    imageStretchX: Float = 1f,
+    imageStretchY: Float = 1f,
     modifier: Modifier = Modifier
 ) {
     val normalizedTheme = when (appTheme.trim().lowercase()) {
@@ -1250,13 +1255,19 @@ fun ThemeBanner(
         val safeScale = imageScale.coerceIn(0.5f, 3f)
         val safeOffsetX = imageOffsetX.coerceIn(-1f, 1f)
         val safeOffsetY = imageOffsetY.coerceIn(-1f, 1f)
+        val safeStretchX = imageStretchX.coerceIn(0.5f, 2.5f)
+        val safeStretchY = imageStretchY.coerceIn(0.5f, 2.5f)
         AsyncImage(
             model = imageModel,
             contentDescription = "Banner do tema $normalizedTheme",
             modifier = Modifier
                 .fillMaxSize()
-                .offset(x = maxWidth * safeOffsetX, y = maxHeight * safeOffsetY)
-                .scale(safeScale),
+                .graphicsLayer {
+                    scaleX = safeScale * safeStretchX
+                    scaleY = safeScale * safeStretchY
+                    translationX = size.width * safeOffsetX
+                    translationY = size.height * safeOffsetY
+                },
             contentScale = ContentScale.FillWidth,
             alignment = Alignment.TopCenter
         )

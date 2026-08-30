@@ -17,6 +17,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
@@ -1482,6 +1484,13 @@ fun MestreScreen(
                 var previewOffsetY by remember(background.id, background.imageOffsetY) {
                     mutableFloatStateOf(background.imageOffsetY.coerceIn(-1f, 1f))
                 }
+                var previewStretchX by remember(background.id, background.imageStretchX) {
+                    mutableFloatStateOf(background.imageStretchX.coerceIn(0.5f, 2.5f))
+                }
+                var previewStretchY by remember(background.id, background.imageStretchY) {
+                    mutableFloatStateOf(background.imageStretchY.coerceIn(0.5f, 2.5f))
+                }
+                var previewUnlocked by remember(background.id) { mutableStateOf(false) }
                 androidx.compose.ui.window.Dialog(
                     onDismissRequest = { backgroundToPreview = null }
                 ) {
@@ -1507,6 +1516,49 @@ fun MestreScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.height(14.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        if (previewUnlocked) "Ajustes liberados" else "Ajustes protegidos",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        if (previewUnlocked) "Cadeado aberto: você pode mover e esticar." else "Abra o cadeado para alterar o enquadramento.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                IconButton(onClick = { previewUnlocked = !previewUnlocked }) {
+                                    Icon(
+                                        imageVector = if (previewUnlocked) Icons.Default.LockOpen else Icons.Default.Lock,
+                                        contentDescription = if (previewUnlocked) "Bloquear ajustes" else "Desbloquear ajustes",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text("Imagem original — sem corte", style = MaterialTheme.typography.labelLarge)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                coil.compose.AsyncImage(
+                                    model = background.url,
+                                    contentDescription = "Imagem original de ${background.label}",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("Resultado na Home", style = MaterialTheme.typography.labelLarge)
                             androidx.compose.foundation.layout.BoxWithConstraints(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -1529,6 +1581,8 @@ fun MestreScreen(
                                         imageScale = previewScale,
                                         imageOffsetX = previewOffsetX,
                                         imageOffsetY = previewOffsetY,
+                                        imageStretchX = previewStretchX,
+                                        imageStretchY = previewStretchY,
                                         modifier = Modifier.fillMaxSize()
                                     )
                                 }
@@ -1538,25 +1592,44 @@ fun MestreScreen(
                             Slider(
                                 value = previewScale,
                                 onValueChange = { previewScale = it },
-                                valueRange = 0.5f..3f
+                                valueRange = 0.5f..3f,
+                                enabled = previewUnlocked
                             )
-                            Text("Horizontal: ${(previewOffsetX * 100).toInt()}", style = MaterialTheme.typography.labelLarge)
+                            Text("Mover horizontal: ${(previewOffsetX * 100).toInt()}", style = MaterialTheme.typography.labelLarge)
                             Slider(
                                 value = previewOffsetX,
                                 onValueChange = { previewOffsetX = it },
-                                valueRange = -1f..1f
+                                valueRange = -1f..1f,
+                                enabled = previewUnlocked
                             )
-                            Text("Vertical: ${(previewOffsetY * 100).toInt()}", style = MaterialTheme.typography.labelLarge)
+                            Text("Mover vertical: ${(previewOffsetY * 100).toInt()}", style = MaterialTheme.typography.labelLarge)
                             Slider(
                                 value = previewOffsetY,
                                 onValueChange = { previewOffsetY = it },
-                                valueRange = -1f..1f
+                                valueRange = -1f..1f,
+                                enabled = previewUnlocked
+                            )
+                            Text("Esticar largura (esquerda + direita): ${(previewStretchX * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
+                            Slider(
+                                value = previewStretchX,
+                                onValueChange = { previewStretchX = it },
+                                valueRange = 0.5f..2.5f,
+                                enabled = previewUnlocked
+                            )
+                            Text("Esticar altura (cima + baixo): ${(previewStretchY * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
+                            Slider(
+                                value = previewStretchY,
+                                onValueChange = { previewStretchY = it },
+                                valueRange = 0.5f..2.5f,
+                                enabled = previewUnlocked
                             )
                             TextButton(
                                 onClick = {
                                     previewScale = 1f
                                     previewOffsetX = 0f
                                     previewOffsetY = 0f
+                                    previewStretchX = 1f
+                                    previewStretchY = 1f
                                 },
                                 modifier = Modifier.align(Alignment.End)
                             ) {
@@ -1576,7 +1649,9 @@ fun MestreScreen(
                                                 item.copy(
                                                     imageScale = previewScale,
                                                     imageOffsetX = previewOffsetX,
-                                                    imageOffsetY = previewOffsetY
+                                                    imageOffsetY = previewOffsetY,
+                                                    imageStretchX = previewStretchX,
+                                                    imageStretchY = previewStretchY
                                                 )
                                             } else item
                                         }

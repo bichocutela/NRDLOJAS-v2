@@ -845,7 +845,9 @@ object FirebaseService {
                         endDate = normalizePersistedThemeBackgroundDate(map["endDate"] as? String),
                         imageScale = ((map["imageScale"] as? Number)?.toFloat() ?: 1f).coerceIn(0.5f, 3f),
                         imageOffsetX = ((map["imageOffsetX"] as? Number)?.toFloat() ?: 0f).coerceIn(-1f, 1f),
-                        imageOffsetY = ((map["imageOffsetY"] as? Number)?.toFloat() ?: 0f).coerceIn(-1f, 1f)
+                        imageOffsetY = ((map["imageOffsetY"] as? Number)?.toFloat() ?: 0f).coerceIn(-1f, 1f),
+                        imageStretchX = ((map["imageStretchX"] as? Number)?.toFloat() ?: 1f).coerceIn(0.5f, 2.5f),
+                        imageStretchY = ((map["imageStretchY"] as? Number)?.toFloat() ?: 1f).coerceIn(0.5f, 2.5f)
                     )
                 }
                 .orEmpty()
@@ -961,7 +963,9 @@ object FirebaseService {
                         "isActive" to (background.isActive && startDate != null),
                         "imageScale" to background.imageScale.coerceIn(0.5f, 3f),
                         "imageOffsetX" to background.imageOffsetX.coerceIn(-1f, 1f),
-                        "imageOffsetY" to background.imageOffsetY.coerceIn(-1f, 1f)
+                        "imageOffsetY" to background.imageOffsetY.coerceIn(-1f, 1f),
+                        "imageStretchX" to background.imageStretchX.coerceIn(0.5f, 2.5f),
+                        "imageStretchY" to background.imageStretchY.coerceIn(0.5f, 2.5f)
                     ).apply {
                         if (startDate != null) put("startDate", startDate)
                         if (endDate != null) put("endDate", endDate)
@@ -1136,7 +1140,9 @@ object FirebaseService {
                     endDate = normalizePersistedThemeBackgroundDate(item.optString("endDate")),
                     imageScale = item.optDouble("imageScale", 1.0).toFloat().coerceIn(0.5f, 3f),
                     imageOffsetX = item.optDouble("imageOffsetX", 0.0).toFloat().coerceIn(-1f, 1f),
-                    imageOffsetY = item.optDouble("imageOffsetY", 0.0).toFloat().coerceIn(-1f, 1f)
+                    imageOffsetY = item.optDouble("imageOffsetY", 0.0).toFloat().coerceIn(-1f, 1f),
+                    imageStretchX = item.optDouble("imageStretchX", 1.0).toFloat().coerceIn(0.5f, 2.5f),
+                    imageStretchY = item.optDouble("imageStretchY", 1.0).toFloat().coerceIn(0.5f, 2.5f)
                 )
             }
             if (items.isEmpty()) null else themeKey to items
