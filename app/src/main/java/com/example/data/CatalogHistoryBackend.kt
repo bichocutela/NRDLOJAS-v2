@@ -2,6 +2,7 @@ package com.example.data
 
 import com.example.BuildConfig
 import com.google.firebase.auth.FirebaseAuth
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -13,7 +14,12 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 object CatalogHistoryBackend {
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .writeTimeout(120, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .callTimeout(150, TimeUnit.SECONDS)
+        .build()
 
     private suspend fun call(action: String, extra: JSONObject = JSONObject()): JSONObject? {
         val baseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
@@ -58,7 +64,10 @@ object CatalogHistoryBackend {
                 }
             }
         } catch (e: Exception) {
-            FirebaseService.lastError = e.message ?: "Falha de conexão com o backend administrativo."
+            FirebaseService.lastError = when {
+                e.message?.contains("timeout", ignoreCase = true) == true -> "A operação demorou mais que o esperado. Verifique a conexão e tente novamente."
+                else -> e.message ?: "Falha de conexão com o backend administrativo."
+            }
             null
         }
     }
