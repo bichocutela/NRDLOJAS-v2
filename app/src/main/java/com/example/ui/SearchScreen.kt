@@ -279,10 +279,24 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
             }
         )
     }
-    val glassActionBrush = remember(glassAccentPalette) {
-        Brush.verticalGradient(glassAccentPalette)
+    val glassSessionAccent = remember(glassAccentColor) {
+        if (glassAccentColor == "multicolor") {
+            listOf(
+                Color(0xFFE5252A), Color(0xFF2E9D44), Color(0xFFF28C18),
+                Color(0xFF2474D2), Color(0xFFC99A14)
+            ).random()
+        } else {
+            glassAccentPalette.first()
+        }
     }
-    
+    val glassActionBrush = remember(glassSessionAccent, isDarkGlass) {
+        Brush.verticalGradient(
+            listOf(
+                glassSessionAccent.copy(alpha = if (isDarkGlass) 0.82f else 0.88f),
+                glassSessionAccent.copy(alpha = if (isDarkGlass) 0.62f else 0.68f)
+            )
+        )
+    }
     val normalizedTheme = remember(appTheme) { 
         when (appTheme.trim().lowercase()) {
             "multicolor" -> "multicolor"
@@ -912,14 +926,34 @@ fun CategorySection(
         itemsIndexed(categories) { index, category ->
             val colors = categoryColors[index % categoryColors.size]
             val dynamicColors = getDynamicThemeColor(index, appTheme, colors.first, colors.second)
+            val categoryGlassFill = if (glass.enabled) {
+
+                dynamicColors.first.copy(alpha = if (MaterialTheme.colorScheme.background.luminance() < 0.35f) 0.28f else 0.18f)
+
+            } else dynamicColors.first
+
+            val categoryGlassBorder = if (glass.enabled) {
+
+                dynamicColors.first.copy(alpha = 0.78f)
+
+            } else Color.Transparent
+
             Box(
+
                 modifier = Modifier
+
                     .clip(RoundedCornerShape(16.dp))
-                    .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else dynamicColors.first)
+
+                    .background(categoryGlassFill)
+
                     .border(
+
                         1.dp,
-                        if (glass.enabled) glass.border else Color.Transparent,
+
+                        categoryGlassBorder,
+
                         RoundedCornerShape(16.dp)
+
                     )
                     .clickable { onCategoryClick(category) }
                     .padding(horizontal = 16.dp, vertical = 10.dp),
