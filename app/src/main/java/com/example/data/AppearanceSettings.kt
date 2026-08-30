@@ -1,12 +1,5 @@
 package com.example.data
 
-import com.google.firebase.auth.FirebaseAuth
-
-internal object LocalAppearanceChoiceState {
-    @Volatile
-    var themeChosen: Boolean = false
-}
-
 class AppearanceSettings(
     overrideLocalTheme: Boolean = false,
     val theme: String = "multicolor",
@@ -17,25 +10,20 @@ class AppearanceSettings(
     private val storedOverrideLocalTheme: Boolean = overrideLocalTheme
 
     /**
-     * Para usuário comum, tema e modo de aparência são sempre escolhas locais.
-     * O valor remoto é preservado somente para a sessão de gerenciamento, para
-     * manter compatibilidade com o painel enquanto o Mestre administra os fundos.
+     * Tema e modo de aparência são preferências locais para qualquer pessoa,
+     * inclusive Mestre/Admin. O painel administrativo continua publicando a
+     * biblioteca de fundos por tema, mas não força o tema visual do aparelho.
      */
     val overrideLocalTheme: Boolean
-        get() = storedOverrideLocalTheme && isManagementSession()
+        get() = false
 
-    /**
-     * O host usa esta propriedade para decidir se deve considerar a aparência
-     * remota. Para usuários comuns ela é sempre falsa; assim a escolha local
-     * nunca é substituída pelo tema salvo no painel do Mestre.
-     */
+    /** A aparência remota nunca substitui a preferência local do aparelho. */
     val globalOverrideEnabled: Boolean
-        get() = storedOverrideLocalTheme && isManagementSession()
+        get() = false
 
     /**
-     * Retorna somente o fundo pertencente ao tema escolhido pelo usuário.
-     * A normalização impede que variações de caixa/espaço façam uma cor buscar
-     * o conjunto de fundos de outra cor.
+     * Retorna somente o fundo ativo/agendado pertencente ao tema escolhido
+     * localmente no aparelho.
      */
     fun activeBackgroundFor(
         themeKey: String,
@@ -91,14 +79,6 @@ class AppearanceSettings(
         "blue" -> "blue"
         "orange" -> "orange"
         else -> "multicolor"
-    }
-
-    private fun isManagementSession(): Boolean = runCatching {
-        FirebaseAuth.getInstance().currentUser?.email?.trim()?.lowercase() in MANAGEMENT_EMAILS
-    }.getOrDefault(false)
-
-    private companion object {
-        val MANAGEMENT_EMAILS = setOf("admin@nrdlojas.com", "mestre@nrdlojas.com")
     }
 }
 
