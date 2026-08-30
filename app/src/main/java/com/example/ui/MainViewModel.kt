@@ -12,6 +12,7 @@ import com.example.data.AssistantSettings
 import com.example.data.CategoryDefinition
 import com.example.data.CatalogSnapshot
 import com.example.data.CatalogAdminOperations
+import com.example.data.CatalogHistoryBackend
 import com.example.data.ProductImportCommitResult
 import com.example.data.ProductImportRow
 import com.example.data.FirebaseService
@@ -699,7 +700,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         viewModelScope.launch {
             _isLoadingCatalogHistory.value = true
             try {
-                val snapshots = FirebaseService.getCatalogSnapshots()
+                val snapshots = CatalogHistoryBackend.listSnapshots()
                 _catalogSnapshots.value = snapshots
                 if (snapshots.isEmpty() && !FirebaseService.lastError.isNullOrBlank()) {
                     _syncMessage.emit("Não foi possível consultar os backups: ${FirebaseService.lastError}")
@@ -714,7 +715,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         viewModelScope.launch {
             _isLoadingCatalogHistory.value = true
             try {
-                val snapshot = FirebaseService.createCatalogSnapshot()
+                val snapshot = CatalogHistoryBackend.createSnapshot()
                 if (snapshot != null) {
                     _catalogSnapshots.value = listOf(snapshot) + _catalogSnapshots.value
                     _syncMessage.emit("Backup criado com ${snapshot.productCount} produto(s).")
@@ -733,7 +734,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         viewModelScope.launch {
             _isLoadingCatalogHistory.value = true
             try {
-                val result = FirebaseService.restoreCatalogSnapshot(snapshotId)
+                val result = CatalogHistoryBackend.restoreSnapshot(snapshotId)
                 result.restoredProducts?.let { repository.insertProducts(it) }
                 if (result.success) {
                     val restoredCodes = result.restoredProducts.orEmpty().map { it.code }.toSet()
@@ -743,7 +744,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                 }
                 _syncMessage.emit(result.message)
                 if (result.success) {
-                    _catalogSnapshots.value = FirebaseService.getCatalogSnapshots()
+                    _catalogSnapshots.value = CatalogHistoryBackend.listSnapshots()
                 }
             } finally {
                 _isLoadingCatalogHistory.value = false
