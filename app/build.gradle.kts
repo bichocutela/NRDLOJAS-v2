@@ -22,7 +22,6 @@ android {
         val supabaseUrl = System.getenv("SUPABASE_URL") ?: "https://kkayksyzksexoarpfxyj.supabase.co"
     buildConfigField("String", "SUPABASE_URL", "\"${supabaseUrl}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${System.getenv("SUPABASE_ANON_KEY") ?: ""}\"")
-        buildConfigField("String", "GEMINI_API_KEY", "\"${System.getenv("GEMINI_API_KEY") ?: "dummy"}\"")
         val nossaGenteApiBaseUrl = System.getenv("NOSSA_GENTE_API_BASE_URL") ?: "https://app.nordestao.com.br/nossa-gente/v1"
         buildConfigField("String", "NOSSA_GENTE_API_BASE_URL", "\"${nossaGenteApiBaseUrl.trimEnd('/') }\"")
 

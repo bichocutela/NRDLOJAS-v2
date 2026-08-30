@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddBox
 import androidx.compose.material.icons.filled.Backup
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Home
@@ -160,7 +159,7 @@ internal fun MestrePanelAreaNavigation(
     Spacer(modifier = Modifier.height(10.dp))
     PanelAreaCard(
         title = "Configuração do aplicativo",
-        description = "Home, aparência, notificações e Assistente IA",
+        description = "Home, aparência e notificações globais",
         icon = Icons.Default.Settings,
         onClick = onOpenSettings
     )
@@ -247,8 +246,7 @@ internal fun MestreContentHub(
 internal fun MestreSettingsHub(
     onOpenHome: () -> Unit,
     onOpenAppearance: () -> Unit,
-    onOpenNotifications: () -> Unit,
-    onOpenAssistant: () -> Unit
+    onOpenNotifications: () -> Unit
 ) {
     Text("Escolha o que deseja configurar", style = MaterialTheme.typography.titleMedium)
     Text(
@@ -276,13 +274,6 @@ internal fun MestreSettingsHub(
         description = "Políticas aplicadas aos aparelhos dos usuários",
         icon = Icons.Default.Notifications,
         onClick = onOpenNotifications
-    )
-    Spacer(modifier = Modifier.height(10.dp))
-    PanelAreaCard(
-        title = "Assistente IA",
-        description = "Disponibilidade, mensagem e limites do catálogo",
-        icon = Icons.Default.AutoAwesome,
-        onClick = onOpenAssistant
     )
 }
 

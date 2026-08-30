@@ -2,13 +2,7 @@ package com.example.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.BuildConfig
-import com.example.api.Content
-import com.example.api.GenerateContentRequest
-import com.example.api.Part
-import com.example.api.RetrofitClient
 import com.example.data.Product
-import com.example.data.AssistantSettings
 import com.example.data.CategoryDefinition
 import com.example.data.CatalogSnapshot
 import com.example.data.CatalogAdminOperations
@@ -61,12 +55,6 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
 
-    private val _chatInput = MutableStateFlow("")
-    val chatInput = _chatInput.asStateFlow()
-
-    private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
-    val chatMessages = _chatMessages.asStateFlow()
-
     private val _newProductsCount = MutableStateFlow(0)
     val newProductsCount: StateFlow<Int> = _newProductsCount.asStateFlow()
     private val recentlyCountedProducts = mutableMapOf<String, Long>()
@@ -94,13 +82,6 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     private val remoteCategories = FirebaseService.observeCategories()
         .onStart { emit(CategoryDefinition.defaults) }
         .catch { emit(CategoryDefinition.defaults) }
-
-    private val remoteAssistantSettings = FirebaseService.observeAssistantSettings()
-        .onStart { emit(AssistantSettings()) }
-        .catch { emit(AssistantSettings()) }
-
-    val assistantSettings: StateFlow<AssistantSettings> = remoteAssistantSettings
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AssistantSettings())
 
     val categoryDefinitions: StateFlow<List<CategoryDefinition>> = remoteCategories
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CategoryDefinition.defaults)
@@ -258,69 +239,6 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
 
     fun toggleFavorite(product: Product) {
         viewModelScope.launch { repository.toggleFavorite(product) }
-    }
-
-    fun updateChatInput(input: String) {
-        _chatInput.value = input
-    }
-
-    fun sendChatMessage() {
-        val query = _chatInput.value.trim()
-        if (query.isBlank()) return
-
-        _chatInput.value = ""
-        val newMessages = _chatMessages.value.toMutableList()
-        newMessages.add(ChatMessage(query, true))
-        _chatMessages.value = newMessages
-
-        viewModelScope.launch {
-            try {
-                val settings = assistantSettings.value
-                if (!settings.enabled) {
-                    val disabledMessages = _chatMessages.value.toMutableList()
-                    disabledMessages.add(ChatMessage("O Assistente IA está desativado pelo Mestre.", false))
-                    _chatMessages.value = disabledMessages
-                    return@launch
-                }
-
-                val relatedProducts = repository.searchProductsSync(query)
-                    .take(settings.maxContextProducts.coerceIn(5, 50))
-                val contextString = relatedProducts.joinToString("\n") {
-                    "${it.name} (${it.category}) - Código: ${it.code} - Vendido por: ${it.unit}"
-                }.ifBlank { "Nenhum produto relacionado foi encontrado no catálogo." }
-
-                val scopeInstruction = if (settings.catalogOnly) {
-                    "Responda somente com base no catálogo abaixo. Não invente códigos e diga quando não encontrar."
-                } else {
-                    "Priorize o catálogo abaixo. Quando a pergunta não for sobre produtos, responda de forma breve e deixe claro quando não houver informação no catálogo."
-                }
-                val systemPrompt = """
-                    Você é um assistente de um supermercado para ajudar operadores de caixa e repositores a encontrar códigos de produtos.
-                    Sempre responda de forma amigável, direta e curta.
-                    $scopeInstruction
-
-                    Produtos mais relacionados à pergunta:
-                    $contextString
-                """.trimIndent()
-
-                val request = GenerateContentRequest(
-                    contents = listOf(Content(parts = listOf(Part(text = query)))),
-                    systemInstruction = Content(parts = listOf(Part(text = systemPrompt)))
-                )
-
-                val response = RetrofitClient.service.generateContent(BuildConfig.GEMINI_API_KEY, request)
-                val responseText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
-                    ?: "Desculpe, não entendi."
-
-                val updatedMessages = _chatMessages.value.toMutableList()
-                updatedMessages.add(ChatMessage(responseText, false))
-                _chatMessages.value = updatedMessages
-            } catch (e: Throwable) {
-                val updatedMessages = _chatMessages.value.toMutableList()
-                updatedMessages.add(ChatMessage("Erro ao conectar com a IA: ${e.message}", false))
-                _chatMessages.value = updatedMessages
-            }
-        }
     }
 
     fun getProductsByCategory(category: String) = repository.getProductsByCategory(category)
@@ -939,5 +857,3 @@ private data class GlobalMostUsedState(
     val isLoaded: Boolean = false,
     val products: List<Product> = emptyList()
 )
-
-data class ChatMessage(val text: String, val isUser: Boolean)

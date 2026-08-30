@@ -33,7 +33,6 @@ class ProductRepository(
 
     suspend fun searchProductsSync(query: String): List<Product> {
         val products = dao.getAllProductsSync()
-        // The chat assistant uses searchProductsSync("") to build its full context.
         return if (query.isBlank()) products else rankProductsByRelevance(products, query)
     }
     
