@@ -11,6 +11,7 @@ import com.example.data.Product
 import com.example.data.AssistantSettings
 import com.example.data.CategoryDefinition
 import com.example.data.CatalogSnapshot
+import com.example.data.CatalogAdminOperations
 import com.example.data.ProductImportCommitResult
 import com.example.data.ProductImportRow
 import com.example.data.FirebaseService
@@ -41,10 +42,9 @@ import kotlinx.coroutines.launch
 class MainViewModel(private val repository: ProductRepository, val userPreferences: UserPreferences) : ViewModel() {
     val authRepository = com.example.data.AuthRepository()
 
-
     private val _latestProduct = MutableStateFlow<Map<String, Any>?>(null)
     val latestProduct = _latestProduct.asStateFlow()
-    
+
     private val _isSyncingTabs = MutableStateFlow(false)
     val isSyncingTabs: StateFlow<Boolean> = _isSyncingTabs.asStateFlow()
     private val _syncMessage = MutableSharedFlow<String>()
@@ -64,7 +64,6 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
 
     private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val chatMessages = _chatMessages.asStateFlow()
-
 
     private val _newProductsCount = MutableStateFlow(0)
     val newProductsCount: StateFlow<Int> = _newProductsCount.asStateFlow()
@@ -124,6 +123,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     val allProducts = repository.allProducts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val productsCountByCategory = repository.productsCountByCategory.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val latestProductLocal = repository.latestProductLocal.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     init {
         viewModelScope.launch {
             val installationId = userPreferences.getOrCreateInstallationId()
@@ -160,34 +160,38 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         }
         viewModelScope.launch {
             FirebaseService.observeProducts().collect { remoteProducts ->
-                
-                    val localProducts = repository.getAllProductsSync()
-                    val remoteIds = remoteProducts.map { it.code }.toSet()
-                    val toDelete = localProducts.filter { it.code !in remoteIds }
-                    
-                    if (toDelete.isNotEmpty() && !_isSyncing.value) {
-                        repository.deleteProducts(toDelete)
+                val localProducts = repository.getAllProductsSync()
+                val remoteIds = remoteProducts.map { it.code }.toSet()
+                val toDelete = localProducts.filter { it.code !in remoteIds }
+
+                if (toDelete.isNotEmpty() && !_isSyncing.value) {
+                    repository.deleteProducts(toDelete)
+                }
+
+                val localByCode = localProducts.associateBy { it.code }
+                val missingOrUpdated = remoteProducts.mapNotNull { remote ->
+                    val local = localByCode[remote.code]
+                    if (local == null) {
+                        remote
+                    } else if (
+                        local.name != remote.name || local.imageUrl != remote.imageUrl ||
+                        local.category != remote.category || local.unit != remote.unit ||
+                        local.searchCount != remote.searchCount
+                    ) {
+                        remote.copy(id = local.id, lastSearchedAt = local.lastSearchedAt, isFavorite = local.isFavorite)
+                    } else {
+                        null
                     }
-                    
-                    val missingOrUpdated = remoteProducts.mapNotNull { remote ->
-                        val local = localProducts.find { it.code == remote.code }
-                        if (local == null) {
-                            remote
-                        } else if (local.name != remote.name || local.imageUrl != remote.imageUrl || local.category != remote.category || local.unit != remote.unit || local.searchCount != remote.searchCount) {
-                            remote.copy(id = local.id, lastSearchedAt = local.lastSearchedAt, isFavorite = local.isFavorite)
-                        } else {
-                            null
-                        }
+                }
+                if (missingOrUpdated.isNotEmpty() && !_isSyncing.value) {
+                    repository.insertProducts(missingOrUpdated)
+                }
+                remoteProducts.forEach { remote ->
+                    val local = localByCode[remote.code]
+                    if (local != null && local.searchCount != remote.searchCount) {
+                        repository.updateGlobalUsageCount(remote.code, remote.searchCount)
                     }
-                    if (missingOrUpdated.isNotEmpty() && !_isSyncing.value) {
-                        repository.insertProducts(missingOrUpdated)
-                    }
-                    remoteProducts.forEach { remote ->
-                        val local = localProducts.find { it.code == remote.code }
-                        if (local != null && local.searchCount != remote.searchCount) {
-                            repository.updateGlobalUsageCount(remote.code, remote.searchCount)
-                        }
-                    }
+                }
             }
         }
         viewModelScope.launch {
@@ -196,15 +200,10 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         }
     }
 
-    
     val searchResults: StateFlow<List<Product>> = _searchQuery
         .debounce(300)
         .flatMapLatest { query ->
-            if (query.isBlank()) {
-                flowOf(emptyList())
-            } else {
-                repository.searchProducts(query)
-            }
+            if (query.isBlank()) flowOf(emptyList()) else repository.searchProducts(query)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -236,15 +235,12 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     }
 
     fun toggleFavorite(product: Product) {
-        viewModelScope.launch {
-            repository.toggleFavorite(product)
-        }
+        viewModelScope.launch { repository.toggleFavorite(product) }
     }
 
     fun updateChatInput(input: String) {
         _chatInput.value = input
     }
-
 
     fun sendChatMessage() {
         val query = _chatInput.value.trim()
@@ -289,14 +285,14 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                     contents = listOf(Content(parts = listOf(Part(text = query)))),
                     systemInstruction = Content(parts = listOf(Part(text = systemPrompt)))
                 )
-                
+
                 val response = RetrofitClient.service.generateContent(BuildConfig.GEMINI_API_KEY, request)
-                val responseText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: "Desculpe, não entendi."
-                
+                val responseText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                    ?: "Desculpe, não entendi."
+
                 val updatedMessages = _chatMessages.value.toMutableList()
                 updatedMessages.add(ChatMessage(responseText, false))
                 _chatMessages.value = updatedMessages
-
             } catch (e: Throwable) {
                 val updatedMessages = _chatMessages.value.toMutableList()
                 updatedMessages.add(ChatMessage("Erro ao conectar com a IA: ${e.message}", false))
@@ -352,17 +348,26 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         val updated = categoryDefinitions.value.map {
             if (it.id == category.id) it.copy(name = cleanName) else it
         }
-        val saved = FirebaseService.saveCategories(updated)
-        if (!saved) {
-            _syncMessage.emit("Não foi possível salvar o novo nome da categoria.")
+
+        val renamedProducts = CatalogAdminOperations.renameProductsCategorySafely(category.name, cleanName)
+        if (!renamedProducts) {
+            _syncMessage.emit("Não foi possível atualizar os produtos da categoria. Nenhuma mudança parcial foi mantida.")
             return false
         }
-        val renamed = FirebaseService.renameProductsCategory(category.name, cleanName)
-        if (!renamed) {
-            FirebaseService.saveCategories(categoryDefinitions.value)
-            _syncMessage.emit("Não foi possível atualizar os produtos dessa categoria.")
+
+        val savedCategory = FirebaseService.saveCategories(updated)
+        if (!savedCategory) {
+            val rolledBack = CatalogAdminOperations.rollbackProductsCategory(cleanName, category.name)
+            _syncMessage.emit(
+                if (rolledBack) {
+                    "Não foi possível salvar o novo nome da categoria. As alterações foram desfeitas."
+                } else {
+                    "Falha ao salvar a categoria e ao desfazer todos os produtos. Use o diagnóstico antes de tentar novamente."
+                }
+            )
             return false
         }
+
         productsToRename.forEach { product ->
             repository.updateProduct(product.copy(category = cleanName))
         }
@@ -385,7 +390,9 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     }
 
     suspend fun moveCategory(category: CategoryDefinition, direction: Int): Boolean {
-        val ordered = categoryDefinitions.value.sortedWith(compareBy<CategoryDefinition> { it.displayOrder }.thenBy { it.name }).toMutableList()
+        val ordered = categoryDefinitions.value
+            .sortedWith(compareBy<CategoryDefinition> { it.displayOrder }.thenBy { it.name })
+            .toMutableList()
         val index = ordered.indexOfFirst { it.id == category.id }
         val targetIndex = index + direction
         if (index < 0 || targetIndex !in ordered.indices) return false
@@ -450,7 +457,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             val category = activeCategoryByKey[ProductStandards.searchNameFrom(row.category.trim())]
             when {
                 code in existingCodes -> {
-                    errors += "Linha ${row.lineNumber}: código $code já existe e foi ignorado."
+                    errors += "Linha ${row.lineNumber}: código $code já existe localmente e foi ignorado."
                     null
                 }
                 !seenCodes.add(code) -> {
@@ -474,14 +481,25 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         if (candidates.isEmpty()) {
             return ProductImportCommitResult(0, rows.size, errors.ifEmpty { listOf("Nenhum produto novo foi encontrado.") })
         }
-        val saved = FirebaseService.saveProductsBatch(candidates)
-        if (!saved) {
-            return ProductImportCommitResult(0, rows.size, errors + "Não foi possível publicar os produtos na nuvem.")
+
+        val remoteResult = CatalogAdminOperations.saveImportedProductsIfAbsent(candidates)
+        remoteResult.duplicateCodes.forEach { code ->
+            errors += "Código $code já existia na nuvem e não foi sobrescrito."
         }
-        repository.insertProducts(candidates)
-        _newProductsCount.value += candidates.size
-        _syncMessage.emit("${candidates.size} produto(s) importado(s) com sucesso.")
-        return ProductImportCommitResult(candidates.size, rows.size - candidates.size, errors)
+        if (remoteResult.savedProducts.isNotEmpty()) {
+            repository.insertProducts(remoteResult.savedProducts)
+            _newProductsCount.value += remoteResult.savedProducts.size
+        }
+        if (remoteResult.failed) {
+            errors += "A importação foi interrompida com segurança: ${remoteResult.message ?: "falha remota"}."
+        }
+
+        val importedCount = remoteResult.savedProducts.size
+        val skippedRows = rows.size - importedCount
+        if (importedCount > 0) {
+            _syncMessage.emit("$importedCount produto(s) importado(s) sem sobrescrever códigos existentes.")
+        }
+        return ProductImportCommitResult(importedCount, skippedRows, errors)
     }
 
     suspend fun checkDuplicateCode(code: String, currentId: Int? = null): Product? {
@@ -496,11 +514,19 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     suspend fun updateProductSuspend(oldProduct: Product, newProduct: Product): Boolean {
         val normalizedCode = newProduct.code.trim()
         val requestedCategory = newProduct.category.trim()
+        if (normalizedCode.isBlank()) {
+            _syncMessage.emit("Informe um código válido.")
+            return false
+        }
         if (requestedCategory != oldProduct.category && requestedCategory !in activeCategoryNames.value) {
             _syncMessage.emit("Selecione uma categoria ativa para alterar a categoria do produto.")
             return false
         }
         val normalizedName = ProductStandards.normalizeProductName(newProduct.name)
+        if (normalizedName.isBlank()) {
+            _syncMessage.emit("Informe o nome do produto.")
+            return false
+        }
         val finalProductCategory = if (requestedCategory == oldProduct.category) oldProduct.category else requestedCategory
         var finalProduct = newProduct.copy(
             id = oldProduct.id,
@@ -509,87 +535,77 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             searchName = ProductStandards.searchNameFrom(normalizedName),
             category = finalProductCategory
         )
+
         if (oldProduct.code != normalizedCode) {
-            android.util.Log.d("ProductSync", "Verificando se o novo código já existe: $normalizedCode")
-            val existingProduct = repository.getProductByCodeSync(normalizedCode)
-            if (existingProduct != null && existingProduct.id != oldProduct.id) {
-                android.util.Log.e("ProductSync", "Código já existe: $normalizedCode")
-                _syncMessage.emit("Código já cadastrado\n\nO código $normalizedCode já pertence ao produto:\n${existingProduct.name}")
+            val existingLocal = repository.getProductByCodeSync(normalizedCode)
+            if (existingLocal != null && existingLocal.id != oldProduct.id) {
+                _syncMessage.emit("Código já cadastrado\n\nO código $normalizedCode já pertence ao produto:\n${existingLocal.name}")
+                return false
+            }
+            if (FirebaseService.productExists(normalizedCode)) {
+                _syncMessage.emit("Código já cadastrado na nuvem. Escolha outro código.")
                 return false
             }
         }
 
         if (newProduct.imageUrl?.startsWith("content://") == true) {
-            android.util.Log.d("ProductSync", "Iniciando upload de imagem para alteração: ${newProduct.code}")
             val uri = android.net.Uri.parse(newProduct.imageUrl)
-            val url = FirebaseService.uploadImageToStorage(uri, "products/${newProduct.code}_${System.currentTimeMillis()}.jpg")
+            val url = FirebaseService.uploadImageToStorage(
+                uri,
+                "products/${newProduct.code}_${System.currentTimeMillis()}.jpg"
+            )
             if (url != null) {
-                android.util.Log.d("ProductSync", "Upload sucesso: $url")
                 finalProduct = finalProduct.copy(imageUrl = url)
             } else {
-                android.util.Log.e("ProductSync", "Upload falhou para: ${newProduct.code}")
                 _syncMessage.emit("Não foi possível enviar a foto. Tente novamente.")
                 return false
             }
         }
 
-        if (FirebaseService.isFirebaseConfigured()) {
-            android.util.Log.d("ProductSync", "Iniciando save Firestore para edição: ${finalProduct.code}")
-            val saveSuccess = FirebaseService.saveProduct(finalProduct)
-            if (saveSuccess) {
-                if (oldProduct.code != finalProduct.code) {
-                    android.util.Log.d("ProductSync", "Código alterado de ${oldProduct.code} para ${finalProduct.code}. Excluindo antigo.")
-                    val deleteSuccess = FirebaseService.deleteProduct(oldProduct.code)
-                    if (!deleteSuccess) {
-                        android.util.Log.e("ProductSync", "Erro ao excluir documento antigo: ${oldProduct.code}. Iniciando rollback.")
-                        val rollbackSuccess = FirebaseService.deleteProduct(finalProduct.code)
-                        if (rollbackSuccess) {
-                            android.util.Log.e("ProductSync", "Rollback com sucesso para: ${finalProduct.code}")
-                            _syncMessage.emit("Não foi possível alterar o código. Tente novamente.")
-                        } else {
-                            android.util.Log.e("ProductSync", "Erro crítico: rollback falhou para: ${finalProduct.code}")
-                            _syncMessage.emit("Erro ao concluir a alteração do código. Tente novamente.")
-                        }
-                        return false
-                    }
-                }
-                
-                android.util.Log.d("ProductSync", "Atualizando Room: ${finalProduct.code}")
-                repository.updateProduct(finalProduct)
-                
-                if (oldProduct.code != finalProduct.code) {
-                    android.util.Log.d("ProductSync", "Publicando evento: CODE_CHANGED")
-                    FirebaseService.publishProductEvent("CODE_CHANGED", finalProduct.name, null, finalProduct.code)
-                }
-                _syncMessage.emit("Produto atualizado na nuvem!")
-                return true
-            } else {
-                android.util.Log.e("ProductSync", "Save Firestore falhou para edição: ${finalProduct.code}")
-                _syncMessage.emit("Erro ao atualizar produto na nuvem.")
-                return false
-            }
-        } else {
+        if (!FirebaseService.isFirebaseConfigured()) {
             _syncMessage.emit("Nuvem não configurada. Não foi possível atualizar.")
             return false
         }
+
+        if (oldProduct.code != finalProduct.code) {
+            val result = CatalogAdminOperations.replaceProductCodeAtomically(oldProduct.code, finalProduct)
+            if (!result.success) {
+                _syncMessage.emit(
+                    if (result.duplicate) "O novo código já está em uso na nuvem. Nenhuma alteração foi feita."
+                    else "Não foi possível alterar o código. ${result.message.orEmpty()}".trim()
+                )
+                return false
+            }
+            repository.updateProduct(finalProduct)
+            FirebaseService.publishProductEvent("CODE_CHANGED", finalProduct.name, null, finalProduct.code)
+            _syncMessage.emit("Produto atualizado na nuvem!")
+            return true
+        }
+
+        val saveSuccess = FirebaseService.saveProduct(finalProduct)
+        if (!saveSuccess) {
+            _syncMessage.emit("Erro ao atualizar produto na nuvem.")
+            return false
+        }
+        repository.updateProduct(finalProduct)
+        _syncMessage.emit("Produto atualizado na nuvem!")
+        return true
     }
+
     suspend fun removeProductImage(product: Product): Boolean {
         val updatedProduct = product.copy(imageUrl = null)
         if (FirebaseService.isFirebaseConfigured()) {
             val success = FirebaseService.saveProduct(updatedProduct)
             if (success) {
                 repository.updateProduct(updatedProduct)
-                FirebaseService.publishProductEvent("INFO_CHANGED", updatedProduct.name, product.name, updatedProduct.code)
                 _syncMessage.emit("Foto removida com sucesso.")
                 return true
-            } else {
-                _syncMessage.emit("Não foi possível remover a foto.")
-                return false
             }
-        } else {
-            _syncMessage.emit("Não foi possível remover a foto. Verifique a conexão e tente novamente.")
+            _syncMessage.emit("Não foi possível remover a foto.")
             return false
         }
+        _syncMessage.emit("Não foi possível remover a foto. Verifique a conexão e tente novamente.")
+        return false
     }
 
     suspend fun deleteProductSuspend(product: Product): Boolean {
@@ -597,48 +613,55 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             val success = FirebaseService.deleteProduct(product.code)
             if (success) {
                 repository.deleteProduct(product)
-                FirebaseService.publishProductEvent("PRODUCT_DELETED", product.name, null, product.code)
                 _syncMessage.emit("Produto excluído com sucesso.")
                 return true
-            } else {
-                _syncMessage.emit("Não foi possível excluir o produto. Tente novamente.")
-                return false
             }
-        } else {
-            _syncMessage.emit("Não foi possível excluir o produto. Verifique a conexão e tente novamente.")
+            _syncMessage.emit("Não foi possível excluir o produto. Tente novamente.")
             return false
         }
+        _syncMessage.emit("Não foi possível excluir o produto. Verifique a conexão e tente novamente.")
+        return false
     }
 
     fun updateProduct(oldProduct: Product, newProduct: Product) {
-        viewModelScope.launch {
-            updateProductSuspend(oldProduct, newProduct)
-        }
+        viewModelScope.launch { updateProductSuspend(oldProduct, newProduct) }
     }
 
-        suspend fun addProductSuspend(name: String, code: String, category: String, unit: String, imageUrl: String? = null): Boolean {
+    suspend fun addProductSuspend(
+        name: String,
+        code: String,
+        category: String,
+        unit: String,
+        imageUrl: String? = null
+    ): Boolean {
         val normalizedCode = code.trim()
         val normalizedCategory = category.trim()
+        val normalizedName = ProductStandards.normalizeProductName(name)
+        if (normalizedCode.isBlank() || normalizedName.isBlank()) {
+            _syncMessage.emit("Informe nome e código válidos.")
+            return false
+        }
         if (normalizedCategory !in activeCategoryNames.value) {
             _syncMessage.emit("Selecione uma categoria ativa para adicionar o produto.")
             return false
         }
-        val normalizedName = ProductStandards.normalizeProductName(name)
         val existingProduct = repository.getProductByCodeSync(normalizedCode)
         if (existingProduct != null) {
             _syncMessage.emit("Código já cadastrado\n\nJá existe um produto utilizando o código $normalizedCode:\n${existingProduct.name}")
             return false
         }
+        if (FirebaseService.productExists(normalizedCode)) {
+            _syncMessage.emit("Código já cadastrado na nuvem. O produto existente foi preservado.")
+            return false
+        }
+
         var finalImageUrl = imageUrl
         if (imageUrl?.startsWith("content://") == true) {
-            android.util.Log.d("ProductSync", "Iniciando upload de imagem para $code")
             val uri = android.net.Uri.parse(imageUrl)
             val url = FirebaseService.uploadImageToStorage(uri, "products/${code}_${System.currentTimeMillis()}.jpg")
             if (url != null) {
-                android.util.Log.d("ProductSync", "Upload sucesso: $url")
                 finalImageUrl = url
             } else {
-                android.util.Log.e("ProductSync", "Upload falhou para $code")
                 _syncMessage.emit("Não foi possível enviar a foto. Tente novamente.")
                 return false
             }
@@ -651,43 +674,36 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             unit = unit,
             imageUrl = finalImageUrl
         )
-        if (FirebaseService.isFirebaseConfigured()) {
-            android.util.Log.d("ProductSync", "Iniciando save Firestore para novo produto: $code")
-            val success = FirebaseService.saveProduct(product)
-            if (success) {
-                android.util.Log.d("ProductSync", "Save Firestore sucesso, atualizando Room: $code")
-                repository.insertProduct(product)
-                FirebaseService.publishProductEvent(
-                    "NEW_PRODUCT",
-                    product.name,
-                    null,
-                    product.code
-                )
-                _syncMessage.emit("Produto adicionado na nuvem!")
-                _newProductsCount.value += 1
-                return true
-            } else {
-                android.util.Log.e("ProductSync", "Save Firestore falhou para: $code")
-                _syncMessage.emit("Erro ao salvar produto na nuvem.")
-                return false
-            }
-        } else {
-            _syncMessage.emit("Não foi possível publicar o produto. Verifique a conexão e tente novamente.")
+
+        val result = CatalogAdminOperations.createProductIfAbsent(product)
+        if (!result.success) {
+            _syncMessage.emit(
+                if (result.duplicate) "Código já cadastrado na nuvem. Nenhum produto foi sobrescrito."
+                else "Erro ao salvar produto na nuvem. ${result.message.orEmpty()}".trim()
+            )
             return false
         }
+
+        repository.insertProduct(product)
+        FirebaseService.publishProductEvent("NEW_PRODUCT", product.name, null, product.code)
+        _syncMessage.emit("Produto adicionado na nuvem!")
+        _newProductsCount.value += 1
+        return true
     }
-    
+
     fun addProduct(name: String, code: String, category: String, unit: String, imageUrl: String? = null) {
-        viewModelScope.launch {
-            addProductSuspend(name, code, category, unit, imageUrl)
-        }
+        viewModelScope.launch { addProductSuspend(name, code, category, unit, imageUrl) }
     }
-    
+
     fun refreshCatalogHistory() {
         viewModelScope.launch {
             _isLoadingCatalogHistory.value = true
             try {
-                _catalogSnapshots.value = FirebaseService.getCatalogSnapshots()
+                val snapshots = FirebaseService.getCatalogSnapshots()
+                _catalogSnapshots.value = snapshots
+                if (snapshots.isEmpty() && !FirebaseService.lastError.isNullOrBlank()) {
+                    _syncMessage.emit("Não foi possível consultar os backups: ${FirebaseService.lastError}")
+                }
             } finally {
                 _isLoadingCatalogHistory.value = false
             }
@@ -701,9 +717,11 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                 val snapshot = FirebaseService.createCatalogSnapshot()
                 if (snapshot != null) {
                     _catalogSnapshots.value = listOf(snapshot) + _catalogSnapshots.value
-                    _syncMessage.emit("Snapshot criado com ${snapshot.productCount} produto(s).")
+                    _syncMessage.emit("Backup criado com ${snapshot.productCount} produto(s).")
                 } else {
-                    _syncMessage.emit("Não foi possível criar o snapshot do catálogo.")
+                    _syncMessage.emit(
+                        "Não foi possível criar o backup${FirebaseService.lastError?.let { ": $it" }.orEmpty()}."
+                    )
                 }
             } finally {
                 _isLoadingCatalogHistory.value = false
@@ -721,9 +739,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                     val restoredCodes = result.restoredProducts.orEmpty().map { it.code }.toSet()
                     val currentProducts = repository.getAllProductsSync()
                     val staleProducts = currentProducts.filter { it.code !in restoredCodes }
-                    if (staleProducts.isNotEmpty()) {
-                        repository.deleteProducts(staleProducts)
-                    }
+                    if (staleProducts.isNotEmpty()) repository.deleteProducts(staleProducts)
                 }
                 _syncMessage.emit(result.message)
                 if (result.success) {
@@ -735,6 +751,10 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         }
     }
 
+    /**
+     * Sincronização interna de inicialização: somente nuvem -> aparelho.
+     * Nunca altera, migra ou reclassifica documentos remotos.
+     */
     fun syncProductsFromFirebase() {
         viewModelScope.launch {
             _isSyncing.value = true
@@ -748,55 +768,38 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                 val localProducts = repository.getAllProductsSync()
                 val remoteProducts = FirebaseService.getAllProducts()
                 if (remoteProducts.isEmpty() && localProducts.isNotEmpty()) {
-                    _syncMessage.emit("Sincronização interrompida: a nuvem retornou um catálogo vazio. Os dados locais foram preservados.")
+                    _syncMessage.emit("Sincronização automática interrompida: a nuvem retornou um catálogo vazio. Os dados locais foram preservados.")
                     return@launch
                 }
                 repository.cleanDuplicates()
-                val recognizedCategories = (categoryDefinitions.value.map { it.name } + ProductStandards.officialCategories).toSet()
-                val legacyProducts = remoteProducts.filter { it.category !in recognizedCategories }
-                val legacyCounts = legacyProducts.groupingBy { it.category.ifBlank { "(vazia)" } }.eachCount()
-                if (legacyProducts.isNotEmpty()) {
-                    android.util.Log.i("ProductMigration", "Categorias antes: $legacyCounts; total=${remoteProducts.size}")
-                    legacyProducts.forEach { product ->
-                        FirebaseService.saveProduct(product.copy(category = "Mercearia"))
+                val remoteIds = remoteProducts.map { it.code }.toSet()
+                val toDelete = localProducts.filter { it.code !in remoteIds }
+                if (toDelete.isNotEmpty()) repository.deleteProducts(toDelete)
+
+                val localByCode = localProducts.associateBy { it.code }
+                val missingOrUpdated = remoteProducts.mapNotNull { remote ->
+                    val local = localByCode[remote.code]
+                    if (local == null) {
+                        remote
+                    } else if (
+                        local.name != remote.name || local.imageUrl != remote.imageUrl ||
+                        local.category != remote.category || local.unit != remote.unit ||
+                        local.searchCount != remote.searchCount
+                    ) {
+                        remote.copy(id = local.id, lastSearchedAt = local.lastSearchedAt, isFavorite = local.isFavorite)
+                    } else {
+                        null
                     }
                 }
-                val migratedProducts = remoteProducts.map { product ->
-                    if (product.category !in recognizedCategories) product.copy(category = "Mercearia") else product
+                if (missingOrUpdated.isNotEmpty()) repository.insertProducts(missingOrUpdated)
+                remoteProducts.forEach { remote ->
+                    val local = localByCode[remote.code]
+                    if (local != null && local.searchCount != remote.searchCount) {
+                        repository.updateGlobalUsageCount(remote.code, remote.searchCount)
+                    }
                 }
-                android.util.Log.i(
-                    "ProductMigration",
-                    "Categorias depois: ${migratedProducts.groupingBy { it.category }.eachCount()}; total=${migratedProducts.size}; migrados=${legacyProducts.size}"
-                )
-                
-                    val remoteIds = migratedProducts.map { it.code }.toSet()
-                    val toDelete = localProducts.filter { it.code !in remoteIds }
-                    
-                    if (toDelete.isNotEmpty()) {
-                        repository.deleteProducts(toDelete)
-                    }
-                    
-                    val missingOrUpdated = migratedProducts.mapNotNull { remote ->
-                        val local = localProducts.find { it.code == remote.code }
-                        if (local == null) {
-                            remote
-                        } else if (local.name != remote.name || local.imageUrl != remote.imageUrl || local.category != remote.category || local.unit != remote.unit || local.searchCount != remote.searchCount) {
-                            remote.copy(id = local.id, lastSearchedAt = local.lastSearchedAt, isFavorite = local.isFavorite)
-                        } else {
-                            null
-                        }
-                    }
-                    if (missingOrUpdated.isNotEmpty()) {
-                        repository.insertProducts(missingOrUpdated)
-                    }
-                    migratedProducts.forEach { remote ->
-                        val local = localProducts.find { it.code == remote.code }
-                        if (local != null && local.searchCount != remote.searchCount) {
-                            repository.updateGlobalUsageCount(remote.code, remote.searchCount)
-                        }
-                    }
             } catch (e: Exception) {
-                _syncMessage.emit("Não foi possível sincronizar o catálogo. Os dados locais foram preservados.")
+                _syncMessage.emit("Não foi possível atualizar o catálogo local. Os dados deste aparelho foram preservados.")
             } finally {
                 _isSyncing.value = false
             }
@@ -810,16 +813,24 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     private companion object {
         const val GLOBAL_VIEW_DEBOUNCE_MS = 60_000L
     }
-    val dynamicTabs: kotlinx.coroutines.flow.StateFlow<List<com.example.data.DynamicTab>> = repository.getAllTabs()
-        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val dynamicTabs: StateFlow<List<com.example.data.DynamicTab>> = repository.getAllTabs()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun insertTab(tab: com.example.data.DynamicTab) = viewModelScope.launch {
         if (_isSyncingTabs.value) return@launch
         _isSyncingTabs.value = true
         try {
-            repository.insertTab(tab.copy(displayOrder = repository.getAllTabs().first().size))
+            val before = repository.getAllTabs().first()
+            val candidate = tab.copy(displayOrder = before.size)
+            repository.insertTab(candidate)
             val saved = FirebaseService.syncAllDynamicTabs(repository.getAllTabs().first())
-            _syncMessage.emit(if (saved) "Aba criada para todos os usuários." else "A aba foi criada localmente, mas não foi publicada na nuvem.")
+            if (!saved) {
+                repository.deleteTab(candidate)
+                _syncMessage.emit("Não foi possível publicar a aba. O rascunho local foi desfeito.")
+            } else {
+                _syncMessage.emit("Aba criada para todos os usuários.")
+            }
         } finally {
             _isSyncingTabs.value = false
         }
@@ -829,9 +840,16 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         if (_isSyncingTabs.value) return@launch
         _isSyncingTabs.value = true
         try {
+            val before = repository.getAllTabs().first()
+            val previous = before.firstOrNull { it.id == tab.id }
             repository.updateTab(tab)
             val saved = FirebaseService.syncAllDynamicTabs(repository.getAllTabs().first())
-            _syncMessage.emit(if (saved) "Aba atualizada para todos os usuários." else "A aba foi atualizada localmente, mas não foi publicada na nuvem.")
+            if (!saved) {
+                previous?.let { repository.updateTab(it) }
+                _syncMessage.emit("Não foi possível publicar a alteração da aba. A versão anterior foi restaurada.")
+            } else {
+                _syncMessage.emit("Aba atualizada para todos os usuários.")
+            }
         } finally {
             _isSyncingTabs.value = false
         }
@@ -853,7 +871,12 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             }.mapIndexed { order, item -> item.copy(displayOrder = order) }
             reordered.forEach { repository.updateTab(it) }
             val saved = FirebaseService.syncAllDynamicTabs(reordered)
-            _syncMessage.emit(if (saved) "Ordem das abas atualizada para todos." else "A ordem foi atualizada localmente, mas não foi publicada na nuvem.")
+            if (!saved) {
+                current.forEachIndexed { order, item -> repository.updateTab(item.copy(displayOrder = order)) }
+                _syncMessage.emit("Não foi possível publicar a nova ordem. A ordem anterior foi restaurada.")
+            } else {
+                _syncMessage.emit("Ordem das abas atualizada para todos.")
+            }
         } finally {
             _isSyncingTabs.value = false
         }
@@ -861,10 +884,9 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
 
     fun deleteProduct(product: Product) {
         viewModelScope.launch {
-            repository.deleteProduct(product)
-            if (FirebaseService.isFirebaseConfigured()) {
-                FirebaseService.deleteProduct(product.code)
-                _syncMessage.emit("Produto excluído na nuvem!")
+            val success = deleteProductSuspend(product)
+            if (!success) {
+                _syncMessage.emit("O produto foi preservado porque a exclusão remota falhou.")
             }
         }
     }
@@ -874,20 +896,18 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         _isSyncingTabs.value = true
         try {
             val deleted = FirebaseService.deleteDynamicTab(tab)
-            if (deleted) {
-                repository.deleteTab(tab)
-            }
-            _syncMessage.emit(if (deleted) "Aba excluída para todos os usuários." else "Não foi possível excluir a aba na nuvem; os dados foram preservados.")
+            if (deleted) repository.deleteTab(tab)
+            _syncMessage.emit(
+                if (deleted) "Aba excluída para todos os usuários."
+                else "Não foi possível excluir a aba na nuvem; os dados foram preservados."
+            )
         } finally {
             _isSyncingTabs.value = false
         }
     }
 
-
     fun setOnboardingShown() {
-        viewModelScope.launch {
-            userPreferences.setOnboardingShown(true)
-        }
+        viewModelScope.launch { userPreferences.setOnboardingShown(true) }
     }
 }
 
