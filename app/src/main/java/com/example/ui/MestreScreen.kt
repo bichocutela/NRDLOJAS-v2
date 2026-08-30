@@ -46,6 +46,8 @@ import com.example.data.NotificationSettings
 import com.example.data.ProductImportResult
 
 private const val NEW_CATEGORY_ACTION_KEY = "__new_category__"
+private const val CATEGORY_PAGE_SIZE = 15
+private const val BACKGROUND_PAGE_SIZE = 6
 
 private enum class MestrePanelPage(val title: String) {
     DASHBOARD("Painel Mestre"),
@@ -74,13 +76,6 @@ fun MestreScreen(
         ?: MestrePanelPage.DASHBOARD
     val openPage: (MestrePanelPage) -> Unit = { page ->
         if (page != currentPage) pageStack = ArrayList(pageStack + page.name)
-    }
-    val returnFromPage: () -> Unit = {
-        if (pageStack.size > 1) pageStack = ArrayList(pageStack.dropLast(1))
-        else onNavigateBack()
-    }
-    BackHandler(enabled = currentPage != MestrePanelPage.DASHBOARD) {
-        pageStack = ArrayList(pageStack.dropLast(1))
     }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -114,8 +109,10 @@ fun MestreScreen(
     var draftThemeBackgrounds by remember(appearanceSettings.themeBackgrounds) {
         mutableStateOf(appearanceSettings.themeBackgrounds)
     }
+    var showDiscardChangesDialog by remember { mutableStateOf(false) }
     var isSavingAppearanceSettings by remember { mutableStateOf(false) }
     var expandedBackgroundThemes by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var backgroundPages by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
     var showThemeBackgroundDialog by remember { mutableStateOf(false) }
     var editingBackgroundTheme by remember { mutableStateOf<String?>(null) }
     var editingBackground by remember { mutableStateOf<ThemeBackground?>(null) }
@@ -136,6 +133,7 @@ fun MestreScreen(
     var editingCategory by remember { mutableStateOf<CategoryDefinition?>(null) }
     var categoryName by remember { mutableStateOf("") }
     var categoryActionInProgress by remember { mutableStateOf<String?>(null) }
+    var categoryPage by rememberSaveable { mutableIntStateOf(0) }
     val suggestions by FirebaseService.observeSuggestions().collectAsStateWithLifecycle(initialValue = emptyList())
     val coroutineScope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -216,6 +214,29 @@ fun MestreScreen(
 
     fun updateBackgrounds(themeKey: String, backgrounds: List<ThemeBackground>) {
         draftThemeBackgrounds = draftThemeBackgrounds + (themeKey to backgrounds)
+    }
+    val homeHasChanges = draftHomeSettings != homeSettings
+    val notificationsHaveChanges = draftNotificationSettings != notificationSettings
+    val assistantHasChanges = draftAssistantSettings != assistantSettings
+    val appearanceDraft = draftAppearanceSettings.copy(themeBackgrounds = draftThemeBackgrounds)
+    val appearanceHasChanges = appearanceDraft != appearanceSettings
+    val currentPageHasChanges = when (currentPage) {
+        MestrePanelPage.HOME_SETTINGS -> homeHasChanges
+        MestrePanelPage.NOTIFICATION_SETTINGS -> notificationsHaveChanges
+        MestrePanelPage.ASSISTANT_SETTINGS -> assistantHasChanges
+        MestrePanelPage.APPEARANCE_SETTINGS -> appearanceHasChanges
+        else -> false
+    }
+    val performPanelBack: () -> Unit = {
+        if (pageStack.size > 1) pageStack = ArrayList(pageStack.dropLast(1))
+        else onNavigateBack()
+    }
+    val returnFromPage: () -> Unit = {
+        if (currentPageHasChanges) showDiscardChangesDialog = true
+        else performPanelBack()
+    }
+    BackHandler(enabled = currentPage != MestrePanelPage.DASHBOARD) {
+        returnFromPage()
     }
     val panelScrollState = rememberScrollState()
 
@@ -491,7 +512,10 @@ fun MestreScreen(
             }
 
             if (currentPage == MestrePanelPage.HOME_SETTINGS) {
-            MestrePageIntro("Escolha o que aparece para todos os usuários")
+            MestrePageIntro(
+                description = "Escolha o que aparece para todos os usuários",
+                hasUnsavedChanges = homeHasChanges
+            )
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -553,7 +577,7 @@ fun MestreScreen(
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !isSavingHomeSettings
+                        enabled = homeHasChanges && !isSavingHomeSettings
                     ) {
                         if (isSavingHomeSettings) {
                             CircularProgressIndicator(
@@ -563,8 +587,10 @@ fun MestreScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Publicando...")
-                        } else {
+                        } else if (homeHasChanges) {
                             Text("Publicar configurações")
+                        } else {
+                            Text("Tudo atualizado")
                         }
                     }
                 }
@@ -591,13 +617,34 @@ fun MestreScreen(
                         Text("Adicionar categoria")
                     }
                     Spacer(modifier = Modifier.height(12.dp))
-                    categoryDefinitions
+                    val orderedCategories = categoryDefinitions
                         .sortedWith(compareBy<CategoryDefinition> { it.displayOrder }.thenBy { it.name })
-                        .forEachIndexed { index, category ->
+                    val categoryPagination = calculatePaginationWindow(
+                        totalItems = orderedCategories.size,
+                        requestedPage = categoryPage,
+                        pageSize = CATEGORY_PAGE_SIZE
+                    )
+                    LaunchedEffect(orderedCategories.size) {
+                        if (categoryPage != categoryPagination.pageIndex) {
+                            categoryPage = categoryPagination.pageIndex
+                        }
+                    }
+                    if (orderedCategories.isNotEmpty()) {
+                        Text(
+                            "Exibindo ${categoryPagination.fromIndex + 1}–${categoryPagination.toIndex} de ${orderedCategories.size}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    orderedCategories
+                        .subList(categoryPagination.fromIndex, categoryPagination.toIndex)
+                        .forEachIndexed { pageIndex, category ->
+                            val globalIndex = categoryPagination.fromIndex + pageIndex
                             CategoryManagementRow(
                                 category = category,
-                                isFirst = index == 0,
-                                isLast = index == categoryDefinitions.lastIndex,
+                                isFirst = globalIndex == 0,
+                                isLast = globalIndex == orderedCategories.lastIndex,
                                 enabled = categoryActionInProgress == null,
                                 isUpdating = categoryActionInProgress == category.id,
                                 onMoveUp = {
@@ -642,17 +689,28 @@ fun MestreScreen(
                                     }
                                 }
                             )
-                            if (index < categoryDefinitions.lastIndex) {
+                            if (pageIndex < categoryPagination.toIndex - categoryPagination.fromIndex - 1) {
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                             }
                         }
+                    if (categoryPagination.pageCount > 1) {
+                        MestrePaginationControls(
+                            pageIndex = categoryPagination.pageIndex,
+                            pageCount = categoryPagination.pageCount,
+                            onPrevious = { categoryPage = categoryPagination.pageIndex - 1 },
+                            onNext = { categoryPage = categoryPagination.pageIndex + 1 }
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
             }
 
             if (currentPage == MestrePanelPage.NOTIFICATION_SETTINGS) {
-            MestrePageIntro("Controle o que pode ser recebido pelos usuários")
+            MestrePageIntro(
+                description = "Controle o que pode ser recebido pelos usuários",
+                hasUnsavedChanges = notificationsHaveChanges
+            )
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -670,27 +728,32 @@ fun MestreScreen(
                     NotificationSettingSwitch(
                         label = "Produto adicionado",
                         checked = draftNotificationSettings.productAddedEnabled,
-                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(productAddedEnabled = it) }
+                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(productAddedEnabled = it) },
+                        enabled = draftNotificationSettings.enabled
                     )
                     NotificationSettingSwitch(
                         label = "Código alterado",
                         checked = draftNotificationSettings.codeChangedEnabled,
-                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(codeChangedEnabled = it) }
+                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(codeChangedEnabled = it) },
+                        enabled = draftNotificationSettings.enabled
                     )
                     NotificationSettingSwitch(
                         label = "Sugestão corrigida",
                         checked = draftNotificationSettings.suggestionFixedEnabled,
-                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(suggestionFixedEnabled = it) }
+                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(suggestionFixedEnabled = it) },
+                        enabled = draftNotificationSettings.enabled
                     )
                     NotificationSettingSwitch(
                         label = "Atualização do app",
                         checked = draftNotificationSettings.appUpdateEnabled,
-                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(appUpdateEnabled = it) }
+                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(appUpdateEnabled = it) },
+                        enabled = draftNotificationSettings.enabled
                     )
                     NotificationSettingSwitch(
                         label = "Promoções atualizadas",
                         checked = draftNotificationSettings.promotionUpdatedEnabled,
-                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(promotionUpdatedEnabled = it) }
+                        onCheckedChange = { draftNotificationSettings = draftNotificationSettings.copy(promotionUpdatedEnabled = it) },
+                        enabled = draftNotificationSettings.enabled
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
@@ -706,7 +769,7 @@ fun MestreScreen(
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !isSavingNotificationSettings
+                        enabled = notificationsHaveChanges && !isSavingNotificationSettings
                     ) {
                         if (isSavingNotificationSettings) {
                             CircularProgressIndicator(
@@ -716,8 +779,10 @@ fun MestreScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Publicando...")
-                        } else {
+                        } else if (notificationsHaveChanges) {
                             Text("Publicar notificações")
+                        } else {
+                            Text("Tudo atualizado")
                         }
                     }
                 }
@@ -726,7 +791,10 @@ fun MestreScreen(
             }
 
             if (currentPage == MestrePanelPage.ASSISTANT_SETTINGS) {
-            MestrePageIntro("Defina os limites e a mensagem inicial do assistente")
+            MestrePageIntro(
+                description = "Defina os limites e a mensagem inicial do assistente",
+                hasUnsavedChanges = assistantHasChanges
+            )
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -738,7 +806,8 @@ fun MestreScreen(
                     AssistantSettingSwitch(
                         label = "Restringir respostas ao catálogo",
                         checked = draftAssistantSettings.catalogOnly,
-                        onCheckedChange = { draftAssistantSettings = draftAssistantSettings.copy(catalogOnly = it) }
+                        onCheckedChange = { draftAssistantSettings = draftAssistantSettings.copy(catalogOnly = it) },
+                        enabled = draftAssistantSettings.enabled
                     )
                     Text(
                         "Quando ativo, a IA recebe apenas os produtos mais relacionados à pergunta.",
@@ -755,7 +824,8 @@ fun MestreScreen(
                         supportingText = { Text("Até 160 caracteres") },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 2,
-                        maxLines = 3
+                        maxLines = 3,
+                        enabled = draftAssistantSettings.enabled
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -768,7 +838,8 @@ fun MestreScreen(
                             draftAssistantSettings = draftAssistantSettings.copy(maxContextProducts = it.toInt())
                         },
                         valueRange = 5f..50f,
-                        steps = 44
+                        steps = 44,
+                        enabled = draftAssistantSettings.enabled
                     )
                     Button(
                         onClick = {
@@ -783,7 +854,7 @@ fun MestreScreen(
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !isSavingAssistantSettings
+                        enabled = assistantHasChanges && !isSavingAssistantSettings
                     ) {
                         if (isSavingAssistantSettings) {
                             CircularProgressIndicator(
@@ -793,8 +864,10 @@ fun MestreScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Publicando...")
-                        } else {
+                        } else if (assistantHasChanges) {
                             Text("Publicar Assistente")
+                        } else {
+                            Text("Tudo atualizado")
                         }
                     }
                 }
@@ -803,7 +876,10 @@ fun MestreScreen(
             }
 
             if (currentPage == MestrePanelPage.APPEARANCE_SETTINGS) {
-            MestrePageIntro("Personalize o visual para todos os usuários")
+            MestrePageIntro(
+                description = "Personalize o visual para todos os usuários",
+                hasUnsavedChanges = appearanceHasChanges
+            )
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -822,7 +898,11 @@ fun MestreScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                     ExposedDropdownMenuBox(
                         expanded = expandedRemoteTheme,
-                        onExpandedChange = { expandedRemoteTheme = !expandedRemoteTheme }
+                        onExpandedChange = {
+                            if (draftAppearanceSettings.overrideLocalTheme) {
+                                expandedRemoteTheme = !expandedRemoteTheme
+                            }
+                        }
                     ) {
                         OutlinedTextField(
                             value = themeOptions.find { it.first == draftAppearanceSettings.theme }?.second ?: "Multicolorido",
@@ -830,7 +910,8 @@ fun MestreScreen(
                             readOnly = true,
                             label = { Text("Tema global") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRemoteTheme) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            enabled = draftAppearanceSettings.overrideLocalTheme
                         )
                         ExposedDropdownMenu(
                             expanded = expandedRemoteTheme,
@@ -850,7 +931,11 @@ fun MestreScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     ExposedDropdownMenuBox(
                         expanded = expandedRemoteMode,
-                        onExpandedChange = { expandedRemoteMode = !expandedRemoteMode }
+                        onExpandedChange = {
+                            if (draftAppearanceSettings.overrideLocalTheme) {
+                                expandedRemoteMode = !expandedRemoteMode
+                            }
+                        }
                     ) {
                         OutlinedTextField(
                             value = appearanceModeOptions.find { it.first == draftAppearanceSettings.appearanceMode }?.second ?: "Seguir sistema",
@@ -858,7 +943,8 @@ fun MestreScreen(
                             readOnly = true,
                             label = { Text("Modo de aparência") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRemoteMode) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            enabled = draftAppearanceSettings.overrideLocalTheme
                         )
                         ExposedDropdownMenu(
                             expanded = expandedRemoteMode,
@@ -890,8 +976,19 @@ fun MestreScreen(
                     themeOptions.forEach { (themeKey, themeLabel) ->
                         val backgrounds = draftThemeBackgrounds[themeKey].orEmpty()
                         val expanded = themeKey in expandedBackgroundThemes
+                        val backgroundPagination = calculatePaginationWindow(
+                            totalItems = backgrounds.size,
+                            requestedPage = backgroundPages[themeKey] ?: 0,
+                            pageSize = BACKGROUND_PAGE_SIZE
+                        )
+                        LaunchedEffect(themeKey, backgrounds.size) {
+                            if (backgroundPages[themeKey] != backgroundPagination.pageIndex) {
+                                backgroundPages = backgroundPages + (themeKey to backgroundPagination.pageIndex)
+                            }
+                        }
                         OutlinedCard(
                             modifier = Modifier.fillMaxWidth(),
+                            enabled = draftAppearanceSettings.overrideLocalTheme,
                             onClick = {
                                 expandedBackgroundThemes = if (expanded) {
                                     expandedBackgroundThemes - themeKey
@@ -936,15 +1033,25 @@ fun MestreScreen(
                                         onClick = {
                                             updateBackgrounds(themeKey, backgrounds.map { it.copy(isActive = false) })
                                         },
-                                        enabled = backgrounds.any { it.isActive }
+                                        enabled = draftAppearanceSettings.overrideLocalTheme && backgrounds.any { it.isActive }
                                     ) {
                                         Text("Usar fundo padrão")
                                     }
                                 }
-                                backgrounds.forEach { background ->
+                                if (backgrounds.isNotEmpty()) {
+                                    Text(
+                                        "Exibindo ${backgroundPagination.fromIndex + 1}–${backgroundPagination.toIndex} de ${backgrounds.size}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                backgrounds
+                                    .subList(backgroundPagination.fromIndex, backgroundPagination.toIndex)
+                                    .forEach { background ->
                                     Spacer(modifier = Modifier.height(6.dp))
                                     ThemeBackgroundItem(
                                         background = background,
+                                        enabled = draftAppearanceSettings.overrideLocalTheme,
                                         onActiveChange = { isActive ->
                                             updateBackgrounds(
                                                 themeKey,
@@ -958,10 +1065,25 @@ fun MestreScreen(
                                         onDelete = { backgroundToDelete = themeKey to background }
                                     )
                                 }
+                                if (backgroundPagination.pageCount > 1) {
+                                    MestrePaginationControls(
+                                        pageIndex = backgroundPagination.pageIndex,
+                                        pageCount = backgroundPagination.pageCount,
+                                        onPrevious = {
+                                            backgroundPages = backgroundPages +
+                                                (themeKey to (backgroundPagination.pageIndex - 1))
+                                        },
+                                        onNext = {
+                                            backgroundPages = backgroundPages +
+                                                (themeKey to (backgroundPagination.pageIndex + 1))
+                                        }
+                                    )
+                                }
                                 Spacer(modifier = Modifier.height(6.dp))
                                 OutlinedButton(
                                     onClick = { openBackgroundEditor(themeKey, null) },
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = draftAppearanceSettings.overrideLocalTheme
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = null)
                                     Spacer(modifier = Modifier.width(6.dp))
@@ -975,9 +1097,7 @@ fun MestreScreen(
                         onClick = {
                             coroutineScope.launch {
                                 isSavingAppearanceSettings = true
-                                val saved = FirebaseService.saveAppearanceSettings(
-                                    draftAppearanceSettings.copy(themeBackgrounds = draftThemeBackgrounds)
-                                )
+                                val saved = FirebaseService.saveAppearanceSettings(appearanceDraft)
                                 isSavingAppearanceSettings = false
                                 snackbarHostState.showSnackbar(
                                     if (saved) "Aparência global publicada para todos."
@@ -986,7 +1106,7 @@ fun MestreScreen(
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !isSavingAppearanceSettings
+                        enabled = appearanceHasChanges && !isSavingAppearanceSettings
                     ) {
                         if (isSavingAppearanceSettings) {
                             CircularProgressIndicator(
@@ -996,13 +1116,48 @@ fun MestreScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Publicando...")
-                        } else {
+                        } else if (appearanceHasChanges) {
                             Text("Salvar aparência e fundos")
+                        } else {
+                            Text("Tudo atualizado")
                         }
                     }
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            if (showDiscardChangesDialog) {
+                AlertDialog(
+                    onDismissRequest = { showDiscardChangesDialog = false },
+                    title = { Text("Descartar alterações?") },
+                    text = { Text("As mudanças desta página ainda não foram publicadas e serão perdidas.") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                when (currentPage) {
+                                    MestrePanelPage.HOME_SETTINGS -> draftHomeSettings = homeSettings
+                                    MestrePanelPage.NOTIFICATION_SETTINGS -> draftNotificationSettings = notificationSettings
+                                    MestrePanelPage.ASSISTANT_SETTINGS -> draftAssistantSettings = assistantSettings
+                                    MestrePanelPage.APPEARANCE_SETTINGS -> {
+                                        draftAppearanceSettings = appearanceSettings
+                                        draftThemeBackgrounds = appearanceSettings.themeBackgrounds
+                                    }
+                                    else -> Unit
+                                }
+                                showDiscardChangesDialog = false
+                                performPanelBack()
+                            }
+                        ) {
+                            Text("Descartar", color = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDiscardChangesDialog = false }) {
+                            Text("Continuar editando")
+                        }
+                    }
+                )
             }
 
             if (showImportDialog && importResult != null) {
@@ -1419,6 +1574,7 @@ private fun backgroundScheduleStatus(background: ThemeBackground): String {
 @Composable
 private fun ThemeBackgroundItem(
     background: ThemeBackground,
+    enabled: Boolean,
     onActiveChange: (Boolean) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
@@ -1452,10 +1608,10 @@ private fun ThemeBackgroundItem(
             Switch(
                 checked = background.isActive,
                 onCheckedChange = onActiveChange,
-                enabled = ThemeBackground.normalizeDate(background.startDate) != null
+                enabled = enabled && ThemeBackground.normalizeDate(background.startDate) != null
             )
             Box {
-                IconButton(onClick = { menuExpanded = true }) {
+                IconButton(onClick = { menuExpanded = true }, enabled = enabled) {
                     Icon(Icons.Default.MoreVert, contentDescription = "Ações de ${background.label}")
                 }
                 DropdownMenu(
@@ -1583,15 +1739,20 @@ private fun MaintenanceMetricRow(label: String, value: String) {
 private fun AssistantSettingSwitch(
     label: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 
@@ -1599,15 +1760,20 @@ private fun AssistantSettingSwitch(
 private fun NotificationSettingSwitch(
     label: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 
@@ -1774,13 +1940,57 @@ internal fun MestreSectionHeader(title: String, description: String) {
 }
 
 @Composable
-private fun MestrePageIntro(description: String) {
-    Text(
-        text = description,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.fillMaxWidth()
-    )
+private fun MestrePageIntro(
+    description: String,
+    hasUnsavedChanges: Boolean = false
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (hasUnsavedChanges) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                shape = RoundedCornerShape(50)
+            ) {
+                Text(
+                    "Alterações não salvas",
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MestrePaginationControls(
+    pageIndex: Int,
+    pageCount: Int,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TextButton(onClick = onPrevious, enabled = pageIndex > 0) {
+            Text("Anterior")
+        }
+        Text(
+            "Página ${pageIndex + 1} de $pageCount",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        TextButton(onClick = onNext, enabled = pageIndex < pageCount - 1) {
+            Text("Próxima")
+        }
+    }
 }
 
 @Composable
