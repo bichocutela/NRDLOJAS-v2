@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Pending
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -56,7 +57,7 @@ internal fun MestreSuggestionsSection(
         description = "Analise sugestões dos usuários e marque solicitações como corrigidas"
     )
     Spacer(modifier = Modifier.height(8.dp))
-    Card(modifier = Modifier.fillMaxWidth()) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -199,7 +200,10 @@ private fun SuggestionManagementItem(
         "Data não informada"
     }
     val isFixed = suggestion.status == ProductSuggestion.STATUS_FIXED
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(suggestion.text, style = MaterialTheme.typography.bodyLarge)
             Spacer(modifier = Modifier.height(4.dp))

@@ -8,10 +8,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.AddBox
+import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Add
@@ -20,7 +25,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -156,7 +162,7 @@ fun MestreScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Painel Mestre", color = MaterialTheme.colorScheme.primary) },
+                title = { Text("Painel Mestre") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -176,18 +182,6 @@ fun MestreScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("Painel de trabalho do Mestre", style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                "Acompanhe pendências e administre o conteúdo do aplicativo.",
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-
             MestreSuggestionsSection(suggestions = suggestions) { suggestion, status ->
                 val updated = FirebaseService.updateSuggestionStatus(suggestion.id, status)
                 val statusLabel = if (status == "fixed") "corrigida" else "pendente"
@@ -202,7 +196,7 @@ fun MestreScreen(
                 description = "Confira o estado do catálogo remoto antes de sincronizar"
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Card(modifier = Modifier.fillMaxWidth()) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     val summary = maintenanceSummary
                     if (summary == null) {
@@ -214,7 +208,7 @@ fun MestreScreen(
                         Text(
                             if (summary.remoteAvailable) "Conexão remota disponível" else "Não foi possível consultar a nuvem",
                             style = MaterialTheme.typography.titleSmall,
-                            color = if (summary.remoteAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            color = if (summary.remoteAvailable) mestreSuccessColor() else MaterialTheme.colorScheme.error
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         MaintenanceMetricRow("Produtos locais", summary.localProductCount.toString())
@@ -286,9 +280,9 @@ fun MestreScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Sincronizando...")
                         } else {
-                            Icon(Icons.Default.Sync, contentDescription = null)
+                            Icon(Icons.Default.CloudSync, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Sincronizar Banco de Dados")
+                            Text("Sincronizar catálogo")
                         }
                     }
                 }
@@ -300,10 +294,10 @@ fun MestreScreen(
                 description = "Crie pontos de retorno do catálogo antes de mudanças importantes"
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Card(modifier = Modifier.fillMaxWidth()) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "O histórico mantém até 20 snapshots remotos. Restaurar uma versão cria primeiro um backup automático do catálogo atual.",
+                        "O histórico mantém até 20 backups remotos. Restaurar uma versão cria primeiro um backup automático do catálogo atual.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -314,9 +308,9 @@ fun MestreScreen(
                             enabled = !isLoadingCatalogHistory && !isSyncing,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Icon(Icons.Default.Inventory, contentDescription = null)
+                            Icon(Icons.Default.Backup, contentDescription = null)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Criar snapshot")
+                            Text("Criar backup")
                         }
                         OutlinedButton(
                             onClick = { viewModel.refreshCatalogHistory() },
@@ -353,18 +347,15 @@ fun MestreScreen(
             }
             Spacer(modifier = Modifier.height(16.dp))
 
-            MestreSectionHeader(
-                title = "Configurações globais",
-                description = "Defina o comportamento geral exibido para todos os usuários"
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            MestreGroupLabel("Configurações globais")
+            Spacer(modifier = Modifier.height(12.dp))
 
             MestreSectionHeader(
                 title = "Configurações da Home",
                 description = "Escolha o que aparece para todos os usuários"
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Card(modifier = Modifier.fillMaxWidth()) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         "Seções visíveis",
@@ -447,7 +438,7 @@ fun MestreScreen(
                 description = "Organize os grupos exibidos e usados no catálogo"
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Card(modifier = Modifier.fillMaxWidth()) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Button(
                         onClick = {
@@ -527,7 +518,7 @@ fun MestreScreen(
                 description = "Controle o que pode ser recebido pelos usuários"
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Card(modifier = Modifier.fillMaxWidth()) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     NotificationSettingSwitch(
                         label = "Permitir notificações",
@@ -602,7 +593,7 @@ fun MestreScreen(
                 description = "Defina os limites e a mensagem inicial do assistente"
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Card(modifier = Modifier.fillMaxWidth()) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     AssistantSettingSwitch(
                         label = "Permitir uso do Assistente IA",
@@ -721,7 +712,7 @@ fun MestreScreen(
                 description = "Personalize o visual para todos os usuários"
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Card(modifier = Modifier.fillMaxWidth()) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     NotificationSettingSwitch(
                         label = "Aplicar aparência para todos",
@@ -830,7 +821,10 @@ fun MestreScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                Text(if (expanded) "−" else "+", style = MaterialTheme.typography.titleLarge)
+                                Icon(
+                                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = if (expanded) "Recolher $themeLabel" else "Expandir $themeLabel"
+                                )
                             }
                         }
                         if (expanded) {
@@ -933,7 +927,7 @@ fun MestreScreen(
                     Icon(Icons.Default.ViewCarousel, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
-                        Text("Gerenciar Abas (Painel Mestre)", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        Text("Gerenciar abas", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                         Text("Criar, editar, excluir ou reordenar abas.", style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -950,7 +944,7 @@ fun MestreScreen(
                     Icon(Icons.Default.Inventory, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
-                        Text("Editar Produtos Existentes", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        Text("Editar produtos", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                         Text("Modificar código, foto e nome de produtos da base.", style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -964,10 +958,10 @@ fun MestreScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Build, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Default.AddBox, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
-                        Text("Adicionar Produtos", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        Text("Adicionar produtos", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                         Text("Cadastrar produtos manualmente.", style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -984,10 +978,10 @@ fun MestreScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Inventory, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Default.UploadFile, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
-                        Text("Importar produtos por planilha", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        Text("Importar planilha", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                         Text("Use CSV ou TSV e confira a prévia antes de publicar.", style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -1433,13 +1427,6 @@ private fun ThemeBackgroundItem(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    background.url,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
             }
             Switch(
                 checked = background.isActive,
@@ -1677,7 +1664,24 @@ internal fun MestreSectionHeader(title: String, description: String) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
     ) {
-        Text(title, style = MaterialTheme.typography.titleLarge)
-        Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+@Composable
+private fun MestreGroupLabel(label: String) {
+    Text(
+        text = label.uppercase(Locale("pt", "BR")),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+@Composable
+private fun mestreSuccessColor(): Color = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
+    Color(0xFF81C784)
+} else {
+    Color(0xFF2E7D32)
 }
