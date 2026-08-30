@@ -47,6 +47,8 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
     val initialRole = remember(firebaseAuth) { managementRoleForEmail(firebaseAuth.currentUser?.email) }
     var isLoggedIn by remember { mutableStateOf(initialRole != null) }
     var userRole by remember { mutableStateOf(initialRole ?: "user") }
+    val drawerAppTheme by viewModel.userPreferences.appTheme.collectAsState(initial = "multicolor")
+    val isGlassDrawer = drawerAppTheme.trim().lowercase() == "glass"
 
     DisposableEffect(firebaseAuth) {
         val listener = FirebaseAuth.AuthStateListener { auth ->
@@ -74,7 +76,9 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
+            ModalDrawerSheet(
+                drawerContainerColor = if (isGlassDrawer) Color.Transparent else MaterialTheme.colorScheme.surface
+            ) {
                 LoginDrawerContent(
                     viewModel = viewModel,
                     isLoggedIn = isLoggedIn,
