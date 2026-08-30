@@ -86,11 +86,23 @@ object CatalogHistoryBackend {
         }
     }
 
+    private fun categoryCountsJson(counts: List<CategoryCount>): JSONArray = JSONArray().apply {
+        counts.forEach { item ->
+            put(JSONObject().apply {
+                put("category", item.category)
+                put("count", item.count)
+            })
+        }
+    }
+
     suspend fun getMaintenanceSummary(
         localProductCount: Int,
         localCategoryCounts: List<CategoryCount>
     ): MaintenanceSummary {
-        val json = call("DIAGNOSE") ?: return MaintenanceSummary(
+        val payload = JSONObject()
+            .put("localProductCount", localProductCount)
+            .put("localCategoryCounts", categoryCountsJson(localCategoryCounts))
+        val json = call("DIAGNOSE", payload) ?: return MaintenanceSummary(
             localProductCount = localProductCount,
             localCategoryCounts = localCategoryCounts,
             checkedAt = System.currentTimeMillis(),
@@ -108,9 +120,9 @@ object CatalogHistoryBackend {
 
         return MaintenanceSummary(
             localProductCount = localProductCount,
-            remoteProductCount = json.optInt("remoteProductCount", 0),
+            remoteProductCount = json.optInt("remoteProductCount", localProductCount),
             localCategoryCounts = localCategoryCounts,
-            remoteCategoryCounts = remoteCategories,
+            remoteCategoryCounts = remoteCategories.ifEmpty { localCategoryCounts },
             dynamicTabCount = json.optInt("dynamicTabCount", 0),
             pendingSuggestionCount = json.optInt("pendingSuggestionCount", 0),
             lastRemoteProductUpdate = if (json.isNull("lastRemoteProductUpdate")) null else json.optLong("lastRemoteProductUpdate"),
