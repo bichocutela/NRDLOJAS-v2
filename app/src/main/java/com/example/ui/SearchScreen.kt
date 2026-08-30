@@ -187,7 +187,7 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
     val localAppTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
     val remoteAppearance by FirebaseService.observeAppearanceSettings()
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
-    val appTheme = if (remoteAppearance.overrideLocalTheme) remoteAppearance.theme else localAppTheme
+    val appTheme = localAppTheme
     
     val normalizedTheme = remember(appTheme) { 
         when (appTheme.trim().lowercase()) {
@@ -265,8 +265,6 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
-        // App Bar / Header: each official asset uses the same native 3:1
-        // composition. The banner is the only artwork; no separate logo is overlaid.
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val headerHeight = maxWidth / 3f
 
@@ -288,7 +286,6 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Hamburger Menu overlay
                 IconButton(
                     onClick = {
                         viewModel.clearNewProductsCount()
@@ -297,7 +294,7 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(top = 48.dp, start = 8.dp)
-                        .background(Color.Transparent) // Transparent background
+                        .background(Color.Transparent)
                 ) {
                     BadgedBox(
                         badge = {
@@ -327,7 +324,6 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
         }
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Custom Search Bar
         Column(
             modifier = Modifier.padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -392,16 +388,13 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-                if (searchQuery.isNotEmpty()) {
-            // Search Results
+        if (searchQuery.isNotEmpty()) {
             LazyColumn(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (searchResults.isEmpty()) {
-                    item {
-                        SearchEmptyState(onClear = { viewModel.updateSearchQuery("") })
-                    }
+                    item { SearchEmptyState(onClear = { viewModel.updateSearchQuery("") }) }
                 } else {
                     itemsIndexed(searchResults, key = { _, it -> it.code }) { index, product ->
                         ProductCard(product, viewModel, index, appTheme, textPreferences)
@@ -409,7 +402,6 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                 }
             }
         } else {
-            // Dashboard (Categories, Most Used, History, Favorites)
             val hasVisibleHomeSection = homeSettings.showCategories ||
                 (homeSettings.showMostUsed && mostUsed.isNotEmpty()) ||
                 (homeSettings.showHistory && history.isNotEmpty()) ||
@@ -852,7 +844,6 @@ fun ProductCard(
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Icon / Category Color Box
         if (product.imageUrl != null) {
             AsyncImage(
                 model = product.imageUrl,
@@ -921,7 +912,6 @@ fun ProductCard(
                 Text(
                     text = product.code,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
-                    
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
@@ -934,7 +924,6 @@ fun ProductCard(
 
     }
 }
-
 
 @Composable
 fun MiniProductCard(
@@ -1119,7 +1108,6 @@ fun NordestaoLogo() {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
-        // The 4 circles
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1129,10 +1117,7 @@ fun NordestaoLogo() {
             LogoCircle(color = Color(0xFFF57C00), icon = Icons.Default.BakeryDining)
             LogoCircle(color = Color(0xFF1976D2), icon = Icons.Default.LocalLaundryService)
         }
-        
         Spacer(modifier = Modifier.width(8.dp))
-        
-        // Text
         Column(horizontalAlignment = Alignment.Start) {
             Text(
                 text = "supermercado",
@@ -1230,7 +1215,6 @@ fun generateBarcodeBitmap(data: String, profile: String = "Padrão"): ImageBitma
     }
 }
 
-
 @Composable
 fun ThemeBanner(
     appTheme: String,
@@ -1262,8 +1246,6 @@ fun ThemeBanner(
         alignment = Alignment.TopCenter
     )
 }
-
-
 
 fun Modifier.vibrateClickable(
     viewModel: MainViewModel,
