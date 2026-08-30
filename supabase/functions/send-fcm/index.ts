@@ -286,7 +286,20 @@ serve(async (request) => {
     const { title, body: messageBody } = body;
     const allowed = ["Produto adicionado", "Código alterado", "Sugestão corrigida", "Atualização disponível"];
     if (!allowed.includes(title) || typeof messageBody !== "string" || !messageBody) return json({ ok: false, error: "Unsupported notification payload" }, 400);
-    const notification = await sendEvent(account, accountProject, title as "Produto adicionado" | "Código alterado" | "Sugestão corrigida" | "Atualização disponível", messageBody, identity.uid);
+    const suggestionTopic = typeof body.topic === "string" ? body.topic.trim() : "";
+    if (title === "Sugestão corrigida" && !/^suggestion_[A-Za-z0-9_\-]{8,890}$/.test(suggestionTopic)) {
+      return json({ ok: false, error: "Invalid private suggestion topic" }, 400);
+    }
+    const notification = await sendEvent(
+      account,
+      accountProject,
+      title as "Produto adicionado" | "Código alterado" | "Sugestão corrigida" | "Atualização disponível",
+      messageBody,
+      identity.uid,
+      undefined,
+      title === "Sugestão corrigida" ? suggestionTopic : "products",
+      title !== "Sugestão corrigida",
+    );
     return json({ ok: true, notification });
   } catch (error) {
     console.error("[send-fcm] Erro", { message: error instanceof Error ? error.message : "unknown" });

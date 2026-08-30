@@ -20,6 +20,7 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.channels.awaitClose
 import android.util.Log
 
@@ -537,7 +538,7 @@ object FirebaseService {
         "timestamp" to System.currentTimeMillis()
     )
 
-    fun observeProducts(): Flow<List<com.example.data.Product>> = callbackFlow {
+    fun observeProductUsage(): Flow<List<GlobalProductUsage>> = callbackFlow {
         if (!isFirebaseConfigured()) {
             close()
             return@callbackFlow
@@ -558,14 +559,17 @@ object FirebaseService {
                         val unit = doc.getString("unit") ?: "un"
                         val imageUrl = doc.getString("imageUrl")
                         val searchCount = doc.getLong("searchCount")?.toInt() ?: 0
-                        com.example.data.Product(
-                            code = code,
-                            name = name,
-                            searchName = searchName,
-                            category = category,
-                            unit = unit,
-                            imageUrl = imageUrl,
-                            searchCount = searchCount
+                        GlobalProductUsage(
+                            product = com.example.data.Product(
+                                code = code,
+                                name = name,
+                                searchName = searchName,
+                                category = category,
+                                unit = unit,
+                                imageUrl = imageUrl,
+                                searchCount = searchCount
+                            ),
+                            lastViewedAt = doc.getTimestamp("lastViewedAt")?.toDate()?.time
                         )
                     }
                     trySend(products)
@@ -573,6 +577,9 @@ object FirebaseService {
             }
         awaitClose { registration.remove() }
     }
+
+    fun observeProducts(): Flow<List<com.example.data.Product>> =
+        observeProductUsage().map { usage -> usage.map { it.product } }
 
     fun observeLatestProduct(): Flow<Map<String, Any>?> = callbackFlow {
         if (!isFirebaseConfigured()) {
@@ -795,7 +802,7 @@ object FirebaseService {
     }
 
     suspend fun saveHomeSettings(settings: HomeSettings): Boolean {
-        if (!isFirebaseConfigured() || !hasManagementAccess()) return false
+        if (!prepareManagementWrite("publicar as configurações da Home")) return false
         return try {
             FirebaseFirestore.getInstance()
                 .collection("config")
@@ -823,6 +830,19 @@ object FirebaseService {
     private fun hasManagementAccess(): Boolean {
         val email = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email?.lowercase()
         return email == "admin@nrdlojas.com" || email == "mestre@nrdlojas.com"
+    }
+
+    private fun prepareManagementWrite(action: String): Boolean {
+        lastError = null
+        if (!isFirebaseConfigured()) {
+            lastError = "Firebase não configurado para $action."
+            return false
+        }
+        if (!hasManagementAccess()) {
+            lastError = "A sessão atual não tem permissão para $action."
+            return false
+        }
+        return true
     }
 
     private fun parseThemeBackgrounds(raw: Any?): Map<String, List<ThemeBackground>> {
@@ -1010,9 +1030,9 @@ object FirebaseService {
                 )
                 .await()
         } catch (e: Exception) {
-            // O manifesto já foi publicado e continua sendo a fonte canônica.
-            // A próxima abertura ainda receberá a configuração correta.
-            Log.w("FirebaseService", "Aparência publicada; espelho em tempo real indisponível", e)
+            lastError = "O manifesto foi enviado, mas a atualização em tempo real falhou. Tente novamente."
+            Log.e("FirebaseService", "Falha ao publicar aparência no Firestore", e)
+            return false
         }
 
         lastError = null
@@ -1063,7 +1083,7 @@ object FirebaseService {
             .addFormDataPart(
                 "file",
                 "appearance-settings.json",
-                manifest.toRequestBody("application/json; charset=utf-8".toMediaType())
+                manifest.toRequestBody("application/json".toMediaType())
             )
             .build()
         val request = Request.Builder()
@@ -1204,7 +1224,7 @@ object FirebaseService {
     }
 
     suspend fun saveNotificationSettings(settings: NotificationSettings): Boolean {
-        if (!isFirebaseConfigured() || !hasManagementAccess()) return false
+        if (!prepareManagementWrite("publicar a política de notificações")) return false
         return try {
             FirebaseFirestore.getInstance()
                 .collection("config")
@@ -1289,7 +1309,7 @@ object FirebaseService {
     }
 
     suspend fun saveAssistantSettings(settings: AssistantSettings): Boolean {
-        if (!isFirebaseConfigured() || !hasManagementAccess()) return false
+        if (!prepareManagementWrite("publicar as configurações do Assistente")) return false
         return try {
             FirebaseFirestore.getInstance()
                 .collection("config")
@@ -1348,7 +1368,7 @@ object FirebaseService {
     }
 
     suspend fun saveCategories(categories: List<CategoryDefinition>): Boolean {
-        if (!isFirebaseConfigured() || !hasManagementAccess()) return false
+        if (!prepareManagementWrite("salvar as categorias")) return false
         val normalized = categories
             .filter { it.name.isNotBlank() }
             .mapIndexed { index, category ->
@@ -1359,7 +1379,10 @@ object FirebaseService {
                     "isActive" to category.isActive
                 )
             }
-        if (normalized.isEmpty()) return false
+        if (normalized.isEmpty()) {
+            lastError = "Mantenha pelo menos uma categoria válida."
+            return false
+        }
         return try {
             FirebaseFirestore.getInstance()
                 .collection("config")
@@ -1472,7 +1495,7 @@ object FirebaseService {
 
 
     suspend fun syncAllDynamicTabs(tabs: List<com.example.data.DynamicTab>): Boolean {
-        if (!isFirebaseConfigured() || !hasManagementAccess()) return false
+        if (!prepareManagementWrite("publicar as abas")) return false
         return try {
             val firestore = FirebaseFirestore.getInstance()
             val batch = firestore.batch()
@@ -1489,19 +1512,21 @@ object FirebaseService {
             batch.commit().await()
             true
         } catch (e: Exception) {
+            lastError = e.message
             Log.e("FirebaseService", "Error syncing dynamic tabs", e)
             false
         }
     }
 
     suspend fun deleteDynamicTab(tab: com.example.data.DynamicTab): Boolean {
-        if (!isFirebaseConfigured() || !hasManagementAccess()) return false
+        if (!prepareManagementWrite("excluir a aba")) return false
         return try {
             val firestore = FirebaseFirestore.getInstance()
             firestore.collection("dynamic_tabs").document(tab.id.toString())
                 .delete().await()
             true
         } catch (e: Exception) {
+            lastError = e.message
             Log.e("FirebaseService", "Error deleting dynamic tab", e)
             false
         }

@@ -21,6 +21,7 @@ import com.example.data.ProductRepository
 import com.example.data.ProductStandards
 import com.example.data.RemoteHomeSettings
 import com.example.data.UserPreferences
+import com.example.data.rankGloballyMostUsedProducts
 import com.example.util.FcmTopicSubscription
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -69,6 +70,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     private val _newProductsCount = MutableStateFlow(0)
     val newProductsCount: StateFlow<Int> = _newProductsCount.asStateFlow()
     private val recentlyCountedProducts = mutableMapOf<String, Long>()
+    private val _globalMostUsed = MutableStateFlow(GlobalMostUsedState())
 
     private val remoteHomeSettings = FirebaseService.observeHomeSettings()
         .onStart { emit(RemoteHomeSettings()) }
@@ -113,10 +115,13 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CategoryDefinition.defaults.map { it.name })
 
     val favorites = repository.favorites.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val mostUsed = homeSettings
-        .map { it.mostUsedLimit }
-        .distinctUntilChanged()
-        .flatMapLatest { repository.mostUsed(it) }
+    val mostUsed = combine(
+        homeSettings.map { it.mostUsedLimit }.distinctUntilChanged(),
+        repository.mostUsed(50),
+        _globalMostUsed
+    ) { limit, localMostUsed, globalMostUsed ->
+        (if (globalMostUsed.isLoaded) globalMostUsed.products else localMostUsed).take(limit)
+    }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val history = repository.history.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val notificationHistory = userPreferences.notificationHistory
@@ -160,8 +165,24 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             }
         }
         viewModelScope.launch {
-            FirebaseService.observeProducts().collect { remoteProducts ->
+            FirebaseService.observeProductUsage().collect { remoteUsage ->
                 val localProducts = repository.getAllProductsSync()
+                val localProductsByCode = localProducts.associateBy { it.code }
+                val rankedUsage = remoteUsage.map { usage ->
+                    val local = localProductsByCode[usage.product.code]
+                    if (local == null) usage else usage.copy(
+                        product = usage.product.copy(
+                            id = local.id,
+                            isFavorite = local.isFavorite,
+                            lastSearchedAt = local.lastSearchedAt
+                        )
+                    )
+                }
+                _globalMostUsed.value = GlobalMostUsedState(
+                    isLoaded = true,
+                    products = rankGloballyMostUsedProducts(rankedUsage)
+                )
+                val remoteProducts = remoteUsage.map { it.product }
                 val remoteIds = remoteProducts.map { it.code }.toSet()
                 val toDelete = localProducts.filter { it.code !in remoteIds }
 
@@ -902,7 +923,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             if (deleted) repository.deleteTab(tab)
             _syncMessage.emit(
                 if (deleted) "Aba excluída para todos os usuários."
-                else "Não foi possível excluir a aba na nuvem; os dados foram preservados."
+                else FirebaseService.lastError ?: "Não foi possível excluir a aba na nuvem; os dados foram preservados."
             )
         } finally {
             _isSyncingTabs.value = false
@@ -913,5 +934,10 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         viewModelScope.launch { userPreferences.setOnboardingShown(true) }
     }
 }
+
+private data class GlobalMostUsedState(
+    val isLoaded: Boolean = false,
+    val products: List<Product> = emptyList()
+)
 
 data class ChatMessage(val text: String, val isUser: Boolean)

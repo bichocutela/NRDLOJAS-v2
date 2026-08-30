@@ -66,7 +66,6 @@ private enum class MestrePanelPage(val title: String) {
     APPEARANCE_SETTINGS("Aparência global"),
     ADVANCED("Ferramentas avançadas")
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MestreScreen(
@@ -564,7 +563,7 @@ fun MestreScreen(
                                 isSavingHomeSettings = false
                                 snackbarHostState.showSnackbar(
                                     if (saved) "Configurações da Home publicadas para todos."
-                                    else "Não foi possível publicar as configurações da Home."
+                                    else FirebaseService.lastError ?: "Não foi possível publicar as configurações da Home."
                                 )
                             }
                         },
@@ -756,7 +755,7 @@ fun MestreScreen(
                                 isSavingNotificationSettings = false
                                 snackbarHostState.showSnackbar(
                                     if (saved) "Política de notificações publicada para todos."
-                                    else "Não foi possível publicar a política de notificações."
+                                    else FirebaseService.lastError ?: "Não foi possível publicar a política de notificações."
                                 )
                             }
                         },
@@ -841,7 +840,7 @@ fun MestreScreen(
                                 isSavingAssistantSettings = false
                                 snackbarHostState.showSnackbar(
                                     if (saved) "Configurações do Assistente publicadas para todos."
-                                    else "Não foi possível publicar as configurações do Assistente."
+                                    else FirebaseService.lastError ?: "Não foi possível publicar as configurações do Assistente."
                                 )
                             }
                         },
@@ -1360,7 +1359,7 @@ fun MestreScreen(
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                             )
                             Text(
-                                "Sem início, começa agora. Sem fim, permanece até ser desativado. Após o fim, o fundo padrão volta automaticamente.",
+                                "A data de início é obrigatória para ativar. Sem data de fim, permanece ativo até ser desativado. Após o fim, o fundo padrão volta automaticamente.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
