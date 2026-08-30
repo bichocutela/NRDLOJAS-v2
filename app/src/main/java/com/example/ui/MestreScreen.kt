@@ -10,7 +10,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Backup
-import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
@@ -65,7 +64,7 @@ private enum class MestrePanelPage(val title: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MestreScreen(
-    viewModel: MainViewModel, 
+    viewModel: MainViewModel,
     onNavigateToAdmin: () -> Unit,
     onNavigateToManageTabs: () -> Unit,
     onNavigateToManageProducts: () -> Unit,
@@ -127,7 +126,6 @@ fun MestreScreen(
     var backgroundToDelete by remember { mutableStateOf<Pair<String, ThemeBackground>?>(null) }
     var maintenanceSummary by remember { mutableStateOf<MaintenanceSummary?>(null) }
     var isLoadingMaintenance by remember { mutableStateOf(false) }
-    var showSyncConfirmation by remember { mutableStateOf(false) }
     var snapshotToRestore by remember { mutableStateOf<CatalogSnapshot?>(null) }
     var showAllCatalogBackups by rememberSaveable { mutableStateOf(false) }
     var editingCategory by remember { mutableStateOf<CategoryDefinition?>(null) }
@@ -243,7 +241,7 @@ fun MestreScreen(
     LaunchedEffect(currentPage) {
         panelScrollState.scrollTo(0)
     }
-    
+
     LaunchedEffect(Unit) {
         viewModel.refreshCatalogHistory()
         viewModel.syncMessage.collect { message ->
@@ -341,8 +339,8 @@ fun MestreScreen(
 
             if (currentPage == MestrePanelPage.ADVANCED) {
             MestreSectionHeader(
-                title = "Manutenção e sincronização",
-                description = "Confira o estado do catálogo remoto antes de sincronizar"
+                title = "Manutenção e diagnóstico",
+                description = "Confira o estado do catálogo local e remoto sem alterar dados"
             )
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
@@ -393,10 +391,16 @@ fun MestreScreen(
                             coroutineScope.launch {
                                 isLoadingMaintenance = true
                                 try {
-                                    maintenanceSummary = FirebaseService.getMaintenanceSummary(
+                                    val result = FirebaseService.getMaintenanceSummary(
                                         localProductCount = allProducts.size,
                                         localCategoryCounts = localCategoryCounts
                                     )
+                                    maintenanceSummary = result
+                                    if (!result.remoteAvailable) {
+                                        snackbarHostState.showSnackbar(
+                                            FirebaseService.lastError ?: "Não foi possível consultar a nuvem. Tente novamente."
+                                        )
+                                    }
                                 } finally {
                                     isLoadingMaintenance = false
                                 }
@@ -413,25 +417,6 @@ fun MestreScreen(
                             Icon(Icons.Default.Sync, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Atualizar diagnóstico")
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = { showSyncConfirmation = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isSyncing && !isLoadingMaintenance && !isLoadingCatalogHistory
-                    ) {
-                        if (isSyncing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Sincronizando...")
-                        } else {
-                            Icon(Icons.Default.CloudSync, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Sincronizar catálogo")
                         }
                     }
                 }
@@ -1208,45 +1193,6 @@ fun MestreScreen(
                     },
                     dismissButton = {
                         TextButton(onClick = { snapshotToRestore = null }) {
-                            Text("Cancelar")
-                        }
-                    }
-                )
-            }
-
-            if (showSyncConfirmation) {
-                AlertDialog(
-                    onDismissRequest = { showSyncConfirmation = false },
-                    title = { Text("Sincronizar catálogo?") },
-                    text = {
-                        val difference = maintenanceSummary?.let {
-                            it.remoteProductCount - it.localProductCount
-                        }
-                        Text(
-                            when {
-                                maintenanceSummary == null ->
-                                    "A rotina existente consultará o catálogo remoto e atualizará os dados locais. Continue somente se a conexão estiver disponível."
-                                difference == 0 ->
-                                    "O diagnóstico não encontrou diferença na quantidade de produtos. A sincronização ainda poderá atualizar nomes, categorias e imagens."
-                                difference != null ->
-                                    "O diagnóstico encontrou uma diferença de ${kotlin.math.abs(difference)} produto(s) entre a nuvem e este aparelho. A sincronização atualizará o catálogo local usando os dados remotos."
-                                else ->
-                                    "A sincronização atualizará o catálogo local usando os dados remotos."
-                            }
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                showSyncConfirmation = false
-                                viewModel.syncProductsFromFirebase()
-                            }
-                        ) {
-                            Text("Continuar")
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showSyncConfirmation = false }) {
                             Text("Cancelar")
                         }
                     }
