@@ -292,18 +292,37 @@ fun LoginDrawerContent(
     val categories by viewModel.productsCountByCategory.collectAsState()
     val activeCategoryNames by viewModel.activeCategoryNames.collectAsState()
     val appTheme by viewModel.userPreferences.appTheme.collectAsState(initial = "multicolor")
+    val glassAccentColor by viewModel.userPreferences.glassAccentColor.collectAsState(initial = "multicolor")
+    val glassTransparency by viewModel.userPreferences.glassTransparency.collectAsState(initial = 0.55f)
+    val glassType by viewModel.userPreferences.glassType.collectAsState(initial = "soft")
     val isMulticolorTheme = appTheme.trim().lowercase() == "multicolor"
+    val isGlassTheme = appTheme.trim().lowercase() == "glass"
     val multicolorSessionColors = remember {
         listOf(
-            Color(0xFFE5252A), // vermelho
-            Color(0xFF2E9D44), // verde
-            Color(0xFFF28C18), // laranja
-            Color(0xFF2474D2), // azul
-            Color(0xFFC99A14)  // dourado
+            Color(0xFFE5252A), Color(0xFF2E9D44), Color(0xFFF28C18),
+            Color(0xFF2474D2), Color(0xFFC99A14)
         ).shuffled()
     }
-    val multicolorBrush = remember(multicolorSessionColors) {
-        Brush.horizontalGradient(multicolorSessionColors)
+    val glassSessionColors = remember(glassAccentColor) {
+        when (glassAccentColor) {
+            "red" -> listOf(Color(0xFFE5252A), Color(0xFFFF8A8D), Color(0xFFFFD5D6))
+            "green" -> listOf(Color(0xFF2E9D44), Color(0xFF83D69A), Color(0xFFD7F2DF))
+            "orange" -> listOf(Color(0xFFF28C18), Color(0xFFFFBA68), Color(0xFFFFE1BC))
+            "blue" -> listOf(Color(0xFF2474D2), Color(0xFF75ACEA), Color(0xFFD4E7FA))
+            "gold" -> listOf(Color(0xFFC99A14), Color(0xFFE6C45E), Color(0xFFF6E8B7))
+            else -> multicolorSessionColors
+        }
+    }
+    val drawerAccentColors = if (isGlassTheme) glassSessionColors else multicolorSessionColors
+    val multicolorBrush = remember(drawerAccentColors) { Brush.horizontalGradient(drawerAccentColors) }
+    val useGradientDrawer = isMulticolorTheme || isGlassTheme
+    val glassSurfaceAlpha = when (glassType) {
+        "frosted" -> (0.94f - glassTransparency * 0.48f).coerceIn(0.44f, 0.84f)
+        "crystal" -> (0.76f - glassTransparency * 0.38f).coerceIn(0.28f, 0.66f)
+        else -> (0.86f - glassTransparency * 0.44f).coerceIn(0.36f, 0.76f)
+    }
+    val drawerGlassBrush = remember(drawerAccentColors) {
+        Brush.verticalGradient(listOf(Color.White) + drawerAccentColors.map { it.copy(alpha = 0.16f) } + listOf(Color.White))
     }
     var expandedCategory by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -311,6 +330,12 @@ fun LoginDrawerContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (isGlassTheme) Modifier
+                    .background(drawerGlassBrush, RoundedCornerShape(28.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.72f), RoundedCornerShape(28.dp))
+                else Modifier
+            )
             .padding(16.dp)
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -319,10 +344,10 @@ fun LoginDrawerContent(
             Spacer(modifier = Modifier.height(24.dp))
             Text(
                 text = "Login",
-                style = if (isMulticolorTheme) {
+                style = if (useGradientDrawer) {
                     MaterialTheme.typography.headlineMedium.merge(TextStyle(brush = multicolorBrush))
                 } else MaterialTheme.typography.headlineMedium,
-                color = if (isMulticolorTheme) Color.Unspecified else MaterialTheme.colorScheme.primary
+                color = if (useGradientDrawer) Color.Unspecified else MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(32.dp))
             OutlinedTextField(
@@ -390,19 +415,19 @@ fun LoginDrawerContent(
             Spacer(modifier = Modifier.height(24.dp))
             Text(
                 text = if (userRole == "mestre" || userRole == "admin") "Administrador" else "Usuário",
-                style = if (isMulticolorTheme) {
+                style = if (useGradientDrawer) {
                     MaterialTheme.typography.headlineMedium.merge(TextStyle(brush = multicolorBrush))
                 } else MaterialTheme.typography.headlineMedium,
-                color = if (isMulticolorTheme) Color.Unspecified else MaterialTheme.colorScheme.primary
+                color = if (useGradientDrawer) Color.Unspecified else MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(24.dp))
             if (userRole == "mestre" || userRole == "admin") {
                 Button(
                     onClick = onGoToAdmin,
-                    modifier = if (isMulticolorTheme) {
+                    modifier = if (useGradientDrawer) {
                         Modifier.fillMaxWidth().background(multicolorBrush, RoundedCornerShape(28.dp))
                     } else Modifier.fillMaxWidth(),
-                    colors = if (isMulticolorTheme) {
+                    colors = if (useGradientDrawer) {
                         ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.White)
                     } else ButtonDefaults.buttonColors()
                 ) {
@@ -425,7 +450,10 @@ fun LoginDrawerContent(
                     loginStatus = null
                     onLogout() 
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = if (isGlassTheme) {
+                    ButtonDefaults.outlinedButtonColors(containerColor = Color.White.copy(alpha = glassSurfaceAlpha))
+                } else ButtonDefaults.outlinedButtonColors()
             ) {
                 Text("Sair")
             }
@@ -441,10 +469,10 @@ fun LoginDrawerContent(
         if (supportedDynamicTabs.isNotEmpty()) {
             Text(
                 text = "Abas Adicionais",
-                style = if (isMulticolorTheme) {
+                style = if (useGradientDrawer) {
                     MaterialTheme.typography.titleLarge.merge(TextStyle(brush = multicolorBrush))
                 } else MaterialTheme.typography.titleLarge,
-                color = if (isMulticolorTheme) Color.Unspecified else MaterialTheme.colorScheme.primary,
+                color = if (useGradientDrawer) Color.Unspecified else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.Start)
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -465,8 +493,10 @@ fun LoginDrawerContent(
         
         Text(
             text = "Categorias",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary,
+            style = if (useGradientDrawer) {
+                MaterialTheme.typography.titleLarge.merge(TextStyle(brush = multicolorBrush))
+            } else MaterialTheme.typography.titleLarge,
+            color = if (useGradientDrawer) Color.Unspecified else MaterialTheme.colorScheme.primary,
             modifier = Modifier.align(Alignment.Start)
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -476,8 +506,8 @@ fun LoginDrawerContent(
                 category = categoryName,
                 viewModel = viewModel,
                 isExpanded = expandedCategory == categoryName,
-                accentBrush = if (isMulticolorTheme) multicolorBrush else null,
-                accentColor = if (isMulticolorTheme) {
+                accentBrush = if (useGradientDrawer) multicolorBrush else null,
+                accentColor = if (useGradientDrawer) {
                     multicolorSessionColors[kotlin.math.abs(categoryName.hashCode()) % multicolorSessionColors.size]
                 } else null,
                 onExpandToggle = {
@@ -496,10 +526,10 @@ fun LoginDrawerContent(
 
         Button(
             onClick = onGoToPromotions,
-            modifier = if (isMulticolorTheme) {
+            modifier = if (useGradientDrawer) {
                 Modifier.fillMaxWidth().background(multicolorBrush, RoundedCornerShape(28.dp))
             } else Modifier.fillMaxWidth(),
-            colors = if (isMulticolorTheme) {
+            colors = if (useGradientDrawer) {
                 ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.White)
             } else ButtonDefaults.buttonColors()
         ) {
@@ -510,10 +540,10 @@ fun LoginDrawerContent(
 
         Button(
             onClick = onGoToSettings,
-            modifier = if (isMulticolorTheme) {
+            modifier = if (useGradientDrawer) {
                 Modifier.fillMaxWidth().background(multicolorBrush, RoundedCornerShape(28.dp))
             } else Modifier.fillMaxWidth(),
-            colors = if (isMulticolorTheme) {
+            colors = if (useGradientDrawer) {
                 ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.White)
             } else ButtonDefaults.buttonColors()
         ) {
@@ -524,10 +554,10 @@ fun LoginDrawerContent(
 
         Button(
             onClick = onGoToAbout,
-            modifier = if (isMulticolorTheme) {
+            modifier = if (useGradientDrawer) {
                 Modifier.fillMaxWidth().background(multicolorBrush, RoundedCornerShape(28.dp))
             } else Modifier.fillMaxWidth(),
-            colors = if (isMulticolorTheme) {
+            colors = if (useGradientDrawer) {
                 ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.White)
             } else ButtonDefaults.buttonColors()
         ) {
