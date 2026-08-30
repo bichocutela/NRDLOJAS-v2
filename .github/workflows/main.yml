@@ -18,6 +18,56 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Corrigir tema local da Home uma vez
+      run: |
+        python3 <<'PY'
+        from pathlib import Path
+
+        prefs = Path('app/src/main/java/com/example/data/UserPreferences.kt')
+        text = prefs.read_text()
+        old = '''    val appTheme: Flow<String> = context.dataStore.data.map { preferences ->
+            preferences[APP_THEME] ?: "multicolor"
+        }
+
+        val appearanceMode: Flow<String> = context.dataStore.data.map { preferences ->
+        '''
+        new = '''    val appTheme: Flow<String> = context.dataStore.data.map { preferences ->
+            preferences[APP_THEME] ?: "multicolor"
+        }
+        val appThemeWasChosen: Flow<Boolean> = context.dataStore.data.map { preferences ->
+            preferences[APP_THEME] != null
+        }
+
+        val appearanceMode: Flow<String> = context.dataStore.data.map { preferences ->
+        '''
+        if old not in text:
+            raise SystemExit('Trecho appTheme não encontrado')
+        prefs.write_text(text.replace(old, new, 1))
+
+        home = Path('app/src/main/java/com/example/ui/SearchScreen.kt')
+        text = home.read_text()
+        old = '''    val localAppTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
+            val remoteAppearance by FirebaseService.observeAppearanceSettings()
+                .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
+            val appTheme = if (remoteAppearance.overrideLocalTheme) remoteAppearance.theme else localAppTheme
+        '''
+        new = '''    val localAppTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
+            val localThemeWasChosen by viewModel.userPreferences.appThemeWasChosen.collectAsStateWithLifecycle(initialValue = false)
+            val remoteAppearance by FirebaseService.observeAppearanceSettings()
+                .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
+            val appTheme = if (remoteAppearance.overrideLocalTheme && !localThemeWasChosen) remoteAppearance.theme else localAppTheme
+        '''
+        if old not in text:
+            raise SystemExit('Trecho de tema da Home não encontrado')
+        home.write_text(text.replace(old, new, 1))
+        PY
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git checkout HEAD^ -- .github/workflows/main.yml
+        git add app/src/main/java/com/example/data/UserPreferences.kt app/src/main/java/com/example/ui/SearchScreen.kt .github/workflows/main.yml
+        git commit -m "Respeita tema escolhido pelo usuário também na Home"
+        git push
+
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
