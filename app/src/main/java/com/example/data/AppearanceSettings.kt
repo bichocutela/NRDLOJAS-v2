@@ -17,20 +17,35 @@ class AppearanceSettings(
     private val storedOverrideLocalTheme: Boolean = overrideLocalTheme
 
     /**
-     * Para usuários comuns, uma escolha local explícita de tema tem prioridade.
-     * O Mestre/Admin continua enxergando e administrando o valor remoto real.
+     * Para usuário comum, tema e modo de aparência são sempre escolhas locais.
+     * O valor remoto é preservado somente para a sessão de gerenciamento, para
+     * manter compatibilidade com o painel enquanto o Mestre administra os fundos.
      */
     val overrideLocalTheme: Boolean
-        get() = storedOverrideLocalTheme && (isManagementSession() || !LocalAppearanceChoiceState.themeChosen)
+        get() = storedOverrideLocalTheme && isManagementSession()
 
-    /** Valor remoto bruto, usado pelo host para tratar tema e claro/escuro separadamente. */
+    /**
+     * O host usa esta propriedade para decidir se deve considerar a aparência
+     * remota. Para usuários comuns ela é sempre falsa; assim a escolha local
+     * nunca é substituída pelo tema salvo no painel do Mestre.
+     */
     val globalOverrideEnabled: Boolean
-        get() = storedOverrideLocalTheme
+        get() = storedOverrideLocalTheme && isManagementSession()
 
-    fun activeBackgroundFor(themeKey: String, date: String = ThemeBackground.todayIsoDate()): ThemeBackground? =
-        themeBackgrounds[themeKey]
+    /**
+     * Retorna somente o fundo pertencente ao tema escolhido pelo usuário.
+     * A normalização impede que variações de caixa/espaço façam uma cor buscar
+     * o conjunto de fundos de outra cor.
+     */
+    fun activeBackgroundFor(
+        themeKey: String,
+        date: String = ThemeBackground.todayIsoDate()
+    ): ThemeBackground? {
+        val normalizedTheme = normalizeThemeKey(themeKey)
+        return themeBackgrounds[normalizedTheme]
             ?.filter { it.isAvailableOn(date) }
             ?.maxByOrNull { ThemeBackground.normalizeDate(it.startDate).orEmpty() }
+    }
 
     fun copy(
         overrideLocalTheme: Boolean = storedOverrideLocalTheme,
@@ -67,6 +82,16 @@ class AppearanceSettings(
 
     override fun toString(): String =
         "AppearanceSettings(overrideLocalTheme=$storedOverrideLocalTheme, theme=$theme, appearanceMode=$appearanceMode, themeBackgrounds=$themeBackgrounds, revision=$revision)"
+
+    private fun normalizeThemeKey(value: String): String = when (value.trim().lowercase()) {
+        "multicolor" -> "multicolor"
+        "red" -> "red"
+        "gold" -> "gold"
+        "green" -> "green"
+        "blue" -> "blue"
+        "orange" -> "orange"
+        else -> "multicolor"
+    }
 
     private fun isManagementSession(): Boolean = runCatching {
         FirebaseAuth.getInstance().currentUser?.email?.trim()?.lowercase() in MANAGEMENT_EMAILS
