@@ -1473,6 +1473,15 @@ fun MestreScreen(
             }
 
             backgroundToPreview?.let { (themeKey, background) ->
+                var previewScale by remember(background.id, background.imageScale) {
+                    mutableFloatStateOf(background.imageScale.coerceIn(0.5f, 3f))
+                }
+                var previewOffsetX by remember(background.id, background.imageOffsetX) {
+                    mutableFloatStateOf(background.imageOffsetX.coerceIn(-1f, 1f))
+                }
+                var previewOffsetY by remember(background.id, background.imageOffsetY) {
+                    mutableFloatStateOf(background.imageOffsetY.coerceIn(-1f, 1f))
+                }
                 androidx.compose.ui.window.Dialog(
                     onDismissRequest = { backgroundToPreview = null }
                 ) {
@@ -1481,7 +1490,11 @@ fun MestreScreen(
                         shape = RoundedCornerShape(24.dp),
                         color = MaterialTheme.colorScheme.surface
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
+                        Column(
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
                             Text(
                                 "Prévia real na Home",
                                 style = MaterialTheme.typography.titleLarge,
@@ -1513,20 +1526,97 @@ fun MestreScreen(
                                     ThemeBanner(
                                         appTheme = themeKey,
                                         backgroundUrl = background.url,
+                                        imageScale = previewScale,
+                                        imageOffsetX = previewOffsetX,
+                                        imageOffsetY = previewOffsetY,
                                         modifier = Modifier.fillMaxSize()
                                     )
                                 }
                             }
                             Spacer(modifier = Modifier.height(12.dp))
+                            Text("Zoom: ${(previewScale * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
+                            Slider(
+                                value = previewScale,
+                                onValueChange = { previewScale = it },
+                                valueRange = 0.5f..3f
+                            )
+                            Text("Horizontal: ${(previewOffsetX * 100).toInt()}", style = MaterialTheme.typography.labelLarge)
+                            Slider(
+                                value = previewOffsetX,
+                                onValueChange = { previewOffsetX = it },
+                                valueRange = -1f..1f
+                            )
+                            Text("Vertical: ${(previewOffsetY * 100).toInt()}", style = MaterialTheme.typography.labelLarge)
+                            Slider(
+                                value = previewOffsetY,
+                                onValueChange = { previewOffsetY = it },
+                                valueRange = -1f..1f
+                            )
+                            TextButton(
+                                onClick = {
+                                    previewScale = 1f
+                                    previewOffsetX = 0f
+                                    previewOffsetY = 0f
+                                },
+                                modifier = Modifier.align(Alignment.End)
+                            ) {
+                                Text("Restaurar enquadramento")
+                            }
                             Text(
-                                "Esta prévia usa o mesmo componente, proporção e recorte do banner exibido na Home. Nada é aplicado ao fechar esta janela.",
+                                "O ajuste acima será usado exatamente na Home. A imagem original não é alterada.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
                             Button(
+                                onClick = {
+                                    val updatedBackgrounds = draftThemeBackgrounds + (
+                                        themeKey to draftThemeBackgrounds[themeKey].orEmpty().map { item ->
+                                            if (item.id == background.id) {
+                                                item.copy(
+                                                    imageScale = previewScale,
+                                                    imageOffsetX = previewOffsetX,
+                                                    imageOffsetY = previewOffsetY
+                                                )
+                                            } else item
+                                        }
+                                    )
+                                    draftThemeBackgrounds = updatedBackgrounds
+                                    val settingsToSave = draftAppearanceSettings.copy(themeBackgrounds = updatedBackgrounds)
+                                    coroutineScope.launch {
+                                        isSavingAppearanceSettings = true
+                                        val saved = FirebaseService.saveAppearanceSettings(settingsToSave)
+                                        isSavingAppearanceSettings = false
+                                        if (saved) {
+                                            backgroundToPreview = null
+                                            snackbarHostState.showSnackbar("Prévia salva. Este enquadramento será usado na Home.")
+                                        } else {
+                                            snackbarHostState.showSnackbar(
+                                                FirebaseService.lastError ?: "Não foi possível salvar a prévia."
+                                            )
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !isSavingAppearanceSettings
+                            ) {
+                                if (isSavingAppearanceSettings) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Salvando prévia...")
+                                } else {
+                                    Text("Salvar Prévia")
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
                                 onClick = { backgroundToPreview = null },
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !isSavingAppearanceSettings
                             ) {
                                 Text("Fechar prévia")
                             }

@@ -842,7 +842,10 @@ object FirebaseService {
                         url = url,
                         isActive = map["isActive"] as? Boolean ?: false,
                         startDate = normalizePersistedThemeBackgroundDate(map["startDate"] as? String),
-                        endDate = normalizePersistedThemeBackgroundDate(map["endDate"] as? String)
+                        endDate = normalizePersistedThemeBackgroundDate(map["endDate"] as? String),
+                        imageScale = ((map["imageScale"] as? Number)?.toFloat() ?: 1f).coerceIn(0.5f, 3f),
+                        imageOffsetX = ((map["imageOffsetX"] as? Number)?.toFloat() ?: 0f).coerceIn(-1f, 1f),
+                        imageOffsetY = ((map["imageOffsetY"] as? Number)?.toFloat() ?: 0f).coerceIn(-1f, 1f)
                     )
                 }
                 .orEmpty()
@@ -955,7 +958,10 @@ object FirebaseService {
                         "id" to background.id.ifBlank { UUID.randomUUID().toString() },
                         "label" to background.label.trim().take(80).ifBlank { "Fundo personalizado" },
                         "url" to background.url.trim(),
-                        "isActive" to (background.isActive && startDate != null)
+                        "isActive" to (background.isActive && startDate != null),
+                        "imageScale" to background.imageScale.coerceIn(0.5f, 3f),
+                        "imageOffsetX" to background.imageOffsetX.coerceIn(-1f, 1f),
+                        "imageOffsetY" to background.imageOffsetY.coerceIn(-1f, 1f)
                     ).apply {
                         if (startDate != null) put("startDate", startDate)
                         if (endDate != null) put("endDate", endDate)
@@ -1127,7 +1133,10 @@ object FirebaseService {
                     url = url,
                     isActive = item.optBoolean("isActive", false),
                     startDate = normalizePersistedThemeBackgroundDate(item.optString("startDate")),
-                    endDate = normalizePersistedThemeBackgroundDate(item.optString("endDate"))
+                    endDate = normalizePersistedThemeBackgroundDate(item.optString("endDate")),
+                    imageScale = item.optDouble("imageScale", 1.0).toFloat().coerceIn(0.5f, 3f),
+                    imageOffsetX = item.optDouble("imageOffsetX", 0.0).toFloat().coerceIn(-1f, 1f),
+                    imageOffsetY = item.optDouble("imageOffsetY", 0.0).toFloat().coerceIn(-1f, 1f)
                 )
             }
             if (items.isEmpty()) null else themeKey to items

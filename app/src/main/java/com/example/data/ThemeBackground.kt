@@ -11,7 +11,10 @@ data class ThemeBackground(
     val url: String,
     val isActive: Boolean = false,
     val startDate: String? = null,
-    val endDate: String? = null
+    val endDate: String? = null,
+    val imageScale: Float = 1f,
+    val imageOffsetX: Float = 0f,
+    val imageOffsetY: Float = 0f
 ) {
     /** O fundo só participa do agendamento quando está ativo e possui início válido. */
     fun isAvailableOn(date: String = todayIsoDate()): Boolean {

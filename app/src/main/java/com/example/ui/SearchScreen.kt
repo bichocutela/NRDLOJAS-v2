@@ -87,6 +87,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.Image
 import com.example.R
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
@@ -199,6 +200,7 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
             else -> "red"
         }
     }
+    val activeThemeBackground = remoteAppearance.activeBackgroundFor(normalizedTheme)
 
 
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
@@ -282,7 +284,10 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
             ) {
                 ThemeBanner(
                     appTheme = normalizedTheme,
-                    backgroundUrl = remoteAppearance.activeBackgroundFor(normalizedTheme)?.url,
+                    backgroundUrl = activeThemeBackground?.url,
+                    imageScale = activeThemeBackground?.imageScale ?: 1f,
+                    imageOffsetX = activeThemeBackground?.imageOffsetX ?: 0f,
+                    imageOffsetY = activeThemeBackground?.imageOffsetY ?: 0f,
                     modifier = Modifier.fillMaxSize()
                 )
 
@@ -1219,6 +1224,9 @@ fun generateBarcodeBitmap(data: String, profile: String = "Padrão"): ImageBitma
 fun ThemeBanner(
     appTheme: String,
     backgroundUrl: String? = null,
+    imageScale: Float = 1f,
+    imageOffsetX: Float = 0f,
+    imageOffsetY: Float = 0f,
     modifier: Modifier = Modifier
 ) {
     val normalizedTheme = when (appTheme.trim().lowercase()) {
@@ -1238,13 +1246,21 @@ fun ThemeBanner(
         "file:///android_asset/themes/theme_${normalizedTheme}.jpg"
     }
 
-    AsyncImage(
-        model = imageModel,
-        contentDescription = "Banner do tema $normalizedTheme",
-        modifier = modifier,
-        contentScale = ContentScale.FillWidth,
-        alignment = Alignment.TopCenter
-    )
+    BoxWithConstraints(modifier = modifier) {
+        val safeScale = imageScale.coerceIn(0.5f, 3f)
+        val safeOffsetX = imageOffsetX.coerceIn(-1f, 1f)
+        val safeOffsetY = imageOffsetY.coerceIn(-1f, 1f)
+        AsyncImage(
+            model = imageModel,
+            contentDescription = "Banner do tema $normalizedTheme",
+            modifier = Modifier
+                .fillMaxSize()
+                .offset(x = maxWidth * safeOffsetX, y = maxHeight * safeOffsetY)
+                .scale(safeScale),
+            contentScale = ContentScale.FillWidth,
+            alignment = Alignment.TopCenter
+        )
+    }
 }
 
 fun Modifier.vibrateClickable(
