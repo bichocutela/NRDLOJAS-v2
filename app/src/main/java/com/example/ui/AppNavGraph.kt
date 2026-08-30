@@ -319,6 +319,7 @@ fun LoginDrawerContent(
     val sessionAccent = remember(multicolorSessionColors) { multicolorSessionColors.first() }
     val glassAccent = remember(glassSessionColors) { glassSessionColors.first() }
     val drawerAccent = if (isGlassTheme) glassAccent else sessionAccent
+    val multicolorBrush = remember(drawerAccent) { Brush.linearGradient(listOf(drawerAccent, drawerAccent)) }
     val useGradientDrawer = false
     val isDarkGlass = MaterialTheme.colorScheme.background.luminance() < 0.35f
     val glassSurfaceAlpha = when (glassType) {
@@ -364,7 +365,7 @@ fun LoginDrawerContent(
             Text(
                 text = "Login",
                 style = if (useGradientDrawer) {
-                    MaterialTheme.typography.headlineMedium
+                    MaterialTheme.typography.headlineMedium.merge(TextStyle(brush = multicolorBrush))
                 } else MaterialTheme.typography.headlineMedium,
                 color = if (isMulticolorTheme || isGlassTheme) drawerAccent else MaterialTheme.colorScheme.primary
             )
@@ -594,66 +595,30 @@ fun CategoryItem(
     accentColor: Color? = null,
     onExpandToggle: () -> Unit
 ) {
-    val productsFlow = remember(category) { viewModel.getProductsByCategory(category) }
-    val products by if (isExpanded) productsFlow.collectAsState(initial = emptyList()) else remember { mutableStateOf(emptyList()) }
-    
+    val count = viewModel.productsCountByCategory.collectAsState().value[category] ?: 0
     Column(modifier = Modifier.fillMaxWidth()) {
         TextButton(
             onClick = onExpandToggle,
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(vertical = 12.dp)
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = category,
-                    style = if (accentBrush != null) {
-                        MaterialTheme.typography.titleMedium.merge(TextStyle(brush = accentBrush))
-                    } else MaterialTheme.typography.titleMedium,
-                    color = if (accentBrush != null) Color.Unspecified else LocalContentColor.current
-                )
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (isExpanded) "Recolher" else "Expandir",
-                    tint = accentColor ?: LocalContentColor.current
-                )
-            }
+            Text(
+                text = category,
+                modifier = Modifier.weight(1f),
+                color = accentColor ?: MaterialTheme.colorScheme.primary,
+                style = if (accentBrush != null) MaterialTheme.typography.titleMedium.merge(TextStyle(brush = accentBrush)) else MaterialTheme.typography.titleMedium
+            )
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+                tint = accentColor ?: MaterialTheme.colorScheme.primary
+            )
         }
-        
         if (isExpanded) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
-            ) {
-                if (products.isEmpty()) {
-                    Text("Carregando...", style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    products.forEach { product ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = product.name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                text = product.code,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        HorizontalDivider(modifier = Modifier.alpha(0.5f))
-                    }
-                }
-            }
+            Text(
+                text = "$count produtos",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
+            )
         }
     }
 }
