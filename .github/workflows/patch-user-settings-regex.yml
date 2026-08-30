@@ -1,0 +1,102 @@
+name: Corrigir configurações restantes
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-user-settings-regex.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Aplicar patch restrito
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          prefs = Path('app/src/main/java/com/example/data/UserPreferences.kt')
+          text = prefs.read_text()
+          text, n1 = re.subn(
+              r'(val appTheme: Flow<String> = context\.dataStore\.data\.map \{ preferences ->\s*preferences\[APP_THEME\] \?: "multicolor"\s*\})',
+              r'''\1
+    val appThemeWasChosen: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[APP_THEME] != null
+    }''',
+              text,
+              count=1,
+          )
+          text, n2 = re.subn(
+              r'(val appearanceMode: Flow<String> = context\.dataStore\.data\.map \{ preferences ->\s*preferences\[APPEARANCE_MODE\] \?: "system"\s*\})',
+              r'''\1
+    val appearanceModeWasChosen: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[APPEARANCE_MODE] != null
+    }''',
+              text,
+              count=1,
+          )
+          if n1 != 1 or n2 != 1:
+              raise SystemExit(f'Falha UserPreferences: theme={n1}, appearance={n2}')
+          prefs.write_text(text)
+
+          main = Path('app/src/main/java/com/example/MainActivity.kt')
+          text = main.read_text()
+          text = text.replace('import com.example.data.dataStore\n', '').replace('import kotlinx.coroutines.flow.map\n', '')
+          text, n3 = re.subn(
+              r'(val fontScale by userPreferences\.fontScale\.collectAsState\(initial = 1\.0f\)\s*)',
+              r'''\1            val largeText by userPreferences.largeText.collectAsState(initial = false)
+''',
+              text,
+              count=1,
+          )
+          text, n4 = re.subn(
+              r'val hasLocalThemeChoice by applicationContext\.dataStore\.data\s*\.map \{ preferences -> preferences\[UserPreferences\.APP_THEME\] != null \}\s*\.collectAsState\(initial = false\)\s*val hasLocalAppearanceChoice by applicationContext\.dataStore\.data\s*\.map \{ preferences -> preferences\[UserPreferences\.APPEARANCE_MODE\] != null \}\s*\.collectAsState\(initial = false\)',
+              '''val hasLocalThemeChoice by userPreferences.appThemeWasChosen.collectAsState(initial = false)
+            val hasLocalAppearanceChoice by userPreferences.appearanceModeWasChosen.collectAsState(initial = false)''',
+              text,
+              count=1,
+          )
+          text, n5 = re.subn(
+              r'fontScale = currentDensity\.fontScale \* fontScale',
+              'fontScale = currentDensity.fontScale * fontScale * if (largeText) 1.15f else 1.0f',
+              text,
+              count=1,
+          )
+          if n3 != 1 or n4 != 1 or n5 != 1:
+              raise SystemExit(f'Falha MainActivity: large={n3}, precedence={n4}, density={n5}')
+          main.write_text(text)
+
+          search = Path('app/src/main/java/com/example/ui/SearchScreen.kt')
+          text = search.read_text()
+          pattern = r'(val localAppTheme by viewModel\.userPreferences\.appTheme\.collectAsStateWithLifecycle\(initialValue = "multicolor"\)\s*)(val remoteAppearance by FirebaseService\.observeAppearanceSettings\(\)\s*\.collectAsStateWithLifecycle\(initialValue = AppearanceSettings\(\)\)\s*)(val appTheme = if \(remoteAppearance\.overrideLocalTheme\) remoteAppearance\.theme else localAppTheme)'
+          replacement = r'''\1    val localThemeWasChosen by viewModel.userPreferences.appThemeWasChosen.collectAsStateWithLifecycle(initialValue = false)
+    \2val appTheme = if (remoteAppearance.overrideLocalTheme && !localThemeWasChosen) remoteAppearance.theme else localAppTheme'''
+          text, n6 = re.subn(pattern, replacement, text, count=1)
+          if n6 != 1:
+              raise SystemExit(f'Falha SearchScreen: {n6}')
+          search.write_text(text)
+
+          settings = Path('app/src/main/java/com/example/ui/SettingsScreen.kt')
+          text = settings.read_text()
+          old = 'Text("Aumentar letras da tela inicial")'
+          if text.count(old) != 1:
+              raise SystemExit(f'Falha Settings label: {text.count(old)}')
+          settings.write_text(text.replace(old, 'Text("Aumentar letras do aplicativo")', 1))
+
+          Path('.github/workflows/patch-user-settings-regex.yml').unlink()
+          PY
+      - name: Commit e push
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Corrige configurações locais de aparência e texto"
+          git push
