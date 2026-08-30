@@ -27,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -61,17 +62,29 @@ fun ProductBarcodeDialog(
     val appTheme by userPreferences.appTheme.collectAsState(initial = "multicolor")
     val glassTransparency by userPreferences.glassTransparency.collectAsState(initial = 0.55f)
     val glassType by userPreferences.glassType.collectAsState(initial = "soft")
+    val glassAccentName by userPreferences.glassAccentColor.collectAsState(initial = "multicolor")
     val isGlassTheme = appTheme == "glass"
+    val darkGlass = MaterialTheme.colorScheme.background.luminance() < 0.35f
+    val glassAccent = remember(glassAccentName) {
+        when (glassAccentName) {
+            "red" -> Color(0xFFE5252A)
+            "green" -> Color(0xFF2E9D44)
+            "orange" -> Color(0xFFF28C18)
+            "blue" -> Color(0xFF2474D2)
+            "gold" -> Color(0xFFC99A14)
+            else -> listOf(Color(0xFFE5252A), Color(0xFF2E9D44), Color(0xFFF28C18), Color(0xFF2474D2), Color(0xFFC99A14)).shuffled().first()
+        }
+    }
     val glassBaseAlpha = (1f - glassTransparency).coerceIn(0.10f, 0.80f)
     val glassDialogAlpha = when (glassType) {
         "frosted" -> (glassBaseAlpha + 0.18f).coerceIn(0.22f, 0.86f)
         "crystal" -> (glassBaseAlpha - 0.12f).coerceIn(0.08f, 0.62f)
         else -> glassBaseAlpha
     }
-    val glassDialogColor = when (glassType) {
-        "frosted" -> Color(0xFFF7FAFC).copy(alpha = glassDialogAlpha)
-        "crystal" -> Color.White.copy(alpha = glassDialogAlpha)
-        else -> Color(0xFFFBFDFF).copy(alpha = glassDialogAlpha)
+    val glassDialogColor = if (darkGlass) {
+        glassAccent.copy(alpha = (glassDialogAlpha * 0.62f).coerceAtLeast(0.14f))
+    } else {
+        glassAccent.copy(alpha = (glassDialogAlpha * 0.28f).coerceAtLeast(0.08f))
     }
     val glassDialogBorder = when (glassType) {
         "crystal" -> Color.White.copy(alpha = 0.96f)

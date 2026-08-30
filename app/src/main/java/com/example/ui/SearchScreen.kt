@@ -91,6 +91,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -195,16 +196,36 @@ fun rememberGlassVisualStyle(viewModel: MainViewModel): GlassVisualStyle {
     val theme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
     val transparency by viewModel.userPreferences.glassTransparency.collectAsStateWithLifecycle(initialValue = 0.55f)
     val type by viewModel.userPreferences.glassType.collectAsStateWithLifecycle(initialValue = "soft")
+    val accentName by viewModel.userPreferences.glassAccentColor.collectAsStateWithLifecycle(initialValue = "multicolor")
+    val darkGlass = MaterialTheme.colorScheme.background.luminance() < 0.35f
+    val accent = remember(accentName) {
+        when (accentName) {
+            "red" -> Color(0xFFE5252A)
+            "green" -> Color(0xFF2E9D44)
+            "orange" -> Color(0xFFF28C18)
+            "blue" -> Color(0xFF2474D2)
+            "gold" -> Color(0xFFC99A14)
+            else -> listOf(Color(0xFFE5252A), Color(0xFF2E9D44), Color(0xFFF28C18), Color(0xFF2474D2), Color(0xFFC99A14)).shuffled().first()
+        }
+    }
     val baseAlpha = (1f - transparency).coerceIn(0.10f, 0.80f)
     val alpha = when (type) {
         "frosted" -> (baseAlpha + 0.18f).coerceIn(0.22f, 0.86f)
         "crystal" -> (baseAlpha - 0.12f).coerceIn(0.08f, 0.62f)
         else -> baseAlpha
     }
-    val fill = when (type) {
-        "frosted" -> Color(0xFFF7FAFC)
-        "crystal" -> Color.White
-        else -> Color(0xFFFBFDFF)
+    val fill = if (darkGlass) {
+        when (type) {
+            "frosted" -> accent.copy(alpha = 0.62f)
+            "crystal" -> accent.copy(alpha = 0.34f)
+            else -> accent.copy(alpha = 0.48f)
+        }
+    } else {
+        when (type) {
+            "frosted" -> accent.copy(alpha = 0.22f)
+            "crystal" -> accent.copy(alpha = 0.12f)
+            else -> accent.copy(alpha = 0.17f)
+        }
     }
     val border = when (type) {
         "frosted" -> Color.White.copy(alpha = 0.82f)
@@ -250,9 +271,24 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
             )
         }
     }
-    val glassBackgroundBrush = remember(glassAccentPalette) {
-        Brush.linearGradient(
-            colors = listOf(Color.White) + glassAccentPalette.map { it.copy(alpha = 0.24f) } + listOf(Color.White)
+    val isDarkGlass = MaterialTheme.colorScheme.background.luminance() < 0.35f
+    val glassBackgroundBrush = remember(glassAccentPalette, isDarkGlass) {
+        val base = if (isDarkGlass) Color(0xFF0C0F14) else Color.White
+        val accent = glassAccentPalette.first()
+        Brush.verticalGradient(
+            colors = if (isDarkGlass) {
+                listOf(
+                    base,
+                    accent.copy(alpha = 0.34f),
+                    base.copy(alpha = 0.96f)
+                )
+            } else {
+                listOf(
+                    accent.copy(alpha = 0.22f),
+                    Color.White.copy(alpha = 0.96f),
+                    accent.copy(alpha = 0.12f)
+                )
+            }
         )
     }
     val glassActionBrush = remember(glassAccentPalette) {
@@ -352,7 +388,13 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                             bottomEnd = 32.dp
                         )
                     )
-                    .background(if (isGlassTheme) Color.White.copy(alpha = glassSurfaceAlpha) else Color.White)
+                    .background(
+                        if (isGlassTheme) {
+                            val tint = glassAccentPalette.first()
+                            if (isDarkGlass) tint.copy(alpha = (glassSurfaceAlpha * 0.46f).coerceAtLeast(0.12f))
+                            else Color.White.copy(alpha = glassSurfaceAlpha)
+                        } else Color.White
+                    )
             ) {
                 ThemeBanner(
                     appTheme = normalizedTheme,
@@ -630,7 +672,11 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
             val sheetResults by sheetResultsFlow.collectAsState(initial = emptyList())
             ModalBottomSheet(
                 onDismissRequest = { showProductSearchSheet = false },
-                containerColor = if (isGlassTheme) Color.White.copy(alpha = glassSurfaceAlpha) else MaterialTheme.colorScheme.surfaceContainerLow
+                containerColor = if (isGlassTheme) {
+                    val tint = glassAccentPalette.first()
+                    if (isDarkGlass) tint.copy(alpha = (glassSurfaceAlpha * 0.50f).coerceAtLeast(0.14f))
+                    else tint.copy(alpha = (glassSurfaceAlpha * 0.28f).coerceAtLeast(0.08f))
+                } else MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -663,7 +709,11 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
         if (showMostUsedSheet) {
             ModalBottomSheet(
                 onDismissRequest = { showMostUsedSheet = false },
-                containerColor = if (isGlassTheme) Color.White.copy(alpha = glassSurfaceAlpha) else MaterialTheme.colorScheme.surfaceContainerLow
+                containerColor = if (isGlassTheme) {
+                    val tint = glassAccentPalette.first()
+                    if (isDarkGlass) tint.copy(alpha = (glassSurfaceAlpha * 0.50f).coerceAtLeast(0.14f))
+                    else tint.copy(alpha = (glassSurfaceAlpha * 0.28f).coerceAtLeast(0.08f))
+                } else MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                     Text("Mais Utilizados", style = MaterialTheme.typography.headlineSmall)
@@ -689,7 +739,11 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
         if (showNotificationsSheet) {
             ModalBottomSheet(
                 onDismissRequest = { showNotificationsSheet = false },
-                containerColor = if (isGlassTheme) Color.White.copy(alpha = glassSurfaceAlpha) else MaterialTheme.colorScheme.surfaceContainerLow
+                containerColor = if (isGlassTheme) {
+                    val tint = glassAccentPalette.first()
+                    if (isDarkGlass) tint.copy(alpha = (glassSurfaceAlpha * 0.50f).coerceAtLeast(0.14f))
+                    else tint.copy(alpha = (glassSurfaceAlpha * 0.28f).coerceAtLeast(0.08f))
+                } else MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                     Row(

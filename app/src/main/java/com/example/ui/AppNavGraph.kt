@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -315,15 +316,32 @@ fun LoginDrawerContent(
         }
     }
     val drawerAccentColors = if (isGlassTheme) glassSessionColors else multicolorSessionColors
-    val multicolorBrush = remember(drawerAccentColors) { Brush.horizontalGradient(drawerAccentColors) }
-    val useGradientDrawer = isMulticolorTheme || isGlassTheme
+    val sessionAccent = remember(multicolorSessionColors) { multicolorSessionColors.first() }
+    val glassAccent = remember(glassSessionColors) { glassSessionColors.first() }
+    val drawerAccent = if (isGlassTheme) glassAccent else sessionAccent
+    val useGradientDrawer = false
+    val isDarkGlass = MaterialTheme.colorScheme.background.luminance() < 0.35f
     val glassSurfaceAlpha = when (glassType) {
         "frosted" -> (0.94f - glassTransparency * 0.48f).coerceIn(0.44f, 0.84f)
         "crystal" -> (0.76f - glassTransparency * 0.38f).coerceIn(0.28f, 0.66f)
         else -> (0.86f - glassTransparency * 0.44f).coerceIn(0.36f, 0.76f)
     }
-    val drawerGlassBrush = remember(drawerAccentColors) {
-        Brush.verticalGradient(listOf(Color.White) + drawerAccentColors.map { it.copy(alpha = 0.16f) } + listOf(Color.White))
+    val drawerGlassBrush = remember(drawerAccent, isDarkGlass) {
+        Brush.verticalGradient(
+            if (isDarkGlass) {
+                listOf(
+                    Color(0xFF0C0F14),
+                    drawerAccent.copy(alpha = 0.38f),
+                    Color(0xFF11151B)
+                )
+            } else {
+                listOf(
+                    drawerAccent.copy(alpha = 0.18f),
+                    Color.White.copy(alpha = 0.94f),
+                    drawerAccent.copy(alpha = 0.10f)
+                )
+            }
+        )
     }
     var expandedCategory by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -346,9 +364,9 @@ fun LoginDrawerContent(
             Text(
                 text = "Login",
                 style = if (useGradientDrawer) {
-                    MaterialTheme.typography.headlineMedium.merge(TextStyle(brush = multicolorBrush))
+                    MaterialTheme.typography.headlineMedium
                 } else MaterialTheme.typography.headlineMedium,
-                color = if (useGradientDrawer) Color.Unspecified else MaterialTheme.colorScheme.primary
+                color = if (isMulticolorTheme || isGlassTheme) drawerAccent else MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(32.dp))
             OutlinedTextField(
@@ -417,9 +435,9 @@ fun LoginDrawerContent(
             Text(
                 text = if (userRole == "mestre" || userRole == "admin") "Administrador" else "Usuário",
                 style = if (useGradientDrawer) {
-                    MaterialTheme.typography.headlineMedium.merge(TextStyle(brush = multicolorBrush))
+                    MaterialTheme.typography.headlineMedium
                 } else MaterialTheme.typography.headlineMedium,
-                color = if (useGradientDrawer) Color.Unspecified else MaterialTheme.colorScheme.primary
+                color = if (isMulticolorTheme || isGlassTheme) drawerAccent else MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(24.dp))
             if (userRole == "mestre" || userRole == "admin") {
@@ -473,7 +491,7 @@ fun LoginDrawerContent(
                 style = if (useGradientDrawer) {
                     MaterialTheme.typography.titleLarge.merge(TextStyle(brush = multicolorBrush))
                 } else MaterialTheme.typography.titleLarge,
-                color = if (useGradientDrawer) Color.Unspecified else MaterialTheme.colorScheme.primary,
+                color = if (isMulticolorTheme || isGlassTheme) drawerAccent else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.Start)
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -497,7 +515,7 @@ fun LoginDrawerContent(
             style = if (useGradientDrawer) {
                 MaterialTheme.typography.titleLarge.merge(TextStyle(brush = multicolorBrush))
             } else MaterialTheme.typography.titleLarge,
-            color = if (useGradientDrawer) Color.Unspecified else MaterialTheme.colorScheme.primary,
+            color = if (isMulticolorTheme || isGlassTheme) drawerAccent else MaterialTheme.colorScheme.primary,
             modifier = Modifier.align(Alignment.Start)
         )
         Spacer(modifier = Modifier.height(16.dp))
