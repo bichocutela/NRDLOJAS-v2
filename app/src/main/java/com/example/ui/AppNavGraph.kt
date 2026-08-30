@@ -2,6 +2,7 @@ package com.example.ui
 
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -599,14 +600,14 @@ fun CategoryItem(
     accentColor: Color? = null,
     onExpandToggle: () -> Unit
 ) {
-    val productsFlow = remember(category) { viewModel.getProductsByCategory(category) }
-    val products by if (isExpanded) {
-        productsFlow.collectAsState(initial = emptyList())
-    } else {
-        remember { mutableStateOf(emptyList()) }
+    val allProducts by viewModel.allProducts.collectAsState()
+    val products = remember(allProducts, category) {
+        allProducts.filter { it.category.equals(category, ignoreCase = true) }
+            .sortedBy { it.name.lowercase() }
     }
     val glass = rememberGlassVisualStyle(viewModel)
     val shape = RoundedCornerShape(18.dp)
+    val glassFillAlpha = (glass.alpha * 0.68f).coerceIn(0.24f, 0.62f)
 
     Column(
         modifier = Modifier
@@ -614,45 +615,38 @@ fun CategoryItem(
             .padding(vertical = if (glass.enabled) 4.dp else 0.dp)
             .clip(shape)
             .then(
-                if (glass.enabled) Modifier
-                    .background(glass.fill.copy(alpha = glass.alpha), shape)
-                    .border(1.dp, glass.border, shape)
-                else Modifier
+                if (glass.enabled) {
+                    Modifier
+                        .background(glass.fill.copy(alpha = glassFillAlpha))
+                        .border(1.dp, glass.border, shape)
+                } else Modifier
             )
     ) {
-        TextButton(
-            onClick = onExpandToggle,
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(shape),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            colors = ButtonDefaults.textButtonColors(
-                containerColor = Color.Transparent,
-                contentColor = if (glass.enabled) glass.highlight else (accentColor ?: MaterialTheme.colorScheme.primary)
-            )
+                .clip(shape)
+                .clickable(onClick = onExpandToggle)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = category,
-                    style = if (!glass.enabled && accentBrush != null) {
-                        MaterialTheme.typography.titleMedium.merge(TextStyle(brush = accentBrush))
-                    } else MaterialTheme.typography.titleMedium,
-                    color = when {
-                        glass.enabled -> glass.highlight
-                        accentBrush != null -> Color.Unspecified
-                        else -> LocalContentColor.current
-                    }
-                )
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (isExpanded) "Recolher" else "Expandir",
-                    tint = if (glass.enabled) glass.highlight else (accentColor ?: LocalContentColor.current)
-                )
-            }
+            Text(
+                text = category,
+                style = if (!glass.enabled && accentBrush != null) {
+                    MaterialTheme.typography.titleMedium.merge(TextStyle(brush = accentBrush))
+                } else MaterialTheme.typography.titleMedium,
+                color = when {
+                    glass.enabled -> glass.highlight
+                    accentBrush != null -> Color.Unspecified
+                    else -> (accentColor ?: MaterialTheme.colorScheme.primary)
+                }
+            )
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = if (isExpanded) "Recolher" else "Expandir",
+                tint = if (glass.enabled) glass.highlight else (accentColor ?: MaterialTheme.colorScheme.primary)
+            )
         }
 
         if (isExpanded) {
@@ -663,9 +657,10 @@ fun CategoryItem(
             ) {
                 if (products.isEmpty()) {
                     Text(
-                        "Carregando...",
+                        "Nenhum produto nesta categoria.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
+                        modifier = Modifier.padding(vertical = 8.dp)
                     )
                 } else {
                     products.forEach { product ->
@@ -690,7 +685,7 @@ fun CategoryItem(
                             )
                         }
                         HorizontalDivider(
-                            color = if (glass.enabled) glass.border.copy(alpha = 0.45f)
+                            color = if (glass.enabled) glass.border.copy(alpha = 0.28f)
                             else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
                     }
