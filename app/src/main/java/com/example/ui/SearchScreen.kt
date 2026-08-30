@@ -187,9 +187,39 @@ fun StylizedText(
 fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
     val bannerImageUri by viewModel.userPreferences.bannerImageUri.collectAsState(initial = null)
     val localAppTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
+    val glassAccentColor by viewModel.userPreferences.glassAccentColor.collectAsStateWithLifecycle(initialValue = "multicolor")
+    val glassTransparency by viewModel.userPreferences.glassTransparency.collectAsStateWithLifecycle(initialValue = 0.55f)
+    val glassType by viewModel.userPreferences.glassType.collectAsStateWithLifecycle(initialValue = "soft")
     val remoteAppearance by FirebaseService.observeAppearanceSettings()
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
-    val appTheme = localAppTheme
+    val isGlassTheme = localAppTheme == "glass"
+    val appTheme = if (isGlassTheme) glassAccentColor else localAppTheme
+    val glassSurfaceAlpha = when (glassType) {
+        "frosted" -> (0.92f - glassTransparency * 0.52f).coerceIn(0.38f, 0.82f)
+        "crystal" -> (0.72f - glassTransparency * 0.40f).coerceIn(0.24f, 0.64f)
+        else -> (0.84f - glassTransparency * 0.46f).coerceIn(0.32f, 0.74f)
+    }
+    val glassAccentPalette = remember(glassAccentColor) {
+        when (glassAccentColor) {
+            "red" -> listOf(Color(0xFFE5252A), Color(0xFFFF8A8D), Color(0xFFFFD5D6))
+            "green" -> listOf(Color(0xFF2E9D44), Color(0xFF83D69A), Color(0xFFD7F2DF))
+            "orange" -> listOf(Color(0xFFF28C18), Color(0xFFFFBA68), Color(0xFFFFE1BC))
+            "blue" -> listOf(Color(0xFF2474D2), Color(0xFF75ACEA), Color(0xFFD4E7FA))
+            "gold" -> listOf(Color(0xFFC99A14), Color(0xFFE6C45E), Color(0xFFF6E8B7))
+            else -> listOf(
+                Color(0xFFE5252A), Color(0xFF2E9D44), Color(0xFFF28C18),
+                Color(0xFF2474D2), Color(0xFFC99A14)
+            )
+        }
+    }
+    val glassBackgroundBrush = remember(glassAccentPalette) {
+        Brush.linearGradient(
+            colors = listOf(Color.White) + glassAccentPalette.map { it.copy(alpha = 0.24f) } + listOf(Color.White)
+        )
+    }
+    val glassActionBrush = remember(glassAccentPalette) {
+        Brush.horizontalGradient(glassAccentPalette)
+    }
     
     val normalizedTheme = remember(appTheme) { 
         when (appTheme.trim().lowercase()) {
@@ -266,7 +296,10 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
     Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .then(
+                    if (isGlassTheme) Modifier.background(glassBackgroundBrush)
+                    else Modifier.background(MaterialTheme.colorScheme.background)
+                )
         ) {
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val headerHeight = maxWidth / 3f
@@ -281,7 +314,7 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                             bottomEnd = 32.dp
                         )
                     )
-                    .background(Color.White)
+                    .background(if (isGlassTheme) Color.White.copy(alpha = glassSurfaceAlpha) else Color.White)
             ) {
                 ThemeBanner(
                     appTheme = normalizedTheme,
@@ -367,10 +400,17 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(32.dp))
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(32.dp)),
+                    .background(
+                        if (isGlassTheme) Color.White.copy(alpha = glassSurfaceAlpha) else MaterialTheme.colorScheme.surfaceVariant,
+                        RoundedCornerShape(32.dp)
+                    )
+                    .border(
+                        1.dp,
+                        if (isGlassTheme) Color.White.copy(alpha = 0.68f) else MaterialTheme.colorScheme.outline,
+                        RoundedCornerShape(32.dp)
+                    ),
                 colors = SearchBarDefaults.colors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    containerColor = if (isGlassTheme) Color.White.copy(alpha = glassSurfaceAlpha) else MaterialTheme.colorScheme.surfaceVariant,
                     dividerColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
                 )
             ) {}
@@ -383,9 +423,16 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                     showProductSearchSheet = true
                 },
                 shape = RoundedCornerShape(28.dp),
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = if (isGlassTheme) {
+                    Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .background(glassActionBrush, RoundedCornerShape(28.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.62f), RoundedCornerShape(28.dp))
+                } else Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
+                    containerColor = if (isGlassTheme) Color.Transparent else MaterialTheme.colorScheme.primary,
+                    contentColor = if (isGlassTheme) Color.White else MaterialTheme.colorScheme.onPrimary
                 )
             ) {
                 Icon(Icons.Default.Search, contentDescription = null)
