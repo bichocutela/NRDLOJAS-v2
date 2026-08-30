@@ -39,7 +39,6 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
 import com.example.data.AppearanceSettings
-import com.example.data.AssistantSettings
 import com.example.data.CategoryDefinition
 import com.example.data.CatalogSnapshot
 import com.example.data.CatalogHistoryBackend
@@ -62,7 +61,6 @@ private enum class MestrePanelPage(val title: String) {
     SETTINGS("Configuração do aplicativo"),
     HOME_SETTINGS("Configurações da Home"),
     NOTIFICATION_SETTINGS("Notificações globais"),
-    ASSISTANT_SETTINGS("Assistente IA"),
     APPEARANCE_SETTINGS("Aparência global"),
     ADVANCED("Ferramentas avançadas")
 }
@@ -103,10 +101,6 @@ fun MestreScreen(
         .collectAsStateWithLifecycle(initialValue = NotificationSettings())
     var draftNotificationSettings by remember(notificationSettings) { mutableStateOf(notificationSettings) }
     var isSavingNotificationSettings by remember { mutableStateOf(false) }
-    val assistantSettings by FirebaseService.observeAssistantSettings()
-        .collectAsStateWithLifecycle(initialValue = AssistantSettings())
-    var draftAssistantSettings by remember(assistantSettings) { mutableStateOf(assistantSettings) }
-    var isSavingAssistantSettings by remember { mutableStateOf(false) }
     val appearanceSettings by FirebaseService.observeAppearanceSettings()
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
     var draftAppearanceSettings by remember(appearanceSettings) { mutableStateOf(appearanceSettings) }
@@ -221,13 +215,11 @@ fun MestreScreen(
     }
     val homeHasChanges = draftHomeSettings != homeSettings
     val notificationsHaveChanges = draftNotificationSettings != notificationSettings
-    val assistantHasChanges = draftAssistantSettings != assistantSettings
     val appearanceDraft = draftAppearanceSettings.copy(themeBackgrounds = draftThemeBackgrounds)
     val appearanceHasChanges = appearanceDraft != appearanceSettings
     val currentPageHasChanges = when (currentPage) {
         MestrePanelPage.HOME_SETTINGS -> homeHasChanges
         MestrePanelPage.NOTIFICATION_SETTINGS -> notificationsHaveChanges
-        MestrePanelPage.ASSISTANT_SETTINGS -> assistantHasChanges
         MestrePanelPage.APPEARANCE_SETTINGS -> appearanceHasChanges
         else -> false
     }
@@ -337,8 +329,7 @@ fun MestreScreen(
                 MestreSettingsHub(
                     onOpenHome = { openPage(MestrePanelPage.HOME_SETTINGS) },
                     onOpenAppearance = { openPage(MestrePanelPage.APPEARANCE_SETTINGS) },
-                    onOpenNotifications = { openPage(MestrePanelPage.NOTIFICATION_SETTINGS) },
-                    onOpenAssistant = { openPage(MestrePanelPage.ASSISTANT_SETTINGS) }
+                    onOpenNotifications = { openPage(MestrePanelPage.NOTIFICATION_SETTINGS) }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -781,91 +772,6 @@ fun MestreScreen(
             Spacer(modifier = Modifier.height(16.dp))
             }
 
-            if (currentPage == MestrePanelPage.ASSISTANT_SETTINGS) {
-            MestrePageIntro(
-                description = "Defina os limites e a mensagem inicial do assistente",
-                hasUnsavedChanges = assistantHasChanges
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    AssistantSettingSwitch(
-                        label = "Permitir uso do Assistente IA",
-                        checked = draftAssistantSettings.enabled,
-                        onCheckedChange = { draftAssistantSettings = draftAssistantSettings.copy(enabled = it) }
-                    )
-                    AssistantSettingSwitch(
-                        label = "Restringir respostas ao catálogo",
-                        checked = draftAssistantSettings.catalogOnly,
-                        onCheckedChange = { draftAssistantSettings = draftAssistantSettings.copy(catalogOnly = it) },
-                        enabled = draftAssistantSettings.enabled
-                    )
-                    Text(
-                        "Quando ativo, a IA recebe apenas os produtos mais relacionados à pergunta.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = draftAssistantSettings.welcomeMessage,
-                        onValueChange = {
-                            draftAssistantSettings = draftAssistantSettings.copy(welcomeMessage = it.take(160))
-                        },
-                        label = { Text("Mensagem inicial") },
-                        supportingText = { Text("Até 160 caracteres") },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 2,
-                        maxLines = 3,
-                        enabled = draftAssistantSettings.enabled
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "Produtos enviados como contexto: ${draftAssistantSettings.maxContextProducts}",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Slider(
-                        value = draftAssistantSettings.maxContextProducts.toFloat(),
-                        onValueChange = {
-                            draftAssistantSettings = draftAssistantSettings.copy(maxContextProducts = it.toInt())
-                        },
-                        valueRange = 5f..50f,
-                        steps = 44,
-                        enabled = draftAssistantSettings.enabled
-                    )
-                    Button(
-                        onClick = {
-                            coroutineScope.launch {
-                                isSavingAssistantSettings = true
-                                val saved = FirebaseService.saveAssistantSettings(draftAssistantSettings)
-                                isSavingAssistantSettings = false
-                                snackbarHostState.showSnackbar(
-                                    if (saved) "Configurações do Assistente publicadas para todos."
-                                    else FirebaseService.lastError ?: "Não foi possível publicar as configurações do Assistente."
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = assistantHasChanges && !isSavingAssistantSettings
-                    ) {
-                        if (isSavingAssistantSettings) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Publicando...")
-                        } else if (assistantHasChanges) {
-                            Text("Publicar Assistente")
-                        } else {
-                            Text("Tudo atualizado")
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            }
-
             if (currentPage == MestrePanelPage.APPEARANCE_SETTINGS) {
             MestrePageIntro(
                 description = "Gerencie os fundos disponíveis para cada tema. Tema e modo de aparência continuam sendo escolhas individuais em Configurações.",
@@ -1130,7 +1036,6 @@ fun MestreScreen(
                                 when (currentPage) {
                                     MestrePanelPage.HOME_SETTINGS -> draftHomeSettings = homeSettings
                                     MestrePanelPage.NOTIFICATION_SETTINGS -> draftNotificationSettings = notificationSettings
-                                    MestrePanelPage.ASSISTANT_SETTINGS -> draftAssistantSettings = assistantSettings
                                     MestrePanelPage.APPEARANCE_SETTINGS -> {
                                         draftAppearanceSettings = appearanceSettings
                                         draftThemeBackgrounds = appearanceSettings.themeBackgrounds
@@ -1927,27 +1832,6 @@ private fun MaintenanceMetricRow(label: String, value: String) {
     ) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-    }
-}
-
-@Composable
-private fun AssistantSettingSwitch(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    enabled: Boolean = true
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 
