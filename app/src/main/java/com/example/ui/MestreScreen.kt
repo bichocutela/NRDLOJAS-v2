@@ -8,16 +8,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.AddBox
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Inventory
-import androidx.compose.material.icons.filled.UploadFile
-import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
@@ -182,6 +178,20 @@ fun MestreScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            MestreDashboardOverview(
+                pendingSuggestions = suggestions.count { it.status == com.example.data.ProductSuggestion.STATUS_PENDING },
+                productCount = allProducts.size,
+                activeCategoryCount = categoryDefinitions.count { it.isActive },
+                categoryCount = categoryDefinitions.size,
+                latestBackupAt = catalogSnapshots.maxOfOrNull { it.createdAt },
+                importEnabled = !isParsingImport && !isImporting,
+                onManageProducts = onNavigateToManageProducts,
+                onAddProduct = onNavigateToAdmin,
+                onManageTabs = onNavigateToManageTabs,
+                onImportProducts = { importLauncher.launch("text/*") }
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+
             MestreSuggestionsSection(suggestions = suggestions) { suggestion, status ->
                 val updated = FirebaseService.updateSuggestionStatus(suggestion.id, status)
                 val statusLabel = if (status == "fixed") "corrigida" else "pendente"
@@ -911,83 +921,6 @@ fun MestreScreen(
             }
             Spacer(modifier = Modifier.height(16.dp))
 
-            MestreSectionHeader(
-                title = "Catálogo e conteúdo",
-                description = "Gerencie abas, produtos e importações do catálogo"
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onNavigateToManageTabs
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.ViewCarousel, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text("Gerenciar abas", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        Text("Criar, editar, excluir ou reordenar abas.", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onNavigateToManageProducts
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Inventory, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text("Editar produtos", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        Text("Modificar código, foto e nome de produtos da base.", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onNavigateToAdmin
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.AddBox, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text("Adicionar produtos", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        Text("Cadastrar produtos manualmente.", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    if (!isParsingImport && !isImporting) importLauncher.launch("text/*")
-                }
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.UploadFile, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text("Importar planilha", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        Text("Use CSV ou TSV e confira a prévia antes de publicar.", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            
             if (showImportDialog && importResult != null) {
                 ImportPreviewDialog(
                     result = importResult!!,
