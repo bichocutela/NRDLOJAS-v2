@@ -863,7 +863,7 @@ fun MestreScreen(
 
             if (currentPage == MestrePanelPage.APPEARANCE_SETTINGS) {
             MestrePageIntro(
-                description = "Personalize o visual para todos os usuários",
+                description = "Gerencie os fundos disponíveis para cada tema. Tema e modo de aparência continuam sendo escolhas individuais em Configurações.",
                 hasUnsavedChanges = appearanceHasChanges
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -974,7 +974,7 @@ fun MestreScreen(
                         }
                         OutlinedCard(
                             modifier = Modifier.fillMaxWidth(),
-                            enabled = draftAppearanceSettings.overrideLocalTheme,
+                            enabled = true,
                             onClick = {
                                 expandedBackgroundThemes = if (expanded) {
                                     expandedBackgroundThemes - themeKey
@@ -1019,7 +1019,7 @@ fun MestreScreen(
                                         onClick = {
                                             updateBackgrounds(themeKey, backgrounds.map { it.copy(isActive = false) })
                                         },
-                                        enabled = draftAppearanceSettings.overrideLocalTheme && backgrounds.any { it.isActive }
+                                        enabled = backgrounds.any { it.isActive }
                                     ) {
                                         Text("Usar fundo padrão")
                                     }
@@ -1037,7 +1037,7 @@ fun MestreScreen(
                                     Spacer(modifier = Modifier.height(6.dp))
                                     ThemeBackgroundItem(
                                         background = background,
-                                        enabled = draftAppearanceSettings.overrideLocalTheme,
+                                        enabled = true,
                                         onActiveChange = { isActive ->
                                             updateBackgrounds(
                                                 themeKey,
@@ -1069,7 +1069,7 @@ fun MestreScreen(
                                 OutlinedButton(
                                     onClick = { openBackgroundEditor(themeKey, null) },
                                     modifier = Modifier.fillMaxWidth(),
-                                    enabled = draftAppearanceSettings.overrideLocalTheme
+                                    enabled = true
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = null)
                                     Spacer(modifier = Modifier.width(6.dp))
