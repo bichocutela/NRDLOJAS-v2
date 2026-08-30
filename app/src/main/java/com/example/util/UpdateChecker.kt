@@ -127,14 +127,9 @@ object UpdateChecker {
                 }
 
                 if (downloadUrl == null) {
-                    downloadUrl = json.optString("html_url").takeIf { it.isNotBlank() }
-                    Log.w(TAG, "app-release.apk não encontrado; usando html_url da release como fallback")
-                }
-
-                if (downloadUrl == null) {
-                    Log.e(TAG, "Resposta válida, mas sem app-release.apk e sem html_url")
+                    Log.e(TAG, "Resposta válida, mas sem app-release.apk")
                     return@withContext ReleaseCheckResult.InvalidResponse(
-                        "Release sem app-release.apk e sem página de fallback"
+                        "Release sem o arquivo app-release.apk"
                     )
                 }
 
@@ -207,6 +202,58 @@ object UpdateChecker {
         if (responseBody.isBlank()) return null
         return runCatching { JSONObject(responseBody).optString("message").takeIf { it.isNotBlank() } }
             .getOrNull()
+    }
+
+    data class ApkDownloadHandle(val id: Long, val filePath: String)
+    data class ApkDownloadProgress(
+        val status: Int,
+        val progressPercent: Int,
+        val filePath: String,
+        val failureReason: Int? = null
+    )
+
+    fun startApkDownload(context: Context, url: String, versionTag: String): ApkDownloadHandle? {
+        if (!url.substringBefore('?').endsWith(".apk", ignoreCase = true)) {
+            Toast.makeText(context, "Link de atualização inválido", Toast.LENGTH_LONG).show()
+            return null
+        }
+        return try {
+            val fileName = "update_$versionTag.apk"
+            val downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            cleanupOldUpdateApks(downloadDir)
+            val file = File(downloadDir, fileName)
+            val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            val request = DownloadManager.Request(Uri.parse(url))
+                .setTitle("Atualização NRDLOJAS")
+                .setDescription("Baixando versão $versionTag")
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+                .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
+            ApkDownloadHandle(manager.enqueue(request), file.absolutePath)
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao iniciar download interno", e)
+            Toast.makeText(context, "Erro ao iniciar download", Toast.LENGTH_SHORT).show()
+            null
+        }
+    }
+
+    fun queryApkDownload(context: Context, handle: ApkDownloadHandle): ApkDownloadProgress? {
+        val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val cursor = manager.query(DownloadManager.Query().setFilterById(handle.id)) ?: return null
+        cursor.use {
+            if (!it.moveToFirst()) return null
+            val status = it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+            val total = it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+            val done = it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+            val reason = if (status == DownloadManager.STATUS_FAILED) {
+                it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+            } else null
+            val progress = if (total > 0) ((done * 100L) / total).toInt().coerceIn(0, 100) else 0
+            return ApkDownloadProgress(status, progress, handle.filePath, reason)
+        }
+    }
+
+    fun installDownloadedApk(context: Context, filePath: String) {
+        installApk(context, File(filePath))
     }
 
     fun downloadAndInstallApk(context: Context, url: String, versionTag: String) {

@@ -33,6 +33,7 @@ import androidx.compose.foundation.text.ClickableText
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.util.Calendar
 import com.example.R
 
@@ -119,6 +120,34 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
             var showQrErrorDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
             var qrErrorMessage by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("Verifique sua conexão e tente novamente.") }
             var updateAvailable by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+            var updateDownloadHandle by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.example.util.UpdateChecker.ApkDownloadHandle?>(null) }
+            var updateDownloadProgress by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+            var downloadedApkPath by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+            var updateDownloadError by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+
+            androidx.compose.runtime.LaunchedEffect(updateDownloadHandle) {
+                val handle = updateDownloadHandle ?: return@LaunchedEffect
+                while (true) {
+                    val state = com.example.util.UpdateChecker.queryApkDownload(context, handle)
+                    if (state != null) {
+                        updateDownloadProgress = state.progressPercent
+                        when (state.status) {
+                            android.app.DownloadManager.STATUS_SUCCESSFUL -> {
+                                downloadedApkPath = state.filePath
+                                updateDownloadProgress = 100
+                                updateDownloadHandle = null
+                                break
+                            }
+                            android.app.DownloadManager.STATUS_FAILED -> {
+                                updateDownloadError = "Falha no download. Código: ${state.failureReason ?: -1}"
+                                updateDownloadHandle = null
+                                break
+                            }
+                        }
+                    }
+                    delay(500)
+                }
+            }
 
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 when (val releaseResult = com.example.util.UpdateChecker.checkLatestRelease()) {
@@ -256,18 +285,40 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Spacer(modifier = Modifier.height(8.dp))
+                        if (updateDownloadHandle != null) {
+                            LinearProgressIndicator(
+                                progress = { updateDownloadProgress / 100f },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                "Baixando atualização... $updateDownloadProgress%",
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        updateDownloadError?.let {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(it, color = MaterialTheme.colorScheme.error)
+                        }
                         Button(
                             onClick = {
-                                com.example.util.UpdateChecker.downloadAndInstallApk(
-                                    context,
-                                    updateUrl,
-                                    updateTag
-                                )
+                                val readyPath = downloadedApkPath
+                                if (readyPath != null) {
+                                    com.example.util.UpdateChecker.installDownloadedApk(context, readyPath)
+                                } else {
+                                    updateDownloadError = null
+                                    updateDownloadProgress = 0
+                                    updateDownloadHandle = com.example.util.UpdateChecker.startApkDownload(
+                                        context,
+                                        updateUrl,
+                                        updateTag
+                                    )
+                                }
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            enabled = updateUrl.isNotBlank()
+                            enabled = updateUrl.isNotBlank() && updateDownloadHandle == null
                         ) {
-                            Text("Baixar agora")
+                            Text(if (downloadedApkPath != null) "Instalar atualização" else "Baixar atualização")
                         }
                     }
                 }
