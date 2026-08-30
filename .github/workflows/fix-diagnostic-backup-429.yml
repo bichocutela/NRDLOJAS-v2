@@ -24,17 +24,13 @@ jobs:
 
           vm = Path('app/src/main/java/com/example/ui/MainViewModel.kt')
           text = vm.read_text(encoding='utf-8')
-          replacements = [
-              (
-                  'val snapshot = CatalogHistoryBackend.createSnapshot()',
-                  'val localProducts = repository.getAllProductsSync()\n                val snapshot = CatalogHistoryBackend.createSnapshot(localProducts)'
-              ),
-              (
-                  'val result = CatalogHistoryBackend.restoreSnapshot(snapshotId)',
-                  'val currentProducts = repository.getAllProductsSync()\n                val result = CatalogHistoryBackend.restoreSnapshot(snapshotId, currentProducts)'
-              ),
+          vm_replacements = [
+              ('val snapshot = CatalogHistoryBackend.createSnapshot()',
+               'val localProducts = repository.getAllProductsSync()\n                val snapshot = CatalogHistoryBackend.createSnapshot(localProducts)'),
+              ('val result = CatalogHistoryBackend.restoreSnapshot(snapshotId)',
+               'val currentProducts = repository.getAllProductsSync()\n                val result = CatalogHistoryBackend.restoreSnapshot(snapshotId, currentProducts)'),
           ]
-          for old, new in replacements:
+          for old, new in vm_replacements:
               if old not in text:
                   raise SystemExit(f'MainViewModel: trecho não encontrado: {old}')
               text = text.replace(old, new, 1)
@@ -43,23 +39,16 @@ jobs:
           screen = Path('app/src/main/java/com/example/ui/MestreScreen.kt')
           text = screen.read_text(encoding='utf-8')
 
-          old_import = 'import com.example.data.CatalogSnapshot\n'
-          new_import = 'import com.example.data.CatalogSnapshot\nimport com.example.data.CatalogHistoryBackend\n'
-          if old_import not in text:
-              raise SystemExit('MestreScreen: import âncora não encontrado')
-          text = text.replace(old_import, new_import, 1)
+          if 'import com.example.data.CatalogHistoryBackend\n' not in text:
+              anchor = 'import com.example.data.CatalogSnapshot\n'
+              if anchor not in text:
+                  raise SystemExit('MestreScreen: import âncora não encontrado')
+              text = text.replace(anchor, anchor + 'import com.example.data.CatalogHistoryBackend\n', 1)
 
-          old_call = '''val result = FirebaseService.getMaintenanceSummary(
-                                        localProductCount = allProducts.size,
-                                        localCategoryCounts = localCategoryCounts
-                                    )'''
-          new_call = '''val result = CatalogHistoryBackend.getMaintenanceSummary(
-                                        localProductCount = allProducts.size,
-                                        localCategoryCounts = localCategoryCounts
-                                    )'''
+          old_call = 'FirebaseService.getMaintenanceSummary('
           if old_call not in text:
               raise SystemExit('MestreScreen: chamada antiga do diagnóstico não encontrada')
-          text = text.replace(old_call, new_call, 1)
+          text = text.replace(old_call, 'CatalogHistoryBackend.getMaintenanceSummary(', 1)
 
           old_metrics = '''MaintenanceMetricRow("Produtos locais", summary.localProductCount.toString())
                         MaintenanceMetricRow("Produtos na nuvem", summary.remoteProductCount.toString())
