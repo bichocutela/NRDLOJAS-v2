@@ -18,8 +18,9 @@ jobs:
           fetch-depth: 0
 
       - name: Remover sincronização manual e melhorar diagnóstico
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           path = Path('app/src/main/java/com/example/ui/MestreScreen.kt')
@@ -113,6 +114,7 @@ jobs:
               text = text.replace(old, new, 1)
 
           path.write_text(text, encoding='utf-8')
+          PY
 
       - name: Validar compilação
         run: ./gradlew :app:compileDebugKotlin --no-daemon
