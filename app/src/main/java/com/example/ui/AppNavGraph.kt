@@ -350,6 +350,11 @@ fun LoginDrawerContent(
             }
         )
     }
+    val drawerInnerAlpha = when (glassType) {
+        "frosted" -> (0.88f - glassTransparency * 0.16f).coerceIn(0.74f, 0.88f)
+        "crystal" -> (0.78f - glassTransparency * 0.16f).coerceIn(0.62f, 0.78f)
+        else -> (0.84f - glassTransparency * 0.16f).coerceIn(0.68f, 0.84f)
+    }
     var expandedCategory by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -358,7 +363,8 @@ fun LoginDrawerContent(
             .fillMaxWidth()
             .then(
                 if (isGlassTheme) Modifier
-                    .background(sharedGlassStyle.fill.copy(alpha = sharedGlassStyle.alpha), RoundedCornerShape(28.dp))
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(sharedGlassStyle.fill.copy(alpha = drawerInnerAlpha))
                     .border(1.dp, sharedGlassStyle.border, RoundedCornerShape(28.dp))
                 else Modifier
             )
