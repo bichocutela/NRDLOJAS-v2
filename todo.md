@@ -12,3 +12,4 @@
 - [x] Tema pessoal funciona também para Mestre/Admin sem interferir na biblioteca global de fundos.
 
 <!-- rebuild-preview-adjustment: 2026-08-30 -->
+<!-- updater-retest-release: 2026-08-30T08:32-03:00 -->
