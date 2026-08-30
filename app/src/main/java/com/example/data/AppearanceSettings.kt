@@ -12,15 +12,12 @@ class AppearanceSettings(
     val themeBackgrounds: Map<String, List<ThemeBackground>> = emptyMap(),
     val revision: Long = 0L
 ) {
-    private val storedOverrideLocalTheme: Boolean = overrideLocalTheme
-
     /**
-     * Tema e modo de aparência são preferências locais para qualquer pessoa,
-     * inclusive Mestre/Admin. O painel administrativo continua publicando a
-     * biblioteca de fundos por tema, mas não força o tema visual do aparelho.
+     * Valor administrativo persistido. Ele continua disponível para o painel
+     * Mestre editar/visualizar, mas não é usado para substituir a preferência
+     * local de tema ou modo de aparência do aparelho.
      */
-    val overrideLocalTheme: Boolean
-        get() = false
+    val overrideLocalTheme: Boolean = overrideLocalTheme
 
     /** A aparência remota nunca substitui a preferência local do aparelho. */
     val globalOverrideEnabled: Boolean
@@ -41,7 +38,7 @@ class AppearanceSettings(
     }
 
     fun copy(
-        overrideLocalTheme: Boolean = storedOverrideLocalTheme,
+        overrideLocalTheme: Boolean = this.overrideLocalTheme,
         theme: String = this.theme,
         appearanceMode: String = this.appearanceMode,
         themeBackgrounds: Map<String, List<ThemeBackground>> = this.themeBackgrounds,
@@ -57,7 +54,7 @@ class AppearanceSettings(
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is AppearanceSettings) return false
-        return storedOverrideLocalTheme == other.storedOverrideLocalTheme &&
+        return overrideLocalTheme == other.overrideLocalTheme &&
             theme == other.theme &&
             appearanceMode == other.appearanceMode &&
             themeBackgrounds == other.themeBackgrounds &&
@@ -65,7 +62,7 @@ class AppearanceSettings(
     }
 
     override fun hashCode(): Int {
-        var result = storedOverrideLocalTheme.hashCode()
+        var result = overrideLocalTheme.hashCode()
         result = 31 * result + theme.hashCode()
         result = 31 * result + appearanceMode.hashCode()
         result = 31 * result + themeBackgrounds.hashCode()
@@ -74,7 +71,7 @@ class AppearanceSettings(
     }
 
     override fun toString(): String =
-        "AppearanceSettings(overrideLocalTheme=$storedOverrideLocalTheme, theme=$theme, appearanceMode=$appearanceMode, themeBackgrounds=$themeBackgrounds, revision=$revision)"
+        "AppearanceSettings(overrideLocalTheme=$overrideLocalTheme, theme=$theme, appearanceMode=$appearanceMode, themeBackgrounds=$themeBackgrounds, revision=$revision)"
 
     private fun normalizeThemeKey(value: String): String = when (value.trim().lowercase()) {
         "multicolor" -> "multicolor"
