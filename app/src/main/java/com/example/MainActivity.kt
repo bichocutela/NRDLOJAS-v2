@@ -45,6 +45,7 @@ import com.example.data.AppDatabase
 import com.example.data.AppearanceSettings
 import com.example.data.ProductRepository
 import com.example.data.UserPreferences
+import com.example.data.dataStore
 import com.example.ui.AppNavGraph
 import com.example.ui.MainViewModel
 import com.example.ui.MainViewModelFactory
@@ -54,6 +55,7 @@ import com.example.util.FcmTopicSubscription
 import com.example.util.NotificationHelper
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 
@@ -142,10 +144,20 @@ class MainActivity : ComponentActivity() {
             val fontScale by userPreferences.fontScale.collectAsState(initial = 1.0f)
             val appTheme by userPreferences.appTheme.collectAsState(initial = "multicolor")
             val appearanceMode by userPreferences.appearanceMode.collectAsState(initial = "system")
+            val hasLocalThemeChoice by applicationContext.dataStore.data
+                .map { preferences -> preferences[UserPreferences.APP_THEME] != null }
+                .collectAsState(initial = false)
+            val hasLocalAppearanceChoice by applicationContext.dataStore.data
+                .map { preferences -> preferences[UserPreferences.APPEARANCE_MODE] != null }
+                .collectAsState(initial = false)
             val remoteAppearance by com.example.data.FirebaseService.observeAppearanceSettings()
                 .collectAsState(initial = AppearanceSettings())
-            val effectiveAppTheme = if (remoteAppearance.overrideLocalTheme) remoteAppearance.theme else appTheme
-            val effectiveAppearanceMode = if (remoteAppearance.overrideLocalTheme) {
+            val effectiveAppTheme = if (remoteAppearance.overrideLocalTheme && !hasLocalThemeChoice) {
+                remoteAppearance.theme
+            } else {
+                appTheme
+            }
+            val effectiveAppearanceMode = if (remoteAppearance.overrideLocalTheme && !hasLocalAppearanceChoice) {
                 remoteAppearance.appearanceMode
             } else {
                 appearanceMode
