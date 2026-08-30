@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -1541,7 +1542,13 @@ fun MestreScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.height(10.dp))
-                            Text("Imagem original — sem corte", style = MaterialTheme.typography.labelLarge)
+                            Text("Área de edição — imagem original", style = MaterialTheme.typography.labelLarge)
+                            Text(
+                                "Ajuste a arte original aqui. A prévia abaixo serve apenas para mostrar como ela ficará na Home.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1552,13 +1559,20 @@ fun MestreScreen(
                             ) {
                                 coil.compose.AsyncImage(
                                     model = background.url,
-                                    contentDescription = "Imagem original de ${background.label}",
-                                    modifier = Modifier.fillMaxSize(),
+                                    contentDescription = "Área de edição da imagem original de ${background.label}",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer {
+                                            scaleX = previewScale * previewStretchX
+                                            scaleY = previewScale * previewStretchY
+                                            translationX = size.width * previewOffsetX
+                                            translationY = size.height * previewOffsetY
+                                        },
                                     contentScale = androidx.compose.ui.layout.ContentScale.Fit
                                 )
                             }
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("Resultado na Home", style = MaterialTheme.typography.labelLarge)
+                            Text("Resultado na Home — somente visualização", style = MaterialTheme.typography.labelLarge)
                             androidx.compose.foundation.layout.BoxWithConstraints(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -1637,7 +1651,7 @@ fun MestreScreen(
                                 Text("Restaurar enquadramento")
                             }
                             Text(
-                                "O ajuste acima será usado exatamente na Home. A imagem original não é alterada.",
+                                "Você edita a imagem original acima; o quadro da Home apenas reproduz o resultado. A imagem armazenada não é modificada, somente o enquadramento salvo.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
