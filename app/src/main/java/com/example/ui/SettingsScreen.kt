@@ -5,8 +5,10 @@ import com.example.util.NotificationHelper
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ExpandLess
@@ -14,6 +16,8 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.Modifier
 import com.example.ui.theme.getDynamicThemeColor
 import androidx.compose.ui.platform.LocalContext
@@ -206,10 +210,16 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
 
             if (appTheme == "glass") {
                 Spacer(modifier = Modifier.height(12.dp))
+                val glassBaseAlpha = (1f - glassTransparency).coerceIn(0.10f, 0.80f)
+                val glassPreviewAlpha = when (glassType) {
+                    "frosted" -> (glassBaseAlpha + 0.18f).coerceIn(0.22f, 0.86f)
+                    "crystal" -> (glassBaseAlpha - 0.12f).coerceIn(0.08f, 0.62f)
+                    else -> glassBaseAlpha
+                }
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = glassPreviewAlpha)),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = if (glassType == "crystal") 0.95f else 0.72f))
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -254,6 +264,43 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                             coroutineScope.launch { viewModel.userPreferences.setGlassAccentColor(key) }
                                             expandedGlassColorMenu = false
                                         }
+                                    )
+                                }
+                            }
+                        }
+
+                        val previewColors = when (glassAccentColor) {
+                            "red" -> listOf(Color(0xFFE5252A), Color(0xFFFFB5B7))
+                            "green" -> listOf(Color(0xFF2E9D44), Color(0xFFBDEAC8))
+                            "orange" -> listOf(Color(0xFFF28C18), Color(0xFFFFD19A))
+                            "blue" -> listOf(Color(0xFF2474D2), Color(0xFFB9D7F8))
+                            "gold" -> listOf(Color(0xFFC99A14), Color(0xFFF2D989))
+                            else -> listOf(Color(0xFFE5252A), Color(0xFF2E9D44), Color(0xFFF28C18), Color(0xFF2474D2), Color(0xFFC99A14))
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(128.dp)
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(Brush.linearGradient(previewColors))
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = glassPreviewAlpha)),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = if (glassType == "crystal") 0.98f else 0.78f)),
+                                shape = RoundedCornerShape(20.dp)
+                            ) {
+                                Column(Modifier.padding(16.dp)) {
+                                    Text("Prévia do vidro", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                    Text(
+                                        when (glassType) {
+                                            "frosted" -> "Fosco • superfície mais preenchida"
+                                            "crystal" -> "Cristal • mais transparente e brilhante"
+                                            else -> "Suave • equilíbrio entre cor e transparência"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall
                                     )
                                 }
                             }

@@ -182,6 +182,43 @@ fun StylizedText(
     }
 }
 
+data class GlassVisualStyle(
+    val enabled: Boolean,
+    val alpha: Float,
+    val fill: Color,
+    val border: Color,
+    val highlight: Color
+)
+
+@Composable
+fun rememberGlassVisualStyle(viewModel: MainViewModel): GlassVisualStyle {
+    val theme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
+    val transparency by viewModel.userPreferences.glassTransparency.collectAsStateWithLifecycle(initialValue = 0.55f)
+    val type by viewModel.userPreferences.glassType.collectAsStateWithLifecycle(initialValue = "soft")
+    val baseAlpha = (1f - transparency).coerceIn(0.10f, 0.80f)
+    val alpha = when (type) {
+        "frosted" -> (baseAlpha + 0.18f).coerceIn(0.22f, 0.86f)
+        "crystal" -> (baseAlpha - 0.12f).coerceIn(0.08f, 0.62f)
+        else -> baseAlpha
+    }
+    val fill = when (type) {
+        "frosted" -> Color(0xFFF7FAFC)
+        "crystal" -> Color.White
+        else -> Color(0xFFFBFDFF)
+    }
+    val border = when (type) {
+        "frosted" -> Color.White.copy(alpha = 0.82f)
+        "crystal" -> Color.White.copy(alpha = 0.95f)
+        else -> Color.White.copy(alpha = 0.74f)
+    }
+    val highlight = when (type) {
+        "crystal" -> Color.White.copy(alpha = 0.78f)
+        "frosted" -> Color.White.copy(alpha = 0.48f)
+        else -> Color.White.copy(alpha = 0.58f)
+    }
+    return GlassVisualStyle(theme == "glass", alpha, fill, border, highlight)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
@@ -194,10 +231,11 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
     val isGlassTheme = localAppTheme == "glass"
     val appTheme = if (isGlassTheme) glassAccentColor else localAppTheme
+    val baseGlassAlpha = (1f - glassTransparency).coerceIn(0.10f, 0.80f)
     val glassSurfaceAlpha = when (glassType) {
-        "frosted" -> (0.92f - glassTransparency * 0.52f).coerceIn(0.38f, 0.82f)
-        "crystal" -> (0.72f - glassTransparency * 0.40f).coerceIn(0.24f, 0.64f)
-        else -> (0.84f - glassTransparency * 0.46f).coerceIn(0.32f, 0.74f)
+        "frosted" -> (baseGlassAlpha + 0.18f).coerceIn(0.22f, 0.86f)
+        "crystal" -> (baseGlassAlpha - 0.12f).coerceIn(0.08f, 0.62f)
+        else -> baseGlassAlpha
     }
     val glassAccentPalette = remember(glassAccentColor) {
         when (glassAccentColor) {
@@ -793,6 +831,7 @@ fun CategorySection(
     categories: List<String> = ProductStandards.officialCategories,
     onCategoryClick: (String) -> Unit = {}
 ) {
+    val glass = rememberGlassVisualStyle(viewModel)
     val categoryColors = listOf(
         MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer,
         MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer,
@@ -812,8 +851,13 @@ fun CategorySection(
             val dynamicColors = getDynamicThemeColor(index, appTheme, colors.first, colors.second)
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(dynamicColors.first)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else dynamicColors.first)
+                    .border(
+                        1.dp,
+                        if (glass.enabled) glass.border else Color.Transparent,
+                        RoundedCornerShape(16.dp)
+                    )
                     .clickable { onCategoryClick(category) }
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
@@ -884,6 +928,7 @@ fun ProductCard(
     appTheme: String = "multicolor",
     textPreferences: HomeTextPreferences = HomeTextPreferences()
 ) {
+    val glass = rememberGlassVisualStyle(viewModel)
     var showDialog by remember { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(product = product, onDismiss = { showDialog = false })
@@ -893,8 +938,12 @@ fun ProductCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f), RoundedCornerShape(24.dp))
+            .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surface)
+            .border(
+                1.dp,
+                if (glass.enabled) glass.border else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                RoundedCornerShape(24.dp)
+            )
             .vibrateClickable(viewModel) { viewModel.onProductSearched(product); showDialog = true }
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -988,6 +1037,7 @@ fun MiniProductCard(
     appTheme: String = "multicolor",
     textPreferences: HomeTextPreferences = HomeTextPreferences()
 ) {
+    val glass = rememberGlassVisualStyle(viewModel)
     var showDialog by remember { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(product = product, onDismiss = { showDialog = false })
@@ -997,8 +1047,12 @@ fun MiniProductCard(
             .width(180.dp)
             .height(150.dp)
             .clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f), RoundedCornerShape(24.dp))
+            .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surface)
+            .border(
+                1.dp,
+                if (glass.enabled) glass.border else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                RoundedCornerShape(24.dp)
+            )
             .vibrateClickable(viewModel) { viewModel.onProductSearched(product); showDialog = true }
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -1101,6 +1155,7 @@ fun HistoryItem(
     appTheme: String = "multicolor",
     textPreferences: HomeTextPreferences = HomeTextPreferences()
 ) {
+    val glass = rememberGlassVisualStyle(viewModel)
     var showDialog by remember { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(product = product, onDismiss = { showDialog = false })
@@ -1110,8 +1165,8 @@ fun HistoryItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
-            .border(1.dp, dynColors.first, RoundedCornerShape(16.dp))
+            .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+            .border(1.dp, if (glass.enabled) glass.border else dynColors.first, RoundedCornerShape(16.dp))
             .vibrateClickable(viewModel) { showDialog = true }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
