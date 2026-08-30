@@ -97,8 +97,8 @@ jobs:
         SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       run: |
-        ./gradlew testDebugUnitTest assembleRelease \
-          --tests 'com.example.data.GlobalProductUsageTest' \
+        ./gradlew testDebugUnitTest --tests 'com.example.data.GlobalProductUsageTest'
+        ./gradlew assembleRelease \
           -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.keystore \
           -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
           -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
