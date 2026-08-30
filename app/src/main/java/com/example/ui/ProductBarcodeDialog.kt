@@ -58,6 +58,26 @@ fun ProductBarcodeDialog(
     val barcodeTitleScale by userPreferences.barcodeTitleScale.collectAsState(initial = 1.0f)
     val boldOutline by userPreferences.boldOutline.collectAsState(initial = false)
     val uppercaseBold by userPreferences.uppercaseBold.collectAsState(initial = false)
+    val appTheme by userPreferences.appTheme.collectAsState(initial = "multicolor")
+    val glassTransparency by userPreferences.glassTransparency.collectAsState(initial = 0.55f)
+    val glassType by userPreferences.glassType.collectAsState(initial = "soft")
+    val isGlassTheme = appTheme == "glass"
+    val glassBaseAlpha = (1f - glassTransparency).coerceIn(0.10f, 0.80f)
+    val glassDialogAlpha = when (glassType) {
+        "frosted" -> (glassBaseAlpha + 0.18f).coerceIn(0.22f, 0.86f)
+        "crystal" -> (glassBaseAlpha - 0.12f).coerceIn(0.08f, 0.62f)
+        else -> glassBaseAlpha
+    }
+    val glassDialogColor = when (glassType) {
+        "frosted" -> Color(0xFFF7FAFC).copy(alpha = glassDialogAlpha)
+        "crystal" -> Color.White.copy(alpha = glassDialogAlpha)
+        else -> Color(0xFFFBFDFF).copy(alpha = glassDialogAlpha)
+    }
+    val glassDialogBorder = when (glassType) {
+        "crystal" -> Color.White.copy(alpha = 0.96f)
+        "frosted" -> Color.White.copy(alpha = 0.84f)
+        else -> Color.White.copy(alpha = 0.76f)
+    }
     val photoUrl = remember(product.imageUrl) {
         product.imageUrl
             ?.trim()
@@ -94,15 +114,15 @@ fun ProductBarcodeDialog(
             ) {
                 Surface(
                     shape = RoundedCornerShape(32.dp),
-                    color = if (highlightedFromNotification) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surface
+                    color = when {
+                        highlightedFromNotification -> MaterialTheme.colorScheme.primaryContainer
+                        isGlassTheme -> glassDialogColor
+                        else -> MaterialTheme.colorScheme.surface
                     },
-                    border = if (highlightedFromNotification) {
-                        BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
-                    } else {
-                        null
+                    border = when {
+                        highlightedFromNotification -> BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
+                        isGlassTheme -> BorderStroke(1.dp, glassDialogBorder)
+                        else -> null
                     },
                     modifier = Modifier.fillMaxWidth(0.9f).padding(vertical = 24.dp)
                 ) {
@@ -295,6 +315,7 @@ fun ProductBarcodeDialog(
             var photoLoadFailed by remember(photoUrl) { mutableStateOf(false) }
             AlertDialog(
                 onDismissRequest = { showPhotoDialog = false },
+                containerColor = if (isGlassTheme) glassDialogColor else MaterialTheme.colorScheme.surfaceContainerHigh,
                 title = { Text("Foto do Produto") },
                 text = {
                     Box(

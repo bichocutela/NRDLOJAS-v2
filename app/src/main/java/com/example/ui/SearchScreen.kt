@@ -628,7 +628,10 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
         if (showProductSearchSheet) {
             val sheetResultsFlow = remember(sheetQuery) { viewModel.searchProducts(sheetQuery) }
             val sheetResults by sheetResultsFlow.collectAsState(initial = emptyList())
-            ModalBottomSheet(onDismissRequest = { showProductSearchSheet = false }) {
+            ModalBottomSheet(
+                onDismissRequest = { showProductSearchSheet = false },
+                containerColor = if (isGlassTheme) Color.White.copy(alpha = glassSurfaceAlpha) else MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -658,7 +661,10 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
         }
 
         if (showMostUsedSheet) {
-            ModalBottomSheet(onDismissRequest = { showMostUsedSheet = false }) {
+            ModalBottomSheet(
+                onDismissRequest = { showMostUsedSheet = false },
+                containerColor = if (isGlassTheme) Color.White.copy(alpha = glassSurfaceAlpha) else MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                     Text("Mais Utilizados", style = MaterialTheme.typography.headlineSmall)
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -681,7 +687,10 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
         }
 
         if (showNotificationsSheet) {
-            ModalBottomSheet(onDismissRequest = { showNotificationsSheet = false }) {
+            ModalBottomSheet(
+                onDismissRequest = { showNotificationsSheet = false },
+                containerColor = if (isGlassTheme) Color.White.copy(alpha = glassSurfaceAlpha) else MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -883,10 +892,14 @@ fun CategoryProductsSheet(
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
     onDismiss: () -> Unit
 ) {
+    val glass = rememberGlassVisualStyle(viewModel)
     var query by remember { mutableStateOf("") }
     val productsFlow = remember(category, query) { viewModel.searchProductsByCategory(category, query) }
     val products by productsFlow.collectAsState(initial = emptyList())
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
