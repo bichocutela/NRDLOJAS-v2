@@ -297,6 +297,7 @@ fun LoginDrawerContent(
     val glassAccentColor by viewModel.userPreferences.glassAccentColor.collectAsState(initial = "multicolor")
     val glassTransparency by viewModel.userPreferences.glassTransparency.collectAsState(initial = 0.55f)
     val glassType by viewModel.userPreferences.glassType.collectAsState(initial = "soft")
+    val sharedGlassStyle = rememberGlassVisualStyle(viewModel)
     val isMulticolorTheme = appTheme.trim().lowercase() == "multicolor"
     val isGlassTheme = appTheme.trim().lowercase() == "glass"
     val multicolorSessionColors = remember {
@@ -352,8 +353,8 @@ fun LoginDrawerContent(
             .fillMaxWidth()
             .then(
                 if (isGlassTheme) Modifier
-                    .background(drawerGlassBrush, RoundedCornerShape(28.dp))
-                    .border(1.dp, Color.White.copy(alpha = 0.72f), RoundedCornerShape(28.dp))
+                    .background(sharedGlassStyle.fill.copy(alpha = sharedGlassStyle.alpha), RoundedCornerShape(28.dp))
+                    .border(1.dp, sharedGlassStyle.border, RoundedCornerShape(28.dp))
                 else Modifier
             )
             .padding(16.dp)
@@ -472,7 +473,10 @@ fun LoginDrawerContent(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 colors = if (isGlassTheme) {
-                    ButtonDefaults.outlinedButtonColors(containerColor = Color.White.copy(alpha = glassSurfaceAlpha))
+                    ButtonDefaults.outlinedButtonColors(
+                        containerColor = sharedGlassStyle.fill.copy(alpha = sharedGlassStyle.alpha),
+                        contentColor = sharedGlassStyle.highlight
+                    )
                 } else ButtonDefaults.outlinedButtonColors()
             ) {
                 Text("Sair")
@@ -596,7 +600,19 @@ fun CategoryItem(
     onExpandToggle: () -> Unit
 ) {
     val count = viewModel.productsCountByCategory.collectAsState().value.firstOrNull { it.category == category }?.count ?: 0
-    Column(modifier = Modifier.fillMaxWidth()) {
+    val glass = rememberGlassVisualStyle(viewModel)
+    val shape = RoundedCornerShape(18.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (glass.enabled) Modifier
+                    .background(glass.fill.copy(alpha = glass.alpha), shape)
+                    .border(1.dp, glass.border, shape)
+                else Modifier
+            )
+            .padding(vertical = if (glass.enabled) 2.dp else 0.dp)
+    ) {
         TextButton(
             onClick = onExpandToggle,
             modifier = Modifier.fillMaxWidth()
@@ -604,13 +620,13 @@ fun CategoryItem(
             Text(
                 text = category,
                 modifier = Modifier.weight(1f),
-                color = accentColor ?: MaterialTheme.colorScheme.primary,
+                color = if (glass.enabled) glass.highlight else (accentColor ?: MaterialTheme.colorScheme.primary),
                 style = if (accentBrush != null) MaterialTheme.typography.titleMedium.merge(TextStyle(brush = accentBrush)) else MaterialTheme.typography.titleMedium
             )
             Icon(
                 imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                 contentDescription = null,
-                tint = accentColor ?: MaterialTheme.colorScheme.primary
+                tint = if (glass.enabled) glass.highlight else (accentColor ?: MaterialTheme.colorScheme.primary)
             )
         }
         if (isExpanded) {
