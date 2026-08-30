@@ -1,13 +1,10 @@
 package com.example.ui
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.EaseIn
-import androidx.compose.animation.core.EaseOutBack
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
 import coil.compose.AsyncImage
 import androidx.compose.foundation.background
@@ -27,7 +24,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -42,7 +38,11 @@ import com.example.data.Product
 import com.example.data.UserPreferences
 import com.example.util.ImageUrlHelper
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+private val barcodeBitmapCache = android.util.LruCache<String, androidx.compose.ui.graphics.ImageBitmap>(12)
 
 @Composable
 fun ProductBarcodeDialog(
@@ -51,7 +51,9 @@ fun ProductBarcodeDialog(
     highlightedFromNotification: Boolean = false
 ) {
     val showDialog = remember { mutableStateOf(true) }
-    val animateIn = remember { mutableStateOf(false) }
+    val visibilityState = remember {
+        MutableTransitionState(false).apply { targetState = true }
+    }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val userPreferences = remember { UserPreferences(context) }
@@ -59,38 +61,6 @@ fun ProductBarcodeDialog(
     val barcodeTitleScale by userPreferences.barcodeTitleScale.collectAsState(initial = 1.0f)
     val boldOutline by userPreferences.boldOutline.collectAsState(initial = false)
     val uppercaseBold by userPreferences.uppercaseBold.collectAsState(initial = false)
-    val appTheme by userPreferences.appTheme.collectAsState(initial = "multicolor")
-    val glassTransparency by userPreferences.glassTransparency.collectAsState(initial = 0.55f)
-    val glassType by userPreferences.glassType.collectAsState(initial = "soft")
-    val glassAccentName by userPreferences.glassAccentColor.collectAsState(initial = "multicolor")
-    val isGlassTheme = appTheme == "glass"
-    val darkGlass = MaterialTheme.colorScheme.background.luminance() < 0.35f
-    val glassAccent = remember(glassAccentName) {
-        when (glassAccentName) {
-            "red" -> Color(0xFFE5252A)
-            "green" -> Color(0xFF2E9D44)
-            "orange" -> Color(0xFFF28C18)
-            "blue" -> Color(0xFF2474D2)
-            "gold" -> Color(0xFFC99A14)
-            else -> listOf(Color(0xFFE5252A), Color(0xFF2E9D44), Color(0xFFF28C18), Color(0xFF2474D2), Color(0xFFC99A14)).shuffled().first()
-        }
-    }
-    val glassBaseAlpha = (1f - glassTransparency).coerceIn(0.10f, 0.80f)
-    val glassDialogAlpha = when (glassType) {
-        "frosted" -> (glassBaseAlpha + 0.18f).coerceIn(0.22f, 0.86f)
-        "crystal" -> (glassBaseAlpha - 0.12f).coerceIn(0.08f, 0.62f)
-        else -> glassBaseAlpha
-    }
-    val glassDialogColor = if (darkGlass) {
-        Color(0xFF10151B).copy(alpha = when (glassType) { "frosted" -> 0.92f; "crystal" -> 0.74f; else -> 0.84f })
-    } else {
-        Color.White.copy(alpha = when (glassType) { "frosted" -> 0.92f; "crystal" -> 0.74f; else -> 0.84f })
-    }
-    val glassDialogBorder = when (glassType) {
-        "crystal" -> glassAccent.copy(alpha = 0.90f)
-        "frosted" -> glassAccent.copy(alpha = 0.62f)
-        else -> glassAccent.copy(alpha = 0.76f)
-    }
     val photoUrl = remember(product.imageUrl) {
         product.imageUrl
             ?.trim()
@@ -104,38 +74,35 @@ fun ProductBarcodeDialog(
     var zoomPercent by remember { mutableIntStateOf(100) }
 
     fun closeDialog() {
-        animateIn.value = false
+        visibilityState.targetState = false
         coroutineScope.launch {
-            delay(200)
+            delay(100)
             showDialog.value = false
             onDismiss()
         }
     }
 
     if (showDialog.value) {
-        LaunchedEffect(Unit) {
-            animateIn.value = true
-        }
         Dialog(
             onDismissRequest = { closeDialog() },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             AnimatedVisibility(
-                visible = animateIn.value,
-                enter = fadeIn() + scaleIn(initialScale = 0.8f, animationSpec = tween(300, easing = EaseOutBack)),
-                exit = fadeOut(tween(200)) + scaleOut(targetScale = 0.8f, animationSpec = tween(200, easing = EaseIn))
+                visibleState = visibilityState,
+                enter = fadeIn(tween(140)),
+                exit = fadeOut(tween(100))
             ) {
                 Surface(
                     shape = RoundedCornerShape(32.dp),
-                    color = when {
-                        highlightedFromNotification -> MaterialTheme.colorScheme.primaryContainer
-                        isGlassTheme -> glassDialogColor
-                        else -> MaterialTheme.colorScheme.surface
+                    color = if (highlightedFromNotification) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surface
                     },
-                    border = when {
-                        highlightedFromNotification -> BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
-                        isGlassTheme -> BorderStroke(1.dp, glassDialogBorder)
-                        else -> null
+                    border = if (highlightedFromNotification) {
+                        BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
+                    } else {
+                        null
                     },
                     modifier = Modifier.fillMaxWidth(0.9f).padding(vertical = 24.dp)
                 ) {
@@ -175,7 +142,7 @@ fun ProductBarcodeDialog(
                             style = MaterialTheme.typography.displayMedium.copy(
                                 fontWeight = FontWeight.Black,
                                 fontSize = 42.sp * barcodeNumberScale,
-                                color = if (isGlassTheme) glassAccent else MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.primary
                             ),
                             modifier = Modifier.fillMaxWidth(),
                             textAlign = TextAlign.Center
@@ -186,12 +153,24 @@ fun ProductBarcodeDialog(
                             baseStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             boldOutline = boldOutline,
                             uppercaseBold = true,
-                            color = if (isGlassTheme) glassAccent else MaterialTheme.colorScheme.secondary,
+                            color = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        val barcodeBitmap = generateBarcodeBitmap(product.code, scannerProfile)
+                        val barcodeCacheKey = "${product.code}|$scannerProfile"
+                        val barcodeBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(
+                            initialValue = barcodeBitmapCache.get(barcodeCacheKey),
+                            barcodeCacheKey
+                        ) {
+                            if (value == null) {
+                                value = withContext(Dispatchers.Default) {
+                                    generateBarcodeBitmap(product.code, scannerProfile)
+                                }?.also { generated ->
+                                    barcodeBitmapCache.put(barcodeCacheKey, generated)
+                                }
+                            }
+                        }
                         if (barcodeBitmap != null) {
                             val targetHeight = when (scannerProfile) {
                                 "Symbol" -> 130.dp
@@ -328,7 +307,6 @@ fun ProductBarcodeDialog(
             var photoLoadFailed by remember(photoUrl) { mutableStateOf(false) }
             AlertDialog(
                 onDismissRequest = { showPhotoDialog = false },
-                containerColor = if (isGlassTheme) glassDialogColor else MaterialTheme.colorScheme.surfaceContainerHigh,
                 title = { Text("Foto do Produto") },
                 text = {
                     Box(
