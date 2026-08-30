@@ -82,14 +82,14 @@ fun ProductBarcodeDialog(
         else -> glassBaseAlpha
     }
     val glassDialogColor = if (darkGlass) {
-        glassAccent.copy(alpha = (glassDialogAlpha * 0.62f).coerceAtLeast(0.14f))
+        Color(0xFF10151B).copy(alpha = when (glassType) { "frosted" -> 0.92f; "crystal" -> 0.74f; else -> 0.84f })
     } else {
-        glassAccent.copy(alpha = (glassDialogAlpha * 0.28f).coerceAtLeast(0.08f))
+        Color.White.copy(alpha = when (glassType) { "frosted" -> 0.92f; "crystal" -> 0.74f; else -> 0.84f })
     }
     val glassDialogBorder = when (glassType) {
-        "crystal" -> Color.White.copy(alpha = 0.96f)
-        "frosted" -> Color.White.copy(alpha = 0.84f)
-        else -> Color.White.copy(alpha = 0.76f)
+        "crystal" -> glassAccent.copy(alpha = 0.90f)
+        "frosted" -> glassAccent.copy(alpha = 0.62f)
+        else -> glassAccent.copy(alpha = 0.76f)
     }
     val photoUrl = remember(product.imageUrl) {
         product.imageUrl
@@ -175,7 +175,7 @@ fun ProductBarcodeDialog(
                             style = MaterialTheme.typography.displayMedium.copy(
                                 fontWeight = FontWeight.Black,
                                 fontSize = 42.sp * barcodeNumberScale,
-                                color = MaterialTheme.colorScheme.primary
+                                color = if (isGlassTheme) glassAccent else MaterialTheme.colorScheme.primary
                             ),
                             modifier = Modifier.fillMaxWidth(),
                             textAlign = TextAlign.Center
@@ -186,7 +186,7 @@ fun ProductBarcodeDialog(
                             baseStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             boldOutline = boldOutline,
                             uppercaseBold = true,
-                            color = MaterialTheme.colorScheme.secondary,
+                            color = if (isGlassTheme) glassAccent else MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(16.dp))
