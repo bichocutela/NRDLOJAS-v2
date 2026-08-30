@@ -1,0 +1,86 @@
+name: Aplicar etapa 1 Glass Soft Suave
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply_glass_stage1.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Adicionar preferências e configurações Glass
+        shell: python
+        run: |
+          from pathlib import Path
+
+          # UserPreferences
+          p = Path('app/src/main/java/com/example/data/UserPreferences.kt')
+          s = p.read_text()
+          marker = '''    val appearanceMode: Flow<String> = context.dataStore.data.map { preferences ->\n        preferences[APPEARANCE_MODE] ?: "system"\n    }\n'''
+          insert = marker + '''\n    val glassAccentColor: Flow<String> = context.dataStore.data.map { preferences ->\n        preferences[GLASS_ACCENT_COLOR] ?: "multicolor"\n    }\n\n    val glassTransparency: Flow<Float> = context.dataStore.data.map { preferences ->\n        preferences[GLASS_TRANSPARENCY] ?: 0.55f\n    }\n\n    val glassType: Flow<String> = context.dataStore.data.map { preferences ->\n        preferences[GLASS_TYPE] ?: "soft"\n    }\n'''
+          if marker not in s:
+              raise SystemExit('appearanceMode marker missing')
+          s = s.replace(marker, insert, 1)
+
+          marker = '''    suspend fun setAppearanceMode(mode: String) {\n        context.dataStore.edit { it[APPEARANCE_MODE] = mode }\n    }\n'''
+          insert = marker + '''\n    suspend fun setGlassAccentColor(color: String) {\n        val safe = color.takeIf { it in setOf("multicolor", "red", "green", "orange", "blue", "gold") } ?: "multicolor"\n        context.dataStore.edit { it[GLASS_ACCENT_COLOR] = safe }\n    }\n\n    suspend fun setGlassTransparency(value: Float) {\n        context.dataStore.edit { it[GLASS_TRANSPARENCY] = value.coerceIn(0.20f, 0.90f) }\n    }\n\n    suspend fun setGlassType(type: String) {\n        val safe = type.takeIf { it in setOf("soft", "frosted", "crystal") } ?: "soft"\n        context.dataStore.edit { it[GLASS_TYPE] = safe }\n    }\n'''
+          if marker not in s:
+              raise SystemExit('setAppearanceMode marker missing')
+          s = s.replace(marker, insert, 1)
+
+          marker = '''        val APP_THEME = stringPreferencesKey("app_theme")\n        val APPEARANCE_MODE = stringPreferencesKey("appearance_mode")\n'''
+          insert = marker + '''        val GLASS_ACCENT_COLOR = stringPreferencesKey("glass_accent_color")\n        val GLASS_TRANSPARENCY = floatPreferencesKey("glass_transparency")\n        val GLASS_TYPE = stringPreferencesKey("glass_type")\n'''
+          if marker not in s:
+              raise SystemExit('keys marker missing')
+          s = s.replace(marker, insert, 1)
+          p.write_text(s)
+
+          # MainActivity: route Glass through selected accent until glass layer is applied
+          p = Path('app/src/main/java/com/example/MainActivity.kt')
+          s = p.read_text()
+          marker = '''            val appTheme by userPreferences.appTheme.collectAsState(initial = "multicolor")\n            val appearanceMode by userPreferences.appearanceMode.collectAsState(initial = "system")\n'''
+          insert = marker + '''            val glassAccentColor by userPreferences.glassAccentColor.collectAsState(initial = "multicolor")\n'''
+          if marker not in s:
+              raise SystemExit('MainActivity state marker missing')
+          s = s.replace(marker, insert, 1)
+          marker = '''                MyApplicationTheme(\n                    appTheme = effectiveAppTheme,\n                    appearanceMode = effectiveAppearanceMode\n                ) {\n'''
+          replacement = '''                MyApplicationTheme(\n                    appTheme = if (effectiveAppTheme == "glass") glassAccentColor else effectiveAppTheme,\n                    appearanceMode = effectiveAppearanceMode\n                ) {\n'''
+          if marker not in s:
+              raise SystemExit('MyApplicationTheme marker missing')
+          s = s.replace(marker, replacement, 1)
+          p.write_text(s)
+
+          # SettingsScreen
+          p = Path('app/src/main/java/com/example/ui/SettingsScreen.kt')
+          s = p.read_text()
+          marker = '''    val appTheme by viewModel.userPreferences.appTheme.collectAsState(initial = "multicolor")\n    val appearanceMode by viewModel.userPreferences.appearanceMode.collectAsState(initial = "system")\n'''
+          insert = marker + '''    val glassAccentColor by viewModel.userPreferences.glassAccentColor.collectAsState(initial = "multicolor")\n    val glassTransparency by viewModel.userPreferences.glassTransparency.collectAsState(initial = 0.55f)\n    val glassType by viewModel.userPreferences.glassType.collectAsState(initial = "soft")\n'''
+          if marker not in s:
+              raise SystemExit('Settings state marker missing')
+          s = s.replace(marker, insert, 1)
+
+          marker = '''                "orange" to "Laranja"\n            )\n'''
+          replacement = '''                "orange" to "Laranja",\n                "glass" to "Glass Soft Suave"\n            )\n'''
+          if marker not in s:
+              raise SystemExit('themeOptions marker missing')
+          s = s.replace(marker, replacement, 1)
+
+          marker = '''            }\n            \n                        Spacer(modifier = Modifier.height(16.dp))\n            Text(\n                "Modo de aparência",\n'''
+          glass_ui = '''            }\n\n            if (appTheme == "glass") {\n                Spacer(modifier = Modifier.height(12.dp))\n                Card(\n                    modifier = Modifier.fillMaxWidth(),\n                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)),\n                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))\n                ) {\n                    Column(\n                        modifier = Modifier.padding(16.dp),\n                        verticalArrangement = Arrangement.spacedBy(12.dp)\n                    ) {\n                        Text("Personalizar Glass Soft Suave", style = MaterialTheme.typography.titleMedium)\n                        Text(\n                            "Esses ajustes aparecem somente neste tema.",\n                            style = MaterialTheme.typography.bodySmall,\n                            color = MaterialTheme.colorScheme.onSurfaceVariant\n                        )\n\n                        var expandedGlassColorMenu by remember { mutableStateOf(false) }\n                        val glassColorOptions = listOf(\n                            "multicolor" to "Multicolorido",\n                            "red" to "Vermelho",\n                            "green" to "Verde",\n                            "orange" to "Laranja",\n                            "blue" to "Azul",\n                            "gold" to "Dourado"\n                        )\n                        ExposedDropdownMenuBox(\n                            expanded = expandedGlassColorMenu,\n                            onExpandedChange = { expandedGlassColorMenu = !expandedGlassColorMenu }\n                        ) {\n                            OutlinedTextField(\n                                value = glassColorOptions.find { it.first == glassAccentColor }?.second ?: "Multicolorido",\n                                onValueChange = {},\n                                readOnly = true,\n                                label = { Text("Cor do vidro") },\n                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedGlassColorMenu) },\n                                modifier = Modifier.menuAnchor().fillMaxWidth()\n                            )\n                            ExposedDropdownMenu(\n                                expanded = expandedGlassColorMenu,\n                                onDismissRequest = { expandedGlassColorMenu = false }\n                            ) {\n                                glassColorOptions.forEach { (key, label) ->\n                                    DropdownMenuItem(\n                                        text = { Text(label) },\n                                        onClick = {\n                                            coroutineScope.launch { viewModel.userPreferences.setGlassAccentColor(key) }\n                                            expandedGlassColorMenu = false\n                                        }\n                                    )\n                                }\n                            }\n                        }\n\n                        Text("Transparência do vidro: ${(glassTransparency * 100).toInt()}%", style = MaterialTheme.typography.titleSmall)\n                        Slider(\n                            value = glassTransparency,\n                            onValueChange = { coroutineScope.launch { viewModel.userPreferences.setGlassTransparency(it) } },\n                            valueRange = 0.20f..0.90f,\n                            steps = 13\n                        )\n                        Text(\n                            "Menor valor deixa o vidro mais sólido; maior valor deixa o fundo mais aparente.",\n                            style = MaterialTheme.typography.bodySmall,\n                            color = MaterialTheme.colorScheme.onSurfaceVariant\n                        )\n\n                        Text("Tipo de vidro", style = MaterialTheme.typography.titleSmall)\n                        val glassTypes = listOf(\n                            "soft" to "Suave",\n                            "frosted" to "Fosco",\n                            "crystal" to "Cristal"\n                        )\n                        Row(\n                            modifier = Modifier.fillMaxWidth(),\n                            horizontalArrangement = Arrangement.spacedBy(8.dp)\n                        ) {\n                            glassTypes.forEach { (key, label) ->\n                                val selected = glassType == key\n                                FilterChip(\n                                    selected = selected,\n                                    onClick = { coroutineScope.launch { viewModel.userPreferences.setGlassType(key) } },\n                                    label = { Text(label) },\n                                    modifier = Modifier.weight(1f)\n                                )\n                            }\n                        }\n                    }\n                }\n            }\n            \n                        Spacer(modifier = Modifier.height(16.dp))\n            Text(\n                "Modo de aparência",\n'''
+          if marker not in s:
+              raise SystemExit('Glass UI insertion marker missing')
+          s = s.replace(marker, glass_ui, 1)
+          p.write_text(s)
+
+      - name: Commit e push
+        run: |
+          git config user.name "bicho cutela"
+          git config user.email "haydendanex@gmail.com"
+          git add app/src/main/java/com/example/data/UserPreferences.kt app/src/main/java/com/example/MainActivity.kt app/src/main/java/com/example/ui/SettingsScreen.kt
+          git commit -m "Adiciona base do tema Glass Soft Suave"
+          git push
