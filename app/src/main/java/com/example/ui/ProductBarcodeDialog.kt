@@ -171,7 +171,8 @@ fun ProductBarcodeDialog(
                                 }
                             }
                         }
-                        if (barcodeBitmap != null) {
+                        val renderedBarcode = barcodeBitmap
+                        if (renderedBarcode != null) {
                             val targetHeight = when (scannerProfile) {
                                 "Symbol" -> 130.dp
                                 "Datalogic" -> 140.dp
@@ -184,7 +185,7 @@ fun ProductBarcodeDialog(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Image(
-                                    bitmap = barcodeBitmap,
+                                    bitmap = renderedBarcode,
                                     contentDescription = "Código de barras",
                                     contentScale = ContentScale.Fit,
                                     filterQuality = FilterQuality.None,
