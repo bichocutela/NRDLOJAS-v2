@@ -1,5 +1,6 @@
 package com.example.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
@@ -44,6 +46,18 @@ import com.example.data.ProductImportResult
 
 private const val NEW_CATEGORY_ACTION_KEY = "__new_category__"
 
+private enum class MestrePanelPage(val title: String) {
+    DASHBOARD("Painel Mestre"),
+    CONTENT("Conteúdo e catálogo"),
+    CATEGORIES("Categorias"),
+    SETTINGS("Configuração do aplicativo"),
+    HOME_SETTINGS("Configurações da Home"),
+    NOTIFICATION_SETTINGS("Notificações globais"),
+    ASSISTANT_SETTINGS("Assistente IA"),
+    APPEARANCE_SETTINGS("Aparência global"),
+    ADVANCED("Ferramentas avançadas")
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MestreScreen(
@@ -53,6 +67,20 @@ fun MestreScreen(
     onNavigateToManageProducts: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
+    var pageStack by rememberSaveable { mutableStateOf(arrayListOf(MestrePanelPage.DASHBOARD.name)) }
+    val currentPage = MestrePanelPage.entries.firstOrNull { it.name == pageStack.lastOrNull() }
+        ?: MestrePanelPage.DASHBOARD
+    val openPage: (MestrePanelPage) -> Unit = { page ->
+        if (page != currentPage) pageStack = ArrayList(pageStack + page.name)
+    }
+    val returnFromPage: () -> Unit = {
+        if (pageStack.size > 1) pageStack = ArrayList(pageStack.dropLast(1))
+        else onNavigateBack()
+    }
+    BackHandler(enabled = currentPage != MestrePanelPage.DASHBOARD) {
+        pageStack = ArrayList(pageStack.dropLast(1))
+    }
+
     val snackbarHostState = remember { SnackbarHostState() }
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
     val catalogSnapshots by viewModel.catalogSnapshots.collectAsStateWithLifecycle()
@@ -146,6 +174,51 @@ fun MestreScreen(
             showImportDialog = true
         }
     }
+    val themeOptions = listOf(
+        "multicolor" to "Multicolorido",
+        "red" to "Vermelho",
+        "gold" to "Dourado",
+        "green" to "Verde",
+        "blue" to "Azul",
+        "orange" to "Laranja"
+    )
+    val appearanceModeOptions = listOf(
+        "system" to "Seguir sistema",
+        "light" to "Claro",
+        "dark" to "Escuro"
+    )
+    var expandedRemoteTheme by remember { mutableStateOf(false) }
+    var expandedRemoteMode by remember { mutableStateOf(false) }
+
+    fun openBackgroundEditor(themeKey: String, background: ThemeBackground?) {
+        editingBackgroundTheme = themeKey
+        editingBackground = background
+        backgroundLabelInput = background?.label.orEmpty()
+        backgroundUrlInput = background?.url.orEmpty()
+        backgroundStartDateInput = background?.startDate.orEmpty()
+        backgroundEndDateInput = background?.endDate.orEmpty()
+        showStartDatePicker = false
+        showEndDatePicker = false
+        backgroundInputError = null
+        showThemeBackgroundDialog = true
+    }
+
+    fun pickerDateToIsoDate(millis: Long?): String? = millis?.let {
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.format(Date(it))
+    }
+
+    fun dateToPickerMillis(value: String): Long? = ThemeBackground.parseDate(value)?.time
+
+    fun updateBackgrounds(themeKey: String, backgrounds: List<ThemeBackground>) {
+        draftThemeBackgrounds = draftThemeBackgrounds + (themeKey to backgrounds)
+    }
+    val panelScrollState = rememberScrollState()
+
+    LaunchedEffect(currentPage) {
+        panelScrollState.scrollTo(0)
+    }
     
     LaunchedEffect(Unit) {
         viewModel.refreshCatalogHistory()
@@ -158,9 +231,9 @@ fun MestreScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Painel Mestre") },
+                title = { Text(currentPage.title) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = returnFromPage) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Voltar"
@@ -174,33 +247,64 @@ fun MestreScreen(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(panelScrollState)
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            MestreDashboardOverview(
-                pendingSuggestions = suggestions.count { it.status == com.example.data.ProductSuggestion.STATUS_PENDING },
-                productCount = allProducts.size,
-                activeCategoryCount = categoryDefinitions.count { it.isActive },
-                categoryCount = categoryDefinitions.size,
-                latestBackupAt = catalogSnapshots.maxOfOrNull { it.createdAt },
-                importEnabled = !isParsingImport && !isImporting,
-                onManageProducts = onNavigateToManageProducts,
-                onAddProduct = onNavigateToAdmin,
-                onManageTabs = onNavigateToManageTabs,
-                onImportProducts = { importLauncher.launch("text/*") }
-            )
-            Spacer(modifier = Modifier.height(24.dp))
+            if (currentPage == MestrePanelPage.DASHBOARD) {
+                MestreDashboardOverview(
+                    pendingSuggestions = suggestions.count { it.status == com.example.data.ProductSuggestion.STATUS_PENDING },
+                    productCount = allProducts.size,
+                    activeCategoryCount = categoryDefinitions.count { it.isActive },
+                    categoryCount = categoryDefinitions.size,
+                    latestBackupAt = catalogSnapshots.maxOfOrNull { it.createdAt },
+                    importEnabled = !isParsingImport && !isImporting,
+                    onOpenCatalog = { openPage(MestrePanelPage.CONTENT) },
+                    onOpenCategories = { openPage(MestrePanelPage.CATEGORIES) },
+                    onManageTabs = onNavigateToManageTabs,
+                    onImportProducts = { importLauncher.launch("text/*") }
+                )
+                Spacer(modifier = Modifier.height(24.dp))
 
-            MestreSuggestionsSection(suggestions = suggestions) { suggestion, status ->
-                val updated = FirebaseService.updateSuggestionStatus(suggestion.id, status)
-                val statusLabel = if (status == "fixed") "corrigida" else "pendente"
-                val message = if (updated) "Sugestão marcada como $statusLabel."
-                else "Não foi possível atualizar a sugestão. Tente novamente."
-                coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+                MestreSuggestionsSection(suggestions = suggestions) { suggestion, status ->
+                    val updated = FirebaseService.updateSuggestionStatus(suggestion.id, status)
+                    val statusLabel = if (status == "fixed") "corrigida" else "pendente"
+                    val message = if (updated) "Sugestão marcada como $statusLabel."
+                    else "Não foi possível atualizar a sugestão. Tente novamente."
+                    coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+                MestrePanelAreaNavigation(
+                    onOpenCatalog = { openPage(MestrePanelPage.CONTENT) },
+                    onOpenSettings = { openPage(MestrePanelPage.SETTINGS) },
+                    onOpenAdvanced = { openPage(MestrePanelPage.ADVANCED) }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
             }
-            Spacer(modifier = Modifier.height(16.dp))
 
+            if (currentPage == MestrePanelPage.CONTENT) {
+                MestreContentHub(
+                    importEnabled = !isParsingImport && !isImporting,
+                    onManageProducts = onNavigateToManageProducts,
+                    onAddProduct = onNavigateToAdmin,
+                    onOpenCategories = { openPage(MestrePanelPage.CATEGORIES) },
+                    onManageTabs = onNavigateToManageTabs,
+                    onImportProducts = { importLauncher.launch("text/*") }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            if (currentPage == MestrePanelPage.SETTINGS) {
+                MestreSettingsHub(
+                    onOpenHome = { openPage(MestrePanelPage.HOME_SETTINGS) },
+                    onOpenAppearance = { openPage(MestrePanelPage.APPEARANCE_SETTINGS) },
+                    onOpenNotifications = { openPage(MestrePanelPage.NOTIFICATION_SETTINGS) },
+                    onOpenAssistant = { openPage(MestrePanelPage.ASSISTANT_SETTINGS) }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            if (currentPage == MestrePanelPage.ADVANCED) {
             MestreSectionHeader(
                 title = "Manutenção e sincronização",
                 description = "Confira o estado do catálogo remoto antes de sincronizar"
@@ -356,10 +460,9 @@ fun MestreScreen(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
+            }
 
-            MestreGroupLabel("Configurações globais")
-            Spacer(modifier = Modifier.height(12.dp))
-
+            if (currentPage == MestrePanelPage.HOME_SETTINGS) {
             MestreSectionHeader(
                 title = "Configurações da Home",
                 description = "Escolha o que aparece para todos os usuários"
@@ -442,7 +545,9 @@ fun MestreScreen(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
+            }
 
+            if (currentPage == MestrePanelPage.CATEGORIES) {
             MestreSectionHeader(
                 title = "Categorias",
                 description = "Organize os grupos exibidos e usados no catálogo"
@@ -522,7 +627,9 @@ fun MestreScreen(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
+            }
 
+            if (currentPage == MestrePanelPage.NOTIFICATION_SETTINGS) {
             MestreSectionHeader(
                 title = "Notificações globais",
                 description = "Controle o que pode ser recebido pelos usuários"
@@ -597,7 +704,9 @@ fun MestreScreen(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
+            }
 
+            if (currentPage == MestrePanelPage.ASSISTANT_SETTINGS) {
             MestreSectionHeader(
                 title = "Assistente IA",
                 description = "Defina os limites e a mensagem inicial do assistente"
@@ -675,48 +784,9 @@ fun MestreScreen(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-
-            val themeOptions = listOf(
-                "multicolor" to "Multicolorido",
-                "red" to "Vermelho",
-                "gold" to "Dourado",
-                "green" to "Verde",
-                "blue" to "Azul",
-                "orange" to "Laranja"
-            )
-            val appearanceModeOptions = listOf(
-                "system" to "Seguir sistema",
-                "light" to "Claro",
-                "dark" to "Escuro"
-            )
-            var expandedRemoteTheme by remember { mutableStateOf(false) }
-            var expandedRemoteMode by remember { mutableStateOf(false) }
-
-            fun openBackgroundEditor(themeKey: String, background: ThemeBackground?) {
-                editingBackgroundTheme = themeKey
-                editingBackground = background
-                backgroundLabelInput = background?.label.orEmpty()
-                backgroundUrlInput = background?.url.orEmpty()
-                backgroundStartDateInput = background?.startDate.orEmpty()
-                backgroundEndDateInput = background?.endDate.orEmpty()
-                showStartDatePicker = false
-                showEndDatePicker = false
-                backgroundInputError = null
-                showThemeBackgroundDialog = true
             }
 
-            fun pickerDateToIsoDate(millis: Long?): String? = millis?.let {
-                SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
-                    timeZone = TimeZone.getTimeZone("UTC")
-                }.format(Date(it))
-            }
-
-            fun dateToPickerMillis(value: String): Long? = ThemeBackground.parseDate(value)?.time
-
-            fun updateBackgrounds(themeKey: String, backgrounds: List<ThemeBackground>) {
-                draftThemeBackgrounds = draftThemeBackgrounds + (themeKey to backgrounds)
-            }
-
+            if (currentPage == MestrePanelPage.APPEARANCE_SETTINGS) {
             MestreSectionHeader(
                 title = "Aparência global",
                 description = "Personalize o visual para todos os usuários"
@@ -920,6 +990,7 @@ fun MestreScreen(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
+            }
 
             if (showImportDialog && importResult != null) {
                 ImportPreviewDialog(
@@ -1600,16 +1671,6 @@ internal fun MestreSectionHeader(title: String, description: String) {
         Text(title, style = MaterialTheme.typography.titleMedium)
         Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-}
-
-@Composable
-private fun MestreGroupLabel(label: String) {
-    Text(
-        text = label.uppercase(Locale("pt", "BR")),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.fillMaxWidth()
-    )
 }
 
 @Composable

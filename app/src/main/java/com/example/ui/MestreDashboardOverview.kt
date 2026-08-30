@@ -13,14 +13,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddBox
 import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PendingActions
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,8 +49,8 @@ internal fun MestreDashboardOverview(
     categoryCount: Int,
     latestBackupAt: Long?,
     importEnabled: Boolean,
-    onManageProducts: () -> Unit,
-    onAddProduct: () -> Unit,
+    onOpenCatalog: () -> Unit,
+    onOpenCategories: () -> Unit,
     onManageTabs: () -> Unit,
     onImportProducts: () -> Unit
 ) {
@@ -99,16 +107,16 @@ internal fun MestreDashboardOverview(
     ) {
         DashboardQuickAction(
             title = "Produtos",
-            description = "Editar catálogo",
+            description = "Gerenciar catálogo",
             icon = Icons.Default.Inventory,
-            onClick = onManageProducts,
+            onClick = onOpenCatalog,
             modifier = Modifier.weight(1f)
         )
         DashboardQuickAction(
-            title = "Novo produto",
-            description = "Cadastrar item",
-            icon = Icons.Default.AddBox,
-            onClick = onAddProduct,
+            title = "Categorias",
+            description = "Organizar grupos",
+            icon = Icons.Default.Category,
+            onClick = onOpenCategories,
             modifier = Modifier.weight(1f)
         )
     }
@@ -133,6 +141,149 @@ internal fun MestreDashboardOverview(
             modifier = Modifier.weight(1f)
         )
     }
+}
+
+@Composable
+internal fun MestrePanelAreaNavigation(
+    onOpenCatalog: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenAdvanced: () -> Unit
+) {
+    Text("Áreas do painel", style = MaterialTheme.typography.titleMedium)
+    Spacer(modifier = Modifier.height(8.dp))
+    PanelAreaCard(
+        title = "Conteúdo e catálogo",
+        description = "Produtos, categorias, abas e importação",
+        icon = Icons.Default.Inventory,
+        onClick = onOpenCatalog
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PanelAreaCard(
+        title = "Configuração do aplicativo",
+        description = "Home, aparência, notificações e Assistente IA",
+        icon = Icons.Default.Settings,
+        onClick = onOpenSettings
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PanelAreaCard(
+        title = "Ferramentas avançadas",
+        description = "Diagnóstico, sincronização e backups",
+        icon = Icons.Default.CloudSync,
+        onClick = onOpenAdvanced
+    )
+}
+
+@Composable
+internal fun MestreContentHub(
+    importEnabled: Boolean,
+    onManageProducts: () -> Unit,
+    onAddProduct: () -> Unit,
+    onOpenCategories: () -> Unit,
+    onManageTabs: () -> Unit,
+    onImportProducts: () -> Unit
+) {
+    Text("Produtos", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "Edite o catálogo existente ou cadastre um novo item.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Inventory,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text("Gerenciar produtos", style = MaterialTheme.typography.titleSmall)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilledTonalButton(onClick = onManageProducts, modifier = Modifier.weight(1f)) {
+                    Text("Editar")
+                }
+                OutlinedButton(onClick = onAddProduct, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.AddBox, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Adicionar")
+                }
+            }
+        }
+    }
+    Spacer(modifier = Modifier.height(16.dp))
+    Text("Outras ferramentas", style = MaterialTheme.typography.titleMedium)
+    Spacer(modifier = Modifier.height(8.dp))
+    PanelAreaCard(
+        title = "Categorias",
+        description = "Criar, ordenar, renomear ou ocultar grupos",
+        icon = Icons.Default.Category,
+        onClick = onOpenCategories
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PanelAreaCard(
+        title = "Abas do aplicativo",
+        description = "Criar e organizar conteúdo adicional",
+        icon = Icons.Default.ViewCarousel,
+        onClick = onManageTabs
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PanelAreaCard(
+        title = "Importar planilha",
+        description = if (importEnabled) "Adicionar produtos por CSV ou TSV" else "Importação em andamento...",
+        icon = Icons.Default.UploadFile,
+        onClick = onImportProducts,
+        enabled = importEnabled
+    )
+}
+
+@Composable
+internal fun MestreSettingsHub(
+    onOpenHome: () -> Unit,
+    onOpenAppearance: () -> Unit,
+    onOpenNotifications: () -> Unit,
+    onOpenAssistant: () -> Unit
+) {
+    Text("Escolha o que deseja configurar", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "Cada alteração global é publicada separadamente para todos os usuários.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+    PanelAreaCard(
+        title = "Tela Home",
+        description = "Seções, quantidade de produtos e carrossel",
+        icon = Icons.Default.Home,
+        onClick = onOpenHome
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PanelAreaCard(
+        title = "Aparência global",
+        description = "Tema, modo visual e fundos programados",
+        icon = Icons.Default.Palette,
+        onClick = onOpenAppearance
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PanelAreaCard(
+        title = "Notificações globais",
+        description = "Políticas aplicadas aos aparelhos dos usuários",
+        icon = Icons.Default.Notifications,
+        onClick = onOpenNotifications
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PanelAreaCard(
+        title = "Assistente IA",
+        description = "Disponibilidade, mensagem e limites do catálogo",
+        icon = Icons.Default.AutoAwesome,
+        onClick = onOpenAssistant
+    )
 }
 
 @Composable
@@ -186,6 +337,42 @@ private fun DashboardQuickAction(
                 modifier = Modifier.size(26.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
+            Column {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PanelAreaCard(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    enabled: Boolean = true
+) {
+    OutlinedCard(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp)
+            )
+            Spacer(modifier = Modifier.width(14.dp))
             Column {
                 Text(title, style = MaterialTheme.typography.titleSmall)
                 Text(
