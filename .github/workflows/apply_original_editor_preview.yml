@@ -1,0 +1,54 @@
+name: Aplicar edição sobre imagem original
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/apply_original_editor_preview.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ajustar editor do preview
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('app/src/main/java/com/example/ui/MestreScreen.kt')
+          s = path.read_text()
+
+          if 'import androidx.compose.ui.graphics.graphicsLayer\n' not in s:
+              s = s.replace(
+                  'import androidx.compose.ui.graphics.Color\n',
+                  'import androidx.compose.ui.graphics.Color\nimport androidx.compose.ui.graphics.graphicsLayer\n'
+              )
+
+          old = '''                            Text("Imagem original — sem corte", style = MaterialTheme.typography.labelLarge)\n                            Box(\n                                modifier = Modifier\n                                    .fillMaxWidth()\n                                    .height(180.dp)\n                                    .clip(RoundedCornerShape(16.dp))\n                                    .background(MaterialTheme.colorScheme.surfaceVariant),\n                                contentAlignment = Alignment.Center\n                            ) {\n                                coil.compose.AsyncImage(\n                                    model = background.url,\n                                    contentDescription = "Imagem original de ${background.label}",\n                                    modifier = Modifier.fillMaxSize(),\n                                    contentScale = androidx.compose.ui.layout.ContentScale.Fit\n                                )\n                            }\n                            Spacer(modifier = Modifier.height(12.dp))\n                            Text("Resultado na Home", style = MaterialTheme.typography.labelLarge)\n'''
+          new = '''                            Text("Área de edição — imagem original", style = MaterialTheme.typography.labelLarge)\n                            Text(\n                                "Ajuste a arte original aqui. A prévia abaixo serve apenas para mostrar como ela ficará na Home.",\n                                style = MaterialTheme.typography.bodySmall,\n                                color = MaterialTheme.colorScheme.onSurfaceVariant\n                            )\n                            Spacer(modifier = Modifier.height(6.dp))\n                            Box(\n                                modifier = Modifier\n                                    .fillMaxWidth()\n                                    .height(180.dp)\n                                    .clip(RoundedCornerShape(16.dp))\n                                    .background(MaterialTheme.colorScheme.surfaceVariant),\n                                contentAlignment = Alignment.Center\n                            ) {\n                                coil.compose.AsyncImage(\n                                    model = background.url,\n                                    contentDescription = "Área de edição da imagem original de ${background.label}",\n                                    modifier = Modifier\n                                        .fillMaxSize()\n                                        .graphicsLayer {\n                                            scaleX = previewScale * previewStretchX\n                                            scaleY = previewScale * previewStretchY\n                                            translationX = size.width * previewOffsetX\n                                            translationY = size.height * previewOffsetY\n                                        },\n                                    contentScale = androidx.compose.ui.layout.ContentScale.Fit\n                                )\n                            }\n                            Spacer(modifier = Modifier.height(12.dp))\n                            Text("Resultado na Home — somente visualização", style = MaterialTheme.typography.labelLarge)\n'''
+          if old not in s:
+              raise SystemExit('Bloco da imagem original não encontrado')
+          s = s.replace(old, new, 1)
+
+          old_note = '                                "O ajuste acima será usado exatamente na Home. A imagem original não é alterada.",\n'
+          new_note = '                                "Você edita a imagem original acima; o quadro da Home apenas reproduz o resultado. A imagem armazenada não é modificada, somente o enquadramento salvo.",\n'
+          if old_note in s:
+              s = s.replace(old_note, new_note, 1)
+
+          path.write_text(s)
+
+      - name: Commit e push
+        run: |
+          git config user.name "bicho cutela"
+          git config user.email "haydendanex@gmail.com"
+          git add app/src/main/java/com/example/ui/MestreScreen.kt
+          if git diff --cached --quiet; then
+            echo "Nada para commitar"
+            exit 0
+          fi
+          git commit -m "Usa imagem original como área de edição do preview"
+          git push
