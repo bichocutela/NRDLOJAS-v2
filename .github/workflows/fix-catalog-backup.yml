@@ -1,0 +1,48 @@
+name: Corrigir backups do Mestre
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-catalog-backup.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Aplicar backend administrativo aos backups
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('app/src/main/java/com/example/ui/MainViewModel.kt')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = [
+              ('import com.example.data.CatalogAdminOperations\n', 'import com.example.data.CatalogAdminOperations\nimport com.example.data.CatalogHistoryBackend\n'),
+              ('val snapshots = FirebaseService.getCatalogSnapshots()', 'val snapshots = CatalogHistoryBackend.listSnapshots()'),
+              ('val snapshot = FirebaseService.createCatalogSnapshot()', 'val snapshot = CatalogHistoryBackend.createSnapshot()'),
+              ('val result = FirebaseService.restoreCatalogSnapshot(snapshotId)', 'val result = CatalogHistoryBackend.restoreSnapshot(snapshotId)'),
+              ('_catalogSnapshots.value = FirebaseService.getCatalogSnapshots()', '_catalogSnapshots.value = CatalogHistoryBackend.listSnapshots()'),
+          ]
+
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'Trecho esperado não encontrado: {old}')
+              text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/ui/MainViewModel.kt
+          git commit -m "Corrige acesso seguro aos backups do Mestre"
+          git push
