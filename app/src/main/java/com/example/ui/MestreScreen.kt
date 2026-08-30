@@ -1631,7 +1631,8 @@ fun MestreScreen(
                                     previewStretchX = 1f
                                     previewStretchY = 1f
                                 },
-                                modifier = Modifier.align(Alignment.End)
+                                modifier = Modifier.align(Alignment.End),
+                                enabled = previewUnlocked
                             ) {
                                 Text("Restaurar enquadramento")
                             }
