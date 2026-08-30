@@ -1,0 +1,122 @@
+name: Corrigir visual Glass Soft Suave
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply_glass_visual_fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tornar Glass visível e funcional
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('app/src/main/java/com/example/ui/SearchScreen.kt')
+          s = p.read_text()
+
+          # Replace home alpha logic with direct transparency semantics.
+          old = '''    val glassSurfaceAlpha = when (glassType) {\n        "frosted" -> (0.92f - glassTransparency * 0.52f).coerceIn(0.38f, 0.82f)\n        "crystal" -> (0.72f - glassTransparency * 0.40f).coerceIn(0.24f, 0.64f)\n        else -> (0.84f - glassTransparency * 0.46f).coerceIn(0.32f, 0.74f)\n    }\n'''
+          new = '''    val baseGlassAlpha = (1f - glassTransparency).coerceIn(0.10f, 0.80f)\n    val glassSurfaceAlpha = when (glassType) {\n        "frosted" -> (baseGlassAlpha + 0.18f).coerceIn(0.22f, 0.86f)\n        "crystal" -> (baseGlassAlpha - 0.12f).coerceIn(0.08f, 0.62f)\n        else -> baseGlassAlpha\n    }\n'''
+          if old not in s:
+              raise SystemExit('home alpha block missing')
+          s = s.replace(old, new, 1)
+
+          # Add reusable glass helpers before SearchScreen.
+          marker = '''@OptIn(ExperimentalMaterial3Api::class)\n@Composable\nfun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {\n'''
+          helper = '''data class GlassVisualStyle(\n    val enabled: Boolean,\n    val alpha: Float,\n    val fill: Color,\n    val border: Color,\n    val highlight: Color\n)\n\n@Composable\nfun rememberGlassVisualStyle(viewModel: MainViewModel): GlassVisualStyle {\n    val theme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")\n    val transparency by viewModel.userPreferences.glassTransparency.collectAsStateWithLifecycle(initialValue = 0.55f)\n    val type by viewModel.userPreferences.glassType.collectAsStateWithLifecycle(initialValue = "soft")\n    val baseAlpha = (1f - transparency).coerceIn(0.10f, 0.80f)\n    val alpha = when (type) {\n        "frosted" -> (baseAlpha + 0.18f).coerceIn(0.22f, 0.86f)\n        "crystal" -> (baseAlpha - 0.12f).coerceIn(0.08f, 0.62f)\n        else -> baseAlpha\n    }\n    val fill = when (type) {\n        "frosted" -> Color(0xFFF7FAFC)\n        "crystal" -> Color.White\n        else -> Color(0xFFFBFDFF)\n    }\n    val border = when (type) {\n        "frosted" -> Color.White.copy(alpha = 0.82f)\n        "crystal" -> Color.White.copy(alpha = 0.95f)\n        else -> Color.White.copy(alpha = 0.74f)\n    }\n    val highlight = when (type) {\n        "crystal" -> Color.White.copy(alpha = 0.78f)\n        "frosted" -> Color.White.copy(alpha = 0.48f)\n        else -> Color.White.copy(alpha = 0.58f)\n    }\n    return GlassVisualStyle(theme == "glass", alpha, fill, border, highlight)\n}\n\n@OptIn(ExperimentalMaterial3Api::class)\n@Composable\nfun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {\n'''
+          if marker not in s:
+              raise SystemExit('SearchScreen marker missing')
+          s = s.replace(marker, helper, 1)
+
+          # Category chips glass.
+          marker = '''fun CategorySection(\n    viewModel: MainViewModel,\n    appTheme: String,\n    textPreferences: HomeTextPreferences = HomeTextPreferences(),\n    categories: List<String> = ProductStandards.officialCategories,\n    onCategoryClick: (String) -> Unit = {}\n) {\n'''
+          replacement = marker + '''    val glass = rememberGlassVisualStyle(viewModel)\n'''
+          if marker not in s:
+              raise SystemExit('CategorySection marker missing')
+          s = s.replace(marker, replacement, 1)
+
+          old = '''                modifier = Modifier\n                    .clip(RoundedCornerShape(12.dp))\n                    .background(dynamicColors.first)\n                    .clickable { onCategoryClick(category) }\n                    .padding(horizontal = 16.dp, vertical = 10.dp),\n'''
+          new = '''                modifier = Modifier\n                    .clip(RoundedCornerShape(16.dp))\n                    .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else dynamicColors.first)\n                    .border(\n                        1.dp,\n                        if (glass.enabled) glass.border else Color.Transparent,\n                        RoundedCornerShape(16.dp)\n                    )\n                    .clickable { onCategoryClick(category) }\n                    .padding(horizontal = 16.dp, vertical = 10.dp),\n'''
+          if old not in s:
+              raise SystemExit('Category chip block missing')
+          s = s.replace(old, new, 1)
+
+          # ProductCard.
+          marker = '''fun ProductCard(\n    product: Product,\n    viewModel: MainViewModel,\n    index: Int = 0,\n    appTheme: String = "multicolor",\n    textPreferences: HomeTextPreferences = HomeTextPreferences()\n) {\n'''
+          replacement = marker + '''    val glass = rememberGlassVisualStyle(viewModel)\n'''
+          if marker not in s:
+              raise SystemExit('ProductCard marker missing')
+          s = s.replace(marker, replacement, 1)
+          old = '''            .clip(RoundedCornerShape(24.dp))\n            .background(MaterialTheme.colorScheme.surface)\n            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f), RoundedCornerShape(24.dp))\n'''
+          new = '''            .clip(RoundedCornerShape(24.dp))\n            .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surface)\n            .border(\n                1.dp,\n                if (glass.enabled) glass.border else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),\n                RoundedCornerShape(24.dp)\n            )\n'''
+          if old not in s:
+              raise SystemExit('ProductCard surface block missing')
+          s = s.replace(old, new, 1)
+
+          # MiniProductCard.
+          marker = '''fun MiniProductCard(\n    product: Product,\n    viewModel: MainViewModel,\n    index: Int = 0,\n    appTheme: String = "multicolor",\n    textPreferences: HomeTextPreferences = HomeTextPreferences()\n) {\n'''
+          replacement = marker + '''    val glass = rememberGlassVisualStyle(viewModel)\n'''
+          if marker not in s:
+              raise SystemExit('MiniProductCard marker missing')
+          s = s.replace(marker, replacement, 1)
+          old = '''            .clip(RoundedCornerShape(24.dp))\n            .background(MaterialTheme.colorScheme.surface)\n            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f), RoundedCornerShape(24.dp))\n'''
+          new = '''            .clip(RoundedCornerShape(24.dp))\n            .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surface)\n            .border(\n                1.dp,\n                if (glass.enabled) glass.border else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),\n                RoundedCornerShape(24.dp)\n            )\n'''
+          if old not in s:
+              raise SystemExit('MiniProductCard surface block missing')
+          s = s.replace(old, new, 1)
+
+          # HistoryItem.
+          marker = '''fun HistoryItem(\n    product: Product,\n    viewModel: MainViewModel,\n    index: Int = 0,\n    appTheme: String = "multicolor",\n    textPreferences: HomeTextPreferences = HomeTextPreferences()\n) {\n'''
+          replacement = marker + '''    val glass = rememberGlassVisualStyle(viewModel)\n'''
+          if marker not in s:
+              raise SystemExit('HistoryItem marker missing')
+          s = s.replace(marker, replacement, 1)
+          old = '''            .clip(RoundedCornerShape(16.dp))\n            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))\n            .border(1.dp, dynColors.first, RoundedCornerShape(16.dp))\n'''
+          new = '''            .clip(RoundedCornerShape(16.dp))\n            .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))\n            .border(1.dp, if (glass.enabled) glass.border else dynColors.first, RoundedCornerShape(16.dp))\n'''
+          if old not in s:
+              raise SystemExit('HistoryItem surface block missing')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+
+          # Settings: add a live glass preview and make the panel itself follow the slider.
+          p = Path('app/src/main/java/com/example/ui/SettingsScreen.kt')
+          s = p.read_text()
+
+          old = '''                Card(\n                    modifier = Modifier.fillMaxWidth(),\n                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)),\n                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))\n                ) {\n'''
+          new = '''                val glassBaseAlpha = (1f - glassTransparency).coerceIn(0.10f, 0.80f)\n                val glassPreviewAlpha = when (glassType) {\n                    "frosted" -> (glassBaseAlpha + 0.18f).coerceIn(0.22f, 0.86f)\n                    "crystal" -> (glassBaseAlpha - 0.12f).coerceIn(0.08f, 0.62f)\n                    else -> glassBaseAlpha\n                }\n                Card(\n                    modifier = Modifier.fillMaxWidth(),\n                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = glassPreviewAlpha)),\n                    border = BorderStroke(1.dp, Color.White.copy(alpha = if (glassType == "crystal") 0.95f else 0.72f))\n                ) {\n'''
+          if old not in s:
+              raise SystemExit('settings glass card block missing')
+          s = s.replace(old, new, 1)
+
+          # Insert preview before transparency controls.
+          marker = '''                        Text("Transparência do vidro: ${(glassTransparency * 100).toInt()}%", style = MaterialTheme.typography.titleSmall)\n'''
+          preview = '''                        val previewColors = when (glassAccentColor) {\n                            "red" -> listOf(Color(0xFFE5252A), Color(0xFFFFB5B7))\n                            "green" -> listOf(Color(0xFF2E9D44), Color(0xFFBDEAC8))\n                            "orange" -> listOf(Color(0xFFF28C18), Color(0xFFFFD19A))\n                            "blue" -> listOf(Color(0xFF2474D2), Color(0xFFB9D7F8))\n                            "gold" -> listOf(Color(0xFFC99A14), Color(0xFFF2D989))\n                            else -> listOf(Color(0xFFE5252A), Color(0xFF2E9D44), Color(0xFFF28C18), Color(0xFF2474D2), Color(0xFFC99A14))\n                        }\n                        Box(\n                            modifier = Modifier\n                                .fillMaxWidth()\n                                .height(128.dp)\n                                .clip(RoundedCornerShape(24.dp))\n                                .background(Brush.linearGradient(previewColors))\n                                .padding(16.dp),\n                            contentAlignment = Alignment.Center\n                        ) {\n                            Card(\n                                modifier = Modifier.fillMaxWidth(),\n                                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = glassPreviewAlpha)),\n                                border = BorderStroke(1.dp, Color.White.copy(alpha = if (glassType == "crystal") 0.98f else 0.78f)),\n                                shape = RoundedCornerShape(20.dp)\n                            ) {\n                                Column(Modifier.padding(16.dp)) {\n                                    Text("Prévia do vidro", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)\n                                    Text(\n                                        when (glassType) {\n                                            "frosted" -> "Fosco • superfície mais preenchida"\n                                            "crystal" -> "Cristal • mais transparente e brilhante"\n                                            else -> "Suave • equilíbrio entre cor e transparência"\n                                        },\n                                        style = MaterialTheme.typography.bodySmall\n                                    )\n                                }\n                            }\n                        }\n\n                        Text("Transparência do vidro: ${(glassTransparency * 100).toInt()}%", style = MaterialTheme.typography.titleSmall)\n'''
+          if marker not in s:
+              raise SystemExit('settings transparency marker missing')
+          s = s.replace(marker, preview, 1)
+
+          # Needed imports.
+          if 'import androidx.compose.foundation.background\n' not in s:
+              s = s.replace('import androidx.compose.foundation.BorderStroke\n', 'import androidx.compose.foundation.BorderStroke\nimport androidx.compose.foundation.background\n', 1)
+          if 'import androidx.compose.ui.graphics.Color\n' not in s:
+              s = s.replace('import androidx.compose.ui.Alignment\n', 'import androidx.compose.ui.Alignment\nimport androidx.compose.ui.graphics.Color\nimport androidx.compose.ui.graphics.Brush\n', 1)
+          if 'import androidx.compose.foundation.shape.RoundedCornerShape\n' not in s:
+              s = s.replace('import androidx.compose.foundation.verticalScroll\n', 'import androidx.compose.foundation.verticalScroll\nimport androidx.compose.foundation.shape.RoundedCornerShape\n', 1)
+
+          p.write_text(s)
+
+      - name: Commit e push
+        run: |
+          git config user.name "bicho cutela"
+          git config user.email "haydendanex@gmail.com"
+          git add app/src/main/java/com/example/ui/SearchScreen.kt app/src/main/java/com/example/ui/SettingsScreen.kt
+          git commit -m "Corrige transparência e visual do Glass Soft Suave"
+          git push
