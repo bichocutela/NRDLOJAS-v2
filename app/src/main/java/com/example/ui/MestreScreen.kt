@@ -37,6 +37,7 @@ import com.example.data.AppearanceSettings
 import com.example.data.AssistantSettings
 import com.example.data.CategoryDefinition
 import com.example.data.CatalogSnapshot
+import com.example.data.CatalogHistoryBackend
 import com.example.data.ThemeBackground
 import com.example.data.FirebaseService
 import com.example.data.MaintenanceSummary
@@ -359,16 +360,16 @@ fun MestreScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         MaintenanceMetricRow("Produtos locais", summary.localProductCount.toString())
-                        MaintenanceMetricRow("Produtos na nuvem", summary.remoteProductCount.toString())
+                        MaintenanceMetricRow("Produtos na nuvem", if (summary.remoteAvailable) summary.remoteProductCount.toString() else "Não disponível")
                         val productDifference = summary.remoteProductCount - summary.localProductCount
-                        val differenceLabel = when {
+                        val differenceLabel = if (!summary.remoteAvailable) "Não calculada" else when {
                             productDifference == 0 -> "Nenhuma diferença"
                             productDifference > 0 -> "+$productDifference na nuvem"
                             else -> "$productDifference na nuvem"
                         }
                         MaintenanceMetricRow("Diferença de produtos", differenceLabel)
-                        MaintenanceMetricRow("Abas dinâmicas", summary.dynamicTabCount.toString())
-                        MaintenanceMetricRow("Sugestões pendentes", summary.pendingSuggestionCount.toString())
+                        MaintenanceMetricRow("Abas dinâmicas", if (summary.remoteAvailable) summary.dynamicTabCount.toString() else "Não disponível")
+                        MaintenanceMetricRow("Sugestões pendentes", if (summary.remoteAvailable) summary.pendingSuggestionCount.toString() else "Não disponível")
                         val lastUpdate = summary.lastRemoteProductUpdate?.let {
                             SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(it))
                         } ?: "Não informado"
@@ -391,7 +392,7 @@ fun MestreScreen(
                             coroutineScope.launch {
                                 isLoadingMaintenance = true
                                 try {
-                                    val result = FirebaseService.getMaintenanceSummary(
+                                    val result = CatalogHistoryBackend.getMaintenanceSummary(
                                         localProductCount = allProducts.size,
                                         localCategoryCounts = localCategoryCounts
                                     )

@@ -715,7 +715,8 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         viewModelScope.launch {
             _isLoadingCatalogHistory.value = true
             try {
-                val snapshot = CatalogHistoryBackend.createSnapshot()
+                val localProducts = repository.getAllProductsSync()
+                val snapshot = CatalogHistoryBackend.createSnapshot(localProducts)
                 if (snapshot != null) {
                     _catalogSnapshots.value = listOf(snapshot) + _catalogSnapshots.value
                     _syncMessage.emit("Backup criado com ${snapshot.productCount} produto(s).")
@@ -734,7 +735,8 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         viewModelScope.launch {
             _isLoadingCatalogHistory.value = true
             try {
-                val result = CatalogHistoryBackend.restoreSnapshot(snapshotId)
+                val currentProducts = repository.getAllProductsSync()
+                val result = CatalogHistoryBackend.restoreSnapshot(snapshotId, currentProducts)
                 result.restoredProducts?.let { repository.insertProducts(it) }
                 if (result.success) {
                     val restoredCodes = result.restoredProducts.orEmpty().map { it.code }.toSet()
