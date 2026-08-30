@@ -25,41 +25,28 @@ jobs:
 
         prefs = Path('app/src/main/java/com/example/data/UserPreferences.kt')
         text = prefs.read_text()
-        old = '''    val appTheme: Flow<String> = context.dataStore.data.map { preferences ->
-            preferences[APP_THEME] ?: "multicolor"
-        }
-
-        val appearanceMode: Flow<String> = context.dataStore.data.map { preferences ->
-        '''
-        new = '''    val appTheme: Flow<String> = context.dataStore.data.map { preferences ->
-            preferences[APP_THEME] ?: "multicolor"
-        }
-        val appThemeWasChosen: Flow<Boolean> = context.dataStore.data.map { preferences ->
-            preferences[APP_THEME] != null
-        }
-
-        val appearanceMode: Flow<String> = context.dataStore.data.map { preferences ->
-        '''
-        if old not in text:
-            raise SystemExit('Trecho appTheme não encontrado')
-        prefs.write_text(text.replace(old, new, 1))
+        marker = '    val appearanceMode: Flow<String> = context.dataStore.data.map { preferences ->\n'
+        addition = '    val appThemeWasChosen: Flow<Boolean> = context.dataStore.data.map { preferences ->\n        preferences[APP_THEME] != null\n    }\n\n'
+        if 'val appThemeWasChosen:' not in text:
+            if marker not in text:
+                raise SystemExit('Marcador appearanceMode não encontrado')
+            text = text.replace(marker, addition + marker, 1)
+        prefs.write_text(text)
 
         home = Path('app/src/main/java/com/example/ui/SearchScreen.kt')
         text = home.read_text()
-        old = '''    val localAppTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
-            val remoteAppearance by FirebaseService.observeAppearanceSettings()
-                .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
-            val appTheme = if (remoteAppearance.overrideLocalTheme) remoteAppearance.theme else localAppTheme
-        '''
-        new = '''    val localAppTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
-            val localThemeWasChosen by viewModel.userPreferences.appThemeWasChosen.collectAsStateWithLifecycle(initialValue = false)
-            val remoteAppearance by FirebaseService.observeAppearanceSettings()
-                .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
-            val appTheme = if (remoteAppearance.overrideLocalTheme && !localThemeWasChosen) remoteAppearance.theme else localAppTheme
-        '''
-        if old not in text:
-            raise SystemExit('Trecho de tema da Home não encontrado')
-        home.write_text(text.replace(old, new, 1))
+        marker = '    val remoteAppearance by FirebaseService.observeAppearanceSettings()\n'
+        addition = '    val localThemeWasChosen by viewModel.userPreferences.appThemeWasChosen.collectAsStateWithLifecycle(initialValue = false)\n'
+        if 'val localThemeWasChosen by' not in text:
+            if marker not in text:
+                raise SystemExit('Marcador remoteAppearance não encontrado')
+            text = text.replace(marker, addition + marker, 1)
+        old = '    val appTheme = if (remoteAppearance.overrideLocalTheme) remoteAppearance.theme else localAppTheme\n'
+        new = '    val appTheme = if (remoteAppearance.overrideLocalTheme && !localThemeWasChosen) remoteAppearance.theme else localAppTheme\n'
+        if old not in text and new not in text:
+            raise SystemExit('Regra appTheme não encontrada')
+        text = text.replace(old, new, 1)
+        home.write_text(text)
         PY
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
