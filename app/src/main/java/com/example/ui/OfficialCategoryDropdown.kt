@@ -22,28 +22,32 @@ fun OfficialCategoryDropdown(
     onCategorySelected: (String) -> Unit,
     modifier: Modifier = Modifier,
     label: String = "Categoria",
-    categories: List<String> = ProductStandards.officialCategories
+    categories: List<String> = ProductStandards.officialCategories,
+    enabled: Boolean = true
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = !expanded },
+        expanded = expanded && enabled,
+        onExpandedChange = {
+            if (enabled) expanded = !expanded
+        },
         modifier = modifier
     ) {
         OutlinedTextField(
             value = selectedCategory,
             onValueChange = {},
             readOnly = true,
+            enabled = enabled,
             label = { Text(label) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded && enabled) },
             modifier = Modifier
                 .menuAnchor()
                 .fillMaxWidth(),
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
         )
         ExposedDropdownMenu(
-            expanded = expanded,
+            expanded = expanded && enabled,
             onDismissRequest = { expanded = false }
         ) {
             categories.forEach { category ->
