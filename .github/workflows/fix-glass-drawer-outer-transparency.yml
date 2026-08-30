@@ -1,0 +1,26 @@
+name: Corrigir Transparencia Externa Drawer Glass
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-glass-drawer-outer-transparency.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Aplicar correção
+        run: python3 tools/fix_glass_drawer_outer_transparency.py
+      - name: Commit e push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/ui/AppNavGraph.kt
+          git commit -m "Deixa fundo externo do drawer transparente no Glass"
+          git push
