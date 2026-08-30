@@ -14,3 +14,4 @@
 <!-- rebuild-preview-adjustment: 2026-08-30 -->
 <!-- updater-retest-release: 2026-08-30T08:32-03:00 -->
 <!-- glass-home-fix-dispatch: 2026-08-30 -->
+<!-- glass-home-fix-workflow-ready -->
