@@ -325,6 +325,7 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
 
     var showProductSearchSheet by remember { mutableStateOf(false) }
     var showMostUsedSheet by remember { mutableStateOf(false) }
+    var selectedMostUsedProduct by remember { mutableStateOf<Product?>(null) }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     var showNotificationsSheet by remember { mutableStateOf(false) }
     var selectedNotificationProduct by remember { mutableStateOf<Product?>(null) }
@@ -568,7 +569,17 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             itemsIndexed(mostUsed, key = { _, it -> it.code }) { index, product ->
-                                MiniProductCard(product, viewModel, index, appTheme, textPreferences)
+                                MiniProductCard(
+                                    product = product,
+                                    viewModel = viewModel,
+                                    index = index,
+                                    appTheme = appTheme,
+                                    textPreferences = textPreferences,
+                                    onProductClick = { selected ->
+                                        viewModel.onProductSearched(selected)
+                                        selectedMostUsedProduct = selected
+                                    }
+                                )
                             }
                         }
                     }
@@ -729,7 +740,17 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                     Text("Mais Utilizados", style = MaterialTheme.typography.headlineSmall)
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(mostUsed, key = { _, item -> item.code }) { index, product ->
-                            ProductCard(product, viewModel, index, appTheme, textPreferences)
+                            ProductCard(
+                                product = product,
+                                viewModel = viewModel,
+                                index = index,
+                                appTheme = appTheme,
+                                textPreferences = textPreferences,
+                                onProductClick = { selected ->
+                                    viewModel.onProductSearched(selected)
+                                    selectedMostUsedProduct = selected
+                                }
+                            )
                         }
                     }
                 }
@@ -811,6 +832,13 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                 product = product,
                 onDismiss = { selectedNotificationProduct = null },
                 highlightedFromNotification = true
+            )
+        }
+
+        selectedMostUsedProduct?.let { product ->
+            ProductBarcodeDialog(
+                product = product,
+                onDismiss = { selectedMostUsedProduct = null }
             )
         }
 
@@ -1027,10 +1055,11 @@ fun ProductCard(
     viewModel: MainViewModel,
     index: Int = 0,
     appTheme: String = "multicolor",
-    textPreferences: HomeTextPreferences = HomeTextPreferences()
+    textPreferences: HomeTextPreferences = HomeTextPreferences(),
+    onProductClick: ((Product) -> Unit)? = null
 ) {
     val glass = rememberGlassVisualStyle(viewModel)
-    var showDialog by remember { mutableStateOf(false) }
+    var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(product = product, onDismiss = { showDialog = false })
     }
@@ -1045,7 +1074,14 @@ fun ProductCard(
                 if (glass.enabled) glass.border else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
                 RoundedCornerShape(24.dp)
             )
-            .vibrateClickable(viewModel) { viewModel.onProductSearched(product); showDialog = true }
+            .vibrateClickable(viewModel) {
+                if (onProductClick != null) {
+                    onProductClick(product)
+                } else {
+                    viewModel.onProductSearched(product)
+                    showDialog = true
+                }
+            }
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1136,10 +1172,11 @@ fun MiniProductCard(
     viewModel: MainViewModel,
     index: Int = 0,
     appTheme: String = "multicolor",
-    textPreferences: HomeTextPreferences = HomeTextPreferences()
+    textPreferences: HomeTextPreferences = HomeTextPreferences(),
+    onProductClick: ((Product) -> Unit)? = null
 ) {
     val glass = rememberGlassVisualStyle(viewModel)
-    var showDialog by remember { mutableStateOf(false) }
+    var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(product = product, onDismiss = { showDialog = false })
     }
@@ -1154,7 +1191,14 @@ fun MiniProductCard(
                 if (glass.enabled) glass.border else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
                 RoundedCornerShape(24.dp)
             )
-            .vibrateClickable(viewModel) { viewModel.onProductSearched(product); showDialog = true }
+            .vibrateClickable(viewModel) {
+                if (onProductClick != null) {
+                    onProductClick(product)
+                } else {
+                    viewModel.onProductSearched(product)
+                    showDialog = true
+                }
+            }
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
