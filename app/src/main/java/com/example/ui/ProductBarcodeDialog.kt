@@ -36,6 +36,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.Product
 import com.example.data.UserPreferences
+import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.util.ImageUrlHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +62,7 @@ fun ProductBarcodeDialog(
     val barcodeTitleScale by userPreferences.barcodeTitleScale.collectAsState(initial = 1.0f)
     val boldOutline by userPreferences.boldOutline.collectAsState(initial = false)
     val uppercaseBold by userPreferences.uppercaseBold.collectAsState(initial = false)
+    val glassSoftStyle = LocalGlassSoftStyle.current
     val photoUrl = remember(product.imageUrl) {
         product.imageUrl
             ?.trim()
@@ -101,6 +103,8 @@ fun ProductBarcodeDialog(
                     },
                     border = if (highlightedFromNotification) {
                         BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
+                    } else if (glassSoftStyle.enabled) {
+                        BorderStroke(1.dp, Color.White.copy(alpha = glassSoftStyle.borderAlpha))
                     } else {
                         null
                     },

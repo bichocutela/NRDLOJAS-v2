@@ -77,9 +77,9 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first,
-                    titleContentColor = getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second,
-                    navigationIconContentColor = getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second
+                    containerColor = if (appTheme == "glass") MaterialTheme.colorScheme.surface else getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first,
+                    titleContentColor = if (appTheme == "glass") MaterialTheme.colorScheme.onSurface else getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second,
+                    navigationIconContentColor = if (appTheme == "glass") MaterialTheme.colorScheme.onSurface else getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second
                 )
             )
         }
@@ -177,7 +177,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 "green" to "Verde",
                 "blue" to "Azul",
                 "orange" to "Laranja",
-                "glass" to "Glass Soft Suave"
+                "glass" to "Glass Soft"
             )
             
             ExposedDropdownMenuBox(
@@ -226,7 +226,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text("Personalizar Glass Soft Suave", style = MaterialTheme.typography.titleMedium)
+                        Text("Personalizar Glass Soft", style = MaterialTheme.typography.titleMedium)
                         Text(
                             "Esses ajustes aparecem somente neste tema.",
                             style = MaterialTheme.typography.bodySmall,
@@ -235,12 +235,13 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
 
                         var expandedGlassColorMenu by remember { mutableStateOf(false) }
                         val glassColorOptions = listOf(
-                            "multicolor" to "Multicolorido",
-                            "red" to "Vermelho",
-                            "green" to "Verde",
-                            "orange" to "Laranja",
+                            "multicolor" to "Pastel multicolorido",
                             "blue" to "Azul",
-                            "gold" to "Dourado"
+                            "green" to "Verde",
+                            "purple" to "Lilás",
+                            "pink" to "Rosa",
+                            "orange" to "Laranja",
+                            "cyan" to "Ciano"
                         )
                         ExposedDropdownMenuBox(
                             expanded = expandedGlassColorMenu,
@@ -271,12 +272,13 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         }
 
                         val previewColors = when (glassAccentColor) {
-                            "red" -> listOf(Color(0xFFE5252A), Color(0xFFFFB5B7))
-                            "green" -> listOf(Color(0xFF2E9D44), Color(0xFFBDEAC8))
-                            "orange" -> listOf(Color(0xFFF28C18), Color(0xFFFFD19A))
-                            "blue" -> listOf(Color(0xFF2474D2), Color(0xFFB9D7F8))
-                            "gold" -> listOf(Color(0xFFC99A14), Color(0xFFF2D989))
-                            else -> listOf(Color(0xFFE5252A), Color(0xFF2E9D44), Color(0xFFF28C18), Color(0xFF2474D2), Color(0xFFC99A14))
+                            "blue" -> listOf(Color(0xFF9DD1FA), Color(0xFFD8EEFF), Color(0xFFE8DCFF))
+                            "green" -> listOf(Color(0xFFA9E3C1), Color(0xFFD8F3E4), Color(0xFFD8ECFF))
+                            "purple" -> listOf(Color(0xFFC3ACFA), Color(0xFFE5DAFF), Color(0xFFFFDDF0))
+                            "pink", "red" -> listOf(Color(0xFFF4ADD2), Color(0xFFFFDDEC), Color(0xFFD8E9FF))
+                            "orange", "gold" -> listOf(Color(0xFFF8C985), Color(0xFFFFE6BE), Color(0xFFFFDDED))
+                            "cyan" -> listOf(Color(0xFF9BE3E5), Color(0xFFD3F4F1), Color(0xFFDCCEFF))
+                            else -> listOf(Color(0xFFB9DEFA), Color(0xFFCBEFD9), Color(0xFFDCCBFF), Color(0xFFF8CFE7), Color(0xFFFFE2BB), Color(0xFFC6F0F1))
                         }
                         Box(
                             modifier = Modifier

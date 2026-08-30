@@ -198,16 +198,7 @@ fun rememberGlassVisualStyle(viewModel: MainViewModel): GlassVisualStyle {
     val type by viewModel.userPreferences.glassType.collectAsStateWithLifecycle(initialValue = "soft")
     val accentName by viewModel.userPreferences.glassAccentColor.collectAsStateWithLifecycle(initialValue = "multicolor")
     val darkGlass = MaterialTheme.colorScheme.background.luminance() < 0.35f
-    val accent = remember(accentName) {
-        when (accentName) {
-            "red" -> Color(0xFFE5252A)
-            "green" -> Color(0xFF2E9D44)
-            "orange" -> Color(0xFFF28C18)
-            "blue" -> Color(0xFF2474D2)
-            "gold" -> Color(0xFFC99A14)
-            else -> listOf(Color(0xFFE5252A), Color(0xFF2E9D44), Color(0xFFF28C18), Color(0xFF2474D2), Color(0xFFC99A14)).shuffled().first()
-        }
-    }
+    val accent = remember(accentName) { com.example.ui.theme.glassSoftAccent(accentName) }
     val baseAlpha = (0.92f - transparency * 0.38f).coerceIn(0.58f, 0.86f)
     val alpha = when (type) {
         "frosted" -> (baseAlpha + 0.08f).coerceIn(0.68f, 0.92f)
@@ -248,46 +239,18 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
     }
     val glassAccentPalette = remember(glassAccentColor) {
         when (glassAccentColor) {
-            "red" -> listOf(Color(0xFFE5252A), Color(0xFFFF8A8D), Color(0xFFFFD5D6))
-            "green" -> listOf(Color(0xFF2E9D44), Color(0xFF83D69A), Color(0xFFD7F2DF))
-            "orange" -> listOf(Color(0xFFF28C18), Color(0xFFFFBA68), Color(0xFFFFE1BC))
-            "blue" -> listOf(Color(0xFF2474D2), Color(0xFF75ACEA), Color(0xFFD4E7FA))
-            "gold" -> listOf(Color(0xFFC99A14), Color(0xFFE6C45E), Color(0xFFF6E8B7))
-            else -> listOf(
-                Color(0xFFE5252A), Color(0xFF2E9D44), Color(0xFFF28C18),
-                Color(0xFF2474D2), Color(0xFFC99A14)
-            )
+            "blue" -> listOf(Color(0xFF74B6F2), Color(0xFFB9DEFA), Color(0xFFD8EEFF))
+            "green" -> listOf(Color(0xFF79CFA3), Color(0xFFCBEFD9), Color(0xFFE1F7E9))
+            "purple" -> listOf(Color(0xFFA98AEF), Color(0xFFDCCBFF), Color(0xFFEEE5FF))
+            "pink", "red" -> listOf(Color(0xFFEE88BE), Color(0xFFF8CFE7), Color(0xFFFFE5F2))
+            "orange", "gold" -> listOf(Color(0xFFF4B768), Color(0xFFFFE2BB), Color(0xFFFFF0D8))
+            "cyan" -> listOf(Color(0xFF65CFD4), Color(0xFFC6F0F1), Color(0xFFE0FAF8))
+            else -> listOf(Color(0xFF82B8EF), Color(0xFF79CFA3), Color(0xFFA98AEF), Color(0xFFEE88BE), Color(0xFFF4B768), Color(0xFF65CFD4))
         }
     }
     val isDarkGlass = MaterialTheme.colorScheme.background.luminance() < 0.35f
-    val glassBackgroundBrush = remember(glassAccentPalette, isDarkGlass) {
-        val base = if (isDarkGlass) Color(0xFF0C0F14) else Color.White
-        val accent = glassAccentPalette.first()
-        Brush.verticalGradient(
-            colors = if (isDarkGlass) {
-                listOf(
-                    base,
-                    accent.copy(alpha = 0.34f),
-                    base.copy(alpha = 0.96f)
-                )
-            } else {
-                listOf(
-                    accent.copy(alpha = 0.22f),
-                    Color.White.copy(alpha = 0.96f),
-                    accent.copy(alpha = 0.12f)
-                )
-            }
-        )
-    }
     val glassSessionAccent = remember(glassAccentColor) {
-        if (glassAccentColor == "multicolor") {
-            listOf(
-                Color(0xFFE5252A), Color(0xFF2E9D44), Color(0xFFF28C18),
-                Color(0xFF2474D2), Color(0xFFC99A14)
-            ).random()
-        } else {
-            glassAccentPalette.first()
-        }
+        if (glassAccentColor == "multicolor") Color(0xFF69A9EC) else glassAccentPalette.first()
     }
     val glassActionBrush = remember(glassSessionAccent, isDarkGlass) {
         Brush.verticalGradient(
@@ -297,8 +260,8 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
             )
         )
     }
-    val normalizedTheme = remember(appTheme) { 
-        when (appTheme.trim().lowercase()) {
+    val normalizedTheme = remember(appTheme, isGlassTheme) {
+        if (isGlassTheme) "multicolor" else when (appTheme.trim().lowercase()) {
             "multicolor" -> "multicolor"
             "gold" -> "gold"
             "green" -> "green"
@@ -374,7 +337,7 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
             modifier = Modifier
                 .fillMaxSize()
                 .then(
-                    if (isGlassTheme) Modifier.background(glassBackgroundBrush)
+                    if (isGlassTheme) Modifier.background(Color.Transparent)
                     else Modifier.background(MaterialTheme.colorScheme.background)
                 )
         ) {
