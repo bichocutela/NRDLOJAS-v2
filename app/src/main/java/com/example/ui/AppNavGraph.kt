@@ -595,7 +595,7 @@ fun CategoryItem(
     accentColor: Color? = null,
     onExpandToggle: () -> Unit
 ) {
-    val count = viewModel.productsCountByCategory.collectAsState().value[category] ?: 0
+    val count = viewModel.productsCountByCategory.collectAsState().value.firstOrNull { it.category == category }?.count ?: 0
     Column(modifier = Modifier.fillMaxWidth()) {
         TextButton(
             onClick = onExpandToggle,
