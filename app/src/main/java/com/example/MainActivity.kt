@@ -153,12 +153,12 @@ class MainActivity : ComponentActivity() {
                 .collectAsState(initial = false)
             val remoteAppearance by com.example.data.FirebaseService.observeAppearanceSettings()
                 .collectAsState(initial = AppearanceSettings())
-            val effectiveAppTheme = if (remoteAppearance.overrideLocalTheme && !hasLocalThemeChoice) {
+            val effectiveAppTheme = if (remoteAppearance.globalOverrideEnabled && !hasLocalThemeChoice) {
                 remoteAppearance.theme
             } else {
                 appTheme
             }
-            val effectiveAppearanceMode = if (remoteAppearance.overrideLocalTheme && !hasLocalAppearanceChoice) {
+            val effectiveAppearanceMode = if (remoteAppearance.globalOverrideEnabled && !hasLocalAppearanceChoice) {
                 remoteAppearance.appearanceMode
             } else {
                 appearanceMode
