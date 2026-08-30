@@ -80,6 +80,7 @@ class UserPreferences(private val context: Context) {
     val favoriteStoreCode: Flow<String?> = context.dataStore.data.map { it[FAVORITE_STORE_CODE] }
     
     val appTheme: Flow<String> = context.dataStore.data.map { preferences ->
+        LocalAppearanceChoiceState.themeChosen = preferences[APP_THEME] != null
         preferences[APP_THEME] ?: "multicolor"
     }
 
@@ -181,6 +182,7 @@ class UserPreferences(private val context: Context) {
     val lastNotifiedPromotionFingerprint: Flow<String?> = context.dataStore.data.map { it[LAST_NOTIFIED_PROMOTION_FINGERPRINT] }
 
     suspend fun setAppTheme(theme: String) {
+        LocalAppearanceChoiceState.themeChosen = true
         context.dataStore.edit { it[APP_THEME] = theme }
     }
 
