@@ -142,6 +142,7 @@ class MainActivity : ComponentActivity() {
         setContent {
 
             val fontScale by userPreferences.fontScale.collectAsState(initial = 1.0f)
+            val largeText by userPreferences.largeText.collectAsState(initial = false)
             val appTheme by userPreferences.appTheme.collectAsState(initial = "multicolor")
             val appearanceMode by userPreferences.appearanceMode.collectAsState(initial = "system")
             val hasLocalThemeChoice by applicationContext.dataStore.data
@@ -171,7 +172,7 @@ class MainActivity : ComponentActivity() {
             val currentDensity = LocalDensity.current
             val customDensity = androidx.compose.ui.unit.Density(
                 density = currentDensity.density,
-                fontScale = currentDensity.fontScale * fontScale
+                fontScale = currentDensity.fontScale * fontScale * if (largeText) 1.15f else 1.0f
             )
 
 
