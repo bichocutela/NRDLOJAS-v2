@@ -1268,8 +1268,8 @@ fun ThemeBanner(
                     translationX = size.width * safeOffsetX
                     translationY = size.height * safeOffsetY
                 },
-            contentScale = ContentScale.FillWidth,
-            alignment = Alignment.TopCenter
+            contentScale = ContentScale.Fit,
+            alignment = Alignment.Center
         )
     }
 }
