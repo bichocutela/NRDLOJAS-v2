@@ -125,6 +125,7 @@ fun MestreScreen(
     var backgroundInputError by remember { mutableStateOf<String?>(null) }
     var isUploadingThemeBackground by remember { mutableStateOf(false) }
     var backgroundToDelete by remember { mutableStateOf<Pair<String, ThemeBackground>?>(null) }
+    var backgroundToPreview by remember { mutableStateOf<Pair<String, ThemeBackground>?>(null) }
     var maintenanceSummary by remember { mutableStateOf<MaintenanceSummary?>(null) }
     var isLoadingMaintenance by remember { mutableStateOf(false) }
     var snapshotToRestore by remember { mutableStateOf<CatalogSnapshot?>(null) }
@@ -1047,6 +1048,7 @@ fun MestreScreen(
                                                 }
                                             )
                                         },
+                                        onPreview = { backgroundToPreview = themeKey to background },
                                         onEdit = { openBackgroundEditor(themeKey, background) },
                                         onDelete = { backgroundToDelete = themeKey to background }
                                     )
@@ -1468,6 +1470,69 @@ fun MestreScreen(
                 )
             }
 
+            backgroundToPreview?.let { (themeKey, background) ->
+                androidx.compose.ui.window.Dialog(
+                    onDismissRequest = { backgroundToPreview = null }
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surface
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                "Prévia real na Home",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "${background.label} • ${themeOptions.find { it.first == themeKey }?.second ?: themeKey}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(14.dp))
+                            androidx.compose.foundation.layout.BoxWithConstraints(
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                val previewHeight = maxWidth / 3f
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(previewHeight)
+                                        .clip(
+                                            RoundedCornerShape(
+                                                bottomStart = 32.dp,
+                                                bottomEnd = 32.dp
+                                            )
+                                        )
+                                        .background(Color.White)
+                                ) {
+                                    ThemeBanner(
+                                        appTheme = themeKey,
+                                        backgroundUrl = background.url,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                "Esta prévia usa o mesmo componente, proporção e recorte do banner exibido na Home. Nada é aplicado ao fechar esta janela.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = { backgroundToPreview = null },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Fechar prévia")
+                            }
+                        }
+                    }
+                }
+            }
+
             backgroundToDelete?.let { (themeKey, background) ->
                 AlertDialog(
                     onDismissRequest = { backgroundToDelete = null },
@@ -1523,6 +1588,7 @@ private fun ThemeBackgroundItem(
     background: ThemeBackground,
     enabled: Boolean,
     onActiveChange: (Boolean) -> Unit,
+    onPreview: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -1537,7 +1603,8 @@ private fun ThemeBackgroundItem(
                 contentDescription = "Prévia de ${background.label}",
                 modifier = Modifier
                     .size(width = 72.dp, height = 44.dp)
-                    .clip(RoundedCornerShape(6.dp)),
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(enabled = enabled, onClick = onPreview),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop
             )
             Spacer(modifier = Modifier.width(8.dp))
