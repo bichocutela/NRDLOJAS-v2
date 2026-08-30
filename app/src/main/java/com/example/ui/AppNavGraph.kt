@@ -1,6 +1,7 @@
 package com.example.ui
 
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -16,6 +17,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import kotlinx.coroutines.tasks.await
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -285,6 +291,20 @@ fun LoginDrawerContent(
     var isLoading by remember { mutableStateOf(false) }
     val categories by viewModel.productsCountByCategory.collectAsState()
     val activeCategoryNames by viewModel.activeCategoryNames.collectAsState()
+    val appTheme by viewModel.userPreferences.appTheme.collectAsState(initial = "multicolor")
+    val isMulticolorTheme = appTheme.trim().lowercase() == "multicolor"
+    val multicolorSessionColors = remember {
+        listOf(
+            Color(0xFFE5252A), // vermelho
+            Color(0xFF2E9D44), // verde
+            Color(0xFFF28C18), // laranja
+            Color(0xFF2474D2), // azul
+            Color(0xFFC99A14)  // dourado
+        ).shuffled()
+    }
+    val multicolorBrush = remember(multicolorSessionColors) {
+        Brush.horizontalGradient(multicolorSessionColors)
+    }
     var expandedCategory by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -299,8 +319,10 @@ fun LoginDrawerContent(
             Spacer(modifier = Modifier.height(24.dp))
             Text(
                 text = "Login",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary
+                style = if (isMulticolorTheme) {
+                    MaterialTheme.typography.headlineMedium.merge(TextStyle(brush = multicolorBrush))
+                } else MaterialTheme.typography.headlineMedium,
+                color = if (isMulticolorTheme) Color.Unspecified else MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(32.dp))
             OutlinedTextField(
@@ -368,14 +390,21 @@ fun LoginDrawerContent(
             Spacer(modifier = Modifier.height(24.dp))
             Text(
                 text = if (userRole == "mestre" || userRole == "admin") "Administrador" else "Usuário",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary
+                style = if (isMulticolorTheme) {
+                    MaterialTheme.typography.headlineMedium.merge(TextStyle(brush = multicolorBrush))
+                } else MaterialTheme.typography.headlineMedium,
+                color = if (isMulticolorTheme) Color.Unspecified else MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(24.dp))
             if (userRole == "mestre" || userRole == "admin") {
                 Button(
                     onClick = onGoToAdmin,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = if (isMulticolorTheme) {
+                        Modifier.fillMaxWidth().background(multicolorBrush, RoundedCornerShape(28.dp))
+                    } else Modifier.fillMaxWidth(),
+                    colors = if (isMulticolorTheme) {
+                        ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.White)
+                    } else ButtonDefaults.buttonColors()
                 ) {
                     if (userRole == "mestre") {
                         Text("Acessar Painel Mestre")
@@ -412,8 +441,10 @@ fun LoginDrawerContent(
         if (supportedDynamicTabs.isNotEmpty()) {
             Text(
                 text = "Abas Adicionais",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
+                style = if (isMulticolorTheme) {
+                    MaterialTheme.typography.titleLarge.merge(TextStyle(brush = multicolorBrush))
+                } else MaterialTheme.typography.titleLarge,
+                color = if (isMulticolorTheme) Color.Unspecified else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.Start)
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -445,6 +476,10 @@ fun LoginDrawerContent(
                 category = categoryName,
                 viewModel = viewModel,
                 isExpanded = expandedCategory == categoryName,
+                accentBrush = if (isMulticolorTheme) multicolorBrush else null,
+                accentColor = if (isMulticolorTheme) {
+                    multicolorSessionColors[kotlin.math.abs(categoryName.hashCode()) % multicolorSessionColors.size]
+                } else null,
                 onExpandToggle = {
                     if (expandedCategory == categoryName) {
                         expandedCategory = null
@@ -461,7 +496,12 @@ fun LoginDrawerContent(
 
         Button(
             onClick = onGoToPromotions,
-            modifier = Modifier.fillMaxWidth()
+            modifier = if (isMulticolorTheme) {
+                Modifier.fillMaxWidth().background(multicolorBrush, RoundedCornerShape(28.dp))
+            } else Modifier.fillMaxWidth(),
+            colors = if (isMulticolorTheme) {
+                ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.White)
+            } else ButtonDefaults.buttonColors()
         ) {
             Text("Promoções")
         }
@@ -470,7 +510,12 @@ fun LoginDrawerContent(
 
         Button(
             onClick = onGoToSettings,
-            modifier = Modifier.fillMaxWidth()
+            modifier = if (isMulticolorTheme) {
+                Modifier.fillMaxWidth().background(multicolorBrush, RoundedCornerShape(28.dp))
+            } else Modifier.fillMaxWidth(),
+            colors = if (isMulticolorTheme) {
+                ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.White)
+            } else ButtonDefaults.buttonColors()
         ) {
             Text("Configurações")
         }
@@ -479,7 +524,12 @@ fun LoginDrawerContent(
 
         Button(
             onClick = onGoToAbout,
-            modifier = Modifier.fillMaxWidth()
+            modifier = if (isMulticolorTheme) {
+                Modifier.fillMaxWidth().background(multicolorBrush, RoundedCornerShape(28.dp))
+            } else Modifier.fillMaxWidth(),
+            colors = if (isMulticolorTheme) {
+                ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.White)
+            } else ButtonDefaults.buttonColors()
         ) {
             Text("Sobre")
         }
@@ -491,6 +541,8 @@ fun CategoryItem(
     category: String,
     viewModel: MainViewModel,
     isExpanded: Boolean,
+    accentBrush: Brush? = null,
+    accentColor: Color? = null,
     onExpandToggle: () -> Unit
 ) {
     val productsFlow = remember(category) { viewModel.getProductsByCategory(category) }
@@ -507,10 +559,17 @@ fun CategoryItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = category, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = category,
+                    style = if (accentBrush != null) {
+                        MaterialTheme.typography.titleMedium.merge(TextStyle(brush = accentBrush))
+                    } else MaterialTheme.typography.titleMedium,
+                    color = if (accentBrush != null) Color.Unspecified else LocalContentColor.current
+                )
                 Icon(
                     imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (isExpanded) "Recolher" else "Expandir"
+                    contentDescription = if (isExpanded) "Recolher" else "Expandir",
+                    tint = accentColor ?: LocalContentColor.current
                 )
             }
         }
