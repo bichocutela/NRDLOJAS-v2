@@ -61,10 +61,10 @@ internal fun MestreSuggestionsSection(
             title = "Pendências",
             description = "Analise sugestões dos usuários e marque solicitações como corrigidas"
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
     }
     OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -81,10 +81,10 @@ internal fun MestreSuggestionsSection(
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -107,7 +107,7 @@ internal fun MestreSuggestionsSection(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             val filteredSuggestions = suggestions
                 .filter { suggestion ->
@@ -143,7 +143,7 @@ internal fun MestreSuggestionsSection(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 filteredSuggestions
                     .subList(pagination.fromIndex, pagination.toIndex)
                     .forEach { suggestion ->
@@ -163,7 +163,7 @@ internal fun MestreSuggestionsSection(
                                 }
                             }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                     }
                 if (pagination.pageCount > 1) {
                     Row(
@@ -207,9 +207,9 @@ internal fun MestreSuggestionsPreview(
         title = "Pendências recentes",
         description = "Acompanhe as solicitações que precisam da sua atenção"
     )
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(6.dp))
     OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -220,7 +220,7 @@ internal fun MestreSuggestionsPreview(
                     Text(pendingSuggestions.size.toString())
                 }
             }
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             if (pendingSuggestions.isEmpty()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
@@ -228,19 +228,19 @@ internal fun MestreSuggestionsPreview(
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text("Nenhuma pendência no momento.", style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
                 pendingSuggestions.take(3).forEachIndexed { index, suggestion ->
                     SuggestionPreviewItem(suggestion)
                     if (index < minOf(2, pendingSuggestions.lastIndex)) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                     }
                 }
             }
             if (suggestions.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 TextButton(onClick = onViewAll, modifier = Modifier.align(Alignment.End)) {
                     Text(if (pendingSuggestions.isEmpty()) "Ver histórico" else "Ver todas")
                 }
@@ -255,14 +255,14 @@ private fun SuggestionPreviewItem(suggestion: ProductSuggestion) {
         modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
             Text(
                 suggestion.text,
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(3.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 "${suggestion.submittedBy} · ${formatSuggestionDate(suggestion.createdAt)}",
                 style = MaterialTheme.typography.bodySmall,
@@ -286,19 +286,19 @@ private fun SuggestionManagementItem(
         modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
             Text(suggestion.text, style = MaterialTheme.typography.bodyLarge)
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text("Enviada por: ${suggestion.submittedBy}", style = MaterialTheme.typography.bodySmall)
             Text(dateText, style = MaterialTheme.typography.bodySmall)
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             if (isUpdating) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(
