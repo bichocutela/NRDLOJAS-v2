@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.util.Log
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
@@ -67,7 +68,19 @@ object CatalogAdminOperations {
                 if (newSnapshot.exists()) {
                     false
                 } else {
-                    transaction.set(newRef, product.toRemoteMap())
+                    val previousCount = oldSnapshot.getLong("searchCount") ?: product.searchCount.toLong()
+                    val previousCreatedAt = oldSnapshot.get("createdAt")
+                        ?: oldSnapshot.get("timestamp")
+                        ?: FieldValue.serverTimestamp()
+                    val previousLastViewedAt = oldSnapshot.get("lastViewedAt")
+                    transaction.set(
+                        newRef,
+                        product.toRemoteMap(
+                            searchCountValue = previousCount,
+                            createdAtValue = previousCreatedAt,
+                            lastViewedAtValue = previousLastViewedAt
+                        )
+                    )
                     transaction.delete(oldRef)
                     true
                 }
@@ -160,14 +173,23 @@ object CatalogAdminOperations {
     suspend fun rollbackProductsCategory(currentName: String, previousName: String): Boolean =
         renameProductsCategorySafely(currentName, previousName)
 
-    private fun Product.toRemoteMap(): Map<String, Any?> = mapOf(
+    private fun Product.toRemoteMap(
+        searchCountValue: Long = searchCount.toLong(),
+        createdAtValue: Any = FieldValue.serverTimestamp(),
+        lastViewedAtValue: Any? = null,
+    ): Map<String, Any?> = mutableMapOf<String, Any?>(
         "code" to code.trim(),
         "name" to name,
         "searchName" to searchName,
         "category" to category,
         "unit" to unit,
         "imageUrl" to imageUrl,
-        "searchCount" to searchCount,
-        "timestamp" to System.currentTimeMillis(),
-    )
+        "searchCount" to searchCountValue,
+        "createdAt" to createdAtValue,
+        "updatedAt" to FieldValue.serverTimestamp(),
+    ).apply {
+        if (lastViewedAtValue != null) {
+            this["lastViewedAt"] = lastViewedAtValue
+        }
+    }
 }

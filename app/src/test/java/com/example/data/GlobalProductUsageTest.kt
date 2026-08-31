@@ -5,14 +5,14 @@ import org.junit.Test
 
 class GlobalProductUsageTest {
     @Test
-    fun recentRoutineCanOvertakeStaleHistoricTotal() {
+    fun largerGlobalTotalAlwaysRanksFirst() {
         val now = 1_800_000_000_000L
         val staleLeader = usage("old", count = 1_000, lastViewedAt = now - 70L * DAY)
         val routineLeader = usage("recent", count = 12, lastViewedAt = now)
 
-        val ranked = rankGloballyMostUsedProducts(listOf(staleLeader, routineLeader), now)
+        val ranked = rankGloballyMostUsedProducts(listOf(staleLeader, routineLeader))
 
-        assertEquals(listOf("recent", "old"), ranked.map { it.code })
+        assertEquals(listOf("old", "recent"), ranked.map { it.code })
     }
 
     @Test
@@ -22,8 +22,7 @@ class GlobalProductUsageTest {
             listOf(
                 usage("less", count = 4, lastViewedAt = now),
                 usage("more", count = 9, lastViewedAt = now)
-            ),
-            now
+            )
         )
 
         assertEquals(listOf("more", "less"), ranked.map { it.code })
@@ -32,14 +31,29 @@ class GlobalProductUsageTest {
     @Test
     fun productsNeverOpenedAreNotShown() {
         val ranked = rankGloballyMostUsedProducts(
-            listOf(usage("unused", count = 0, lastViewedAt = null)),
-            nowMillis = 1_800_000_000_000L
+            listOf(usage("unused", count = 0, lastViewedAt = null))
         )
 
         assertEquals(emptyList<Product>(), ranked)
     }
 
-    private fun usage(code: String, count: Int, lastViewedAt: Long?) = GlobalProductUsage(
+    @Test
+    fun latestAddedUsesCreationDateAndSkipsUnknownDates() {
+        val newest = usage("newest", count = 0, lastViewedAt = null, createdAt = 300L)
+        val older = usage("older", count = 0, lastViewedAt = null, createdAt = 100L)
+        val unknown = usage("unknown", count = 0, lastViewedAt = null)
+
+        val ranked = rankLatestAddedProducts(listOf(older, unknown, newest))
+
+        assertEquals(listOf("newest", "older"), ranked.map { it.code })
+    }
+
+    private fun usage(
+        code: String,
+        count: Int,
+        lastViewedAt: Long?,
+        createdAt: Long? = null
+    ) = GlobalProductUsage(
         product = Product(
             code = code,
             name = code,
@@ -47,7 +61,8 @@ class GlobalProductUsageTest {
             category = "Mercearia",
             searchCount = count
         ),
-        lastViewedAt = lastViewedAt
+        lastViewedAt = lastViewedAt,
+        createdAt = createdAt
     )
 
     private companion object {
