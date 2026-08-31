@@ -67,14 +67,14 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                 .padding(innerPadding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
             Text(
                 text = "Sobre o Aplicativo\n\nEste aplicativo foi desenvolvido por Alessandro P., Operador de Caixa, com o objetivo de auxiliar os colaboradores da Frente de Loja na consulta rápida de códigos correlatos, contribuindo para mais agilidade, precisão e eficiência no atendimento aos clientes.\n\nEste projeto nasceu da vivência diária na operação de caixa e da necessidade de tornar a rotina de trabalho mais prática, oferecendo uma ferramenta de apoio aos profissionais da equipe.\n\nRegistro meu sincero agradecimento aos Fiscais de Caixa, pela confiança, incentivo e apoio durante o desenvolvimento desta iniciativa, bem como aos colegas de trabalho, que compartilharam sugestões, experiências e conhecimentos que contribuíram para o aprimoramento do aplicativo.\n\nEste aplicativo foi desenvolvido exclusivamente como uma ferramenta de apoio operacional interno e não substitui os procedimentos, normas, orientações ou sistemas oficiais da empresa.\n\nTodas as marcas, nomes, logotipos, códigos, informações e demais conteúdos relacionados ao Supermercado Nordestão pertencem aos seus respectivos proprietários. Todos os direitos são reservados à empresa. O desenvolvedor não reivindica qualquer direito de propriedade sobre essas informações, utilizando-as unicamente para fins de apoio às atividades internas dos colaboradores.\n\n© $copyrightYear Alessandro P. Todos os direitos do aplicativo são reservados ao autor. O conteúdo institucional e as informações pertencentes ao Supermercado Nordestão permanecem de propriedade exclusiva da empresa.\n\nVersão: ${com.example.BuildConfig.VERSION_NAME}\nDesenvolvedor: Alessandro Paulo\n@bichocutela @haydendanex",
                 style = MaterialTheme.typography.bodyMedium
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             
             LinkText(
                 text = "Site: ",
@@ -104,7 +104,7 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                 uriHandler = uriHandler
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             val context = androidx.compose.ui.platform.LocalContext.current
             val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
@@ -177,14 +177,14 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                                 if (qrPlatform == "iphone") "NRD Códigos para iPhone" else "Versão disponível: $qrReleaseTag",
                                 style = MaterialTheme.typography.bodyMedium
                             )
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
                             Image(
                                 bitmap = qrBitmap!!.asImageBitmap(),
                                 contentDescription = if (qrPlatform == "iphone") "QR Code para instalar NRD Códigos no iPhone" else "QR Code para baixar a versão Android",
-                                modifier = Modifier.size(200.dp),
+                                modifier = Modifier.size(184.dp),
                                 contentScale = ContentScale.Fit
                             )
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
                             Text(
                                 if (qrPlatform == "iphone") {
                                     "Escaneie no iPhone, abra no Safari, toque em Compartilhar e depois em Adicionar à Tela de Início."
@@ -275,7 +275,7 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                     shape = updateCardShape
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(12.dp)) {
                         Text(
                             "Atualização disponível",
                             style = MaterialTheme.typography.titleMedium,
@@ -325,7 +325,7 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
             Text(
@@ -333,7 +333,7 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Button(
                 onClick = {
@@ -389,7 +389,7 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             OutlinedButton(
                 onClick = {
@@ -481,6 +481,6 @@ fun LinkText(text: String, linkText: String, url: String, uriHandler: androidx.c
                     uriHandler.openUri(annotation.item)
                 }
         },
-        modifier = Modifier.padding(vertical = 4.dp)
+        modifier = Modifier.padding(vertical = 2.dp)
     )
 }
