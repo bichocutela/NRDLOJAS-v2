@@ -4,7 +4,10 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.layout.ContentScale
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -55,9 +58,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SearchBar
-import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -95,6 +98,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.graphics.drawscope.Stroke
 import android.os.Vibrator
 import android.content.Context
@@ -386,12 +390,11 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
             modifier = Modifier.padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            SearchBar(
-                query = searchQuery,
-                onQueryChange = viewModel::updateSearchQuery,
-                onSearch = { keyboardController?.hide() },
-                active = false,
-                onActiveChange = { keyboardController?.hide() },
+            val searchFieldShape = RoundedCornerShape(32.dp)
+            TextField(
+                value = searchQuery,
+                onValueChange = viewModel::updateSearchQuery,
+                singleLine = true,
                 placeholder = { Text("Pesquisar produto...", style = MaterialTheme.typography.bodyLarge) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Pesquisar", modifier = Modifier.size(28.dp)) },
                 trailingIcon = {
@@ -417,46 +420,69 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .glassSoftShadow(RoundedCornerShape(32.dp))
-                    .then(
-                        if (isGlassTheme) Modifier
-                        else Modifier.background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(32.dp))
-                    )
+                    .glassSoftShadow(searchFieldShape)
+                    .clip(searchFieldShape)
                     .border(
                         1.dp,
                         if (isGlassTheme) glassStyle.borderColor else MaterialTheme.colorScheme.outline,
-                        RoundedCornerShape(32.dp)
+                        searchFieldShape
                     ),
-                colors = SearchBarDefaults.colors(
-                    containerColor = if (isGlassTheme) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant,
-                    dividerColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                shape = searchFieldShape,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = if (isGlassTheme) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant,
+                    unfocusedContainerColor = if (isGlassTheme) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant,
+                    disabledContainerColor = if (isGlassTheme) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent
                 )
-            ) {}
+            )
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            Button(
-                onClick = {
-                    sheetQuery = searchQuery
-                    showProductSearchSheet = true
-                },
-                shape = RoundedCornerShape(28.dp),
-                modifier = if (isGlassTheme) {
-                    Modifier
+            val searchButtonShape = RoundedCornerShape(28.dp)
+            val openProductSearch = {
+                keyboardController?.hide()
+                sheetQuery = searchQuery
+                showProductSearchSheet = true
+            }
+            if (isGlassTheme) {
+                Surface(
+                    onClick = openProductSearch,
+                    modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp)
-                        .glassSoftShadow(RoundedCornerShape(28.dp))
-                        .background(glassActionBrush, RoundedCornerShape(28.dp))
-                        .border(1.dp, glassStyle.borderColor, RoundedCornerShape(28.dp))
-                } else Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isGlassTheme) Color.Transparent else MaterialTheme.colorScheme.primary,
-                    contentColor = if (isGlassTheme) glassStyle.onAccent else MaterialTheme.colorScheme.onPrimary
-                )
-            ) {
-                Icon(Icons.Default.Search, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Pesquisar", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        .glassSoftShadow(searchButtonShape),
+                    shape = searchButtonShape,
+                    color = Color.Transparent,
+                    contentColor = glassStyle.onAccent,
+                    border = BorderStroke(1.dp, glassStyle.borderColor)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(glassActionBrush),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Pesquisar", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                }
+            } else {
+                Button(
+                    onClick = openProductSearch,
+                    shape = searchButtonShape,
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Default.Search, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Pesquisar", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
             }
         }
 
