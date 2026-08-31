@@ -34,7 +34,7 @@ fun DynamicTabScreen(tab: DynamicTab, onNavigateBack: () -> Unit) {
                 .padding(innerPadding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             when (tab.type) {
@@ -45,7 +45,7 @@ fun DynamicTabScreen(tab: DynamicTab, onNavigateBack: () -> Unit) {
                     AsyncImage(
                         model = tab.content,
                         contentDescription = tab.title,
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
                         contentScale = ContentScale.Fit
                     )
                 }
