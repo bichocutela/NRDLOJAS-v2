@@ -48,6 +48,7 @@ import com.example.data.MaintenanceSummary
 import com.example.data.ProductImportParser
 import com.example.data.NotificationSettings
 import com.example.data.ProductImportResult
+import com.example.ui.theme.glassSoftShadow
 
 private const val NEW_CATEGORY_ACTION_KEY = "__new_category__"
 private const val CATEGORY_PAGE_SIZE = 15
@@ -179,7 +180,8 @@ fun MestreScreen(
         "gold" to "Dourado",
         "green" to "Verde",
         "blue" to "Azul",
-        "orange" to "Laranja"
+        "orange" to "Laranja",
+        "glass" to "Glass Soft"
     )
     val appearanceModeOptions = listOf(
         "system" to "Seguir sistema",
@@ -340,7 +342,7 @@ fun MestreScreen(
                 description = "Confira o estado do catálogo local e remoto sem alterar dados"
             )
             Spacer(modifier = Modifier.height(8.dp))
-            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     val summary = maintenanceSummary
                     if (summary == null) {
@@ -425,7 +427,7 @@ fun MestreScreen(
                 description = "Crie pontos de retorno do catálogo antes de mudanças importantes"
             )
             Spacer(modifier = Modifier.height(8.dp))
-            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         "O histórico mantém até 20 backups remotos. Restaurar uma versão cria primeiro um backup automático do catálogo atual.",
@@ -499,7 +501,7 @@ fun MestreScreen(
                 hasUnsavedChanges = homeHasChanges
             )
             Spacer(modifier = Modifier.height(12.dp))
-            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         "Seções visíveis",
@@ -583,7 +585,7 @@ fun MestreScreen(
             if (currentPage == MestrePanelPage.CATEGORIES) {
             MestrePageIntro("Organize os grupos exibidos e usados no catálogo")
             Spacer(modifier = Modifier.height(12.dp))
-            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Button(
                         onClick = {
@@ -694,7 +696,7 @@ fun MestreScreen(
                 hasUnsavedChanges = notificationsHaveChanges
             )
             Spacer(modifier = Modifier.height(12.dp))
-            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     NotificationSettingSwitch(
                         label = "Permitir notificações",
@@ -778,7 +780,7 @@ fun MestreScreen(
                 hasUnsavedChanges = appearanceHasChanges
             )
             Spacer(modifier = Modifier.height(12.dp))
-            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     NotificationSettingSwitch(
                         label = "Aplicar aparência para todos",
@@ -884,7 +886,7 @@ fun MestreScreen(
                             }
                         }
                         OutlinedCard(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium),
                             enabled = true,
                             onClick = {
                                 expandedBackgroundThemes = if (expanded) {
@@ -1679,7 +1681,7 @@ private fun ThemeBackgroundItem(
     onDelete: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 10.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1782,7 +1784,7 @@ private fun CatalogSnapshotItem(
     onRestore: (CatalogSnapshot) -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Row(

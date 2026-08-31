@@ -13,9 +13,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 private val GlassSoftShapes = Shapes(
@@ -32,26 +36,93 @@ data class GlassSoftStyle(
     val type: String = "soft",
     val transparency: Float = 0.55f,
     val accentName: String = "multicolor",
-    val accent: Color = Color(0xFF78B7F2),
+    val accent: Color = Color(0xFF15548A),
+    val secondaryAccent: Color = Color(0xFF115A35),
+    val tertiaryAccent: Color = Color(0xFF5A3B91),
+    val onAccent: Color = Color.White,
     val surfaceAlpha: Float = 1f,
     val strongSurfaceAlpha: Float = 1f,
     val borderAlpha: Float = 0f,
+    val shadowElevation: Float = 0f,
+    val shadowAlpha: Float = 0f,
     val isDark: Boolean = false
-)
+) {
+    val surfaceBase: Color
+        get() = if (isDark) Color(0xFF111A26) else Color.White
+
+    val borderColor: Color
+        get() = if (isDark) {
+            Color.White.copy(alpha = (borderAlpha * 0.72f).coerceIn(0.28f, 0.72f))
+        } else {
+            Color.White.copy(alpha = borderAlpha)
+        }
+}
 
 val LocalGlassSoftStyle = staticCompositionLocalOf { GlassSoftStyle() }
 
-fun glassSoftAccent(name: String): Color = when (name) {
-    "blue" -> Color(0xFF74B6F2)
-    "green" -> Color(0xFF79CFA3)
-    "purple" -> Color(0xFFA98AEF)
-    "pink", "red" -> Color(0xFFEE88BE)
-    "orange", "gold" -> Color(0xFFF4B768)
-    "cyan" -> Color(0xFF65CFD4)
-    else -> Color(0xFF82B8EF)
+internal val GlassSoftAccentNames = listOf("multicolor", "blue", "green", "purple", "pink", "orange", "cyan")
+internal val GlassSoftTypes = listOf("soft", "frosted", "crystal")
+
+private fun normalizeGlassAccentName(name: String): String = when (name.trim().lowercase()) {
+    "blue" -> "blue"
+    "green" -> "green"
+    "purple" -> "purple"
+    "pink", "red" -> "pink"
+    "orange", "gold" -> "orange"
+    "cyan" -> "cyan"
+    else -> "multicolor"
 }
 
-private fun glassSoftStyle(
+private fun glassSoftActionColors(name: String, isDark: Boolean): List<Color> {
+    val normalized = normalizeGlassAccentName(name)
+    val light = mapOf(
+        "multicolor" to listOf(Color(0xFF15548A), Color(0xFF115A35), Color(0xFF5A3B91)),
+        "blue" to listOf(Color(0xFF15548A), Color(0xFF115A35), Color(0xFF5A3B91)),
+        "green" to listOf(Color(0xFF115A35), Color(0xFF15548A), Color(0xFF714000)),
+        "purple" to listOf(Color(0xFF5A3B91), Color(0xFF892B5E), Color(0xFF15548A)),
+        "pink" to listOf(Color(0xFF892B5E), Color(0xFF5A3B91), Color(0xFF15548A)),
+        "orange" to listOf(Color(0xFF714000), Color(0xFF892B5E), Color(0xFF115A35)),
+        "cyan" to listOf(Color(0xFF00585D), Color(0xFF15548A), Color(0xFF5A3B91))
+    )
+    val dark = mapOf(
+        "multicolor" to listOf(Color(0xFF8CC7FF), Color(0xFF8FE0B4), Color(0xFFC5A8FF)),
+        "blue" to listOf(Color(0xFF8CC7FF), Color(0xFF8FE0B4), Color(0xFFC5A8FF)),
+        "green" to listOf(Color(0xFF8FE0B4), Color(0xFF8CC7FF), Color(0xFFF7BC78)),
+        "purple" to listOf(Color(0xFFC5A8FF), Color(0xFFFF9FCB), Color(0xFF8CC7FF)),
+        "pink" to listOf(Color(0xFFFF9FCB), Color(0xFFC5A8FF), Color(0xFF8CC7FF)),
+        "orange" to listOf(Color(0xFFF7BC78), Color(0xFFFF9FCB), Color(0xFF8FE0B4)),
+        "cyan" to listOf(Color(0xFF78D7DD), Color(0xFF8CC7FF), Color(0xFFC5A8FF))
+    )
+    return (if (isDark) dark else light).getValue(normalized)
+}
+
+fun glassSoftAccent(name: String, isDark: Boolean = false): Color =
+    glassSoftActionColors(name, isDark).first()
+
+internal fun glassSoftBackgroundColors(name: String, isDark: Boolean): List<Color> {
+    val normalized = normalizeGlassAccentName(name)
+    val light = mapOf(
+        "multicolor" to listOf(Color(0xFFB9DEFA), Color(0xFFCBEFD9), Color(0xFFDCCBFF), Color(0xFFF8CFE7), Color(0xFFFFE2BB), Color(0xFFC6F0F1)),
+        "blue" to listOf(Color(0xFFB9DEFA), Color(0xFFD8EEFF), Color(0xFFE7D8FF), Color(0xFFF8D8E9), Color(0xFFD5F3EE)),
+        "green" to listOf(Color(0xFFBDE9CF), Color(0xFFDDF4E5), Color(0xFFCBE9FF), Color(0xFFE8DCFF), Color(0xFFF9E1D2)),
+        "purple" to listOf(Color(0xFFCDBBFA), Color(0xFFE4DAFF), Color(0xFFF8D5EB), Color(0xFFCFE8FF), Color(0xFFD8F1EA)),
+        "pink" to listOf(Color(0xFFF5B7D5), Color(0xFFFBDCEB), Color(0xFFE0D5FF), Color(0xFFCFE9FF), Color(0xFFFCE6CE)),
+        "orange" to listOf(Color(0xFFF8CF96), Color(0xFFFFE8C8), Color(0xFFF7D8E8), Color(0xFFD6E9FF), Color(0xFFD9F2E7)),
+        "cyan" to listOf(Color(0xFFABE5E7), Color(0xFFD5F3F2), Color(0xFFCFE6FF), Color(0xFFE7DCFF), Color(0xFFF7DDEC))
+    )
+    val dark = mapOf(
+        "multicolor" to listOf(Color(0xFF0C1724), Color(0xFF173229), Color(0xFF29203D), Color(0xFF352233), Color(0xFF102D34)),
+        "blue" to listOf(Color(0xFF0B1725), Color(0xFF12304C), Color(0xFF25203B), Color(0xFF302331), Color(0xFF102C30)),
+        "green" to listOf(Color(0xFF0C1917), Color(0xFF15342A), Color(0xFF182A3C), Color(0xFF2A2038), Color(0xFF2E251D)),
+        "purple" to listOf(Color(0xFF171326), Color(0xFF2D2148), Color(0xFF362137), Color(0xFF172C3D), Color(0xFF173029)),
+        "pink" to listOf(Color(0xFF21131C), Color(0xFF3C2030), Color(0xFF2B2140), Color(0xFF172B3C), Color(0xFF30251C)),
+        "orange" to listOf(Color(0xFF21180F), Color(0xFF3B2A18), Color(0xFF37202D), Color(0xFF172B3D), Color(0xFF173029)),
+        "cyan" to listOf(Color(0xFF0C1B20), Color(0xFF12353A), Color(0xFF182D43), Color(0xFF29213F), Color(0xFF35202D))
+    )
+    return (if (isDark) dark else light).getValue(normalized)
+}
+
+internal fun resolveGlassSoftStyle(
     enabled: Boolean,
     type: String,
     transparency: Float,
@@ -59,46 +130,105 @@ private fun glassSoftStyle(
     isDark: Boolean
 ): GlassSoftStyle {
     val safeTransparency = transparency.coerceIn(0.20f, 0.90f)
-    val solidFactor = 1f - safeTransparency
+    val progress = ((safeTransparency - 0.20f) / 0.70f).coerceIn(0f, 1f)
+    fun interpolate(moreSolid: Float, moreTransparent: Float): Float =
+        moreSolid + (moreTransparent - moreSolid) * progress
     val surfaceAlpha = when (type) {
-        "frosted" -> (0.68f + solidFactor * 0.26f).coerceIn(0.72f, 0.94f)
-        "crystal" -> (0.26f + solidFactor * 0.34f).coerceIn(0.30f, 0.58f)
-        else -> (0.46f + solidFactor * 0.34f).coerceIn(0.50f, 0.78f)
+        "frosted" -> interpolate(0.92f, 0.78f)
+        "crystal" -> interpolate(0.72f, 0.52f)
+        else -> interpolate(0.82f, 0.62f)
     }
     val borderAlpha = when (type) {
         "frosted" -> 0.54f
         "crystal" -> 0.90f
         else -> 0.70f
     }
+    val shadowElevation = when (type) {
+        "frosted" -> 5f
+        "crystal" -> 12f
+        else -> 8f
+    }
+    val shadowAlpha = when (type) {
+        "frosted" -> 0.14f
+        "crystal" -> 0.22f
+        else -> 0.18f
+    }
+    val actions = glassSoftActionColors(accentName, isDark)
     return GlassSoftStyle(
         enabled = enabled,
         type = type,
         transparency = safeTransparency,
-        accentName = accentName,
-        accent = glassSoftAccent(accentName),
+        accentName = normalizeGlassAccentName(accentName),
+        accent = actions[0],
+        secondaryAccent = actions[1],
+        tertiaryAccent = actions[2],
+        onAccent = if (isDark) Color(0xFF0B1620) else Color.White,
         surfaceAlpha = surfaceAlpha,
-        strongSurfaceAlpha = (surfaceAlpha + 0.13f).coerceAtMost(0.96f),
+        strongSurfaceAlpha = (surfaceAlpha + 0.08f).coerceAtMost(0.96f),
         borderAlpha = borderAlpha,
+        shadowElevation = shadowElevation,
+        shadowAlpha = shadowAlpha,
         isDark = isDark
     )
 }
 
-private fun glassSoftColorScheme(base: androidx.compose.material3.ColorScheme, style: GlassSoftStyle) =
-    base.copy(
+internal fun glassSoftColorScheme(style: GlassSoftStyle): androidx.compose.material3.ColorScheme {
+    val base = if (style.isDark) DefaultDarkColorScheme else DefaultLightColorScheme
+    val onSurface = if (style.isDark) Color(0xFFF4F7FA) else Color(0xFF18212B)
+    val onSurfaceVariant = if (style.isDark) Color(0xFFC9D3DE) else Color(0xFF465465)
+    val surface = style.surfaceBase
+    val containerAlpha = if (style.isDark) 0.24f else 0.16f
+    return base.copy(
         primary = style.accent,
-        onPrimary = if (style.isDark) Color(0xFF07131F) else Color.White,
-        primaryContainer = style.accent.copy(alpha = if (style.type == "crystal") 0.34f else 0.55f),
-        onPrimaryContainer = if (style.isDark) Color.White else Color(0xFF15202C),
-        background = if (style.isDark) Color(0xFF0B111B).copy(alpha = 0.16f) else Color.White.copy(alpha = 0.08f),
-        surface = if (style.isDark) Color(0xFF101824).copy(alpha = style.surfaceAlpha) else Color.White.copy(alpha = style.surfaceAlpha),
-        surfaceVariant = if (style.isDark) Color(0xFF192434).copy(alpha = style.strongSurfaceAlpha) else Color.White.copy(alpha = style.strongSurfaceAlpha),
-        surfaceContainer = if (style.isDark) Color(0xFF142030).copy(alpha = style.surfaceAlpha) else Color.White.copy(alpha = style.surfaceAlpha),
-        surfaceContainerLow = if (style.isDark) Color(0xFF101A28).copy(alpha = style.surfaceAlpha) else Color.White.copy(alpha = style.surfaceAlpha),
-        surfaceContainerHigh = if (style.isDark) Color(0xFF1B283A).copy(alpha = style.strongSurfaceAlpha) else Color.White.copy(alpha = style.strongSurfaceAlpha),
-        outline = Color.White.copy(alpha = style.borderAlpha),
-        outlineVariant = style.accent.copy(alpha = if (style.type == "crystal") 0.54f else 0.30f),
+        onPrimary = style.onAccent,
+        primaryContainer = style.accent.copy(alpha = containerAlpha),
+        onPrimaryContainer = onSurface,
+        secondary = style.secondaryAccent,
+        onSecondary = style.onAccent,
+        secondaryContainer = style.secondaryAccent.copy(alpha = containerAlpha),
+        onSecondaryContainer = onSurface,
+        tertiary = style.tertiaryAccent,
+        onTertiary = style.onAccent,
+        tertiaryContainer = style.tertiaryAccent.copy(alpha = containerAlpha),
+        onTertiaryContainer = onSurface,
+        background = Color.Transparent,
+        onBackground = onSurface,
+        surface = surface.copy(alpha = style.surfaceAlpha),
+        onSurface = onSurface,
+        surfaceVariant = surface.copy(alpha = style.strongSurfaceAlpha),
+        onSurfaceVariant = onSurfaceVariant,
+        surfaceDim = surface.copy(alpha = style.strongSurfaceAlpha),
+        surfaceBright = surface.copy(alpha = style.surfaceAlpha),
+        surfaceContainerLowest = surface.copy(alpha = (style.surfaceAlpha - 0.06f).coerceAtLeast(0.46f)),
+        surfaceContainerLow = surface.copy(alpha = style.surfaceAlpha),
+        surfaceContainer = surface.copy(alpha = style.surfaceAlpha),
+        surfaceContainerHigh = surface.copy(alpha = style.strongSurfaceAlpha),
+        surfaceContainerHighest = surface.copy(alpha = (style.strongSurfaceAlpha + 0.04f).coerceAtMost(0.98f)),
+        outline = if (style.isDark) Color.White.copy(alpha = 0.52f) else style.accent.copy(alpha = 0.62f),
+        outlineVariant = style.borderColor,
+        inverseSurface = if (style.isDark) Color(0xFFEAF0F6) else Color(0xFF26313D),
+        inverseOnSurface = if (style.isDark) Color(0xFF17212C) else Color.White,
         surfaceTint = Color.Transparent
     )
+}
+
+fun Modifier.glassSoftShadow(
+    shape: Shape,
+    elevation: Dp? = null
+): Modifier = composed {
+    val style = LocalGlassSoftStyle.current
+    if (!style.enabled) {
+        this
+    } else {
+        shadow(
+            elevation = elevation ?: style.shadowElevation.dp,
+            shape = shape,
+            clip = false,
+            ambientColor = Color.Black.copy(alpha = style.shadowAlpha),
+            spotColor = style.accent.copy(alpha = (style.shadowAlpha + 0.06f).coerceAtMost(0.30f))
+        )
+    }
+}
 
 @Composable
 fun GlassSoftBackground(
@@ -110,23 +240,7 @@ fun GlassSoftBackground(
         Box(modifier = modifier, content = { content() })
         return
     }
-    val colors = if (style.isDark) {
-        if (style.accentName == "multicolor") {
-            listOf(Color(0xFF0B1725), Color(0xFF173329), Color(0xFF2A1E42), Color(0xFF351E31), Color(0xFF102C35))
-        } else {
-            listOf(Color(0xFF09121E), style.accent.copy(alpha = 0.44f), Color(0xFF21192E), Color(0xFF0D2027))
-        }
-    } else if (style.accentName == "multicolor") {
-        listOf(Color(0xFFB9DEFA), Color(0xFFCBEFD9), Color(0xFFDCCBFF), Color(0xFFF8CFE7), Color(0xFFFFE2BB), Color(0xFFC6F0F1))
-    } else {
-        listOf(
-            style.accent.copy(alpha = 0.58f),
-            Color(0xFFD8EEFF),
-            Color(0xFFE7D8FF),
-            Color(0xFFFFDCEC),
-            Color(0xFFD5F3EE)
-        )
-    }
+    val colors = glassSoftBackgroundColors(style.accentName, style.isDark)
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -300,17 +414,8 @@ fun MyApplicationTheme(
         else -> isSystemInDarkTheme()
     }
     val isGlassSoft = appTheme == "glass"
-    val fallbackTheme = when (glassAccentColor) {
-        "green" -> "green"
-        "orange" -> "orange"
-        "blue", "purple", "pink", "cyan" -> "blue"
-        "gold" -> "gold"
-        "red" -> "red"
-        else -> "multicolor"
-    }
-    val style = glassSoftStyle(isGlassSoft, glassType, glassTransparency, glassAccentColor, darkTheme)
-    val baseScheme = getThemeColorScheme(if (isGlassSoft) fallbackTheme else appTheme, darkTheme)
-    val colorScheme = if (isGlassSoft) glassSoftColorScheme(baseScheme, style) else baseScheme
+    val style = resolveGlassSoftStyle(isGlassSoft, glassType, glassTransparency, glassAccentColor, darkTheme)
+    val colorScheme = if (isGlassSoft) glassSoftColorScheme(style) else getThemeColorScheme(appTheme, darkTheme)
     CompositionLocalProvider(LocalGlassSoftStyle provides style) {
         MaterialTheme(
             colorScheme = colorScheme,

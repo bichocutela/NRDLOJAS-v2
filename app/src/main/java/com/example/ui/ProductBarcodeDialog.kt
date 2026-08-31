@@ -37,6 +37,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.data.Product
 import com.example.data.UserPreferences
 import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.glassSoftShadow
 import com.example.util.ImageUrlHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -94,8 +95,9 @@ fun ProductBarcodeDialog(
                 enter = fadeIn(tween(140)),
                 exit = fadeOut(tween(100))
             ) {
+                val dialogShape = RoundedCornerShape(32.dp)
                 Surface(
-                    shape = RoundedCornerShape(32.dp),
+                    shape = dialogShape,
                     color = if (highlightedFromNotification) {
                         MaterialTheme.colorScheme.primaryContainer
                     } else {
@@ -104,11 +106,14 @@ fun ProductBarcodeDialog(
                     border = if (highlightedFromNotification) {
                         BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
                     } else if (glassSoftStyle.enabled) {
-                        BorderStroke(1.dp, Color.White.copy(alpha = glassSoftStyle.borderAlpha))
+                        BorderStroke(1.dp, glassSoftStyle.borderColor)
                     } else {
                         null
                     },
-                    modifier = Modifier.fillMaxWidth(0.9f).padding(vertical = 24.dp)
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .padding(vertical = 24.dp)
+                        .glassSoftShadow(dialogShape)
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,

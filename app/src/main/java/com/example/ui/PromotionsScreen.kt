@@ -89,6 +89,8 @@ import com.example.data.PromotionChangeStore
 import com.example.data.PromotionChangeType
 import com.example.data.StoreCatalog
 import com.example.data.UserPreferences
+import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.LocalGlassSoftStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -251,6 +253,7 @@ fun PromotionsScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var visibleOfferCount by rememberSaveable { mutableStateOf(INITIAL_OFFER_PAGE) }
     val context = LocalContext.current
+    val glassStyle = LocalGlassSoftStyle.current
     val userPreferences = remember { UserPreferences(context) }
     val promotionChangeStore = remember { PromotionChangeStore(context) }
     val sortOption = OfferSortOption.values().firstOrNull { it.name == sortOptionName }
@@ -467,13 +470,23 @@ fun PromotionsScreen(
                         onClick = ::handleRefreshClick,
                         enabled = !isLoading && !isChecking,
                         modifier = Modifier
+                            .glassSoftShadow(CircleShape, 4.dp)
                             .background(
                                 color = if (pendingUpdate != null) {
                                     MaterialTheme.colorScheme.primaryContainer
+                                } else if (glassStyle.enabled) {
+                                    MaterialTheme.colorScheme.surface
                                 } else {
                                     MaterialTheme.colorScheme.surface.copy(alpha = 0f)
                                 },
                                 shape = CircleShape
+                            )
+                            .then(
+                                if (glassStyle.enabled) Modifier.border(
+                                    1.dp,
+                                    glassStyle.borderColor,
+                                    CircleShape
+                                ) else Modifier
                             )
                     ) {
                         if (isChecking) {
@@ -796,9 +809,10 @@ private fun CategoryPreviewSection(
 
 @Composable
 private fun CompactOfferCard(offer: OfferGroup, onImageClick: (String) -> Unit) {
+    val cardShape = RoundedCornerShape(12.dp)
     Card(
-        modifier = Modifier.width(190.dp),
-        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.width(190.dp).glassSoftShadow(cardShape),
+        shape = cardShape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column {
@@ -962,9 +976,13 @@ private fun DetailedOfferCard(
     selectedStore: String,
     onImageClick: (String) -> Unit
 ) {
+    val cardShape = RoundedCornerShape(16.dp)
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .glassSoftShadow(cardShape),
+        shape = cardShape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -1187,13 +1205,17 @@ private fun ProductImage(
 
 @Composable
 private fun PromotionImageDialog(imageUrl: String, onDismiss: () -> Unit) {
+    val dialogShape = RoundedCornerShape(18.dp)
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.94f).heightIn(max = 620.dp),
-            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .heightIn(max = 620.dp)
+                .glassSoftShadow(dialogShape),
+            shape = dialogShape,
             color = MaterialTheme.colorScheme.surface
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
@@ -1393,8 +1415,11 @@ private fun NewOffersButton(
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
+    val glassStyle = LocalGlassSoftStyle.current
     val containerColor = if (highlighted) {
         MaterialTheme.colorScheme.primaryContainer
+    } else if (glassStyle.enabled) {
+        MaterialTheme.colorScheme.surface
     } else {
         MaterialTheme.colorScheme.surface.copy(alpha = 0f)
     }
@@ -1403,12 +1428,14 @@ private fun NewOffersButton(
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
+    val buttonShape = RoundedCornerShape(14.dp)
     Surface(
+        modifier = Modifier.glassSoftShadow(buttonShape, 4.dp),
         onClick = onClick,
         enabled = enabled,
         color = containerColor,
         contentColor = contentColor,
-        shape = RoundedCornerShape(14.dp),
+        shape = buttonShape,
         tonalElevation = if (highlighted) 2.dp else 0.dp
     ) {
         Row(
@@ -1465,9 +1492,13 @@ private fun NewOffersDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
+        val dialogShape = RoundedCornerShape(20.dp)
         Surface(
-            modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.9f),
-            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier
+                .fillMaxWidth(0.96f)
+                .fillMaxHeight(0.9f)
+                .glassSoftShadow(dialogShape),
+            shape = dialogShape,
             color = MaterialTheme.colorScheme.surface
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -1571,6 +1602,7 @@ private fun PromotionChangeCard(
     change: PromotionChange,
     onImageClick: (String) -> Unit
 ) {
+    val cardShape = RoundedCornerShape(14.dp)
     val badgeColor = when (change.type) {
         PromotionChangeType.ADDED -> MaterialTheme.colorScheme.primaryContainer
         PromotionChangeType.CHANGED -> MaterialTheme.colorScheme.secondaryContainer
@@ -1582,9 +1614,9 @@ private fun PromotionChangeCard(
         PromotionChangeType.REMOVED -> MaterialTheme.colorScheme.onErrorContainer
     }
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().glassSoftShadow(cardShape),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(14.dp)
+        shape = cardShape
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.Top) {
             if (!change.imageUrl.isNullOrBlank()) {

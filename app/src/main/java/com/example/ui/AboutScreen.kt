@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import java.util.Calendar
 import com.example.R
+import com.example.ui.theme.glassSoftShadow
 
 private const val IPHONE_PWA_URL = "https://bichocutela.github.io"
 
@@ -268,9 +269,11 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
             }
 
             if (updateAvailable) {
+                val updateCardShape = MaterialTheme.shapes.large
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                    modifier = Modifier.fillMaxWidth().glassSoftShadow(updateCardShape),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    shape = updateCardShape
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(

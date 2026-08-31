@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -27,6 +28,7 @@ import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 import com.google.firebase.auth.FirebaseAuth
 import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.glassSoftShadow
 
 @Composable
 fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = false) {
@@ -40,6 +42,7 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
     var isLoggedIn by remember { mutableStateOf(initialRole != null) }
     var userRole by remember { mutableStateOf(initialRole ?: "user") }
     val glassSoftStyle = LocalGlassSoftStyle.current
+    val glassDrawerShape = RoundedCornerShape(topEnd = 32.dp, bottomEnd = 32.dp)
 
     DisposableEffect(firebaseAuth) {
         val listener = FirebaseAuth.AuthStateListener { auth ->
@@ -67,7 +70,15 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
+            ModalDrawerSheet(
+                modifier = Modifier.glassSoftShadow(glassDrawerShape),
+                drawerShape = if (glassSoftStyle.enabled) glassDrawerShape else DrawerDefaults.shape,
+                drawerContainerColor = if (glassSoftStyle.enabled) {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                } else {
+                    DrawerDefaults.modalContainerColor
+                }
+            ) {
                 LoginDrawerContent(
                     viewModel = viewModel,
                     isLoggedIn = isLoggedIn,

@@ -14,6 +14,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.ui.theme.getDynamicThemeColor
+import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.glassSoftShadow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.data.Product
@@ -25,6 +27,7 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val products by viewModel.allProducts.collectAsState()
     val activeCategoryNames by viewModel.activeCategoryNames.collectAsState()
     val appTheme by viewModel.userPreferences.appTheme.collectAsState(initial = "multicolor")
+    val glassStyle = LocalGlassSoftStyle.current
     val coroutineScope = rememberCoroutineScope()
     var showDialog by remember { mutableStateOf(false) }
     var editingProduct by remember { mutableStateOf<Product?>(null) }
@@ -67,10 +70,17 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     MaterialTheme.colorScheme.primaryContainer,
                     MaterialTheme.colorScheme.onPrimaryContainer
                 )
+                val productCardShape = RoundedCornerShape(18.dp)
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, dynColors.first),
-                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .glassSoftShadow(productCardShape),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (glassStyle.enabled) glassStyle.borderColor else dynColors.first
+                    ),
+                    shape = productCardShape,
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                 ) {
                     Row(

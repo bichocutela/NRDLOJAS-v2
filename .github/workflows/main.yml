@@ -96,7 +96,9 @@ jobs:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       run: |
-        ./gradlew testDebugUnitTest --tests 'com.example.data.GlobalProductUsageTest'
+        ./gradlew testDebugUnitTest \
+          --tests 'com.example.data.GlobalProductUsageTest' \
+          --tests 'com.example.ui.theme.GlassSoftThemeTest'
         ./gradlew assembleRelease \
           -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.keystore \
           -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
