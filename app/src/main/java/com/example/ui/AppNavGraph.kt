@@ -26,9 +26,15 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
+import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.FirebaseTooManyRequestsException
 import com.google.firebase.auth.FirebaseAuth
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.glassSoftShadow
+
+private const val ADMIN_LOGIN_TIMEOUT_MS = 15_000L
 
 @Composable
 fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = false) {
@@ -318,6 +324,7 @@ fun LoginDrawerContent(
                 value = username,
                 onValueChange = { username = it },
                 label = { Text("Usuário") },
+                enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -326,6 +333,7 @@ fun LoginDrawerContent(
                 onValueChange = { password = it },
                 label = { Text("Senha") },
                 visualTransformation = PasswordVisualTransformation(),
+                enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(24.dp))
@@ -333,6 +341,7 @@ fun LoginDrawerContent(
                 onClick = {
                     if (isLoading) return@Button
                     isLoading = true
+                    loginStatus = null
                     val inputUser = username.trim().lowercase()
                     scope.launch {
                         try {
@@ -343,8 +352,10 @@ fun LoginDrawerContent(
                             }
                             if (email != null && password.isNotBlank()) {
                                 val auth = FirebaseAuth.getInstance()
-                                auth.signInWithEmailAndPassword(email, password).await()
-                                val authenticatedRole = managementRoleForEmail(auth.currentUser?.email)
+                                val authResult = withTimeout(ADMIN_LOGIN_TIMEOUT_MS) {
+                                    auth.signInWithEmailAndPassword(email, password).await()
+                                }
+                                val authenticatedRole = managementRoleForEmail(authResult.user?.email)
                                 if (authenticatedRole != null) {
                                     password = ""
                                     loginStatus = null
@@ -356,6 +367,12 @@ fun LoginDrawerContent(
                             } else {
                                 loginStatus = "Usuário ou senha incorretos"
                             }
+                        } catch (_: TimeoutCancellationException) {
+                            loginStatus = "A autenticação demorou demais. Verifique sua conexão e tente novamente."
+                        } catch (_: FirebaseNetworkException) {
+                            loginStatus = "Sem conexão com o serviço de login. Verifique sua internet e tente novamente."
+                        } catch (_: FirebaseTooManyRequestsException) {
+                            loginStatus = "Muitas tentativas seguidas. Aguarde um instante e tente novamente."
                         } catch (_: Exception) {
                             loginStatus = "Usuário ou senha incorretos"
                         } finally {
