@@ -28,11 +28,14 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
+import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.FirebaseTooManyRequestsException
 import com.google.firebase.auth.FirebaseAuth
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.glassSoftShadow
 
-private const val ADMIN_LOGIN_TIMEOUT_MS = 30_000L
+private const val ADMIN_LOGIN_TIMEOUT_MS = 45_000L
 private const val ADMIN_LOGIN_TAG = "AdminLogin"
 
 @Composable
@@ -217,21 +220,45 @@ fun LoginDrawerContent(
                         val passwordSnapshot = password
                         isLoading = true
                         loginStatus = null
-                        password = ""
-                        onLoginSuccess(inputUser)
-                        isLoading = false
                         scope.launch {
                             try {
                                 val auth = FirebaseAuth.getInstance()
-                                val result = withTimeout(ADMIN_LOGIN_TIMEOUT_MS) { auth.signInWithEmailAndPassword(email, passwordSnapshot).await() }
-                                val firebaseRole = managementRoleForEmail(result.user?.email)
-                                if (firebaseRole != inputUser) { Log.e(ADMIN_LOGIN_TAG, "Sessão Firebase retornou papel administrativo inesperado"); auth.signOut() }
-                                else Log.d(ADMIN_LOGIN_TAG, "Sessão Firebase administrativa sincronizada com sucesso")
+                                val currentRole = managementRoleForEmail(auth.currentUser?.email)
+                                val authenticatedRole = if (currentRole == inputUser) {
+                                    currentRole
+                                } else {
+                                    val result = withTimeout(ADMIN_LOGIN_TIMEOUT_MS) {
+                                        auth.signInWithEmailAndPassword(email, passwordSnapshot).await()
+                                    }
+                                    managementRoleForEmail(result.user?.email)
+                                }
+
+                                if (authenticatedRole == inputUser) {
+                                    Log.d(ADMIN_LOGIN_TAG, "Sessão Firebase administrativa validada com sucesso")
+                                    password = ""
+                                    loginStatus = null
+                                    onLoginSuccess(authenticatedRole)
+                                } else {
+                                    auth.signOut()
+                                    loginStatus = "Usuário sem acesso administrativo"
+                                }
+                            } catch (_: TimeoutCancellationException) {
+                                loginStatus = "A autenticação demorou demais. Verifique sua conexão e tente novamente."
+                            } catch (_: FirebaseNetworkException) {
+                                loginStatus = "Sem conexão com o serviço de login. Verifique sua internet e tente novamente."
+                            } catch (_: FirebaseTooManyRequestsException) {
+                                loginStatus = "Muitas tentativas seguidas. Aguarde um instante e tente novamente."
                             } catch (error: Exception) {
-                                Log.w(ADMIN_LOGIN_TAG, "Login local concluído; sincronização Firebase ficará para nova tentativa", error)
+                                Log.e(ADMIN_LOGIN_TAG, "Falha ao autenticar sessão administrativa", error)
+                                loginStatus = "Não foi possível autenticar o acesso administrativo. Tente novamente."
+                            } finally {
+                                isLoading = false
                             }
                         }
-                    } else { isLoading = false; loginStatus = "Usuário ou senha incorretos" }
+                    } else {
+                        isLoading = false
+                        loginStatus = "Usuário ou senha incorretos"
+                    }
                 },
                 enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth().height(48.dp)
