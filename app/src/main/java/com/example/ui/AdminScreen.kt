@@ -117,7 +117,7 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 20.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
                 .verticalScroll(adminScrollState),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -125,7 +125,7 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     title = "Ações rápidas",
                     description = "Exportações e ferramentas de administração"
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Button(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first,
@@ -147,14 +147,14 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Exportar Produtos em PDF")
                 }
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(14.dp))
             
             AdminPanelSectionHeader(
                 title = "Produtos",
                 description = "Cadastre um novo produto ou edite o catálogo existente"
             )
             
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(14.dp))
             
             Box(
                 modifier = Modifier.fillMaxWidth(),
@@ -187,7 +187,7 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 }
             }
             
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(14.dp))
             
             AnimatedVisibility(
                 visible = showManualForm,
@@ -202,10 +202,10 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Column(
-                        modifier = Modifier.padding(20.dp)
+                        modifier = Modifier.padding(12.dp)
                     ) {
                         Text("Novo produto", style = MaterialTheme.typography.titleLarge)
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = productName,
                             onValueChange = { productName = it },
@@ -259,7 +259,7 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             Text(text = "Foto selecionada", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 4.dp))
                         }
                         
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                         
                         var isAdding by remember { mutableStateOf(false) }
                 Button(
@@ -307,14 +307,14 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 }
             }
             
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(18.dp))
             HorizontalDivider()
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             AdminPanelSectionHeader(
                 title = "Catálogo de produtos",
                 description = "Pesquise, edite ou remova itens do inventário"
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             AdminProductList(
                 products = allProducts,
                 viewModel = viewModel,
@@ -336,7 +336,7 @@ private fun AdminPanelSectionHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
+            .padding(vertical = 3.dp)
     ) {
         Text(title, style = MaterialTheme.typography.headlineSmall)
         Text(
@@ -378,7 +378,7 @@ fun AdminProductList(
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(8.dp))
     
     OutlinedTextField(
         value = searchQuery,
@@ -389,12 +389,12 @@ fun AdminProductList(
         placeholder = { Text("Pesquisar por nome, código ou categoria") },
         shape = RoundedCornerShape(16.dp)
     )
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(8.dp))
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         FilterChip(
             selected = searchQuery.isBlank(),
@@ -409,7 +409,7 @@ fun AdminProductList(
             )
         }
     }
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(10.dp))
     
     val filteredProducts = products.filter {
         it.name.contains(searchQuery, ignoreCase = true) ||
@@ -435,13 +435,13 @@ fun AdminProductList(
         Text(
             text = "Digite o nome, código ou selecione uma categoria para carregar os produtos.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(vertical = 16.dp)
+            modifier = Modifier.padding(vertical = 10.dp)
         )
     } else if (filteredProducts.isEmpty()) {
         Text(
             text = "Nenhum produto encontrado.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(vertical = 16.dp)
+            modifier = Modifier.padding(vertical = 10.dp)
         )
     } else {
         val selectionContentColor = if (glassStyle.enabled) {
@@ -452,12 +452,12 @@ fun AdminProductList(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp)
+                .padding(vertical = 4.dp)
                 .glassSoftShadow(MaterialTheme.shapes.medium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
             shape = RoundedCornerShape(16.dp)
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(10.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -489,7 +489,7 @@ fun AdminProductList(
                     }
                 }
                 if (selectedProducts.isNotEmpty()) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         OutlinedButton(
                             onClick = {
                                 bulkCategory = categories.firstOrNull().orEmpty()
@@ -524,7 +524,7 @@ fun AdminProductList(
                 text = category,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(vertical = 8.dp)
+                modifier = Modifier.padding(vertical = 6.dp)
             )
             categoryProducts.forEach { product ->
                 AdminProductItem(
@@ -542,14 +542,14 @@ fun AdminProductList(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp),
+                    .padding(vertical = 10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "Página atual: ${currentPage + 1} | Total de páginas: $pageCount",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -567,7 +567,7 @@ fun AdminProductList(
                     ) {
                         Text("Anterior", maxLines = 1)
                     }
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = { pageIndex = (currentPage + 1).coerceAtMost(pageCount - 1) },
                         enabled = currentPage < pageCount - 1,
@@ -580,7 +580,7 @@ fun AdminProductList(
                         Text("Próxima", maxLines = 1)
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Button(
                     onClick = onScrollToTop,
                     colors = ButtonDefaults.buttonColors(
@@ -607,7 +607,7 @@ fun AdminProductList(
             text = {
                 Column {
                     Text("Escolha a categoria para ${selectedProducts.size} produto(s).")
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     OfficialCategoryDropdown(
                         selectedCategory = bulkCategory,
                         onCategorySelected = { bulkCategory = it },
@@ -713,13 +713,13 @@ fun AdminProductItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
+            .padding(vertical = 3.dp)
             .glassSoftShadow(productCardShape),
         shape = productCardShape,
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -735,13 +735,13 @@ fun AdminProductItem(
                         contentDescription = product.name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                     )
                 } else {
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
@@ -753,10 +753,10 @@ fun AdminProductItem(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(text = product.name, style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Código ${product.code} • ${product.category}",
                         style = MaterialTheme.typography.bodySmall,
@@ -904,9 +904,9 @@ fun AdminProductItem(
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 HorizontalDivider()
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 
                 var showDeleteProductDialog by remember { mutableStateOf(false) }
                 Button(
