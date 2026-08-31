@@ -323,8 +323,8 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                         } else Color.White
                     )
             ) {
-                ThemeBanner(
-                    appTheme = normalizedTheme,
+                MaskedThemeBanner(
+                    appTheme = if (isGlassTheme) "glass" else normalizedTheme,
                     backgroundUrl = activeThemeBackground?.url,
                     imageScale = activeThemeBackground?.imageScale ?: 1f,
                     imageOffsetX = activeThemeBackground?.imageOffsetX ?: 0f,
