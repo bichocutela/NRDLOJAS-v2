@@ -911,7 +911,6 @@ fun CategoryProductsSheet(
     onDismiss: () -> Unit
 ) {
     val glass = rememberGlassVisualStyle()
-    val cardShape = RoundedCornerShape(24.dp)
     var query by remember { mutableStateOf("") }
     val productsFlow = remember(category, query) { viewModel.searchProductsByCategory(category, query) }
     val products by productsFlow.collectAsState(initial = emptyList())
@@ -962,6 +961,7 @@ fun ProductCard(
     onProductClick: ((Product) -> Unit)? = null
 ) {
     val glass = rememberGlassVisualStyle()
+    val cardShape = RoundedCornerShape(24.dp)
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(product = product, onDismiss = { showDialog = false })
