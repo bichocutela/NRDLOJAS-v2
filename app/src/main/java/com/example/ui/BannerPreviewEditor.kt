@@ -1,49 +1,27 @@
 package com.example.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -79,7 +57,10 @@ fun BannerPreviewEditor(
     var previewStretchY by remember(background.id, background.imageStretchY) {
         mutableFloatStateOf(background.imageStretchY.coerceIn(0.5f, 2.5f))
     }
+
     var framingUnlocked by remember(background.id) { mutableStateOf(false) }
+    var framingExpanded by remember(background.id) { mutableStateOf(false) }
+    var maskExpanded by remember(background.id) { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = { if (!isSaving) onDismiss() },
@@ -88,16 +69,16 @@ fun BannerPreviewEditor(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 20.dp),
-            shape = RoundedCornerShape(24.dp),
+                .fillMaxHeight(0.96f)
+                .padding(horizontal = 6.dp, vertical = 8.dp),
+            shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -107,13 +88,15 @@ fun BannerPreviewEditor(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             "Prévia da Home",
-                            style = MaterialTheme.typography.titleLarge,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             "${background.label} • $themeLabel",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                     IconButton(onClick = onDismiss, enabled = !isSaving) {
@@ -122,37 +105,44 @@ fun BannerPreviewEditor(
                 }
 
                 Text(
-                    "Resultado final",
+                    "Resultado na Home",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold
                 )
-                androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val previewHeight = maxWidth / 3f
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(previewHeight)
-                            .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
-                            .background(MaterialTheme.colorScheme.background)
-                    ) {
-                        MaskedThemeBanner(
-                            appTheme = themeKey,
-                            backgroundUrl = background.url,
-                            imageScale = previewScale,
-                            imageOffsetX = previewOffsetX,
-                            imageOffsetY = previewOffsetY,
-                            imageStretchX = previewStretchX,
-                            imageStretchY = previewStretchY,
-                            maskSettingsOverride = effectiveMask,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
 
-                OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                HomeResultPreview(
+                    themeKey = themeKey,
+                    background = background,
+                    maskSettings = effectiveMask,
+                    imageScale = previewScale,
+                    imageOffsetX = previewOffsetX,
+                    imageOffsetY = previewOffsetY,
+                    imageStretchX = previewStretchX,
+                    imageStretchY = previewStretchY
+                )
+
+                Text(
+                    "O resultado acima fica visível enquanto você abre somente o grupo de ajustes necessário.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    ExpandableEditorCard(
+                        title = "Enquadramento",
+                        subtitle = "Zoom ${(previewScale * 100).toInt()}% • posição e proporção",
+                        expanded = framingExpanded,
+                        onToggle = {
+                            val shouldOpen = !framingExpanded
+                            framingExpanded = shouldOpen
+                            if (shouldOpen) maskExpanded = false
+                        }
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -161,12 +151,11 @@ fun BannerPreviewEditor(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    "Enquadramento da imagem",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold
+                                    if (framingUnlocked) "Ajustes liberados" else "Ajustes protegidos",
+                                    style = MaterialTheme.typography.labelLarge
                                 )
                                 Text(
-                                    if (framingUnlocked) "Ajustes liberados" else "Protegido contra alterações acidentais",
+                                    if (framingUnlocked) "Mova, amplie ou estique a arte." else "Abra o cadeado para editar.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -183,8 +172,8 @@ fun BannerPreviewEditor(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(14.dp))
+                                .height(122.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
@@ -212,7 +201,7 @@ fun BannerPreviewEditor(
                             onValueChange = { previewScale = it }
                         )
                         EditorSlider(
-                            label = "Mover horizontal",
+                            label = "Horizontal",
                             valueLabel = "${(previewOffsetX * 100).toInt()}",
                             value = previewOffsetX,
                             valueRange = -1f..1f,
@@ -220,7 +209,7 @@ fun BannerPreviewEditor(
                             onValueChange = { previewOffsetX = it }
                         )
                         EditorSlider(
-                            label = "Mover vertical",
+                            label = "Vertical",
                             valueLabel = "${(previewOffsetY * 100).toInt()}",
                             value = previewOffsetY,
                             valueRange = -1f..1f,
@@ -253,33 +242,33 @@ fun BannerPreviewEditor(
                                 previewStretchY = 1f
                             },
                             enabled = framingUnlocked,
-                            modifier = Modifier.align(Alignment.End)
+                            modifier = Modifier.align(Alignment.End),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            Text("Restaurar enquadramento")
+                            Text("Restaurar")
                         }
                     }
-                }
 
-                OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ExpandableEditorCard(
+                        title = "Máscara e transição",
+                        subtitle = "${maskStyleLabel(effectiveMask.style)} • ${(effectiveMask.strength * 100).toInt()}% de intensidade",
+                        expanded = maskExpanded,
+                        onToggle = {
+                            val shouldOpen = !maskExpanded
+                            maskExpanded = shouldOpen
+                            if (shouldOpen) framingExpanded = false
+                        }
                     ) {
                         Text(
-                            "Máscara e acabamento",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            "Escolha onde o fundo se mistura com a tela. Em 0% não há sombra; em 100% a borda chega ao sólido.",
+                            "A borda agora se mistura com o próprio fundo da tela, criando a névoa suave do resultado acima.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
-                        Text("Tipo de máscara", style = MaterialTheme.typography.labelLarge)
+                        Text("Tipo", style = MaterialTheme.typography.labelLarge)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             MaskStyleChip(
                                 label = "Suave",
@@ -313,7 +302,7 @@ fun BannerPreviewEditor(
                             onValueChange = { maskDraft = effectiveMask.copy(strength = it) }
                         )
                         EditorSlider(
-                            label = "Profundidade da transição",
+                            label = "Profundidade",
                             valueLabel = "${(effectiveMask.depth * 100).toInt()}%",
                             value = effectiveMask.depth,
                             valueRange = 0.08f..0.45f,
@@ -321,10 +310,10 @@ fun BannerPreviewEditor(
                             onValueChange = { maskDraft = effectiveMask.copy(depth = it) }
                         )
 
-                        Text("Lados da máscara", style = MaterialTheme.typography.labelLarge)
+                        Text("Lados", style = MaterialTheme.typography.labelLarge)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             EdgeChip("Cima", effectiveMask.shadeTop, Modifier.weight(1f)) {
                                 maskDraft = effectiveMask.copy(shadeTop = !effectiveMask.shadeTop)
@@ -335,7 +324,7 @@ fun BannerPreviewEditor(
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             EdgeChip("Esquerda", effectiveMask.shadeLeft, Modifier.weight(1f)) {
                                 maskDraft = effectiveMask.copy(shadeLeft = !effectiveMask.shadeLeft)
@@ -347,29 +336,31 @@ fun BannerPreviewEditor(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             OutlinedButton(
                                 onClick = { maskDraft = effectiveMask.copy(strength = 0f) },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
                             ) {
-                                Text("Sem sombra")
+                                Text("Sem transição", maxLines = 1)
                             }
                             OutlinedButton(
                                 onClick = {
                                     maskDraft = BannerMaskSettings(
                                         style = BannerMaskSettings.STYLE_SOFT,
-                                        strength = 0.35f,
-                                        depth = 0.22f,
+                                        strength = 0.62f,
+                                        depth = 0.30f,
                                         shadeTop = false,
                                         shadeBottom = true,
                                         shadeLeft = false,
                                         shadeRight = false
                                     )
                                 },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
                             ) {
-                                Text("Suave embaixo")
+                                Text("Névoa embaixo", maxLines = 1)
                             }
                         }
                     }
@@ -389,15 +380,16 @@ fun BannerPreviewEditor(
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !isSaving
+                    enabled = !isSaving,
+                    contentPadding = PaddingValues(vertical = 9.dp)
                 ) {
                     if (isSaving) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(18.dp),
                             color = MaterialTheme.colorScheme.onPrimary,
                             strokeWidth = 2.dp
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text("Salvando...")
                     } else {
                         Text("Salvar enquadramento e máscara")
@@ -407,10 +399,136 @@ fun BannerPreviewEditor(
                 OutlinedButton(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !isSaving
+                    enabled = !isSaving,
+                    contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
                     Text("Fechar sem salvar")
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeResultPreview(
+    themeKey: String,
+    background: ThemeBackground,
+    maskSettings: BannerMaskSettings,
+    imageScale: Float,
+    imageOffsetX: Float,
+    imageOffsetY: Float,
+    imageStretchX: Float,
+    imageStretchY: Float
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.background,
+        tonalElevation = 0.dp
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val previewHeight = maxWidth / 3f
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(previewHeight)
+                        .clip(RoundedCornerShape(bottomStart = 26.dp, bottomEnd = 26.dp))
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    MaskedThemeBanner(
+                        appTheme = themeKey,
+                        backgroundUrl = background.url,
+                        imageScale = imageScale,
+                        imageOffsetX = imageOffsetX,
+                        imageOffsetY = imageOffsetY,
+                        imageStretchX = imageStretchX,
+                        imageStretchY = imageStretchY,
+                        maskSettingsOverride = maskSettings,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                modifier = Modifier
+                    .padding(horizontal = 10.dp)
+                    .fillMaxWidth()
+                    .height(42.dp),
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                tonalElevation = 0.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        "Pesquisar produto...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun ExpandableEditorCard(
+    title: String,
+    subtitle: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle)
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Recolher $title" else "Expandir $title",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            if (expanded) {
+                HorizontalDivider()
+                Column(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                    content = content
+                )
             }
         }
     }
@@ -425,7 +543,7 @@ private fun EditorSlider(
     enabled: Boolean,
     onValueChange: (Float) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -475,4 +593,10 @@ private fun EdgeChip(
         label = { Text(label, maxLines = 1) },
         modifier = modifier
     )
+}
+
+private fun maskStyleLabel(style: String): String = when (style) {
+    BannerMaskSettings.STYLE_DEFINED -> "Definida"
+    BannerMaskSettings.STYLE_DIFFUSE -> "Difusa"
+    else -> "Suave"
 }
