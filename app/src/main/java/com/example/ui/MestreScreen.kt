@@ -1381,247 +1381,63 @@ fun MestreScreen(
                 )
             }
 
-            backgroundToPreview?.let { (themeKey, background) ->
-                var previewScale by remember(background.id, background.imageScale) {
-                    mutableFloatStateOf(background.imageScale.coerceIn(0.5f, 3f))
-                }
-                var previewOffsetX by remember(background.id, background.imageOffsetX) {
-                    mutableFloatStateOf(background.imageOffsetX.coerceIn(-1f, 1f))
-                }
-                var previewOffsetY by remember(background.id, background.imageOffsetY) {
-                    mutableFloatStateOf(background.imageOffsetY.coerceIn(-1f, 1f))
-                }
-                var previewStretchX by remember(background.id, background.imageStretchX) {
-                    mutableFloatStateOf(background.imageStretchX.coerceIn(0.5f, 2.5f))
-                }
-                var previewStretchY by remember(background.id, background.imageStretchY) {
-                    mutableFloatStateOf(background.imageStretchY.coerceIn(0.5f, 2.5f))
-                }
-                var previewUnlocked by remember(background.id) { mutableStateOf(false) }
-                androidx.compose.ui.window.Dialog(
-                    onDismissRequest = { backgroundToPreview = null }
-                ) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.surface
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .padding(16.dp)
-                                .verticalScroll(rememberScrollState())
-                        ) {
-                            Text(
-                                "Prévia real na Home",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "${background.label} • ${themeOptions.find { it.first == themeKey }?.second ?: themeKey}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(14.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        if (previewUnlocked) "Ajustes liberados" else "Ajustes protegidos",
-                                        style = MaterialTheme.typography.titleSmall
-                                    )
-                                    Text(
-                                        if (previewUnlocked) "Cadeado aberto: você pode mover e esticar." else "Abra o cadeado para alterar o enquadramento.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                IconButton(onClick = { previewUnlocked = !previewUnlocked }) {
-                                    Icon(
-                                        imageVector = if (previewUnlocked) Icons.Default.LockOpen else Icons.Default.Lock,
-                                        contentDescription = if (previewUnlocked) "Bloquear ajustes" else "Desbloquear ajustes",
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text("Área de edição — imagem original", style = MaterialTheme.typography.labelLarge)
-                            Text(
-                                "Ajuste a arte original aqui. A prévia abaixo serve apenas para mostrar como ela ficará na Home.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(180.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                coil.compose.AsyncImage(
-                                    model = background.url,
-                                    contentDescription = "Área de edição da imagem original de ${background.label}",
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .graphicsLayer {
-                                            scaleX = previewScale * previewStretchX
-                                            scaleY = previewScale * previewStretchY
-                                            translationX = size.width * previewOffsetX
-                                            translationY = size.height * previewOffsetY
-                                        },
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Fit
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("Resultado na Home — somente visualização", style = MaterialTheme.typography.labelLarge)
-                            androidx.compose.foundation.layout.BoxWithConstraints(
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                val previewHeight = maxWidth / 3f
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(previewHeight)
-                                        .clip(
-                                            RoundedCornerShape(
-                                                bottomStart = 32.dp,
-                                                bottomEnd = 32.dp
-                                            )
-                                        )
-                                        .background(Color.White)
-                                ) {
-                                    ThemeBanner(
-                                        appTheme = themeKey,
-                                        backgroundUrl = background.url,
-                                        imageScale = previewScale,
-                                        imageOffsetX = previewOffsetX,
-                                        imageOffsetY = previewOffsetY,
-                                        imageStretchX = previewStretchX,
-                                        imageStretchY = previewStretchY,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("Zoom: ${(previewScale * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
-                            Slider(
-                                value = previewScale,
-                                onValueChange = { previewScale = it },
-                                valueRange = 0.5f..3f,
-                                enabled = previewUnlocked
-                            )
-                            Text("Mover horizontal: ${(previewOffsetX * 100).toInt()}", style = MaterialTheme.typography.labelLarge)
-                            Slider(
-                                value = previewOffsetX,
-                                onValueChange = { previewOffsetX = it },
-                                valueRange = -1f..1f,
-                                enabled = previewUnlocked
-                            )
-                            Text("Mover vertical: ${(previewOffsetY * 100).toInt()}", style = MaterialTheme.typography.labelLarge)
-                            Slider(
-                                value = previewOffsetY,
-                                onValueChange = { previewOffsetY = it },
-                                valueRange = -1f..1f,
-                                enabled = previewUnlocked
-                            )
-                            Text("Esticar largura (esquerda + direita): ${(previewStretchX * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
-                            Slider(
-                                value = previewStretchX,
-                                onValueChange = { previewStretchX = it },
-                                valueRange = 0.5f..2.5f,
-                                enabled = previewUnlocked
-                            )
-                            Text("Esticar altura (cima + baixo): ${(previewStretchY * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
-                            Slider(
-                                value = previewStretchY,
-                                onValueChange = { previewStretchY = it },
-                                valueRange = 0.5f..2.5f,
-                                enabled = previewUnlocked
-                            )
-                            TextButton(
-                                onClick = {
-                                    previewScale = 1f
-                                    previewOffsetX = 0f
-                                    previewOffsetY = 0f
-                                    previewStretchX = 1f
-                                    previewStretchY = 1f
-                                },
-                                modifier = Modifier.align(Alignment.End),
-                                enabled = previewUnlocked
-                            ) {
-                                Text("Restaurar enquadramento")
-                            }
-                            Text(
-                                "Você edita a imagem original acima; o quadro da Home apenas reproduz o resultado. A imagem armazenada não é modificada, somente o enquadramento salvo.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Button(
-                                onClick = {
-                                    val updatedBackgrounds = draftThemeBackgrounds + (
-                                        themeKey to draftThemeBackgrounds[themeKey].orEmpty().map { item ->
-                                            if (item.id == background.id) {
-                                                item.copy(
-                                                    imageScale = previewScale,
-                                                    imageOffsetX = previewOffsetX,
-                                                    imageOffsetY = previewOffsetY,
-                                                    imageStretchX = previewStretchX,
-                                                    imageStretchY = previewStretchY
-                                                )
-                                            } else item
-                                        }
-                                    )
-                                    draftThemeBackgrounds = updatedBackgrounds
-                                    val settingsToSave = draftAppearanceSettings.copy(themeBackgrounds = updatedBackgrounds)
-                                    coroutineScope.launch {
-                                        isSavingAppearanceSettings = true
-                                        val saved = FirebaseService.saveAppearanceSettings(settingsToSave)
-                                        isSavingAppearanceSettings = false
-                                        if (saved) {
-                                            backgroundToPreview = null
-                                            snackbarHostState.showSnackbar("Prévia salva. Este enquadramento será usado na Home.")
-                                        } else {
-                                            snackbarHostState.showSnackbar(
-                                                FirebaseService.lastError ?: "Não foi possível salvar a prévia."
-                                            )
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !isSavingAppearanceSettings
-                            ) {
-                                if (isSavingAppearanceSettings) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                        strokeWidth = 2.dp
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Salvando prévia...")
-                                } else {
-                                    Text("Salvar Prévia")
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            OutlinedButton(
-                                onClick = { backgroundToPreview = null },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !isSavingAppearanceSettings
-                            ) {
-                                Text("Fechar prévia")
-                            }
-                        }
-                    }
-                }
-            }
+  backgroundToPreview?.let { (themeKey, background) ->
+      BannerPreviewEditor(
+          themeKey = themeKey,
+          themeLabel = themeOptions.firstOrNull { it.first == themeKey }?.second ?: themeKey,
+          background = background,
+          isSaving = isSavingAppearanceSettings,
+          onDismiss = {
+              if (!isSavingAppearanceSettings) backgroundToPreview = null
+          },
+          onSave = { updatedBackground, maskSettings ->
+              val updatedBackgrounds = draftThemeBackgrounds + (
+                  themeKey to draftThemeBackgrounds[themeKey].orEmpty().map { item ->
+                      if (item.id == updatedBackground.id) updatedBackground else item
+                  }
+              )
+              draftThemeBackgrounds = updatedBackgrounds
+              val settingsToSave = draftAppearanceSettings.copy(
+                  themeBackgrounds = updatedBackgrounds
+              )
 
-            backgroundToDelete?.let { (themeKey, background) ->
+              coroutineScope.launch {
+                  isSavingAppearanceSettings = true
+                  val appearanceSaved = FirebaseService.saveAppearanceSettings(settingsToSave)
+                  if (!appearanceSaved) {
+                      isSavingAppearanceSettings = false
+                      snackbarHostState.showSnackbar(
+                          FirebaseService.lastError
+                              ?: "Não foi possível salvar o enquadramento da prévia."
+                      )
+                      return@launch
+                  }
+
+                  val maskSaved = com.example.data.BannerMaskStore.save(
+                      themeKey = themeKey,
+                      backgroundUrl = updatedBackground.url,
+                      settings = maskSettings
+                  )
+                  isSavingAppearanceSettings = false
+
+                  if (maskSaved) {
+                      backgroundToPreview = null
+                      snackbarHostState.showSnackbar(
+                          "Prévia salva. Enquadramento e máscara já serão usados na Home."
+                      )
+                  } else {
+                      backgroundToPreview = themeKey to updatedBackground
+                      snackbarHostState.showSnackbar(
+                          FirebaseService.lastError
+                              ?: "O enquadramento foi salvo, mas não foi possível salvar a máscara."
+                      )
+                  }
+              }
+          }
+      )
+  }
+
+  backgroundToDelete?.let { (themeKey, background) ->
                 AlertDialog(
                     onDismissRequest = { backgroundToDelete = null },
                     title = { Text("Excluir fundo?") },
