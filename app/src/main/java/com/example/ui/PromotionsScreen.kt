@@ -155,23 +155,23 @@ fun PromotionsLoginScreen(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .padding(24.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
                 imageVector = Icons.Default.Lock,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(56.dp)
+                modifier = Modifier.size(48.dp)
             )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
             Text("Entre com o mesmo acesso do Nossa Gente", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
             Text(
                 "Use seu CPF e sua senha do Nossa Gente. A senha é usada somente nesta autenticação e não é salva no aparelho.",
                 style = MaterialTheme.typography.bodyMedium
             )
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(16.dp))
             OutlinedTextField(
                 value = cpf,
                 onValueChange = { value -> cpf = value.filter(Char::isDigit).take(11) },
@@ -180,7 +180,7 @@ fun PromotionsLoginScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
@@ -189,7 +189,7 @@ fun PromotionsLoginScreen(
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(12.dp))
             Button(
                 onClick = {
                     if (isLoading) return@Button
@@ -220,7 +220,7 @@ fun PromotionsLoginScreen(
                 }
             }
             if (error != null) {
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(10.dp))
                 Text(error!!, color = MaterialTheme.colorScheme.error)
             }
         }
@@ -574,7 +574,7 @@ private fun ErrorPromotionsState(
     onRetry: () -> Unit
 ) {
     Column(
-        modifier = Modifier.padding(innerPadding).fillMaxSize().padding(24.dp),
+        modifier = Modifier.padding(innerPadding).fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -589,7 +589,7 @@ private fun ErrorPromotionsState(
 @Composable
 private fun EmptyPromotionsState(innerPadding: PaddingValues, onRetry: () -> Unit) {
     Column(
-        modifier = Modifier.padding(innerPadding).fillMaxSize().padding(24.dp),
+        modifier = Modifier.padding(innerPadding).fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -617,8 +617,8 @@ private fun PromotionsHome(
 ) {
     LazyColumn(
         modifier = Modifier.padding(innerPadding).fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
             StoreTabs(
@@ -631,7 +631,7 @@ private fun PromotionsHome(
             SearchField(query = searchQuery, onQueryChange = onSearchQueryChange)
         }
         item {
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 12.dp)) {
                 Text("Ofertas por categoria", style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -644,7 +644,7 @@ private fun PromotionsHome(
             item {
                 Text(
                     "Nenhum produto encontrado para esta busca ou loja.",
-                    modifier = Modifier.padding(24.dp),
+                    modifier = Modifier.padding(16.dp),
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
@@ -662,7 +662,7 @@ private fun PromotionsHome(
         item {
             Text(
                 "Atualização automática a cada minuto enquanto esta tela estiver aberta.",
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 style = MaterialTheme.typography.bodySmall
             )
         }
@@ -754,7 +754,7 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
         singleLine = true,
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
         trailingIcon = {
@@ -778,12 +778,12 @@ private fun CategoryPreviewSection(
     onImageClick: (String) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 12.dp))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onCategoryClick(categoryName) }
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -797,8 +797,8 @@ private fun CategoryPreviewSection(
             TextButton(onClick = { onCategoryClick(categoryName) }) { Text("Ver todos") }
         }
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            contentPadding = PaddingValues(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(offers, key = { it.id }) { offer ->
                 CompactOfferCard(offer = offer, onImageClick = onImageClick)
@@ -811,7 +811,7 @@ private fun CategoryPreviewSection(
 private fun CompactOfferCard(offer: OfferGroup, onImageClick: (String) -> Unit) {
     val cardShape = RoundedCornerShape(12.dp)
     Card(
-        modifier = Modifier.width(190.dp).glassSoftShadow(cardShape),
+        modifier = Modifier.width(176.dp).glassSoftShadow(cardShape),
         shape = cardShape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
@@ -821,12 +821,12 @@ private fun CompactOfferCard(offer: OfferGroup, onImageClick: (String) -> Unit) 
                 contentDescription = offer.name,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(150.dp),
+                    .height(136.dp),
                 onClick = onImageClick
             )
-            Column(modifier = Modifier.padding(10.dp)) {
+            Column(modifier = Modifier.padding(8.dp)) {
                 DiscountBadge(discount = offer.bestDiscount, compact = true)
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
                 Text(
                     offer.name,
                     style = MaterialTheme.typography.titleSmall,
@@ -834,7 +834,7 @@ private fun CompactOfferCard(offer: OfferGroup, onImageClick: (String) -> Unit) 
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(3.dp))
                 PriceSummary(offer = offer, compact = true)
             }
         }
@@ -859,12 +859,12 @@ private fun PromotionCategoryList(
     val offersToRender = visibleOffers.take(visibleOfferCount)
     LazyColumn(
         modifier = Modifier.padding(innerPadding).fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedButton(onClick = onBack) {
@@ -892,7 +892,7 @@ private fun PromotionCategoryList(
         item {
             Text(
                 if (selectedStore == ALL_STORES_LABEL) "Preços por loja" else "Filtrado por ${StoreCatalog.nameFor(selectedStore)}",
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(horizontal = 12.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -901,7 +901,7 @@ private fun PromotionCategoryList(
             item {
                 Text(
                     "Nenhum produto encontrado para este filtro.",
-                    modifier = Modifier.padding(24.dp),
+                    modifier = Modifier.padding(16.dp),
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
@@ -918,7 +918,7 @@ private fun PromotionCategoryList(
             item {
                 Button(
                     onClick = onLoadMore,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
                 ) {
                     Text("Carregar mais ofertas (${visibleOffers.size - visibleOfferCount} restantes)")
                 }
@@ -980,22 +980,22 @@ private fun DetailedOfferCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 12.dp)
             .glassSoftShadow(cardShape),
         shape = cardShape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(10.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                 ProductImage(
                     imageUrl = offer.imageUrl,
                     contentDescription = "Ver imagem de ${offer.name}",
                     modifier = Modifier
-                        .size(width = 126.dp, height = 144.dp)
+                        .size(width = 112.dp, height = 128.dp)
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp)),
                     onClick = onImageClick
                 )
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     DiscountBadge(discount = offer.bestDiscount, compact = false)
                     Spacer(Modifier.height(8.dp))
@@ -1495,7 +1495,7 @@ private fun NewOffersDialog(
         val dialogShape = RoundedCornerShape(20.dp)
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.96f)
+                .fillMaxWidth(0.94f)
                 .fillMaxHeight(0.9f)
                 .glassSoftShadow(dialogShape),
             shape = dialogShape,
@@ -1503,7 +1503,7 @@ private fun NewOffersDialog(
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 12.dp, end = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 10.dp, end = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -1520,7 +1520,7 @@ private fun NewOffersDialog(
                     }
                 }
                 var storeMenuExpanded by remember { mutableStateOf(false) }
-                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
                     OutlinedButton(
                         onClick = { storeMenuExpanded = true },
                         modifier = Modifier.fillMaxWidth()
@@ -1555,20 +1555,20 @@ private fun NewOffersDialog(
                 if (limitedBySafetyCap) {
                     Text(
                         "A lista de alterações foi limitada para manter o app estável.",
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
                 }
                 Text(
                     "${filteredChanges.size} alteração(ões) • $addedCount adicionada(s) • $changedCount alterada(s) • $removedCount removida(s)",
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (filteredChanges.isEmpty()) {
                     Column(
-                        modifier = Modifier.fillMaxSize().padding(24.dp),
+                        modifier = Modifier.fillMaxSize().padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
@@ -1584,8 +1584,8 @@ private fun NewOffersDialog(
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 20.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(filteredChanges, key = { it.stableKey }) { change ->
                             PromotionChangeCard(change = change, onImageClick = onImageClick)
@@ -1618,15 +1618,15 @@ private fun PromotionChangeCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         shape = cardShape
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.Top) {
+        Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.Top) {
             if (!change.imageUrl.isNullOrBlank()) {
                 ProductImage(
                     imageUrl = change.imageUrl,
                     contentDescription = "Imagem de ${change.productName}",
-                    modifier = Modifier.size(78.dp),
+                    modifier = Modifier.size(70.dp),
                     onClick = onImageClick
                 )
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(8.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
                 Surface(color = badgeColor, contentColor = badgeContentColor, shape = RoundedCornerShape(6.dp)) {
