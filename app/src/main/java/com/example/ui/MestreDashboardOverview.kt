@@ -60,11 +60,11 @@ internal fun MestreDashboardOverview(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(8.dp))
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         DashboardMetricCard(
             title = "Pendências",
@@ -79,10 +79,10 @@ internal fun MestreDashboardOverview(
             modifier = Modifier.weight(1f)
         )
     }
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(6.dp))
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         DashboardMetricCard(
             title = "Categorias ativas",
@@ -98,12 +98,12 @@ internal fun MestreDashboardOverview(
         )
     }
 
-    Spacer(modifier = Modifier.height(20.dp))
+    Spacer(modifier = Modifier.height(14.dp))
     Text("Ações rápidas", style = MaterialTheme.typography.titleMedium)
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(6.dp))
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         DashboardQuickAction(
             title = "Produtos",
@@ -120,10 +120,10 @@ internal fun MestreDashboardOverview(
             modifier = Modifier.weight(1f)
         )
     }
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(6.dp))
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         DashboardQuickAction(
             title = "Abas",
@@ -150,21 +150,21 @@ internal fun MestrePanelAreaNavigation(
     onOpenAdvanced: () -> Unit
 ) {
     Text("Áreas do painel", style = MaterialTheme.typography.titleMedium)
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(6.dp))
     PanelAreaCard(
         title = "Conteúdo e catálogo",
         description = "Produtos, categorias, abas e importação",
         icon = Icons.Default.Inventory,
         onClick = onOpenCatalog
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(6.dp))
     PanelAreaCard(
         title = "Configuração do aplicativo",
         description = "Home, aparência e notificações globais",
         icon = Icons.Default.Settings,
         onClick = onOpenSettings
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(6.dp))
     PanelAreaCard(
         title = "Ferramentas avançadas",
         description = "Diagnóstico, sincronização e backups",
@@ -188,23 +188,23 @@ internal fun MestreContentHub(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(6.dp))
     OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.Inventory,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(26.dp)
                 )
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Gerenciar produtos", style = MaterialTheme.typography.titleSmall)
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 FilledTonalButton(onClick = onManageProducts, modifier = Modifier.weight(1f)) {
                     Text("Editar")
@@ -217,23 +217,23 @@ internal fun MestreContentHub(
             }
         }
     }
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(12.dp))
     Text("Outras ferramentas", style = MaterialTheme.typography.titleMedium)
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(6.dp))
     PanelAreaCard(
         title = "Categorias",
         description = "Criar, ordenar, renomear ou ocultar grupos",
         icon = Icons.Default.Category,
         onClick = onOpenCategories
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(6.dp))
     PanelAreaCard(
         title = "Abas do aplicativo",
         description = "Criar e organizar conteúdo adicional",
         icon = Icons.Default.ViewCarousel,
         onClick = onManageTabs
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(6.dp))
     PanelAreaCard(
         title = "Importar planilha",
         description = if (importEnabled) "Adicionar produtos por CSV ou TSV" else "Importação em andamento...",
@@ -255,21 +255,21 @@ internal fun MestreSettingsHub(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(8.dp))
     PanelAreaCard(
         title = "Tela Home",
         description = "Seções, quantidade de produtos e carrossel",
         icon = Icons.Default.Home,
         onClick = onOpenHome
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(6.dp))
     PanelAreaCard(
         title = "Aparência global",
         description = "Tema, modo visual e fundos programados",
         icon = Icons.Default.Palette,
         onClick = onOpenAppearance
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(6.dp))
     PanelAreaCard(
         title = "Notificações globais",
         description = "Políticas aplicadas aos aparelhos dos usuários",
@@ -287,17 +287,17 @@ private fun DashboardMetricCard(
 ) {
     ElevatedCard(
         modifier = modifier
-            .heightIn(min = 96.dp)
+            .heightIn(min = 84.dp)
             .glassSoftShadow(MaterialTheme.shapes.medium)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(20.dp)
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
                 title,
@@ -321,20 +321,20 @@ private fun DashboardQuickAction(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
-            .heightIn(min = 88.dp)
+            .heightIn(min = 78.dp)
             .glassSoftShadow(MaterialTheme.shapes.medium)
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(24.dp)
             )
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(8.dp))
             Column {
                 Text(title, style = MaterialTheme.typography.titleSmall)
                 Text(
@@ -361,16 +361,16 @@ private fun PanelAreaCard(
         modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(26.dp)
             )
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(10.dp))
             Column {
                 Text(title, style = MaterialTheme.typography.titleSmall)
                 Text(
