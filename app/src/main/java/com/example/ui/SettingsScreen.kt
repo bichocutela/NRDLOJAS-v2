@@ -92,8 +92,8 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             
             SettingsSectionHeader(
@@ -103,7 +103,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 onToggle = { appearanceExpanded = !appearanceExpanded }
             )
             if (appearanceExpanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Tamanho da Fonte", modifier = Modifier.weight(1f))
                 Slider(
@@ -111,7 +111,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     onValueChange = { coroutineScope.launch { viewModel.userPreferences.setFontScale(it) } },
                     valueRange = 0.8f..2.0f,
                     steps = 11,
-                    modifier = Modifier.weight(2f).padding(horizontal = 16.dp)
+                    modifier = Modifier.weight(2f).padding(horizontal = 12.dp)
                 )
                 Text(String.format("%.1fx", fontScale))
             }
@@ -168,7 +168,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 Switch(checked = uppercaseBold, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setUppercaseBold(it) } })
             }
             
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
             
             Text("Tema do Aplicativo", style = MaterialTheme.typography.titleMedium, color = getDynamicThemeColor(1, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first)
             
@@ -213,8 +213,8 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             }
 
             if (appTheme == "glass") {
-                Spacer(modifier = Modifier.height(12.dp))
-                val settingsGlassShape = RoundedCornerShape(24.dp)
+                Spacer(modifier = Modifier.height(8.dp))
+                val settingsGlassShape = RoundedCornerShape(20.dp)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -227,8 +227,8 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     shape = settingsGlassShape
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text("Personalizar Glass Soft", style = MaterialTheme.typography.titleMedium)
                         Text(
@@ -279,16 +279,16 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             name = glassAccentColor,
                             isDark = glassStyle.isDark
                         )
-                        val previewShape = RoundedCornerShape(24.dp)
-                        val previewCardShape = RoundedCornerShape(20.dp)
+                        val previewShape = RoundedCornerShape(20.dp)
+                        val previewCardShape = RoundedCornerShape(16.dp)
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(128.dp)
+                                .height(112.dp)
                                 .glassSoftShadow(previewShape, 4.dp)
                                 .clip(previewShape)
                                 .background(Brush.linearGradient(previewColors))
-                                .padding(16.dp),
+                                .padding(12.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Card(
@@ -302,7 +302,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 border = BorderStroke(1.dp, glassStyle.borderColor),
                                 shape = previewCardShape
                             ) {
-                                Column(Modifier.padding(16.dp)) {
+                                Column(Modifier.padding(12.dp)) {
                                     Text("Prévia do vidro", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                                     Text(
                                         when (glassType) {
@@ -361,7 +361,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 }
             }
             
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
             Text(
                 "Modo de aparência",
                 style = MaterialTheme.typography.titleMedium,
@@ -430,7 +430,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
+            HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
             Text("Vibração", style = MaterialTheme.typography.titleMedium, color = getDynamicThemeColor(3, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first)
 
             
@@ -454,7 +454,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 onToggle = { notificationsExpanded = !notificationsExpanded }
             )
             if (notificationsExpanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -473,11 +473,11 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             }
             if (notificationsEnabled) {
                 Text("Preferências de notificações", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.secondary)
-                Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.fillMaxWidth().padding(start = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("Código alterado")
                     Switch(checked = notificationsCodeChangedEnabled, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setNotificationsCodeChangedEnabled(it) } })
                 }
-                Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.fillMaxWidth().padding(start = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("Produto adicionado")
                     Switch(checked = notificationsProductAddedEnabled, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setNotificationsProductAddedEnabled(it) } })
                 }
@@ -493,7 +493,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 onToggle = { feedbackExpanded = !feedbackExpanded }
             )
             if (feedbackExpanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
             Button(
                 onClick = { showSuggestionDialog = true },
@@ -669,7 +669,7 @@ private fun SettingsSectionHeader(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
