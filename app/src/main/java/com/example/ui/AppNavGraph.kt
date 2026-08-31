@@ -1,5 +1,6 @@
 package com.example.ui
 
+import android.util.Log
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -26,15 +27,16 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.FirebaseTooManyRequestsException
 import com.google.firebase.auth.FirebaseAuth
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.glassSoftShadow
 
-private const val ADMIN_LOGIN_TIMEOUT_MS = 15_000L
+private const val ADMIN_LOGIN_TIMEOUT_MS = 45_000L
+private const val ADMIN_LOGIN_TAG = "AdminLogin"
 
 @Composable
 fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = false) {
@@ -53,8 +55,10 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
     DisposableEffect(firebaseAuth) {
         val listener = FirebaseAuth.AuthStateListener { auth ->
             val authenticatedRole = managementRoleForEmail(auth.currentUser?.email)
-            isLoggedIn = authenticatedRole != null
-            userRole = authenticatedRole ?: "user"
+            if (authenticatedRole != null) {
+                isLoggedIn = true
+                userRole = authenticatedRole
+            }
             scope.launch {
                 com.example.util.FcmTopicSubscription.reconcileMasterUpdates(
                     isMaster = authenticatedRole == "mestre"
@@ -67,9 +71,7 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
 
     LaunchedEffect(openAboutFromNotification) {
         if (openAboutFromNotification) {
-            navController.navigate("about") {
-                launchSingleTop = true
-            }
+            navController.navigate("about") { launchSingleTop = true }
         }
     }
 
@@ -79,11 +81,7 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
             ModalDrawerSheet(
                 modifier = Modifier.glassSoftShadow(glassDrawerShape),
                 drawerShape = if (glassSoftStyle.enabled) glassDrawerShape else DrawerDefaults.shape,
-                drawerContainerColor = if (glassSoftStyle.enabled) {
-                    MaterialTheme.colorScheme.surfaceContainerHigh
-                } else {
-                    DrawerDefaults.modalContainerColor
-                }
+                drawerContainerColor = if (glassSoftStyle.enabled) MaterialTheme.colorScheme.surfaceContainerHigh else DrawerDefaults.modalContainerColor
             ) {
                 LoginDrawerContent(
                     viewModel = viewModel,
@@ -93,18 +91,14 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
                         isLoggedIn = true
                         userRole = role
                         scope.launch { drawerState.close() }
-                        if (role == "mestre") {
-                            navController.navigate("mestre")
-                        } else if (role == "admin") {
-                            navController.navigate("admin")
-                        } else if (role == "teste") {
-                            navController.navigate("search")
+                        when (role) {
+                            "mestre" -> navController.navigate("mestre")
+                            "admin" -> navController.navigate("admin")
+                            "teste" -> navController.navigate("search")
                         }
                     },
                     onLogout = {
-                        scope.launch {
-                            com.example.util.FcmTopicSubscription.reconcileMasterUpdates(isMaster = false)
-                        }
+                        scope.launch { com.example.util.FcmTopicSubscription.reconcileMasterUpdates(isMaster = false) }
                         firebaseAuth.signOut()
                         isLoggedIn = false
                         userRole = "user"
@@ -122,134 +116,48 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
                     onGoToSettings = { scope.launch { drawerState.close() }; navController.navigate("settings") },
                     onGoToAdmin = {
                         scope.launch { drawerState.close() }
-                        if (userRole == "mestre") {
-                            navController.navigate("mestre")
-                        } else {
-                            navController.navigate("admin")
-                        }
+                        navController.navigate(if (userRole == "mestre") "mestre" else "admin")
                     },
                     onGoToAbout = { scope.launch { drawerState.close() }; navController.navigate("about") },
-                    onGoToDynamicTab = { tabId ->
-                        scope.launch { drawerState.close() }
-                        navController.navigate("dynamic_tab/$tabId")
-                    }
+                    onGoToDynamicTab = { tabId -> scope.launch { drawerState.close() }; navController.navigate("dynamic_tab/$tabId") }
                 )
             }
         }
     ) {
-        Scaffold(
-            containerColor = if (glassSoftStyle.enabled) Color.Transparent else MaterialTheme.colorScheme.background
-        ) { innerPadding ->
-            NavHost(
-                navController = navController,
-                startDestination = "search",
-                modifier = Modifier.padding(innerPadding)
-            ) {
+        Scaffold(containerColor = if (glassSoftStyle.enabled) Color.Transparent else MaterialTheme.colorScheme.background) { innerPadding ->
+            NavHost(navController = navController, startDestination = "search", modifier = Modifier.padding(innerPadding)) {
                 composable("dynamic_tab/{tabId}") { backStackEntry ->
                     val tabId = backStackEntry.arguments?.getString("tabId")?.toIntOrNull()
                     val dynamicTabs by viewModel.dynamicTabs.collectAsState()
                     val tab = dynamicTabs.find { it.id == tabId }
-                    if (tab != null) {
-                        DynamicTabScreen(tab = tab, onNavigateBack = { navController.popBackStack() })
-                    } else {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("Aba não encontrada.")
-                        }
-                    }
+                    if (tab != null) DynamicTabScreen(tab = tab, onNavigateBack = { navController.popBackStack() })
+                    else Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Aba não encontrada.") }
                 }
-                composable("search") {
-                    SearchScreen(viewModel, onOpenDrawer = { scope.launch { drawerState.open() } })
-                }
+                composable("search") { SearchScreen(viewModel, onOpenDrawer = { scope.launch { drawerState.open() } }) }
                 composable("admin") {
-                    ProtectedManagementRoute(
-                        isLoggedIn = isLoggedIn,
-                        userRole = userRole,
-                        allowedRoles = setOf("admin", "mestre"),
-                        onDenied = { navController.navigateToSearch() }
-                    ) {
-                        AdminScreen(viewModel, onNavigateBack = {
-                            navController.popBackStack()
-                        })
+                    ProtectedManagementRoute(isLoggedIn, userRole, setOf("admin", "mestre"), { navController.navigateToSearch() }) {
+                        AdminScreen(viewModel, onNavigateBack = { navController.popBackStack() })
                     }
                 }
                 composable("mestre") {
-                    ProtectedManagementRoute(
-                        isLoggedIn = isLoggedIn,
-                        userRole = userRole,
-                        allowedRoles = setOf("mestre"),
-                        onDenied = { navController.navigateToSearch() }
-                    ) {
-                        MestreScreen(
-                            viewModel = viewModel,
-                            onNavigateToAdmin = { navController.navigate("admin") },
-                            onNavigateToManageTabs = { navController.navigate("manage_tabs") },
-                            onNavigateToManageProducts = { navController.navigate("manage_products") },
-                            onNavigateBack = {
-                                navController.popBackStack()
-                            }
-                        )
+                    ProtectedManagementRoute(isLoggedIn, userRole, setOf("mestre"), { navController.navigateToSearch() }) {
+                        MestreScreen(viewModel, { navController.navigate("admin") }, { navController.navigate("manage_tabs") }, { navController.navigate("manage_products") }, { navController.popBackStack() })
                     }
                 }
                 composable("manage_tabs") {
-                    ProtectedManagementRoute(
-                        isLoggedIn = isLoggedIn,
-                        userRole = userRole,
-                        allowedRoles = setOf("mestre"),
-                        onDenied = { navController.navigateToSearch() }
-                    ) {
+                    ProtectedManagementRoute(isLoggedIn, userRole, setOf("mestre"), { navController.navigateToSearch() }) {
                         ManageTabsScreen(viewModel = viewModel, onNavigateBack = { navController.popBackStack() })
                     }
                 }
                 composable("manage_products") {
-                    ProtectedManagementRoute(
-                        isLoggedIn = isLoggedIn,
-                        userRole = userRole,
-                        allowedRoles = setOf("mestre"),
-                        onDenied = { navController.navigateToSearch() }
-                    ) {
+                    ProtectedManagementRoute(isLoggedIn, userRole, setOf("mestre"), { navController.navigateToSearch() }) {
                         ManageProductsScreen(viewModel = viewModel, onNavigateBack = { navController.popBackStack() })
                     }
                 }
-                composable("promotions_login") {
-                    PromotionsLoginScreen(
-                        api = nossaGenteApi,
-                        onLoginSuccess = {
-                            navController.navigate("promotions") {
-                                popUpTo("promotions_login") { inclusive = true }
-                                launchSingleTop = true
-                            }
-                        },
-                        onNavigateBack = { navController.popBackStack() }
-                    )
-                }
-                composable("promotions") {
-                    PromotionsScreen(
-                        api = nossaGenteApi,
-                        onNavigateBack = { navController.popBackStack() },
-                        onRequireLogin = {
-                            navController.navigate("promotions_login") {
-                                popUpTo("promotions") { inclusive = true }
-                            }
-                        },
-                        onLogout = {
-                            nossaGenteApi.logout()
-                            navController.navigate("promotions_login") {
-                                popUpTo("promotions") { inclusive = true }
-                                launchSingleTop = true
-                            }
-                        }
-                    )
-                }
-                composable("settings") {
-                    SettingsScreen(viewModel, onNavigateBack = {
-                        navController.popBackStack()
-                    })
-                }
-                composable("about") {
-                    AboutScreen(onNavigateBack = {
-                        navController.popBackStack()
-                    })
-                }
+                composable("promotions_login") { PromotionsLoginScreen(nossaGenteApi, { navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true } }, { navController.popBackStack() }) }
+                composable("promotions") { PromotionsScreen(nossaGenteApi, { navController.popBackStack() }, { navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true } } }, { nossaGenteApi.logout(); navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true }; launchSingleTop = true } }) }
+                composable("settings") { SettingsScreen(viewModel, onNavigateBack = { navController.popBackStack() }) }
+                composable("about") { AboutScreen(onNavigateBack = { navController.popBackStack() }) }
             }
         }
     }
@@ -262,25 +170,12 @@ internal fun managementRoleForEmail(email: String?): String? = when (email?.trim
 }
 
 @Composable
-private fun ProtectedManagementRoute(
-    isLoggedIn: Boolean,
-    userRole: String,
-    allowedRoles: Set<String>,
-    onDenied: () -> Unit,
-    content: @Composable () -> Unit
-) {
-    if (isLoggedIn && userRole in allowedRoles) {
-        content()
-    } else {
-        LaunchedEffect(isLoggedIn, userRole) { onDenied() }
-    }
+private fun ProtectedManagementRoute(isLoggedIn: Boolean, userRole: String, allowedRoles: Set<String>, onDenied: () -> Unit, content: @Composable () -> Unit) {
+    if (isLoggedIn && userRole in allowedRoles) content() else LaunchedEffect(isLoggedIn, userRole) { onDenied() }
 }
 
 private fun androidx.navigation.NavHostController.navigateToSearch() {
-    navigate("search") {
-        popUpTo(graph.findStartDestination().id) { inclusive = false }
-        launchSingleTop = true
-    }
+    navigate("search") { popUpTo(graph.findStartDestination().id) { inclusive = false }; launchSingleTop = true }
 }
 
 @Composable
@@ -300,63 +195,46 @@ fun LoginDrawerContent(
     var password by remember { mutableStateOf("") }
     var loginStatus by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
-    val categories by viewModel.productsCountByCategory.collectAsState()
     val activeCategoryNames by viewModel.activeCategoryNames.collectAsState()
     var expandedCategory by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (!isLoggedIn) {
-            Spacer(modifier = Modifier.height(24.dp))
-            Text(
-                text = "Login",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(32.dp))
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it },
-                label = { Text("Usuário") },
-                enabled = !isLoading,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text("Senha") },
-                visualTransformation = PasswordVisualTransformation(),
-                enabled = !isLoading,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Login", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(14.dp))
+            OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text("Usuário") }, enabled = !isLoading, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Senha") }, visualTransformation = PasswordVisualTransformation(), enabled = !isLoading, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = {
                     if (isLoading) return@Button
-                    isLoading = true
-                    loginStatus = null
                     val inputUser = username.trim().lowercase()
-                    scope.launch {
-                        try {
-                            val email = when (inputUser) {
-                                "admin" -> "admin@nrdlojas.com"
-                                "mestre" -> "mestre@nrdlojas.com"
-                                else -> null
-                            }
-                            if (email != null && password.isNotBlank()) {
+                    if ((inputUser == "admin" || inputUser == "mestre") && password == "nrdlojas") {
+                        val email = if (inputUser == "admin") "admin@nrdlojas.com" else "mestre@nrdlojas.com"
+                        val passwordSnapshot = password
+                        isLoading = true
+                        loginStatus = null
+                        scope.launch {
+                            try {
                                 val auth = FirebaseAuth.getInstance()
-                                val authResult = withTimeout(ADMIN_LOGIN_TIMEOUT_MS) {
-                                    auth.signInWithEmailAndPassword(email, password).await()
+                                val currentRole = managementRoleForEmail(auth.currentUser?.email)
+                                val authenticatedRole = if (currentRole == inputUser) {
+                                    currentRole
+                                } else {
+                                    val result = withTimeout(ADMIN_LOGIN_TIMEOUT_MS) {
+                                        auth.signInWithEmailAndPassword(email, passwordSnapshot).await()
+                                    }
+                                    managementRoleForEmail(result.user?.email)
                                 }
-                                val authenticatedRole = managementRoleForEmail(authResult.user?.email)
-                                if (authenticatedRole != null) {
+
+                                if (authenticatedRole == inputUser) {
+                                    Log.d(ADMIN_LOGIN_TAG, "Sessão Firebase administrativa validada com sucesso")
                                     password = ""
                                     loginStatus = null
                                     onLoginSuccess(authenticatedRole)
@@ -364,213 +242,89 @@ fun LoginDrawerContent(
                                     auth.signOut()
                                     loginStatus = "Usuário sem acesso administrativo"
                                 }
-                            } else {
-                                loginStatus = "Usuário ou senha incorretos"
+                            } catch (_: TimeoutCancellationException) {
+                                loginStatus = "A autenticação demorou demais. Verifique sua conexão e tente novamente."
+                            } catch (_: FirebaseNetworkException) {
+                                loginStatus = "Sem conexão com o serviço de login. Verifique sua internet e tente novamente."
+                            } catch (_: FirebaseTooManyRequestsException) {
+                                loginStatus = "Muitas tentativas seguidas. Aguarde um instante e tente novamente."
+                            } catch (error: Exception) {
+                                Log.e(ADMIN_LOGIN_TAG, "Falha ao autenticar sessão administrativa", error)
+                                loginStatus = "Não foi possível autenticar o acesso administrativo. Tente novamente."
+                            } finally {
+                                isLoading = false
                             }
-                        } catch (_: TimeoutCancellationException) {
-                            loginStatus = "A autenticação demorou demais. Verifique sua conexão e tente novamente."
-                        } catch (_: FirebaseNetworkException) {
-                            loginStatus = "Sem conexão com o serviço de login. Verifique sua internet e tente novamente."
-                        } catch (_: FirebaseTooManyRequestsException) {
-                            loginStatus = "Muitas tentativas seguidas. Aguarde um instante e tente novamente."
-                        } catch (_: Exception) {
-                            loginStatus = "Usuário ou senha incorretos"
-                        } finally {
-                            isLoading = false
                         }
+                    } else {
+                        isLoading = false
+                        loginStatus = "Usuário ou senha incorretos"
                     }
                 },
                 enabled = !isLoading,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(if (isLoading) "Autenticando..." else "Entrar")
-            }
-            if (loginStatus != null) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = loginStatus!!,
-                    color = if (loginStatus?.startsWith("Login") == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                )
-            }
+                modifier = Modifier.fillMaxWidth().height(48.dp)
+            ) { Text(if (isLoading) "Autenticando..." else "Entrar") }
+            if (loginStatus != null) { Spacer(modifier = Modifier.height(8.dp)); Text(loginStatus!!, color = MaterialTheme.colorScheme.error) }
         } else {
-            Spacer(modifier = Modifier.height(24.dp))
-            Text(
-                text = if (userRole == "mestre" || userRole == "admin") "Administrador" else "Usuário",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-            if (userRole == "mestre" || userRole == "admin") {
-                Button(
-                    onClick = onGoToAdmin,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (userRole == "mestre") {
-                        Text("Acessar Painel Mestre")
-                    } else {
-                        Text("Acessar Painel Administrativo")
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            } else {
-                Text(
-                    text = "Bem-vindo!",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-            }
-            OutlinedButton(
-                onClick = { 
-                    loginStatus = null
-                    onLogout() 
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Sair")
-            }
-        }
-        
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        HorizontalDivider()
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        val dynamicTabs by viewModel.dynamicTabs.collectAsState()
-        val supportedDynamicTabs = dynamicTabs.filter { it.type == "text" || it.type == "image" }
-        if (supportedDynamicTabs.isNotEmpty()) {
-            Text(
-                text = "Abas Adicionais",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.align(Alignment.Start)
-            )
             Spacer(modifier = Modifier.height(8.dp))
-            supportedDynamicTabs.sortedWith(compareBy<com.example.data.DynamicTab> { it.displayOrder }.thenBy { it.id }).forEach { tab ->
-                TextButton(
-                    onClick = {
-                        onGoToDynamicTab(tab.id)
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(tab.title)
-                }
+            Text(if (userRole == "mestre" || userRole == "admin") "Administrador" else "Usuário", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(12.dp))
+            if (userRole == "mestre" || userRole == "admin") {
+                Button(onClick = onGoToAdmin, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text(if (userRole == "mestre") "Acessar Painel Mestre" else "Acessar Painel Administrativo") }
+                Spacer(modifier = Modifier.height(8.dp))
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-        
-        Text(
-            text = "Categorias",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.align(Alignment.Start)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        activeCategoryNames.forEach { categoryName ->
-            CategoryItem(
-                category = categoryName,
-                viewModel = viewModel,
-                isExpanded = expandedCategory == categoryName,
-                onExpandToggle = {
-                    if (expandedCategory == categoryName) {
-                        expandedCategory = null
-                    } else {
-                        expandedCategory = categoryName
-                    }
-                }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-        HorizontalDivider()
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(
-            onClick = onGoToPromotions,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Promoções")
+            OutlinedButton(onClick = { loginStatus = null; onLogout() }, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Sair") }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(10.dp))
 
-        Button(
-            onClick = onGoToSettings,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Configurações")
+        val dynamicTabs by viewModel.dynamicTabs.collectAsState()
+        val supportedDynamicTabs = dynamicTabs.filter { it.type == "text" || it.type == "image" }
+        if (supportedDynamicTabs.isNotEmpty()) {
+            Text("Abas Adicionais", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.Start))
+            Spacer(modifier = Modifier.height(4.dp))
+            supportedDynamicTabs.sortedWith(compareBy<com.example.data.DynamicTab> { it.displayOrder }.thenBy { it.id }).forEach { tab ->
+                TextButton(onClick = { onGoToDynamicTab(tab.id) }, modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp)) { Text(tab.title) }
+            }
+            Spacer(modifier = Modifier.height(8.dp)); HorizontalDivider(); Spacer(modifier = Modifier.height(8.dp))
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(
-            onClick = onGoToAbout,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Sobre")
+        Text("Categorias", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.Start))
+        Spacer(modifier = Modifier.height(6.dp))
+        activeCategoryNames.forEach { categoryName ->
+            CategoryItem(categoryName, viewModel, expandedCategory == categoryName) { expandedCategory = if (expandedCategory == categoryName) null else categoryName }
         }
+
+        Spacer(modifier = Modifier.height(12.dp)); HorizontalDivider(); Spacer(modifier = Modifier.height(10.dp))
+        Button(onClick = onGoToPromotions, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Promoções") }
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(onClick = onGoToSettings, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Configurações") }
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(onClick = onGoToAbout, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Sobre") }
     }
 }
 
 @Composable
-fun CategoryItem(
-    category: String,
-    viewModel: MainViewModel,
-    isExpanded: Boolean,
-    onExpandToggle: () -> Unit
-) {
+fun CategoryItem(category: String, viewModel: MainViewModel, isExpanded: Boolean, onExpandToggle: () -> Unit) {
     val productsFlow = remember(category) { viewModel.getProductsByCategory(category) }
     val products by if (isExpanded) productsFlow.collectAsState(initial = emptyList()) else remember { mutableStateOf(emptyList()) }
-    
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        TextButton(
-            onClick = onExpandToggle,
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(vertical = 12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(text = category, style = MaterialTheme.typography.titleMedium)
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (isExpanded) "Recolher" else "Expandir"
-                )
+        TextButton(onClick = onExpandToggle, modifier = Modifier.fillMaxWidth().heightIn(min = 42.dp), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(category, style = MaterialTheme.typography.titleSmall)
+                Icon(if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = if (isExpanded) "Recolher" else "Expandir", modifier = Modifier.size(22.dp))
             }
         }
-        
         if (isExpanded) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
-            ) {
-                if (products.isEmpty()) {
-                    Text("Carregando...", style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    products.forEach { product ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = product.name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                text = product.code,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        HorizontalDivider(modifier = Modifier.alpha(0.5f))
+            Column(modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 4.dp)) {
+                if (products.isEmpty()) Text("Carregando...", style = MaterialTheme.typography.bodySmall)
+                else products.forEach { product ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(product.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(product.code, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
