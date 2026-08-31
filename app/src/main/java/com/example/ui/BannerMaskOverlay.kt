@@ -1,20 +1,17 @@
 package com.example.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.BannerMaskSettings
 import com.example.data.BannerMaskStore
@@ -46,43 +43,29 @@ fun MaskedThemeBanner(
     val storedMask = rememberBannerMaskSettings(appTheme, backgroundUrl)
     val mask = (maskSettingsOverride ?: storedMask).normalized()
 
-    Box(modifier = modifier) {
-        ThemeBanner(
-            appTheme = appTheme,
-            backgroundUrl = backgroundUrl,
-            imageScale = imageScale,
-            imageOffsetX = imageOffsetX,
-            imageOffsetY = imageOffsetY,
-            imageStretchX = imageStretchX,
-            imageStretchY = imageStretchY,
-            modifier = Modifier.fillMaxSize()
-        )
-        BannerMaskOverlay(
-            settings = mask,
-            modifier = Modifier.fillMaxSize()
-        )
-    }
+    ThemeBanner(
+        appTheme = appTheme,
+        backgroundUrl = backgroundUrl,
+        imageScale = imageScale,
+        imageOffsetX = imageOffsetX,
+        imageOffsetY = imageOffsetY,
+        imageStretchX = imageStretchX,
+        imageStretchY = imageStretchY,
+        modifier = modifier.bannerAlphaMask(mask)
+    )
 }
 
-@Composable
-fun BannerMaskOverlay(
-    settings: BannerMaskSettings,
-    modifier: Modifier = Modifier,
-    shadeColor: Color = Color.Unspecified
-) {
+/**
+ * Aplica a máscara diretamente no canal alfa do banner.
+ *
+ * Diferente de um overlay colorido, esta máscara torna a própria imagem
+ * gradualmente transparente nas bordas selecionadas. Assim o fundo real da
+ * Home aparece por trás do banner, inclusive em temas claros, escuros e Glass.
+ */
+private fun Modifier.bannerAlphaMask(settings: BannerMaskSettings): Modifier {
     val safe = settings.normalized()
-    if (!safe.hasVisibleShade()) return
+    if (!safe.hasVisibleShade()) return this
 
-    val backgroundColor = MaterialTheme.colorScheme.background
-    val surfaceColor = MaterialTheme.colorScheme.surface
-    val adaptiveFadeColor = if (shadeColor != Color.Unspecified) {
-        shadeColor
-    } else {
-        val surfaceMix = if (backgroundColor.luminance() >= 0.5f) 0.78f else 0.34f
-        lerp(backgroundColor, surfaceColor, surfaceMix)
-    }
-
-    val edgeAlpha = safe.strength.coerceIn(0f, 1f)
     val depthMultiplier = when (safe.style) {
         BannerMaskSettings.STYLE_DEFINED -> 0.78f
         BannerMaskSettings.STYLE_DIFFUSE -> 1.38f
@@ -90,81 +73,103 @@ fun BannerMaskOverlay(
     }
     val bandFraction = (safe.depth * depthMultiplier).coerceIn(0.08f, 0.62f)
 
-    fun alpha(multiplier: Float): Color =
-        adaptiveFadeColor.copy(alpha = (edgeAlpha * multiplier).coerceIn(0f, 1f))
+    // strength = 0 -> imagem totalmente opaca; strength = 1 -> borda transparente.
+    val edgeRetention = (1f - safe.strength).coerceIn(0f, 1f)
 
-    val edge = alpha(1f)
-    val nearEdge = when (safe.style) {
-        BannerMaskSettings.STYLE_DEFINED -> alpha(0.86f)
-        BannerMaskSettings.STYLE_DIFFUSE -> alpha(0.72f)
-        else -> alpha(0.80f)
+    fun retention(progress: Float): Float =
+        edgeRetention + ((1f - edgeRetention) * progress.coerceIn(0f, 1f))
+
+    val fadeStops = when (safe.style) {
+        BannerMaskSettings.STYLE_DEFINED -> arrayOf(
+            0.00f to Color.Black.copy(alpha = edgeRetention),
+            0.24f to Color.Black.copy(alpha = retention(0.12f)),
+            0.52f to Color.Black.copy(alpha = retention(0.48f)),
+            0.78f to Color.Black.copy(alpha = retention(0.88f)),
+            1.00f to Color.Black
+        )
+        BannerMaskSettings.STYLE_DIFFUSE -> arrayOf(
+            0.00f to Color.Black.copy(alpha = edgeRetention),
+            0.16f to Color.Black.copy(alpha = retention(0.18f)),
+            0.38f to Color.Black.copy(alpha = retention(0.42f)),
+            0.68f to Color.Black.copy(alpha = retention(0.76f)),
+            1.00f to Color.Black
+        )
+        else -> arrayOf(
+            0.00f to Color.Black.copy(alpha = edgeRetention),
+            0.18f to Color.Black.copy(alpha = retention(0.16f)),
+            0.44f to Color.Black.copy(alpha = retention(0.45f)),
+            0.72f to Color.Black.copy(alpha = retention(0.80f)),
+            1.00f to Color.Black
+        )
     }
-    val middle = when (safe.style) {
-        BannerMaskSettings.STYLE_DEFINED -> alpha(0.58f)
-        BannerMaskSettings.STYLE_DIFFUSE -> alpha(0.43f)
-        else -> alpha(0.50f)
-    }
-    val feather = when (safe.style) {
-        BannerMaskSettings.STYLE_DEFINED -> alpha(0.18f)
-        BannerMaskSettings.STYLE_DIFFUSE -> alpha(0.12f)
-        else -> alpha(0.15f)
-    }
-    val transparent = adaptiveFadeColor.copy(alpha = 0f)
+    val reverseFadeStops = fadeStops
+        .map { (position, color) -> (1f - position) to color }
+        .sortedBy { it.first }
+        .toTypedArray()
 
-    val outwardStops = arrayOf(
-        0.00f to edge,
-        0.16f to nearEdge,
-        0.42f to middle,
-        0.74f to feather,
-        1.00f to transparent
-    )
-    val inwardStops = arrayOf(
-        0.00f to transparent,
-        0.26f to feather,
-        0.58f to middle,
-        0.84f to nearEdge,
-        1.00f to edge
-    )
-
-    Box(modifier = modifier) {
-        if (safe.shadeTop) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .fillMaxHeight(bandFraction)
-                    .background(Brush.verticalGradient(colorStops = outwardStops))
-            )
+    return this
+        .graphicsLayer {
+            // Necessário para o DstIn recortar somente o banner, sem afetar a Home.
+            compositingStrategy = CompositingStrategy.Offscreen
         }
+        .drawWithContent {
+            drawContent()
 
-        if (safe.shadeBottom) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .fillMaxHeight(bandFraction)
-                    .background(Brush.verticalGradient(colorStops = inwardStops))
-            )
-        }
+            val verticalBand = size.height * bandFraction
+            val horizontalBand = size.width * bandFraction
 
-        if (safe.shadeLeft) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .fillMaxHeight()
-                    .fillMaxWidth(bandFraction)
-                    .background(Brush.horizontalGradient(colorStops = outwardStops))
-            )
-        }
+            if (safe.shadeTop && verticalBand > 0f) {
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        colorStops = fadeStops,
+                        startY = 0f,
+                        endY = verticalBand
+                    ),
+                    topLeft = Offset.Zero,
+                    size = Size(size.width, verticalBand),
+                    blendMode = BlendMode.DstIn
+                )
+            }
 
-        if (safe.shadeRight) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .fillMaxHeight()
-                    .fillMaxWidth(bandFraction)
-                    .background(Brush.horizontalGradient(colorStops = inwardStops))
-            )
+            if (safe.shadeBottom && verticalBand > 0f) {
+                val startY = size.height - verticalBand
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        colorStops = reverseFadeStops,
+                        startY = startY,
+                        endY = size.height
+                    ),
+                    topLeft = Offset(0f, startY),
+                    size = Size(size.width, verticalBand),
+                    blendMode = BlendMode.DstIn
+                )
+            }
+
+            if (safe.shadeLeft && horizontalBand > 0f) {
+                drawRect(
+                    brush = Brush.horizontalGradient(
+                        colorStops = fadeStops,
+                        startX = 0f,
+                        endX = horizontalBand
+                    ),
+                    topLeft = Offset.Zero,
+                    size = Size(horizontalBand, size.height),
+                    blendMode = BlendMode.DstIn
+                )
+            }
+
+            if (safe.shadeRight && horizontalBand > 0f) {
+                val startX = size.width - horizontalBand
+                drawRect(
+                    brush = Brush.horizontalGradient(
+                        colorStops = reverseFadeStops,
+                        startX = startX,
+                        endX = size.width
+                    ),
+                    topLeft = Offset(startX, 0f),
+                    size = Size(horizontalBand, size.height),
+                    blendMode = BlendMode.DstIn
+                )
+            }
         }
-    }
 }
