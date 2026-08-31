@@ -181,16 +181,19 @@ object FirebaseService {
         return try {
             val firestore = FirebaseFirestore.getInstance()
             firestore.collection("products").document(product.code)
-                .set(mapOf(
-                    "code" to product.code,
-                    "name" to product.name,
-                    "searchName" to product.searchName,
-                    "category" to product.category,
-                    "unit" to product.unit,
-                    "imageUrl" to product.imageUrl,
-                    "searchCount" to product.searchCount,
-                    "timestamp" to System.currentTimeMillis()
-                )).await()
+                .set(
+                    mapOf(
+                        "code" to product.code,
+                        "name" to product.name,
+                        "searchName" to product.searchName,
+                        "category" to product.category,
+                        "unit" to product.unit,
+                        "imageUrl" to product.imageUrl,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge()
+                )
+                .await()
             Log.d("ProductSync", "Produto salvo no Firestore: ${product.code}")
             true
         } catch (e: Exception) {
@@ -569,7 +572,16 @@ object FirebaseService {
                                 imageUrl = imageUrl,
                                 searchCount = searchCount
                             ),
-                            lastViewedAt = doc.getTimestamp("lastViewedAt")?.toDate()?.time
+                            lastViewedAt = when (val viewedAt = doc.get("lastViewedAt")) {
+                                is com.google.firebase.Timestamp -> viewedAt.toDate().time
+                                is Number -> viewedAt.toLong()
+                                else -> null
+                            },
+                            createdAt = when (val addedAt = doc.get("createdAt") ?: doc.get("timestamp")) {
+                                is com.google.firebase.Timestamp -> addedAt.toDate().time
+                                is Number -> addedAt.toLong()
+                                else -> null
+                            }
                         )
                     }
                     trySend(products)

@@ -243,6 +243,7 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
     val textPreferences = rememberHomeTextPreferences(viewModel.userPreferences)
     val vibrateOnFound by viewModel.userPreferences.vibrateOnFound.collectAsStateWithLifecycle(initialValue = true)
     val mostUsed by viewModel.mostUsed.collectAsStateWithLifecycle()
+    val latestAdded by viewModel.latestAdded.collectAsStateWithLifecycle()
     val history by viewModel.history.collectAsStateWithLifecycle()
     val latestProductLocal by viewModel.latestProductLocal.collectAsStateWithLifecycle()
     val latestProductFirebase by viewModel.latestProduct.collectAsStateWithLifecycle()
@@ -504,11 +505,12 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
         } else {
             val hasVisibleHomeSection = homeSettings.showCategories ||
                 (homeSettings.showMostUsed && mostUsed.isNotEmpty()) ||
+                latestAdded.isNotEmpty() ||
                 (homeSettings.showHistory && history.isNotEmpty()) ||
                 (homeSettings.showFavorites && favorites.isNotEmpty())
             LazyColumn(
-                contentPadding = PaddingValues(bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                contentPadding = PaddingValues(bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (homeSettings.showCategories) {
                     item {
@@ -528,7 +530,7 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                         LazyRow(
                             state = mostUsedListState,
                             contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             itemsIndexed(mostUsed, key = { _, it -> it.code }) { index, product ->
                                 MiniProductCard(
@@ -547,12 +549,26 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                     }
                 }
 
+                if (latestAdded.isNotEmpty()) {
+                    item {
+                        SectionHeader("Últimos Adicionados", textPreferences)
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            latestAdded.forEachIndexed { index, product ->
+                                HistoryItem(product, viewModel, index, appTheme, textPreferences)
+                            }
+                        }
+                    }
+                }
+
                 if (homeSettings.showHistory && history.isNotEmpty()) {
                     item {
                         SectionHeader("Histórico Recente", textPreferences, actionLabel = "Limpar Histórico", onAction = { showClearHistoryDialog = true })
                         Column(
                             modifier = Modifier.padding(horizontal = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             history.take(5).forEachIndexed { index, product ->
                                 HistoryItem(product, viewModel, index, appTheme, textPreferences)
@@ -566,7 +582,7 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                         SectionHeader("Meus Favoritos", textPreferences)
                         Column(
                             modifier = Modifier.padding(horizontal = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             favorites.forEachIndexed { index, product ->
                                 ProductCard(product, viewModel, index, appTheme, textPreferences)
@@ -815,7 +831,7 @@ fun SectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -893,8 +909,8 @@ fun CategorySection(
 
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.padding(bottom = 8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(bottom = 2.dp)
     ) {
         itemsIndexed(categories) { index, category ->
             val colors = categoryColors[index % categoryColors.size]
@@ -1113,8 +1129,8 @@ fun MiniProductCard(
     }
     Column(
         modifier = Modifier
-            .width(180.dp)
-            .height(150.dp)
+            .width(164.dp)
+            .height(140.dp)
             .glassSoftShadow(cardShape)
             .clip(cardShape)
             .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surface)
@@ -1131,8 +1147,8 @@ fun MiniProductCard(
                     showDialog = true
                 }
             }
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1246,8 +1262,11 @@ fun HistoryItem(
             .clip(itemShape)
             .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
             .border(1.dp, if (glass.enabled) glass.border else dynColors.first, itemShape)
-            .vibrateClickable(viewModel) { showDialog = true }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .vibrateClickable(viewModel) {
+                viewModel.onProductSearched(product)
+                showDialog = true
+            }
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {

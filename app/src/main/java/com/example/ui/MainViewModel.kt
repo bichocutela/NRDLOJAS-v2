@@ -16,6 +16,7 @@ import com.example.data.ProductStandards
 import com.example.data.RemoteHomeSettings
 import com.example.data.UserPreferences
 import com.example.data.rankGloballyMostUsedProducts
+import com.example.data.rankLatestAddedProducts
 import com.example.util.FcmTopicSubscription
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -59,6 +60,8 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     val newProductsCount: StateFlow<Int> = _newProductsCount.asStateFlow()
     private val recentlyCountedProducts = mutableMapOf<String, Long>()
     private val _globalMostUsed = MutableStateFlow(GlobalMostUsedState())
+    private val _latestAdded = MutableStateFlow<List<Product>>(emptyList())
+    val latestAdded: StateFlow<List<Product>> = _latestAdded.asStateFlow()
 
     private val remoteHomeSettings = FirebaseService.observeHomeSettings()
         .onStart { emit(RemoteHomeSettings()) }
@@ -98,10 +101,9 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     val favorites = repository.favorites.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val mostUsed = combine(
         homeSettings.map { it.mostUsedLimit }.distinctUntilChanged(),
-        repository.mostUsed(50),
         _globalMostUsed
-    ) { limit, localMostUsed, globalMostUsed ->
-        (if (globalMostUsed.isLoaded) globalMostUsed.products else localMostUsed).take(limit)
+    ) { limit, globalMostUsed ->
+        globalMostUsed.products.take(limit)
     }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val history = repository.history.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -163,6 +165,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                     isLoaded = true,
                     products = rankGloballyMostUsedProducts(rankedUsage)
                 )
+                _latestAdded.value = rankLatestAddedProducts(rankedUsage)
                 val remoteProducts = remoteUsage.map { it.product }
                 val remoteIds = remoteProducts.map { it.code }.toSet()
                 val toDelete = localProducts.filter { it.code !in remoteIds }
