@@ -42,6 +42,8 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.ui.theme.getDynamicThemeColor
+import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.glassSoftShadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -192,9 +194,10 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut()
             ) {
+                val formCardShape = RoundedCornerShape(20.dp)
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.fillMaxWidth().glassSoftShadow(formCardShape),
+                    shape = formCardShape,
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
@@ -351,6 +354,7 @@ fun AdminProductList(
     categories: List<String>,
     onScrollToTop: () -> Unit
 ) {
+    val glassStyle = LocalGlassSoftStyle.current
     var searchQuery by remember { mutableStateOf("") }
     var pageIndex by remember { mutableStateOf(0) }
     var selectedCodes by remember { mutableStateOf(emptySet<String>()) }
@@ -440,8 +444,16 @@ fun AdminProductList(
             modifier = Modifier.padding(vertical = 16.dp)
         )
     } else {
+        val selectionContentColor = if (glassStyle.enabled) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            Color.White
+        }
         Card(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+                .glassSoftShadow(MaterialTheme.shapes.medium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
             shape = RoundedCornerShape(16.dp)
         ) {
@@ -454,7 +466,7 @@ fun AdminProductList(
                     Text(
                         "${selectedProducts.size} selecionado(s)",
                         style = MaterialTheme.typography.titleSmall,
-                        color = Color.White
+                        color = selectionContentColor
                     )
                     TextButton(
                         onClick = {
@@ -472,7 +484,7 @@ fun AdminProductList(
                             } else {
                                 "Selecionar página"
                             },
-                            color = Color.White
+                            color = selectionContentColor
                         )
                     }
                 }
@@ -484,11 +496,11 @@ fun AdminProductList(
                                 showBulkCategoryDialog = true
                             },
                             enabled = categories.isNotEmpty() && !isBulkWorking,
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = selectionContentColor),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, selectionContentColor),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Alterar categoria", maxLines = 1, color = Color.White)
+                            Text("Alterar categoria", maxLines = 1, color = selectionContentColor)
                         }
                         Button(
                             onClick = { showBulkDeleteDialog = true },
@@ -674,6 +686,7 @@ fun AdminProductItem(
     isSelected: Boolean,
     onSelectionChanged: (Boolean) -> Unit
 ) {
+    val productCardShape = RoundedCornerShape(18.dp)
     var isEditing by remember { mutableStateOf(false) }
     var editCode by remember(product.code) { mutableStateOf(product.code) }
     var editName by remember(product.name) { mutableStateOf(product.name) }
@@ -700,8 +713,9 @@ fun AdminProductItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        shape = RoundedCornerShape(18.dp),
+            .padding(vertical = 4.dp)
+            .glassSoftShadow(productCardShape),
+        shape = productCardShape,
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {

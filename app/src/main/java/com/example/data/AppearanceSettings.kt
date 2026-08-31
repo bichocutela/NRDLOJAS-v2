@@ -80,6 +80,7 @@ class AppearanceSettings(
         "green" -> "green"
         "blue" -> "blue"
         "orange" -> "orange"
+        "glass" -> "glass"
         else -> "multicolor"
     }
 }

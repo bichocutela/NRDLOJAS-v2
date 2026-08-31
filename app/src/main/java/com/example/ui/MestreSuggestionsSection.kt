@@ -41,6 +41,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.launch
+import com.example.ui.theme.glassSoftShadow
 
 private const val SUGGESTIONS_PAGE_SIZE = 10
 
@@ -62,7 +63,7 @@ internal fun MestreSuggestionsSection(
         )
         Spacer(modifier = Modifier.height(8.dp))
     }
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -207,7 +208,7 @@ internal fun MestreSuggestionsPreview(
         description = "Acompanhe as solicitações que precisam da sua atenção"
     )
     Spacer(modifier = Modifier.height(8.dp))
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -251,7 +252,7 @@ internal fun MestreSuggestionsPreview(
 @Composable
 private fun SuggestionPreviewItem(suggestion: ProductSuggestion) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -282,7 +283,7 @@ private fun SuggestionManagementItem(
     val dateText = formatSuggestionDate(suggestion.createdAt)
     val isFixed = suggestion.status == ProductSuggestion.STATUS_FIXED
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {

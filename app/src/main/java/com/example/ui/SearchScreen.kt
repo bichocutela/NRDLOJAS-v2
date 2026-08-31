@@ -75,6 +75,8 @@ import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.ui.theme.getDynamicThemeColor
+import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.glassSoftShadow
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.ui.res.painterResource
@@ -91,7 +93,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -192,31 +193,15 @@ data class GlassVisualStyle(
 )
 
 @Composable
-fun rememberGlassVisualStyle(viewModel: MainViewModel): GlassVisualStyle {
-    val theme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
-    val transparency by viewModel.userPreferences.glassTransparency.collectAsStateWithLifecycle(initialValue = 0.55f)
-    val type by viewModel.userPreferences.glassType.collectAsStateWithLifecycle(initialValue = "soft")
-    val accentName by viewModel.userPreferences.glassAccentColor.collectAsStateWithLifecycle(initialValue = "multicolor")
-    val darkGlass = MaterialTheme.colorScheme.background.luminance() < 0.35f
-    val accent = remember(accentName) { com.example.ui.theme.glassSoftAccent(accentName) }
-    val baseAlpha = (0.92f - transparency * 0.38f).coerceIn(0.58f, 0.86f)
-    val alpha = when (type) {
-        "frosted" -> (baseAlpha + 0.08f).coerceIn(0.68f, 0.92f)
-        "crystal" -> (baseAlpha - 0.12f).coerceIn(0.48f, 0.76f)
-        else -> baseAlpha
-    }
-    val fill = if (darkGlass) Color(0xFF11161D) else Color.White
-    val border = when (type) {
-        "frosted" -> accent.copy(alpha = 0.58f)
-        "crystal" -> accent.copy(alpha = 0.78f)
-        else -> accent.copy(alpha = 0.66f)
-    }
-    val highlight = when (type) {
-        "crystal" -> accent.copy(alpha = 0.72f)
-        "frosted" -> accent.copy(alpha = 0.44f)
-        else -> accent.copy(alpha = 0.56f)
-    }
-    return GlassVisualStyle(theme == "glass", alpha, fill, border, highlight)
+fun rememberGlassVisualStyle(): GlassVisualStyle {
+    val style = LocalGlassSoftStyle.current
+    return GlassVisualStyle(
+        enabled = style.enabled,
+        alpha = style.surfaceAlpha,
+        fill = style.surfaceBase,
+        border = style.borderColor,
+        highlight = style.accent.copy(alpha = if (style.type == "crystal") 0.58f else 0.42f)
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -224,44 +209,18 @@ fun rememberGlassVisualStyle(viewModel: MainViewModel): GlassVisualStyle {
 fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
     val bannerImageUri by viewModel.userPreferences.bannerImageUri.collectAsState(initial = null)
     val localAppTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
-    val glassAccentColor by viewModel.userPreferences.glassAccentColor.collectAsStateWithLifecycle(initialValue = "multicolor")
-    val glassTransparency by viewModel.userPreferences.glassTransparency.collectAsStateWithLifecycle(initialValue = 0.55f)
-    val glassType by viewModel.userPreferences.glassType.collectAsStateWithLifecycle(initialValue = "soft")
     val remoteAppearance by FirebaseService.observeAppearanceSettings()
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
-    val isGlassTheme = localAppTheme == "glass"
-    val appTheme = if (isGlassTheme) glassAccentColor else localAppTheme
-    val baseGlassAlpha = (1f - glassTransparency).coerceIn(0.10f, 0.80f)
-    val glassSurfaceAlpha = when (glassType) {
-        "frosted" -> (baseGlassAlpha + 0.18f).coerceIn(0.22f, 0.86f)
-        "crystal" -> (baseGlassAlpha - 0.12f).coerceIn(0.08f, 0.62f)
-        else -> baseGlassAlpha
-    }
-    val glassAccentPalette = remember(glassAccentColor) {
-        when (glassAccentColor) {
-            "blue" -> listOf(Color(0xFF74B6F2), Color(0xFFB9DEFA), Color(0xFFD8EEFF))
-            "green" -> listOf(Color(0xFF79CFA3), Color(0xFFCBEFD9), Color(0xFFE1F7E9))
-            "purple" -> listOf(Color(0xFFA98AEF), Color(0xFFDCCBFF), Color(0xFFEEE5FF))
-            "pink", "red" -> listOf(Color(0xFFEE88BE), Color(0xFFF8CFE7), Color(0xFFFFE5F2))
-            "orange", "gold" -> listOf(Color(0xFFF4B768), Color(0xFFFFE2BB), Color(0xFFFFF0D8))
-            "cyan" -> listOf(Color(0xFF65CFD4), Color(0xFFC6F0F1), Color(0xFFE0FAF8))
-            else -> listOf(Color(0xFF82B8EF), Color(0xFF79CFA3), Color(0xFFA98AEF), Color(0xFFEE88BE), Color(0xFFF4B768), Color(0xFF65CFD4))
-        }
-    }
-    val isDarkGlass = MaterialTheme.colorScheme.background.luminance() < 0.35f
-    val glassSessionAccent = remember(glassAccentColor) {
-        if (glassAccentColor == "multicolor") Color(0xFF69A9EC) else glassAccentPalette.first()
-    }
-    val glassActionBrush = remember(glassSessionAccent, isDarkGlass) {
+    val glassStyle = LocalGlassSoftStyle.current
+    val isGlassTheme = glassStyle.enabled
+    val appTheme = if (isGlassTheme) "glass" else localAppTheme
+    val glassActionBrush = remember(glassStyle.accent, glassStyle.secondaryAccent) {
         Brush.verticalGradient(
-            listOf(
-                glassSessionAccent.copy(alpha = if (isDarkGlass) 0.82f else 0.88f),
-                glassSessionAccent.copy(alpha = if (isDarkGlass) 0.62f else 0.68f)
-            )
+            listOf(glassStyle.accent, glassStyle.secondaryAccent)
         )
     }
-    val normalizedTheme = remember(appTheme, isGlassTheme) {
-        if (isGlassTheme) "multicolor" else when (appTheme.trim().lowercase()) {
+    val normalizedTheme = remember(localAppTheme, isGlassTheme) {
+        if (isGlassTheme) "multicolor" else when (localAppTheme.trim().lowercase()) {
             "multicolor" -> "multicolor"
             "gold" -> "gold"
             "green" -> "green"
@@ -270,7 +229,9 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
             else -> "red"
         }
     }
-    val activeThemeBackground = remoteAppearance.activeBackgroundFor(normalizedTheme)
+    val activeThemeBackground = remoteAppearance.activeBackgroundFor(
+        if (isGlassTheme) "glass" else normalizedTheme
+    )
 
 
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
@@ -343,22 +304,17 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
         ) {
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val headerHeight = maxWidth / 3f
+            val headerShape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(headerHeight)
-                    .clip(
-                        RoundedCornerShape(
-                            bottomStart = 32.dp,
-                            bottomEnd = 32.dp
-                        )
-                    )
+                    .glassSoftShadow(headerShape)
+                    .clip(headerShape)
                     .background(
                         if (isGlassTheme) {
-                            val tint = glassAccentPalette.first()
-                            if (isDarkGlass) tint.copy(alpha = (glassSurfaceAlpha * 0.46f).coerceAtLeast(0.12f))
-                            else Color.White.copy(alpha = glassSurfaceAlpha)
+                            MaterialTheme.colorScheme.surface
                         } else Color.White
                     )
             ) {
@@ -381,7 +337,13 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(top = 48.dp, start = 8.dp)
-                        .background(Color.Transparent)
+                        .then(
+                            if (isGlassTheme) Modifier
+                                .glassSoftShadow(CircleShape, 4.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                                .border(1.dp, glassStyle.borderColor, CircleShape)
+                            else Modifier.background(Color.Transparent)
+                        )
                 ) {
                     BadgedBox(
                         badge = {
@@ -399,7 +361,16 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                 }
                 IconButton(
                     onClick = { showNotificationsSheet = true },
-                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 48.dp, end = 8.dp)
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 48.dp, end = 8.dp)
+                        .then(
+                            if (isGlassTheme) Modifier
+                                .glassSoftShadow(CircleShape, 4.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                                .border(1.dp, glassStyle.borderColor, CircleShape)
+                            else Modifier
+                        )
                 ) {
                     BadgedBox(
                         badge = { if (unreadNotifications > 0) Badge { Text(unreadNotifications.toString()) } }
@@ -446,17 +417,18 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        if (isGlassTheme) { if (isDarkGlass) Color(0xFF11161D).copy(alpha = 0.78f) else Color.White.copy(alpha = 0.78f) } else MaterialTheme.colorScheme.surfaceVariant,
-                        RoundedCornerShape(32.dp)
+                    .glassSoftShadow(RoundedCornerShape(32.dp))
+                    .then(
+                        if (isGlassTheme) Modifier
+                        else Modifier.background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(32.dp))
                     )
                     .border(
                         1.dp,
-                        if (isGlassTheme) glassAccentPalette.first().copy(alpha = 0.62f) else MaterialTheme.colorScheme.outline,
+                        if (isGlassTheme) glassStyle.borderColor else MaterialTheme.colorScheme.outline,
                         RoundedCornerShape(32.dp)
                     ),
                 colors = SearchBarDefaults.colors(
-                    containerColor = if (isGlassTheme) { if (isDarkGlass) Color(0xFF11161D).copy(alpha = 0.78f) else Color.White.copy(alpha = 0.78f) } else MaterialTheme.colorScheme.surfaceVariant,
+                    containerColor = if (isGlassTheme) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant,
                     dividerColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
                 )
             ) {}
@@ -473,12 +445,13 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                     Modifier
                         .fillMaxWidth()
                         .height(56.dp)
+                        .glassSoftShadow(RoundedCornerShape(28.dp))
                         .background(glassActionBrush, RoundedCornerShape(28.dp))
-                        .border(1.dp, Color.White.copy(alpha = 0.62f), RoundedCornerShape(28.dp))
+                        .border(1.dp, glassStyle.borderColor, RoundedCornerShape(28.dp))
                 } else Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isGlassTheme) Color.Transparent else MaterialTheme.colorScheme.primary,
-                    contentColor = if (isGlassTheme) Color.White else MaterialTheme.colorScheme.onPrimary
+                    contentColor = if (isGlassTheme) glassStyle.onAccent else MaterialTheme.colorScheme.onPrimary
                 )
             ) {
                 Icon(Icons.Default.Search, contentDescription = null)
@@ -648,15 +621,8 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
             val sheetResults by sheetResultsFlow.collectAsState(initial = emptyList())
             ModalBottomSheet(
                 onDismissRequest = { showProductSearchSheet = false },
-                containerColor = if (isGlassTheme) {
-                    val sheetAlpha = when (glassType) {
-                        "frosted" -> 0.90f
-                        "crystal" -> 0.72f
-                        else -> 0.82f
-                    }
-                    if (isDarkGlass) Color(0xFF10151B).copy(alpha = sheetAlpha)
-                    else Color.White.copy(alpha = sheetAlpha)
-                } else MaterialTheme.colorScheme.surfaceContainerLow
+                containerColor = if (isGlassTheme) MaterialTheme.colorScheme.surfaceContainerHigh
+                else MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -689,15 +655,8 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
         if (showMostUsedSheet) {
             ModalBottomSheet(
                 onDismissRequest = { showMostUsedSheet = false },
-                containerColor = if (isGlassTheme) {
-                    val sheetAlpha = when (glassType) {
-                        "frosted" -> 0.90f
-                        "crystal" -> 0.72f
-                        else -> 0.82f
-                    }
-                    if (isDarkGlass) Color(0xFF10151B).copy(alpha = sheetAlpha)
-                    else Color.White.copy(alpha = sheetAlpha)
-                } else MaterialTheme.colorScheme.surfaceContainerLow
+                containerColor = if (isGlassTheme) MaterialTheme.colorScheme.surfaceContainerHigh
+                else MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                     Text("Mais Utilizados", style = MaterialTheme.typography.headlineSmall)
@@ -733,15 +692,8 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
         if (showNotificationsSheet) {
             ModalBottomSheet(
                 onDismissRequest = { showNotificationsSheet = false },
-                containerColor = if (isGlassTheme) {
-                    val sheetAlpha = when (glassType) {
-                        "frosted" -> 0.90f
-                        "crystal" -> 0.72f
-                        else -> 0.82f
-                    }
-                    if (isDarkGlass) Color(0xFF10151B).copy(alpha = sheetAlpha)
-                    else Color.White.copy(alpha = sheetAlpha)
-                } else MaterialTheme.colorScheme.surfaceContainerLow
+                containerColor = if (isGlassTheme) MaterialTheme.colorScheme.surfaceContainerHigh
+                else MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                     Row(
@@ -755,7 +707,10 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(notificationHistory, key = { _, item -> item.id }) { _, notification ->
                             Card(
-                                modifier = Modifier.fillMaxWidth().clickable {
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .glassSoftShadow(MaterialTheme.shapes.medium)
+                                    .clickable {
                                     viewModel.markNotificationRead(notification.id)
                                     val notificationTarget = notification.body.trim()
                                     val normalizedTarget = normalizeNotificationText(notificationTarget)
@@ -861,10 +816,11 @@ fun SectionHeader(
 
 @Composable
 private fun SearchEmptyState(onClear: () -> Unit) {
+    val shape = RoundedCornerShape(20.dp)
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().glassSoftShadow(shape),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(20.dp)
+        shape = shape
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(24.dp),
@@ -899,7 +855,7 @@ fun CategorySection(
     categories: List<String> = ProductStandards.officialCategories,
     onCategoryClick: (String) -> Unit = {}
 ) {
-    val glass = rememberGlassVisualStyle(viewModel)
+    val glass = rememberGlassVisualStyle()
     val categoryColors = listOf(
         MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer,
         MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer,
@@ -917,35 +873,18 @@ fun CategorySection(
         itemsIndexed(categories) { index, category ->
             val colors = categoryColors[index % categoryColors.size]
             val dynamicColors = getDynamicThemeColor(index, appTheme, colors.first, colors.second)
-            val categoryGlassFill = if (glass.enabled) {
-
-                dynamicColors.first.copy(alpha = if (MaterialTheme.colorScheme.background.luminance() < 0.35f) 0.28f else 0.18f)
-
-            } else dynamicColors.first
-
-            val categoryGlassBorder = if (glass.enabled) {
-
-                dynamicColors.first.copy(alpha = 0.78f)
-
-            } else Color.Transparent
+            val categoryGlassFill = if (glass.enabled) glass.fill.copy(alpha = glass.alpha)
+            else dynamicColors.first
+            val categoryGlassBorder = if (glass.enabled) glass.border else Color.Transparent
+            val categoryShape = RoundedCornerShape(16.dp)
 
             Box(
 
                 modifier = Modifier
-
-                    .clip(RoundedCornerShape(16.dp))
-
+                    .glassSoftShadow(categoryShape)
+                    .clip(categoryShape)
                     .background(categoryGlassFill)
-
-                    .border(
-
-                        1.dp,
-
-                        categoryGlassBorder,
-
-                        RoundedCornerShape(16.dp)
-
-                    )
+                    .border(1.dp, categoryGlassBorder, categoryShape)
                     .clickable { onCategoryClick(category) }
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
@@ -955,7 +894,7 @@ fun CategorySection(
                     baseStyle = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     boldOutline = textPreferences.boldOutline,
                     uppercaseBold = true,
-                    color = dynamicColors.second
+                    color = if (glass.enabled) MaterialTheme.colorScheme.onSurface else dynamicColors.second
                 )
             }
         }
@@ -971,7 +910,8 @@ fun CategoryProductsSheet(
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
     onDismiss: () -> Unit
 ) {
-    val glass = rememberGlassVisualStyle(viewModel)
+    val glass = rememberGlassVisualStyle()
+    val cardShape = RoundedCornerShape(24.dp)
     var query by remember { mutableStateOf("") }
     val productsFlow = remember(category, query) { viewModel.searchProductsByCategory(category, query) }
     val products by productsFlow.collectAsState(initial = emptyList())
@@ -1021,7 +961,7 @@ fun ProductCard(
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
     onProductClick: ((Product) -> Unit)? = null
 ) {
-    val glass = rememberGlassVisualStyle(viewModel)
+    val glass = rememberGlassVisualStyle()
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(product = product, onDismiss = { showDialog = false })
@@ -1030,12 +970,13 @@ fun ProductCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .glassSoftShadow(cardShape)
+            .clip(cardShape)
             .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surface)
             .border(
                 1.dp,
                 if (glass.enabled) glass.border else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
-                RoundedCornerShape(24.dp)
+                cardShape
             )
             .vibrateClickable(viewModel) {
                 if (onProductClick != null) {
@@ -1138,7 +1079,8 @@ fun MiniProductCard(
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
     onProductClick: ((Product) -> Unit)? = null
 ) {
-    val glass = rememberGlassVisualStyle(viewModel)
+    val glass = rememberGlassVisualStyle()
+    val cardShape = RoundedCornerShape(24.dp)
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(product = product, onDismiss = { showDialog = false })
@@ -1147,12 +1089,13 @@ fun MiniProductCard(
         modifier = Modifier
             .width(180.dp)
             .height(150.dp)
-            .clip(RoundedCornerShape(24.dp))
+            .glassSoftShadow(cardShape)
+            .clip(cardShape)
             .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surface)
             .border(
                 1.dp,
                 if (glass.enabled) glass.border else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
-                RoundedCornerShape(24.dp)
+                cardShape
             )
             .vibrateClickable(viewModel) {
                 if (onProductClick != null) {
@@ -1263,7 +1206,8 @@ fun HistoryItem(
     appTheme: String = "multicolor",
     textPreferences: HomeTextPreferences = HomeTextPreferences()
 ) {
-    val glass = rememberGlassVisualStyle(viewModel)
+    val glass = rememberGlassVisualStyle()
+    val itemShape = RoundedCornerShape(16.dp)
     var showDialog by remember { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(product = product, onDismiss = { showDialog = false })
@@ -1272,9 +1216,10 @@ fun HistoryItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .glassSoftShadow(itemShape)
+            .clip(itemShape)
             .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
-            .border(1.dp, if (glass.enabled) glass.border else dynColors.first, RoundedCornerShape(16.dp))
+            .border(1.dp, if (glass.enabled) glass.border else dynColors.first, itemShape)
             .vibrateClickable(viewModel) { showDialog = true }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1445,7 +1390,7 @@ fun ThemeBanner(
     modifier: Modifier = Modifier
 ) {
     val normalizedTheme = when (appTheme.trim().lowercase()) {
-        "multicolor" -> "multicolor"
+        "multicolor", "glass" -> "multicolor"
         "gold" -> "gold"
         "green" -> "green"
         "blue" -> "blue"

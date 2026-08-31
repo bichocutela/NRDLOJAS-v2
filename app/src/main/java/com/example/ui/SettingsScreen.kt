@@ -17,10 +17,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.Modifier
 import com.example.ui.theme.getDynamicThemeColor
+import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.glassSoftBackgroundColors
+import com.example.ui.theme.glassSoftShadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -44,6 +46,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val glassAccentColor by viewModel.userPreferences.glassAccentColor.collectAsState(initial = "multicolor")
     val glassTransparency by viewModel.userPreferences.glassTransparency.collectAsState(initial = 0.55f)
     val glassType by viewModel.userPreferences.glassType.collectAsState(initial = "soft")
+    val glassStyle = LocalGlassSoftStyle.current
     
     val notificationsEnabled by viewModel.userPreferences.notificationsEnabled.collectAsState(initial = true)
     val notificationsProductAddedEnabled by viewModel.userPreferences.notificationsProductAddedEnabled.collectAsState(initial = true)
@@ -211,16 +214,17 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
 
             if (appTheme == "glass") {
                 Spacer(modifier = Modifier.height(12.dp))
-                val glassBaseAlpha = (1f - glassTransparency).coerceIn(0.10f, 0.80f)
-                val glassPreviewAlpha = when (glassType) {
-                    "frosted" -> (glassBaseAlpha + 0.18f).coerceIn(0.22f, 0.86f)
-                    "crystal" -> (glassBaseAlpha - 0.12f).coerceIn(0.08f, 0.62f)
-                    else -> glassBaseAlpha
-                }
+                val settingsGlassShape = RoundedCornerShape(24.dp)
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = glassPreviewAlpha)),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = if (glassType == "crystal") 0.95f else 0.72f))
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .glassSoftShadow(settingsGlassShape),
+                    colors = CardDefaults.cardColors(
+                        containerColor = glassStyle.surfaceBase.copy(alpha = glassStyle.strongSurfaceAlpha),
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    border = BorderStroke(1.dp, glassStyle.borderColor),
+                    shape = settingsGlassShape
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -271,29 +275,32 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             }
                         }
 
-                        val previewColors = when (glassAccentColor) {
-                            "blue" -> listOf(Color(0xFF9DD1FA), Color(0xFFD8EEFF), Color(0xFFE8DCFF))
-                            "green" -> listOf(Color(0xFFA9E3C1), Color(0xFFD8F3E4), Color(0xFFD8ECFF))
-                            "purple" -> listOf(Color(0xFFC3ACFA), Color(0xFFE5DAFF), Color(0xFFFFDDF0))
-                            "pink", "red" -> listOf(Color(0xFFF4ADD2), Color(0xFFFFDDEC), Color(0xFFD8E9FF))
-                            "orange", "gold" -> listOf(Color(0xFFF8C985), Color(0xFFFFE6BE), Color(0xFFFFDDED))
-                            "cyan" -> listOf(Color(0xFF9BE3E5), Color(0xFFD3F4F1), Color(0xFFDCCEFF))
-                            else -> listOf(Color(0xFFB9DEFA), Color(0xFFCBEFD9), Color(0xFFDCCBFF), Color(0xFFF8CFE7), Color(0xFFFFE2BB), Color(0xFFC6F0F1))
-                        }
+                        val previewColors = glassSoftBackgroundColors(
+                            name = glassAccentColor,
+                            isDark = glassStyle.isDark
+                        )
+                        val previewShape = RoundedCornerShape(24.dp)
+                        val previewCardShape = RoundedCornerShape(20.dp)
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(128.dp)
-                                .clip(RoundedCornerShape(24.dp))
+                                .glassSoftShadow(previewShape, 4.dp)
+                                .clip(previewShape)
                                 .background(Brush.linearGradient(previewColors))
                                 .padding(16.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = glassPreviewAlpha)),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = if (glassType == "crystal") 0.98f else 0.78f)),
-                                shape = RoundedCornerShape(20.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .glassSoftShadow(previewCardShape, 6.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = glassStyle.surfaceBase.copy(alpha = glassStyle.surfaceAlpha),
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                ),
+                                border = BorderStroke(1.dp, glassStyle.borderColor),
+                                shape = previewCardShape
                             ) {
                                 Column(Modifier.padding(16.dp)) {
                                     Text("Prévia do vidro", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
@@ -316,6 +323,14 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             valueRange = 0.20f..0.90f,
                             steps = 13
                         )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Mais sólido", style = MaterialTheme.typography.labelSmall)
+                            Text("Equilibrado", style = MaterialTheme.typography.labelSmall)
+                            Text("Mais transparente", style = MaterialTheme.typography.labelSmall)
+                        }
                         Text(
                             "Menor valor deixa o vidro mais sólido; maior valor deixa o fundo mais aparente.",
                             style = MaterialTheme.typography.bodySmall,
@@ -373,6 +388,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     Card(
                         modifier = Modifier
                             .weight(1f)
+                            .glassSoftShadow(MaterialTheme.shapes.medium, 4.dp)
                             .clickable {
                                 coroutineScope.launch {
                                     viewModel.userPreferences.setAppearanceMode(modeKey)
@@ -645,6 +661,7 @@ private fun SettingsSectionHeader(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .glassSoftShadow(MaterialTheme.shapes.medium, 5.dp)
             .clickable(onClick = onToggle),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant
@@ -674,7 +691,7 @@ private fun SuggestionResolvedCard(
     onClick: () -> Unit
 ) {
     OutlinedCard(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium),
         onClick = onClick,
         colors = CardDefaults.outlinedCardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
@@ -709,7 +726,7 @@ private fun SuggestionResolvedCard(
 @Composable
 private fun PublicSuggestionCard(suggestion: com.example.data.ProductSuggestion) {
     val isFixed = suggestion.status == com.example.data.ProductSuggestion.STATUS_FIXED
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(suggestion.text, style = MaterialTheme.typography.bodyLarge)
             Spacer(modifier = Modifier.height(6.dp))

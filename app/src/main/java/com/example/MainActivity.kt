@@ -225,7 +225,10 @@ class MainActivity : ComponentActivity() {
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(Color.White),
+                                    .background(
+                                        if (LocalGlassSoftStyle.current.enabled) Color.Transparent
+                                        else Color.White
+                                    ),
                                 contentAlignment = Alignment.Center
                             ) {
                                 coil.compose.AsyncImage(

@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.data.DynamicTab
+import com.example.ui.theme.glassSoftShadow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,7 +67,10 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
         ) {
             items(tabs.sortedWith(compareBy<DynamicTab> { it.displayOrder }.thenBy { it.id })) { tab ->
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .glassSoftShadow(MaterialTheme.shapes.medium)
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp).fillMaxWidth(),

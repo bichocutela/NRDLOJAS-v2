@@ -58,4 +58,4 @@ data class ThemeBackground(
     }
 }
 
-val SupportedThemeKeys = listOf("multicolor", "red", "gold", "green", "blue", "orange")
+val SupportedThemeKeys = listOf("multicolor", "red", "gold", "green", "blue", "orange", "glass")

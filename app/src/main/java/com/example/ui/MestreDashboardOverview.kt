@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.ui.theme.glassSoftShadow
 
 @Composable
 internal fun MestreDashboardOverview(
@@ -188,7 +189,7 @@ internal fun MestreContentHub(
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
     Spacer(modifier = Modifier.height(8.dp))
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -284,7 +285,11 @@ private fun DashboardMetricCard(
     icon: ImageVector,
     modifier: Modifier = Modifier
 ) {
-    ElevatedCard(modifier = modifier.heightIn(min = 96.dp)) {
+    ElevatedCard(
+        modifier = modifier
+            .heightIn(min = 96.dp)
+            .glassSoftShadow(MaterialTheme.shapes.medium)
+    ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Icon(
                 imageVector = icon,
@@ -315,7 +320,9 @@ private fun DashboardQuickAction(
     OutlinedCard(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.heightIn(min = 88.dp)
+        modifier = modifier
+            .heightIn(min = 88.dp)
+            .glassSoftShadow(MaterialTheme.shapes.medium)
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -351,7 +358,7 @@ private fun PanelAreaCard(
     OutlinedCard(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
