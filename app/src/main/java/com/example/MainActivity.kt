@@ -43,10 +43,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.room.Room
 import com.example.data.AppDatabase
 import com.example.data.AppearanceSettings
-import com.example.data.NossaGenteApi
-import com.example.data.NossaGenteCodeLookupResult
 import com.example.data.ProductRepository
-import com.example.data.StoreCatalog
 import com.example.data.UserPreferences
 import com.example.data.dataStore
 import com.example.ui.AppNavGraph
@@ -194,68 +191,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Diagnóstico temporário para validar se o Nossa Gente devolve EAN/GTIN.
-                // Executa somente no Mestre e uma única vez para este código/revisão.
-                LaunchedEffect(Unit) {
-                    if (!FcmTopicSubscription.isMasterAuthenticated()) return@LaunchedEffect
-                    val diagnostics = applicationContext.getSharedPreferences(
-                        "nrd_nossa_gente_diagnostics",
-                        MODE_PRIVATE
-                    )
-                    val diagnosticKey = "lookup_${TEST_NOSSA_GENTE_CODE}_r1"
-                    if (diagnostics.getBoolean(diagnosticKey, false)) return@LaunchedEffect
-
-                    val diagnosticApi = NossaGenteApi(applicationContext)
-                    repeat(120) {
-                        if (!diagnosticApi.hasSession()) {
-                            delay(5_000)
-                            return@repeat
-                        }
-
-                        when (val lookup = diagnosticApi.lookupPromotionCode(TEST_NOSSA_GENTE_CODE)) {
-                            is NossaGenteCodeLookupResult.Found -> {
-                                val match = lookup.matches.first()
-                                val storeLabel = match.storeCode
-                                    ?.takeIf { it.isNotBlank() }
-                                    ?.let(StoreCatalog::nameFor)
-                                    ?: "loja não informada"
-                                val price = match.offerPrice ?: match.regularPrice ?: "preço não informado"
-                                val internalCode = match.internalCode.takeIf { it.isNotBlank() } ?: "não informado"
-                                val name = match.name.takeIf { it.isNotBlank() } ?: "produto sem nome"
-                                val extraMatches = (lookup.matches.size - 1).coerceAtLeast(0)
-                                val suffix = if (extraMatches > 0) " (+$extraMatches resultado(s))" else ""
-                                diagnostics.edit().putBoolean(diagnosticKey, true).apply()
-                                snackbarHostState.showSnackbar(
-                                    message = "Nossa Gente encontrou $TEST_NOSSA_GENTE_CODE no campo ${match.matchedField}: $name | cód. interno $internalCode | $storeLabel | $price$suffix",
-                                    withDismissAction = true,
-                                    duration = androidx.compose.material3.SnackbarDuration.Long
-                                )
-                                return@LaunchedEffect
-                            }
-                            is NossaGenteCodeLookupResult.NotFound -> {
-                                diagnostics.edit().putBoolean(diagnosticKey, true).apply()
-                                snackbarHostState.showSnackbar(
-                                    message = "Nossa Gente não retornou o código ${lookup.queriedCode} nos dados de promoções consultados.",
-                                    withDismissAction = true,
-                                    duration = androidx.compose.material3.SnackbarDuration.Long
-                                )
-                                return@LaunchedEffect
-                            }
-                            NossaGenteCodeLookupResult.Unauthorized -> {
-                                delay(5_000)
-                            }
-                            is NossaGenteCodeLookupResult.Error -> {
-                                snackbarHostState.showSnackbar(
-                                    message = "Teste de código no Nossa Gente: ${lookup.message}",
-                                    withDismissAction = true,
-                                    duration = androidx.compose.material3.SnackbarDuration.Long
-                                )
-                                return@LaunchedEffect
-                            }
-                        }
-                    }
-                }
-
                 MyApplicationTheme(
                     appTheme = effectiveAppTheme,
                     appearanceMode = effectiveAppearanceMode,
@@ -342,6 +277,5 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_OPEN_ABOUT = "open_about"
         const val EXTRA_OPEN_PROMOTIONS = "open_promotions"
         const val EXTRA_UPDATE_TAG = "update_tag"
-        private const val TEST_NOSSA_GENTE_CODE = "7898919411900"
     }
 }
