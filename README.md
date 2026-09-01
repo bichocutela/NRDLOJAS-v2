@@ -52,23 +52,51 @@ A arquitetura mantém a interface separada das camadas de dados e integra recurs
 
 ## Visual e temas
 
-<p align="center">
-  <img src="app/src/main/res/drawable-nodpi/hero_banner.png" width="92%" alt="Banner NRD" />
-</p>
+Os visuais abaixo usam **arquivos que já fazem parte do próprio aplicativo**. Todos são exibidos com a mesma largura no README e sem altura fixa, preservando a proporção original, sem crop e sem deformação.
+
+### Multicolorido
 
 <p align="center">
-  <img src="assets/themes/theme_blue.jpg" width="31%" alt="Tema Azul" />
-  <img src="assets/themes/theme_green.jpg" width="31%" alt="Tema Verde" />
-  <img src="assets/themes/theme_orange.jpg" width="31%" alt="Tema Laranja" />
+  <img src="app/src/main/res/drawable-nodpi/theme_multicolor_header.png" width="92%" alt="Tema Multicolorido" />
 </p>
+
+### Vermelho
 
 <p align="center">
-  <img src="assets/themes/theme_red.jpg" width="31%" alt="Tema Vermelho" />
-  <img src="assets/themes/theme_gold.jpg" width="31%" alt="Tema Dourado" />
-  <img src="app/src/main/res/drawable-nodpi/theme_multicolor_header.png" width="31%" alt="Tema Multicolorido" />
+  <img src="app/src/main/assets/themes/theme_red.jpg" width="92%" alt="Tema Vermelho" />
 </p>
 
-A aplicação possui identidade visual dinâmica, variantes de cores, fundos temáticos e suporte ao estilo **Glass Soft**, mantendo a apresentação adaptável às diferentes áreas do app.
+### Verde
+
+<p align="center">
+  <img src="app/src/main/assets/themes/theme_green.jpg" width="92%" alt="Tema Verde" />
+</p>
+
+### Laranja
+
+<p align="center">
+  <img src="app/src/main/assets/themes/theme_orange.jpg" width="92%" alt="Tema Laranja" />
+</p>
+
+### Azul
+
+<p align="center">
+  <img src="app/src/main/assets/themes/theme_blue.jpg" width="92%" alt="Tema Azul" />
+</p>
+
+### Dourado
+
+<p align="center">
+  <img src="app/src/main/assets/themes/theme_gold.jpg" width="92%" alt="Tema Dourado" />
+</p>
+
+### Glass Soft
+
+<p align="center">
+  <img src="app/src/main/res/drawable-nodpi/hero_banner.png" width="92%" alt="Glass Soft" />
+</p>
+
+O **Glass Soft** também possui superfícies, transparências e gradientes gerados dinamicamente pelo tema do aplicativo; o banner acima é o recurso visual interno usado na apresentação do projeto.
 
 ---
 
