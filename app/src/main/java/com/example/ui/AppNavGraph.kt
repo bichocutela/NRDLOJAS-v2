@@ -39,7 +39,11 @@ private const val ADMIN_LOGIN_TIMEOUT_MS = 45_000L
 private const val ADMIN_LOGIN_TAG = "AdminLogin"
 
 @Composable
-fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = false) {
+fun AppNavGraph(
+    viewModel: MainViewModel,
+    openAboutFromNotification: Boolean = false,
+    openPromotionsFromNotification: Boolean = false
+) {
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -72,6 +76,16 @@ fun AppNavGraph(viewModel: MainViewModel, openAboutFromNotification: Boolean = f
     LaunchedEffect(openAboutFromNotification) {
         if (openAboutFromNotification) {
             navController.navigate("about") { launchSingleTop = true }
+        }
+    }
+
+    LaunchedEffect(openPromotionsFromNotification) {
+        if (openPromotionsFromNotification) {
+            navController.navigate(
+                if (nossaGenteApi.hasSession()) "promotions" else "promotions_login"
+            ) {
+                launchSingleTop = true
+            }
         }
     }
 
