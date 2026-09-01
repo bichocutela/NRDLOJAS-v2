@@ -17,9 +17,10 @@ import java.util.concurrent.TimeUnit
 /** Cliente mínimo para autenticar e consultar promoções da Nossa Gente.
  *  A senha é usada somente na requisição de login e nunca é persistida.
  */
-class NossaGenteApi(@Suppress("UNUSED_PARAMETER") context: Context) {
+class NossaGenteApi(context: Context) {
     @Volatile
     private var inMemoryToken: String? = null
+    private val secureSession = NossaGenteSecureSession(context)
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -62,9 +63,8 @@ class NossaGenteApi(@Suppress("UNUSED_PARAMETER") context: Context) {
                 if (token.isNullOrBlank()) {
                     return@withContext NossaGenteLoginResult.Error("A resposta de autenticação não trouxe uma sessão válida.")
                 }
-                // A sessão é deliberadamente mantida somente em memória. Ao fechar
-                // o aplicativo, o funcionário deverá autenticar novamente.
                 inMemoryToken = token
+                secureSession.saveToken(token)
                 NossaGenteLoginResult.Success
             }
         } catch (_: Exception) {
@@ -88,7 +88,7 @@ class NossaGenteApi(@Suppress("UNUSED_PARAMETER") context: Context) {
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (response.code == 401 || response.code == 403) {
-                    inMemoryToken = null
+                    clearSession()
                     return@withContext NossaGentePromotionsResult.Unauthorized
                 }
                 if (!response.isSuccessful) {
@@ -109,10 +109,18 @@ class NossaGenteApi(@Suppress("UNUSED_PARAMETER") context: Context) {
     }
 
     fun logout() {
-        inMemoryToken = null
+        clearSession()
     }
 
-    private fun currentToken(): String? = inMemoryToken
+    private fun currentToken(): String? {
+        inMemoryToken?.takeIf { it.isNotBlank() }?.let { return it }
+        return secureSession.readToken()?.also { inMemoryToken = it }
+    }
+
+    private fun clearSession() {
+        inMemoryToken = null
+        secureSession.clear()
+    }
 
     internal fun parsePromotionsForTest(raw: String): List<Promotion> = parsePromotions(raw)
 
