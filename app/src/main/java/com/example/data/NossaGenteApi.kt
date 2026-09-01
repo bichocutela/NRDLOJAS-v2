@@ -108,6 +108,108 @@ class NossaGenteApi(context: Context) {
         }
     }
 
+    /**
+     * Diagnóstico de código/EAN usando a sessão já autenticada do Nossa Gente.
+     * A consulta não persiste o código e procura o valor exato em qualquer campo
+     * retornado pelas promoções (EAN/GTIN/código de barras/código interno etc.).
+     */
+    suspend fun lookupPromotionCode(rawCode: String): NossaGenteCodeLookupResult = withContext(Dispatchers.IO) {
+        val cleanCode = rawCode.filter(Char::isDigit)
+        if (cleanCode.length < 4) {
+            return@withContext NossaGenteCodeLookupResult.Error("Informe um código válido.")
+        }
+        val token = currentToken()
+            ?: return@withContext NossaGenteCodeLookupResult.Unauthorized
+
+        try {
+            val request = Request.Builder()
+                .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/promocoes?limit=5000&_lookup=${System.currentTimeMillis()}")
+                .get()
+                .header("Accept", "application/json")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .header("Cache-Control", "no-cache, no-store")
+                .header("Pragma", "no-cache")
+                .header("Authorization", "Bearer $token")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (response.code == 401 || response.code == 403) {
+                    clearSession()
+                    return@withContext NossaGenteCodeLookupResult.Unauthorized
+                }
+                if (!response.isSuccessful) {
+                    return@withContext NossaGenteCodeLookupResult.Error("Não foi possível consultar esse código no Nossa Gente agora.")
+                }
+                if (body.isBlank()) {
+                    return@withContext NossaGenteCodeLookupResult.Error("O Nossa Gente respondeu sem dados para a consulta.")
+                }
+
+                val root = promotionRootArray(body)
+                    ?: return@withContext NossaGenteCodeLookupResult.Error("O formato retornado pelo Nossa Gente não pôde ser analisado.")
+                val matches = mutableListOf<NossaGenteCodeMatch>()
+                for (index in 0 until root.length()) {
+                    val candidate = root.opt(index)
+                    val found = findMatchingObjectAndField(candidate, cleanCode) ?: continue
+                    val item = found.first
+                    val matchedField = found.second
+                    val internalCode = firstNonBlank(
+                        item.optString("codproduto"),
+                        item.optString("codigoProduto"),
+                        item.optString("productCode"),
+                        item.optString("codigo"),
+                        item.optString("code")
+                    ).orEmpty()
+                    val name = firstNonBlank(
+                        item.optString("desc_prod"),
+                        item.optString("nome"),
+                        item.optString("name"),
+                        item.optString("produto"),
+                        item.optString("description")
+                    ).orEmpty()
+                    val regularRaw = firstValue(
+                        item,
+                        "preco_normal", "precoOriginal", "regularPrice", "precoDe", "originalPrice"
+                    )
+                    val offerRaw = firstValue(
+                        item,
+                        "preco_promo", "precoOferta", "offerPrice", "preco", "price"
+                    )
+                    matches += NossaGenteCodeMatch(
+                        queriedCode = cleanCode,
+                        matchedField = matchedField,
+                        internalCode = internalCode,
+                        name = name,
+                        storeCode = firstNonBlank(item.optString("loja"), item.optString("store"), item.optString("storeCode")),
+                        regularPrice = formatPrice(regularRaw),
+                        offerPrice = formatPrice(offerRaw),
+                        discount = calculateDiscount(regularRaw, offerRaw),
+                        validFrom = firstNonBlank(item.optString("datainicio"), item.optString("dataInicio"), item.optString("inicio"), item.optString("validFrom")),
+                        validTo = firstNonBlank(item.optString("datafim"), item.optString("dataFim"), item.optString("fim"), item.optString("validTo"))
+                    )
+                }
+
+                val unique = matches.distinctBy {
+                    listOf(
+                        it.matchedField,
+                        it.internalCode,
+                        it.name,
+                        it.storeCode.orEmpty(),
+                        it.regularPrice.orEmpty(),
+                        it.offerPrice.orEmpty()
+                    ).joinToString("|")
+                }
+                if (unique.isEmpty()) {
+                    NossaGenteCodeLookupResult.NotFound(cleanCode)
+                } else {
+                    NossaGenteCodeLookupResult.Found(unique)
+                }
+            }
+        } catch (_: Exception) {
+            NossaGenteCodeLookupResult.Error("Não foi possível consultar esse código. Verifique a internet.")
+        }
+    }
+
     fun logout() {
         clearSession()
     }
@@ -138,6 +240,69 @@ class NossaGenteApi(context: Context) {
             serverCode.contains("bloque") -> "Acesso bloqueado. Procure o suporte do Nossa Gente."
             else -> "Não foi possível autenticar agora."
         }
+    }
+
+    private fun promotionRootArray(raw: String): JSONArray? = runCatching {
+        val trimmed = raw.trim()
+        if (trimmed.startsWith("[")) {
+            JSONArray(trimmed)
+        } else {
+            val rootObject = JSONObject(trimmed)
+            firstArray(rootObject, "data", "promocoes", "promotions", "items", "results")
+        }
+    }.getOrNull()
+
+    private fun findMatchingObjectAndField(value: Any?, targetDigits: String): Pair<JSONObject, String>? {
+        when (value) {
+            is JSONObject -> {
+                val preferredFields = listOf(
+                    "ean", "EAN", "gtin", "GTIN", "codigo_barras", "codigoBarras",
+                    "codbarra", "cod_barras", "barcode", "barCode", "codproduto",
+                    "codigoProduto", "productCode", "codigo", "code"
+                )
+                preferredFields.forEach { key ->
+                    if (digitsOf(value.opt(key)) == targetDigits) return value to key
+                }
+
+                val keys = value.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val child = value.opt(key)
+                    if (child !is JSONObject && child !is JSONArray && digitsOf(child) == targetDigits) {
+                        return value to key
+                    }
+                }
+
+                val nestedKeys = value.keys()
+                while (nestedKeys.hasNext()) {
+                    val key = nestedKeys.next()
+                    when (val child = value.opt(key)) {
+                        is JSONObject, is JSONArray -> findMatchingObjectAndField(child, targetDigits)?.let { return it }
+                    }
+                }
+            }
+            is JSONArray -> {
+                for (index in 0 until value.length()) {
+                    findMatchingObjectAndField(value.opt(index), targetDigits)?.let { return it }
+                }
+            }
+        }
+        return null
+    }
+
+    private fun digitsOf(value: Any?): String? {
+        if (value == null || value == JSONObject.NULL) return null
+        return value.toString().filter(Char::isDigit).takeIf { it.isNotBlank() }
+    }
+
+    private fun firstValue(item: JSONObject, vararg keys: String): Any? {
+        keys.forEach { key ->
+            if (item.has(key)) {
+                val value = item.opt(key)
+                if (value != null && value != JSONObject.NULL && value.toString().isNotBlank()) return value
+            }
+        }
+        return null
     }
 
     private fun isEmptyPromotionsPayload(raw: String): Boolean = runCatching {
@@ -358,17 +523,29 @@ data class Promotion(
     val products: List<PromotionProduct>
 )
 
-    data class PromotionProduct(
-        val code: String,
-        val name: String,
-        val offerPrice: String?,
-        val regularPrice: String?,
-        val discount: String?,
-        val storeCode: String? = null,
-        val imageUrl: String? = null,
-        val linkUrl: String? = null
-    )
+data class PromotionProduct(
+    val code: String,
+    val name: String,
+    val offerPrice: String?,
+    val regularPrice: String?,
+    val discount: String?,
+    val storeCode: String? = null,
+    val imageUrl: String? = null,
+    val linkUrl: String? = null
+)
 
+data class NossaGenteCodeMatch(
+    val queriedCode: String,
+    val matchedField: String,
+    val internalCode: String,
+    val name: String,
+    val storeCode: String?,
+    val regularPrice: String?,
+    val offerPrice: String?,
+    val discount: String?,
+    val validFrom: String?,
+    val validTo: String?
+)
 
 sealed interface NossaGenteLoginResult {
     data object Success : NossaGenteLoginResult
@@ -382,4 +559,11 @@ sealed interface NossaGentePromotionsResult {
     ) : NossaGentePromotionsResult
     data object Unauthorized : NossaGentePromotionsResult
     data class Error(val message: String) : NossaGentePromotionsResult
+}
+
+sealed interface NossaGenteCodeLookupResult {
+    data class Found(val matches: List<NossaGenteCodeMatch>) : NossaGenteCodeLookupResult
+    data class NotFound(val queriedCode: String) : NossaGenteCodeLookupResult
+    data object Unauthorized : NossaGenteCodeLookupResult
+    data class Error(val message: String) : NossaGenteCodeLookupResult
 }
