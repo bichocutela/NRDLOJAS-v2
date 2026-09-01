@@ -70,6 +70,7 @@ object NotificationHelper {
         "NEW_PRODUCT" -> R.drawable.ic_notification_product_added
         "CODE_CHANGED" -> R.drawable.ic_notification_code_changed
         "SUGGESTION_FIXED" -> R.drawable.ic_notification_suggestion_fixed
+        "PROMOTION_UPDATED" -> R.drawable.ic_notification_product_added
         else -> R.drawable.ic_notification_default
     }
 
@@ -155,6 +156,20 @@ object NotificationHelper {
         )
     }
 
+    private fun promotionsPendingIntent(context: Context): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_OPEN_PROMOTIONS, true)
+            putExtra("type", "PROMOTION_UPDATED")
+        }
+        return PendingIntent.getActivity(
+            context,
+            3001,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
     fun showNotification(context: Context, type: String, title: String, body: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -175,11 +190,13 @@ object NotificationHelper {
             .setLargeIcon(largeIconForNotification(context))
             .setContentTitle(title)
             .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
 
-        if (type == "APP_UPDATE") {
-            builder.setContentIntent(appUpdatePendingIntent(context))
+        when (type) {
+            "APP_UPDATE" -> builder.setContentIntent(appUpdatePendingIntent(context))
+            "PROMOTION_UPDATED" -> builder.setContentIntent(promotionsPendingIntent(context))
         }
 
         with(NotificationManagerCompat.from(context)) {
