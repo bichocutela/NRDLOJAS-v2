@@ -82,11 +82,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private var openAboutFromNotification by mutableStateOf(false)
+    private var openPromotionsFromNotification by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
         super.onCreate(savedInstanceState)
         openAboutFromNotification = shouldOpenAbout(intent)
+        openPromotionsFromNotification = shouldOpenPromotions(intent)
         
         com.example.data.FirebaseService.initialize(this)
 
@@ -210,7 +212,11 @@ class MainActivity : ComponentActivity() {
                         color = if (LocalGlassSoftStyle.current.enabled) Color.Transparent else MaterialTheme.colorScheme.background
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
-                        AppNavGraph(viewModel, openAboutFromNotification)
+                        AppNavGraph(
+                            viewModel = viewModel,
+                            openAboutFromNotification = openAboutFromNotification,
+                            openPromotionsFromNotification = openPromotionsFromNotification
+                        )
 
                         androidx.compose.material3.SnackbarHost(
                             hostState = snackbarHostState,
@@ -252,6 +258,9 @@ class MainActivity : ComponentActivity() {
         if (shouldOpenAbout(intent)) {
             openAboutFromNotification = true
         }
+        if (shouldOpenPromotions(intent)) {
+            openPromotionsFromNotification = true
+        }
     }
 
     private fun shouldOpenAbout(intent: Intent?): Boolean {
@@ -259,8 +268,14 @@ class MainActivity : ComponentActivity() {
             intent?.getStringExtra("type") == "APP_UPDATE"
     }
 
+    private fun shouldOpenPromotions(intent: Intent?): Boolean {
+        return intent?.getBooleanExtra(EXTRA_OPEN_PROMOTIONS, false) == true ||
+            intent?.getStringExtra("type") == "PROMOTION_UPDATED"
+    }
+
     companion object {
         const val EXTRA_OPEN_ABOUT = "open_about"
+        const val EXTRA_OPEN_PROMOTIONS = "open_promotions"
         const val EXTRA_UPDATE_TAG = "update_tag"
     }
 }
