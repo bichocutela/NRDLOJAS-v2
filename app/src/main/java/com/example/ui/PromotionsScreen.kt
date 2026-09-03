@@ -259,6 +259,7 @@ fun PromotionsScreen(
     val sortOption = OfferSortOption.values().firstOrNull { it.name == sortOptionName }
         ?: OfferSortOption.ADDED
     var enlargedImageUrl by remember { mutableStateOf<String?>(null) }
+    var selectedOffer by remember { mutableStateOf<OfferGroup?>(null) }
     val scope = rememberCoroutineScope()
 
     fun requestLoginOnce() {
@@ -321,6 +322,17 @@ fun PromotionsScreen(
             applyPromotionUpdate(update)
         } else if (!isChecking && !isLoading) {
             checkForPromotions(initialLoad = false)
+        }
+    }
+
+    fun openOfferFromImage(imageUrl: String) {
+        val offer = offerGroups.firstOrNull { group ->
+            group.imageUrl == imageUrl || group.stores.any { store -> store.imageUrl == imageUrl }
+        }
+        if (offer != null) {
+            selectedOffer = offer
+        } else {
+            enlargedImageUrl = imageUrl
         }
     }
 
@@ -410,6 +422,19 @@ fun PromotionsScreen(
         )
     }
 
+    selectedOffer?.let { offer ->
+        PromotionDetailsDialog(
+            offer = offer,
+            onDismiss = { selectedOffer = null },
+            onOpenStore = { storeCode ->
+                selectedStore = storeCode
+                selectedCategory = null
+                searchQuery = ""
+                selectedOffer = null
+            }
+        )
+    }
+
     if (enlargedImageUrl != null) {
         PromotionImageDialog(
             imageUrl = enlargedImageUrl!!,
@@ -456,7 +481,7 @@ fun PromotionsScreen(
                             scope.launch { userPreferences.setFavoriteStoreCode(code) }
                         }
                     )
-                            TextButton(
+                    TextButton(
                         onClick = {
                             scope.launch {
                                 promotionChangeStore.clear()
@@ -535,7 +560,7 @@ fun PromotionsScreen(
                 onLoadMore = {
                     visibleOfferCount = (visibleOfferCount + OFFER_PAGE_INCREMENT).coerceAtMost(visibleOffers.size)
                 },
-                onImageClick = { enlargedImageUrl = it },
+                onImageClick = ::openOfferFromImage,
                 onBack = { selectedCategory = null }
             )
             else -> PromotionsHome(
@@ -547,7 +572,7 @@ fun PromotionsScreen(
                 onSearchQueryChange = { searchQuery = it.take(MAX_SEARCH_LENGTH) },
                 categories = categoryGroups,
                 onCategoryClick = { selectedCategory = it },
-                onImageClick = { enlargedImageUrl = it }
+                onImageClick = ::openOfferFromImage
             )
         }
     }
@@ -822,7 +847,8 @@ private fun CompactOfferCard(offer: OfferGroup, onImageClick: (String) -> Unit) 
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(136.dp),
-                onClick = onImageClick
+                onClick = onImageClick,
+                validTo = offer.validTo
             )
             Column(modifier = Modifier.padding(8.dp)) {
                 DiscountBadge(discount = offer.bestDiscount, compact = true)
@@ -993,7 +1019,8 @@ private fun DetailedOfferCard(
                     modifier = Modifier
                         .size(width = 112.dp, height = 128.dp)
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp)),
-                    onClick = onImageClick
+                    onClick = onImageClick,
+                    validTo = offer.validTo
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -1166,11 +1193,39 @@ private fun DiscountBadge(discount: String?, compact: Boolean) {
 }
 
 @Composable
+private fun ValidityBadge(
+    validTo: String?,
+    modifier: Modifier = Modifier,
+    compact: Boolean = true
+) {
+    val label = validTo.toExpiryLabel() ?: return
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+        shape = CircleShape,
+        tonalElevation = 2.dp
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(
+                horizontal = if (compact) 8.dp else 11.dp,
+                vertical = if (compact) 4.dp else 6.dp
+            ),
+            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
 private fun ProductImage(
     imageUrl: String?,
     contentDescription: String,
     modifier: Modifier,
-    onClick: (String) -> Unit
+    onClick: (String) -> Unit,
+    validTo: String? = null
 ) {
     val shape = RoundedCornerShape(10.dp)
     Box(
@@ -1200,6 +1255,11 @@ private fun ProductImage(
                 contentScale = ContentScale.Fit
             )
         }
+        ValidityBadge(
+            validTo = validTo,
+            modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+            compact = true
+        )
     }
 }
 
@@ -1249,6 +1309,248 @@ private fun PromotionImageDialog(imageUrl: String, onDismiss: () -> Unit) {
     }
 }
 
+@Composable
+private fun PromotionDetailsDialog(
+    offer: OfferGroup,
+    onDismiss: () -> Unit,
+    onOpenStore: (String) -> Unit
+) {
+    val dialogShape = RoundedCornerShape(22.dp)
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .fillMaxHeight(0.9f)
+                .glassSoftShadow(dialogShape),
+            shape = dialogShape,
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Detalhes da oferta",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Preços e disponibilidade por loja",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Fechar detalhes da oferta")
+                        }
+                    }
+                }
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 250.dp, max = 330.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Image,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        if (!offer.imageUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = offer.imageUrl,
+                                contentDescription = offer.name,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                        ValidityBadge(
+                            validTo = offer.validTo,
+                            modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
+                            compact = false
+                        )
+                    }
+                }
+                item {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            offer.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        if (offer.code.isNotBlank()) {
+                            Text(
+                                "Código ${offer.code}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            offer.category,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (offer.validity.isNotBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.CalendarToday,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(17.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "Validade: ${offer.validity}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("A partir de", style = MaterialTheme.typography.labelMedium)
+                                    Text(
+                                        offer.bestOffer?.offerPrice ?: "Preço não informado",
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                DiscountBadge(discount = offer.bestDiscount, compact = false)
+                            }
+                        }
+                    }
+                }
+                item {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            "Lojas com promoção",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Toque em “Ver na loja” para abrir esta oferta já filtrada na unidade escolhida.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                items(
+                    items = offer.stores,
+                    key = { store -> "${store.storeCode}|${store.offerPrice.orEmpty()}|${store.regularPrice.orEmpty()}" }
+                ) { storeOffer ->
+                    StoreOfferDetailCard(
+                        storeOffer = storeOffer,
+                        onOpenStore = onOpenStore
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoreOfferDetailCard(
+    storeOffer: StoreOffer,
+    onOpenStore: (String) -> Unit
+) {
+    val storeAvailable = storeOffer.storeCode.isNotBlank() && storeOffer.storeCode != UNKNOWN_STORE_LABEL
+    val shape = RoundedCornerShape(14.dp)
+    Card(
+        modifier = Modifier.fillMaxWidth().glassSoftShadow(shape, 2.dp),
+        shape = shape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    shape = CircleShape
+                ) {
+                    Icon(
+                        Icons.Default.Storefront,
+                        contentDescription = null,
+                        modifier = Modifier.padding(8.dp).size(18.dp)
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        if (storeAvailable) StoreCatalog.nameFor(storeOffer.storeCode) else UNKNOWN_STORE_LABEL,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (storeAvailable) {
+                        Text(
+                            "Loja ${storeOffer.storeCode.padStart(4, '0')}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                DiscountBadge(discount = storeOffer.discount, compact = true)
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    storeOffer.regularPrice?.let { regular ->
+                        Text(
+                            "De $regular",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textDecoration = TextDecoration.LineThrough
+                        )
+                    }
+                    Text(
+                        storeOffer.offerPrice ?: "Preço não informado",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                if (storeAvailable) {
+                    TextButton(onClick = { onOpenStore(storeOffer.storeCode) }) {
+                        Icon(Icons.Default.Storefront, contentDescription = null, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("Ver na loja")
+                    }
+                }
+            }
+        }
+    }
+}
+
 private data class OfferGroup(
     val id: String,
     val category: String,
@@ -1266,7 +1568,7 @@ private data class OfferGroup(
         get() = stores.firstOrNull { !it.discount.isNullOrBlank() }?.discount
 
     val validity: String
-        get() = listOfNotNull(validFrom?.takeIf { it.isNotBlank() }, validTo?.takeIf { it.isNotBlank() })
+        get() = listOfNotNull(validFrom.toDisplayDate(), validTo.toDisplayDate())
             .joinToString(" até ")
 }
 
@@ -1377,6 +1679,30 @@ private fun String?.toNumericPercent(): Double? = this
     ?.trim()
     ?.toDoubleOrNull()
 
+private fun String?.toExpiryLabel(): String? {
+    val raw = this?.trim().orEmpty()
+    if (raw.isBlank()) return null
+    Regex("""(\d{4})-(\d{2})-(\d{2})""").find(raw)?.let { match ->
+        return "Até ${match.groupValues[3]}/${match.groupValues[2]}"
+    }
+    Regex("""(\d{2})[/-](\d{2})[/-](\d{2,4})""").find(raw)?.let { match ->
+        return "Até ${match.groupValues[1]}/${match.groupValues[2]}"
+    }
+    return "Até ${raw.take(10)}"
+}
+
+private fun String?.toDisplayDate(): String? {
+    val raw = this?.trim().orEmpty()
+    if (raw.isBlank()) return null
+    Regex("""(\d{4})-(\d{2})-(\d{2})""").find(raw)?.let { match ->
+        return "${match.groupValues[3]}/${match.groupValues[2]}/${match.groupValues[1]}"
+    }
+    Regex("""(\d{2})[/-](\d{2})[/-](\d{2,4})""").find(raw)?.let { match ->
+        return "${match.groupValues[1]}/${match.groupValues[2]}/${match.groupValues[3]}"
+    }
+    return raw.take(10)
+}
+
 private data class MutableOfferGroup(
     val id: String,
     val category: String,
@@ -1406,7 +1732,6 @@ private fun String?.toNumericPrice(): Double? = this
         if (raw.contains(",")) raw.replace(".", "").replace(",", ".") else raw.replace(",", "")
     }
     ?.toDoubleOrNull()
-
 
 @Composable
 private fun NewOffersButton(
