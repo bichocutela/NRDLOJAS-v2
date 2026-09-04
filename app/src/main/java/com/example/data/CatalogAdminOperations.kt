@@ -130,45 +130,117 @@ object CatalogAdminOperations {
         }
     }
 
+    /**
+     * Troca o código em um único Commit REST, sem ler os documentos antes.
+     *
+     * As precondições garantem atomicamente que o código novo ainda não exista
+     * e que o documento antigo exista. Assim a operação não depende da cota de
+     * leituras do Firestore e não corre o risco de sobrescrever outro produto.
+     */
     suspend fun replaceProductCodeAtomically(oldCode: String, product: Product): CreateProductResult {
         if (!FirebaseService.isFirebaseConfigured() || oldCode.isBlank() || product.code.isBlank()) {
             return CreateProductResult(false, message = "Nuvem indisponível ou código inválido.")
         }
+
         return try {
-            val firestore = FirebaseFirestore.getInstance()
-            val oldRef = firestore.collection("products").document(oldCode.trim())
-            val newRef = firestore.collection("products").document(product.code.trim())
-            val changed = firestore.runTransaction { transaction ->
-                val oldSnapshot = transaction.get(oldRef)
-                val newSnapshot = transaction.get(newRef)
-                if (!oldSnapshot.exists()) {
-                    throw IllegalStateException("O produto original não existe mais na nuvem.")
+            val projectId = FirebaseApp.getInstance().options.projectId.orEmpty()
+            val token = FirebaseAuth.getInstance().currentUser
+                ?.getIdToken(false)
+                ?.await()
+                ?.token
+                .orEmpty()
+            if (projectId.isBlank() || token.isBlank()) {
+                return CreateProductResult(false, message = "Sessão administrativa inválida. Entre novamente e tente de novo.")
+            }
+
+            val databaseRoot = "projects/$projectId/databases/(default)/documents"
+            val oldDocumentName = "$databaseRoot/products/${oldCode.trim()}"
+            val newDocumentName = "$databaseRoot/products/${product.code.trim()}"
+            val now = firestoreTimestampNow()
+            val fields = JSONObject().apply {
+                put("code", firestoreString(product.code.trim()))
+                put("name", firestoreString(product.name))
+                put("searchName", firestoreString(product.searchName))
+                put("category", firestoreString(product.category))
+                put("unit", firestoreString(product.unit))
+                product.imageUrl?.takeIf { it.isNotBlank() }?.let { put("imageUrl", firestoreString(it)) }
+                put("searchCount", JSONObject().put("integerValue", product.searchCount.toString()))
+                put("updatedAt", JSONObject().put("timestampValue", now))
+            }
+
+            val createNewWrite = JSONObject().apply {
+                put(
+                    "update",
+                    JSONObject().apply {
+                        put("name", newDocumentName)
+                        put("fields", fields)
+                    }
+                )
+                put("currentDocument", JSONObject().put("exists", false))
+            }
+            val deleteOldWrite = JSONObject().apply {
+                put("delete", oldDocumentName)
+                put("currentDocument", JSONObject().put("exists", true))
+            }
+            val body = JSONObject()
+                .put("writes", org.json.JSONArray().put(createNewWrite).put(deleteOldWrite))
+                .toString()
+                .toRequestBody("application/json; charset=utf-8".toMediaType())
+
+            val request = Request.Builder()
+                .url("https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents:commit")
+                .post(body)
+                .addHeader("Authorization", "Bearer $token")
+                .build()
+
+            withContext(Dispatchers.IO) {
+                httpClient.newCall(request).execute().use { response ->
+                    val responseBody = response.body?.string().orEmpty()
+                    when {
+                        response.isSuccessful -> CreateProductResult(true)
+                        response.code == 429 || responseBody.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                            responseBody.contains("Quota exceeded", ignoreCase = true) ->
+                            CreateProductResult(
+                                false,
+                                message = "A cota de gravação do Firebase está temporariamente esgotada. Aguarde a liberação da cota e tente novamente."
+                            )
+                        response.code == 401 || response.code == 403 ||
+                            responseBody.contains("UNAUTHENTICATED", ignoreCase = true) ||
+                            responseBody.contains("PERMISSION_DENIED", ignoreCase = true) ->
+                            CreateProductResult(false, message = "A sessão administrativa não tem permissão para alterar códigos. Entre novamente.")
+                        response.code == 409 ||
+                            responseBody.contains("ALREADY_EXISTS", ignoreCase = true) ||
+                            responseBody.contains("already exists", ignoreCase = true) ->
+                            CreateProductResult(false, duplicate = true, message = "O novo código já está em uso na nuvem.")
+                        responseBody.contains("NOT_FOUND", ignoreCase = true) ->
+                            CreateProductResult(false, message = "O produto original não existe mais na nuvem. Atualize a tela e tente novamente.")
+                        responseBody.contains("FAILED_PRECONDITION", ignoreCase = true) ->
+                            CreateProductResult(
+                                false,
+                                message = "A troca não pôde ser concluída porque o código novo já existe ou o produto original mudou. Atualize a tela e tente novamente."
+                            )
+                        else -> {
+                            Log.e(TAG, "Falha REST ao trocar código: HTTP ${response.code}; $responseBody")
+                            CreateProductResult(false, message = "Falha da nuvem (HTTP ${response.code}).")
+                        }
+                    }
                 }
-                if (newSnapshot.exists()) {
-                    false
-                } else {
-                    val previousCount = oldSnapshot.getLong("searchCount") ?: product.searchCount.toLong()
-                    val previousCreatedAt = oldSnapshot.get("createdAt")
-                        ?: oldSnapshot.get("timestamp")
-                        ?: FieldValue.serverTimestamp()
-                    val previousLastViewedAt = oldSnapshot.get("lastViewedAt")
-                    transaction.set(
-                        newRef,
-                        product.toRemoteMap(
-                            searchCountValue = previousCount,
-                            createdAtValue = previousCreatedAt,
-                            lastViewedAtValue = previousLastViewedAt
-                        )
-                    )
-                    transaction.delete(oldRef)
-                    true
-                }
-            }.await()
-            if (changed) CreateProductResult(true)
-            else CreateProductResult(false, duplicate = true, message = "O novo código já está em uso na nuvem.")
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao trocar código de forma atômica", e)
-            CreateProductResult(false, message = e.message)
+            Log.e(TAG, "Erro ao trocar código sem leitura prévia", e)
+            val message = e.message.orEmpty()
+            CreateProductResult(
+                false,
+                message = if (
+                    message.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                    message.contains("Quota exceeded", ignoreCase = true) ||
+                    message.contains("429")
+                ) {
+                    "A cota de gravação do Firebase está temporariamente esgotada. Aguarde a liberação da cota e tente novamente."
+                } else {
+                    message.ifBlank { "Não foi possível alterar o código na nuvem." }
+                }
+            )
         }
     }
 
