@@ -202,7 +202,8 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         }
         viewModelScope.launch {
             repository.populateInitialDataIfNeeded()
-            syncProductsFromFirebase()
+            // O listener observeProductUsage() já mantém o catálogo local sincronizado.
+            // Evita uma segunda leitura completa da coleção em toda inicialização.
         }
     }
 
@@ -485,10 +486,6 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                 _syncMessage.emit("Código já cadastrado\n\nO código $normalizedCode já pertence ao produto:\n${existingLocal.name}")
                 return false
             }
-            if (FirebaseService.productExists(normalizedCode)) {
-                _syncMessage.emit("Código já cadastrado na nuvem. Escolha outro código.")
-                return false
-            }
         }
 
         if (newProduct.imageUrl?.startsWith("content://") == true) {
@@ -591,10 +588,6 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         val existingProduct = repository.getProductByCodeSync(normalizedCode)
         if (existingProduct != null) {
             _syncMessage.emit("Código já cadastrado\n\nJá existe um produto utilizando o código $normalizedCode:\n${existingProduct.name}")
-            return false
-        }
-        if (FirebaseService.productExists(normalizedCode)) {
-            _syncMessage.emit("Código já cadastrado na nuvem. O produto existente foi preservado.")
             return false
         }
 
@@ -756,7 +749,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     }
 
     private companion object {
-        const val GLOBAL_VIEW_DEBOUNCE_MS = 60_000L
+        const val GLOBAL_VIEW_DEBOUNCE_MS = 5 * 60_000L
     }
 
     val dynamicTabs: StateFlow<List<com.example.data.DynamicTab>> = repository.getAllTabs()
