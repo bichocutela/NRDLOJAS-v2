@@ -1,0 +1,188 @@
+name: Corrigir alteração de código sem leituras extras
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/add-padaria-products.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Corrigir troca de código sem consumir leituras do Firestore
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("app/src/main/java/com/example/data/CatalogAdminOperations.kt")
+          text = path.read_text()
+
+          pattern = re.compile(
+              r"    suspend fun replaceProductCodeAtomically\(oldCode: String, product: Product\): CreateProductResult \{.*?\n    \}\n\n    suspend fun saveImportedProductsIfAbsent",
+              re.S,
+          )
+
+          replacement = r'''    /**
+     * Troca o código em um único Commit REST, sem ler os documentos antes.
+     *
+     * As precondições garantem atomicamente que o código novo ainda não exista
+     * e que o documento antigo exista. Assim a operação não depende da cota de
+     * leituras do Firestore e não corre o risco de sobrescrever outro produto.
+     */
+    suspend fun replaceProductCodeAtomically(oldCode: String, product: Product): CreateProductResult {
+        if (!FirebaseService.isFirebaseConfigured() || oldCode.isBlank() || product.code.isBlank()) {
+            return CreateProductResult(false, message = "Nuvem indisponível ou código inválido.")
+        }
+
+        return try {
+            val projectId = FirebaseApp.getInstance().options.projectId.orEmpty()
+            val token = FirebaseAuth.getInstance().currentUser
+                ?.getIdToken(false)
+                ?.await()
+                ?.token
+                .orEmpty()
+            if (projectId.isBlank() || token.isBlank()) {
+                return CreateProductResult(false, message = "Sessão administrativa inválida. Entre novamente e tente de novo.")
+            }
+
+            val databaseRoot = "projects/$projectId/databases/(default)/documents"
+            val oldDocumentName = "$databaseRoot/products/${oldCode.trim()}"
+            val newDocumentName = "$databaseRoot/products/${product.code.trim()}"
+            val now = firestoreTimestampNow()
+            val fields = JSONObject().apply {
+                put("code", firestoreString(product.code.trim()))
+                put("name", firestoreString(product.name))
+                put("searchName", firestoreString(product.searchName))
+                put("category", firestoreString(product.category))
+                put("unit", firestoreString(product.unit))
+                product.imageUrl?.takeIf { it.isNotBlank() }?.let { put("imageUrl", firestoreString(it)) }
+                put("searchCount", JSONObject().put("integerValue", product.searchCount.toString()))
+                put("updatedAt", JSONObject().put("timestampValue", now))
+            }
+
+            val createNewWrite = JSONObject().apply {
+                put(
+                    "update",
+                    JSONObject().apply {
+                        put("name", newDocumentName)
+                        put("fields", fields)
+                    }
+                )
+                put("currentDocument", JSONObject().put("exists", false))
+            }
+            val deleteOldWrite = JSONObject().apply {
+                put("delete", oldDocumentName)
+                put("currentDocument", JSONObject().put("exists", true))
+            }
+            val body = JSONObject()
+                .put("writes", org.json.JSONArray().put(createNewWrite).put(deleteOldWrite))
+                .toString()
+                .toRequestBody("application/json; charset=utf-8".toMediaType())
+
+            val request = Request.Builder()
+                .url("https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents:commit")
+                .post(body)
+                .addHeader("Authorization", "Bearer $token")
+                .build()
+
+            withContext(Dispatchers.IO) {
+                httpClient.newCall(request).execute().use { response ->
+                    val responseBody = response.body?.string().orEmpty()
+                    when {
+                        response.isSuccessful -> CreateProductResult(true)
+                        response.code == 429 || responseBody.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                            responseBody.contains("Quota exceeded", ignoreCase = true) ->
+                            CreateProductResult(
+                                false,
+                                message = "A cota de gravação do Firebase está temporariamente esgotada. Aguarde a liberação da cota e tente novamente."
+                            )
+                        response.code == 401 || response.code == 403 ||
+                            responseBody.contains("UNAUTHENTICATED", ignoreCase = true) ||
+                            responseBody.contains("PERMISSION_DENIED", ignoreCase = true) ->
+                            CreateProductResult(false, message = "A sessão administrativa não tem permissão para alterar códigos. Entre novamente.")
+                        response.code == 409 ||
+                            responseBody.contains("ALREADY_EXISTS", ignoreCase = true) ||
+                            responseBody.contains("already exists", ignoreCase = true) ->
+                            CreateProductResult(false, duplicate = true, message = "O novo código já está em uso na nuvem.")
+                        responseBody.contains("NOT_FOUND", ignoreCase = true) ->
+                            CreateProductResult(false, message = "O produto original não existe mais na nuvem. Atualize a tela e tente novamente.")
+                        responseBody.contains("FAILED_PRECONDITION", ignoreCase = true) ->
+                            CreateProductResult(
+                                false,
+                                message = "A troca não pôde ser concluída porque o código novo já existe ou o produto original mudou. Atualize a tela e tente novamente."
+                            )
+                        else -> {
+                            Log.e(TAG, "Falha REST ao trocar código: HTTP ${response.code}; $responseBody")
+                            CreateProductResult(false, message = "Falha da nuvem (HTTP ${response.code}).")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao trocar código sem leitura prévia", e)
+            val message = e.message.orEmpty()
+            CreateProductResult(
+                false,
+                message = if (
+                    message.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                    message.contains("Quota exceeded", ignoreCase = true) ||
+                    message.contains("429")
+                ) {
+                    "A cota de gravação do Firebase está temporariamente esgotada. Aguarde a liberação da cota e tente novamente."
+                } else {
+                    message.ifBlank { "Não foi possível alterar o código na nuvem." }
+                }
+            )
+        }
+    }
+
+    suspend fun saveImportedProductsIfAbsent'''
+
+          updated, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f"Função esperada não encontrada ou encontrada {count} vezes")
+          path.write_text(updated)
+          PY
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Corrigir Gradle Wrapper
+        run: |
+          rm -f gradle/wrapper/gradle-wrapper.jar
+          curl -fsSL -o gradle/wrapper/gradle-wrapper.jar "https://raw.githubusercontent.com/gradle/gradle/v9.3.1/gradle/wrapper/gradle-wrapper.jar"
+          chmod +x gradlew
+
+      - name: Validar testes e compilação debug
+        run: |
+          ./gradlew testDebugUnitTest \
+            --tests 'com.example.data.GlobalProductUsageTest' \
+            --tests 'com.example.ui.theme.GlassSoftThemeTest'
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Commitar correção
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/data/CatalogAdminOperations.kt
+          if git diff --cached --quiet; then
+            echo "Nenhuma alteração necessária."
+          else
+            git commit -m "fix(catalog): alterar código sem consumir leituras extras"
+            git push
+          fi
