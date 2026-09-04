@@ -1,5 +1,5 @@
 name: Android CI
-# Publicação acionada após correção de cota no cadastro administrativo de produtos.
+# Publicação acionada após correção da troca de código no catálogo administrativo.
 
 on:
   push:
