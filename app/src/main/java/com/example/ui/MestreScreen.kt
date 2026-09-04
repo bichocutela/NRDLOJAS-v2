@@ -183,6 +183,13 @@ fun MestreScreen(
         "orange" to "Laranja",
         "glass" to "Glass Soft"
     )
+    val appearanceModeOptions = listOf(
+        "system" to "Seguir sistema",
+        "light" to "Claro",
+        "dark" to "Escuro"
+    )
+    var expandedRemoteTheme by remember { mutableStateOf(false) }
+    var expandedRemoteMode by remember { mutableStateOf(false) }
 
     fun openBackgroundEditor(themeKey: String, background: ThemeBackground?) {
         editingBackgroundTheme = themeKey
@@ -773,6 +780,250 @@ fun MestreScreen(
                 hasUnsavedChanges = appearanceHasChanges
             )
             Spacer(modifier = Modifier.height(12.dp))
+            OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    NotificationSettingSwitch(
+                        label = "Aplicar aparência para todos",
+                        checked = draftAppearanceSettings.overrideLocalTheme,
+                        onCheckedChange = {
+                            draftAppearanceSettings = draftAppearanceSettings.copy(overrideLocalTheme = it)
+                        }
+                    )
+                    Text(
+                        "Desativado, cada usuário mantém sua própria escolha em Configurações.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ExposedDropdownMenuBox(
+                        expanded = expandedRemoteTheme,
+                        onExpandedChange = {
+                            if (draftAppearanceSettings.overrideLocalTheme) {
+                                expandedRemoteTheme = !expandedRemoteTheme
+                            }
+                        }
+                    ) {
+                        OutlinedTextField(
+                            value = themeOptions.find { it.first == draftAppearanceSettings.theme }?.second ?: "Multicolorido",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Tema global") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRemoteTheme) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            enabled = draftAppearanceSettings.overrideLocalTheme
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expandedRemoteTheme,
+                            onDismissRequest = { expandedRemoteTheme = false }
+                        ) {
+                            themeOptions.forEach { (themeKey, themeLabel) ->
+                                DropdownMenuItem(
+                                    text = { Text(themeLabel) },
+                                    onClick = {
+                                        draftAppearanceSettings = draftAppearanceSettings.copy(theme = themeKey)
+                                        expandedRemoteTheme = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ExposedDropdownMenuBox(
+                        expanded = expandedRemoteMode,
+                        onExpandedChange = {
+                            if (draftAppearanceSettings.overrideLocalTheme) {
+                                expandedRemoteMode = !expandedRemoteMode
+                            }
+                        }
+                    ) {
+                        OutlinedTextField(
+                            value = appearanceModeOptions.find { it.first == draftAppearanceSettings.appearanceMode }?.second ?: "Seguir sistema",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Modo de aparência") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRemoteMode) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            enabled = draftAppearanceSettings.overrideLocalTheme
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expandedRemoteMode,
+                            onDismissRequest = { expandedRemoteMode = false }
+                        ) {
+                            appearanceModeOptions.forEach { (modeKey, modeLabel) ->
+                                DropdownMenuItem(
+                                    text = { Text(modeLabel) },
+                                    onClick = {
+                                        draftAppearanceSettings = draftAppearanceSettings.copy(appearanceMode = modeKey)
+                                        expandedRemoteMode = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "Fundos por tema",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                    Text(
+                        "O fundo padrão permanece disponível. Você pode ativar vários fundos por tema quando cada um tiver data de início; o período define qual aparece ao longo do ano.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    themeOptions.forEach { (themeKey, themeLabel) ->
+                        val backgrounds = draftThemeBackgrounds[themeKey].orEmpty()
+                        val expanded = themeKey in expandedBackgroundThemes
+                        val backgroundPagination = calculatePaginationWindow(
+                            totalItems = backgrounds.size,
+                            requestedPage = backgroundPages[themeKey] ?: 0,
+                            pageSize = BACKGROUND_PAGE_SIZE
+                        )
+                        LaunchedEffect(themeKey, backgrounds.size) {
+                            if (backgroundPages[themeKey] != backgroundPagination.pageIndex) {
+                                backgroundPages = backgroundPages + (themeKey to backgroundPagination.pageIndex)
+                            }
+                        }
+                        OutlinedCard(
+                            modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium),
+                            enabled = true,
+                            onClick = {
+                                expandedBackgroundThemes = if (expanded) {
+                                    expandedBackgroundThemes - themeKey
+                                } else {
+                                    expandedBackgroundThemes + themeKey
+                                }
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(themeLabel, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                                    Text(
+                                        if (backgrounds.any { it.isAvailableOn() }) "Fundo personalizado ativo"
+                                        else "Fundo padrão ativo",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Icon(
+                                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = if (expanded) "Recolher $themeLabel" else "Expandir $themeLabel"
+                                )
+                            }
+                        }
+                        if (expanded) {
+                            Column(modifier = Modifier.padding(start = 8.dp, top = 6.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "Padrão do aplicativo",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    TextButton(
+                                        onClick = {
+                                            updateBackgrounds(themeKey, backgrounds.map { it.copy(isActive = false) })
+                                        },
+                                        enabled = backgrounds.any { it.isActive }
+                                    ) {
+                                        Text("Usar fundo padrão")
+                                    }
+                                }
+                                if (backgrounds.isNotEmpty()) {
+                                    Text(
+                                        "Exibindo ${backgroundPagination.fromIndex + 1}–${backgroundPagination.toIndex} de ${backgrounds.size}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                backgrounds
+                                    .subList(backgroundPagination.fromIndex, backgroundPagination.toIndex)
+                                    .forEach { background ->
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    ThemeBackgroundItem(
+                                        background = background,
+                                        enabled = true,
+                                        onActiveChange = { isActive ->
+                                            updateBackgrounds(
+                                                themeKey,
+                                                backgrounds.map {
+                                                    if (it.id == background.id) it.copy(isActive = isActive)
+                                                    else it
+                                                }
+                                            )
+                                        },
+                                        onPreview = { backgroundToPreview = themeKey to background },
+                                        onEdit = { openBackgroundEditor(themeKey, background) },
+                                        onDelete = { backgroundToDelete = themeKey to background }
+                                    )
+                                }
+                                if (backgroundPagination.pageCount > 1) {
+                                    MestrePaginationControls(
+                                        pageIndex = backgroundPagination.pageIndex,
+                                        pageCount = backgroundPagination.pageCount,
+                                        onPrevious = {
+                                            backgroundPages = backgroundPages +
+                                                (themeKey to (backgroundPagination.pageIndex - 1))
+                                        },
+                                        onNext = {
+                                            backgroundPages = backgroundPages +
+                                                (themeKey to (backgroundPagination.pageIndex + 1))
+                                        }
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                OutlinedButton(
+                                    onClick = { openBackgroundEditor(themeKey, null) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = true
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Adicionar fundo a $themeLabel")
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                isSavingAppearanceSettings = true
+                                val saved = FirebaseService.saveAppearanceSettings(appearanceDraft)
+                                isSavingAppearanceSettings = false
+                                snackbarHostState.showSnackbar(
+                                    if (saved) "Aparência global publicada para todos."
+                                    else FirebaseService.lastError ?: "Não foi possível publicar a aparência global."
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = appearanceHasChanges && !isSavingAppearanceSettings
+                    ) {
+                        if (isSavingAppearanceSettings) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Publicando...")
+                        } else if (appearanceHasChanges) {
+                            Text("Salvar aparência e fundos")
+                        } else {
+                            Text("Tudo atualizado")
+                        }
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(16.dp))
             }
 
