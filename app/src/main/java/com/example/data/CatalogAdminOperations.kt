@@ -1,9 +1,23 @@
 package com.example.data
 
 import android.util.Log
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import java.net.URLEncoder
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 
 /**
  * Operações administrativas que precisam de garantias extras de integridade.
@@ -13,6 +27,7 @@ object CatalogAdminOperations {
     private const val TAG = "CatalogAdminOps"
     private const val MAX_TRANSACTION_PRODUCTS = 180
     private const val MAX_BATCH_PRODUCTS = 400
+    private val httpClient = OkHttpClient()
 
     data class CreateProductResult(
         val success: Boolean,
@@ -27,27 +42,91 @@ object CatalogAdminOperations {
         val message: String? = null,
     )
 
+    /**
+     * Cria um produto sem fazer leitura prévia do documento.
+     *
+     * O SDK do Firestore não expõe create(document) no Android. A implementação
+     * anterior usava transação apenas para garantir "criar se não existir", o que
+     * consumia uma leitura antes de cada cadastro e deixava o botão de adicionar
+     * dependente da cota de leituras. A API REST createDocument mantém a mesma
+     * garantia: retorna ALREADY_EXISTS quando o código já existe, sem consulta
+     * prévia feita pelo aplicativo.
+     *
+     * O Firebase ID Token do Admin/Mestre é enviado no request, portanto as mesmas
+     * Security Rules do Firestore continuam valendo para a criação.
+     */
     suspend fun createProductIfAbsent(product: Product): CreateProductResult {
         if (!FirebaseService.isFirebaseConfigured() || product.code.isBlank()) {
             return CreateProductResult(false, message = "Nuvem indisponível ou código inválido.")
         }
+
         return try {
-            val firestore = FirebaseFirestore.getInstance()
-            val ref = firestore.collection("products").document(product.code.trim())
-            val created = firestore.runTransaction { transaction ->
-                val current = transaction.get(ref)
-                if (current.exists()) {
-                    false
-                } else {
-                    transaction.set(ref, product.toRemoteMap())
-                    true
+            val projectId = FirebaseApp.getInstance().options.projectId.orEmpty()
+            val token = FirebaseAuth.getInstance().currentUser
+                ?.getIdToken(false)
+                ?.await()
+                ?.token
+                .orEmpty()
+            if (projectId.isBlank() || token.isBlank()) {
+                return CreateProductResult(false, message = "Sessão administrativa inválida. Entre novamente e tente de novo.")
+            }
+
+            val encodedCode = URLEncoder.encode(product.code.trim(), Charsets.UTF_8.name())
+            val endpoint = "https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/products?documentId=$encodedCode"
+            val now = firestoreTimestampNow()
+            val fields = JSONObject().apply {
+                put("code", firestoreString(product.code.trim()))
+                put("name", firestoreString(product.name))
+                put("searchName", firestoreString(product.searchName))
+                put("category", firestoreString(product.category))
+                put("unit", firestoreString(product.unit))
+                product.imageUrl?.takeIf { it.isNotBlank() }?.let { put("imageUrl", firestoreString(it)) }
+                put("searchCount", JSONObject().put("integerValue", product.searchCount.toString()))
+                put("createdAt", JSONObject().put("timestampValue", now))
+                put("updatedAt", JSONObject().put("timestampValue", now))
+            }
+            val body = JSONObject().put("fields", fields).toString()
+                .toRequestBody("application/json; charset=utf-8".toMediaType())
+            val request = Request.Builder()
+                .url(endpoint)
+                .post(body)
+                .addHeader("Authorization", "Bearer $token")
+                .build()
+
+            withContext(Dispatchers.IO) {
+                httpClient.newCall(request).execute().use { response ->
+                    val responseBody = response.body?.string().orEmpty()
+                    when {
+                        response.isSuccessful -> CreateProductResult(true)
+                        response.code == 409 || responseBody.contains("ALREADY_EXISTS", ignoreCase = true) ->
+                            CreateProductResult(false, duplicate = true, message = "Código já cadastrado na nuvem.")
+                        response.code == 429 || responseBody.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                            responseBody.contains("Quota exceeded", ignoreCase = true) ->
+                            CreateProductResult(false, message = "A cota do Firebase está temporariamente esgotada. Aguarde a liberação da cota e tente novamente.")
+                        response.code == 401 || response.code == 403 ->
+                            CreateProductResult(false, message = "A sessão administrativa não tem permissão para criar produtos. Entre novamente.")
+                        else -> {
+                            Log.e(TAG, "Falha REST ao criar produto: HTTP ${response.code}; $responseBody")
+                            CreateProductResult(false, message = "Falha da nuvem (HTTP ${response.code}).")
+                        }
+                    }
                 }
-            }.await()
-            if (created) CreateProductResult(true)
-            else CreateProductResult(false, duplicate = true, message = "Código já cadastrado na nuvem.")
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao criar produto de forma atômica", e)
-            CreateProductResult(false, message = e.message)
+            Log.e(TAG, "Erro ao criar produto sem leitura prévia", e)
+            val message = e.message.orEmpty()
+            CreateProductResult(
+                false,
+                message = if (
+                    message.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                    message.contains("Quota exceeded", ignoreCase = true) ||
+                    message.contains("429")
+                ) {
+                    "A cota do Firebase está temporariamente esgotada. Aguarde a liberação da cota e tente novamente."
+                } else {
+                    message.ifBlank { "Não foi possível criar o produto na nuvem." }
+                }
+            )
         }
     }
 
@@ -192,4 +271,13 @@ object CatalogAdminOperations {
             this["lastViewedAt"] = lastViewedAtValue
         }
     }
+
+    private fun firestoreString(value: String): JSONObject = JSONObject().put("stringValue", value)
+
+    private fun firestoreTimestampNow(): String = SimpleDateFormat(
+        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+        Locale.US
+    ).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }.format(Date())
 }
