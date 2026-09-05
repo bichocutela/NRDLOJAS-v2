@@ -127,4 +127,48 @@ class ProductRepositorySearchTest {
 
         assertEquals(listOf("1"), rankProductsByRelevance(products, "cafe").map { it.code })
     }
+
+    @Test
+    fun `hashtag combina termos sem depender da ordem`() {
+        val products = listOf(
+            product("1", "Linguiça Calabresa Sadia"),
+            product("2", "Linguiça de Frango Sadia"),
+            product("3", "Salsicha Sadia"),
+            product("4", "Linguiça Calabresa Perdigão"),
+            product("5", "Linguiça Sadia Toscana")
+        )
+
+        val sadiaPrimeiro = rankProductsByRelevance(products, "sadia#linguica").map { it.code }
+        val linguicaPrimeiro = rankProductsByRelevance(products, "linguiça#SADIA").map { it.code }
+
+        assertEquals(listOf("1", "2", "5"), sadiaPrimeiro)
+        assertEquals(sadiaPrimeiro, linguicaPrimeiro)
+    }
+
+    @Test
+    fun `hashtag aceita varios parametros e ignora segmentos vazios`() {
+        val products = listOf(
+            product("1", "Linguiça Calabresa Sadia"),
+            product("2", "Linguiça de Frango Sadia"),
+            product("3", "Linguiça Frango Perdigão")
+        )
+
+        assertEquals(
+            listOf("2"),
+            rankProductsByRelevance(products, "sadia##linguiça#frango#").map { it.code }
+        )
+    }
+
+    @Test
+    fun `hashtag pode combinar nome e codigo`() {
+        val products = listOf(
+            product("250055", "Linguiça Calabresa Sadia"),
+            product("250056", "Linguiça Calabresa Sadia")
+        )
+
+        assertEquals(
+            listOf("250055"),
+            rankProductsByRelevance(products, "sadia#250055").map { it.code }
+        )
+    }
 }

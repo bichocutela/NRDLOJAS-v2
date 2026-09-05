@@ -107,6 +107,17 @@ internal fun rankProductsByRelevance(products: List<Product>, query: String): Li
     val normalizedQuery = query.unaccent().lowercase(Locale.ROOT).trim()
     if (normalizedQuery.isEmpty()) return emptyList()
 
+    if ('#' in normalizedQuery) {
+        val intensiveTerms = normalizedQuery
+            .split('#')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+
+        if (intensiveTerms.isEmpty()) return emptyList()
+        return rankProductsByIntensiveTerms(products, intensiveTerms)
+    }
+
     val tokens = normalizedQuery.split("\\s+".toRegex()).filter { it.isNotEmpty() }
     val ranked = products.mapNotNull { product ->
         val normalizedName = product.name.unaccent().lowercase(Locale.ROOT).trim()
@@ -128,7 +139,39 @@ internal fun rankProductsByRelevance(products: List<Product>, query: String): Li
         SearchMatch(product, relevance, normalizedName, normalizedCode)
     }
 
-    return ranked.sortedWith(
+    return sortSearchMatches(ranked)
+}
+
+private fun rankProductsByIntensiveTerms(
+    products: List<Product>,
+    intensiveTerms: List<String>
+): List<Product> {
+    val ranked = products.mapNotNull { product ->
+        val normalizedName = product.name.unaccent().lowercase(Locale.ROOT).trim()
+        val normalizedCode = product.code.trim().lowercase(Locale.ROOT)
+
+        val matchesEveryParameter = intensiveTerms.all { term ->
+            val termTokens = term.split("\\s+".toRegex()).filter { it.isNotEmpty() }
+            termTokens.isNotEmpty() && termTokens.all { token ->
+                normalizedName.contains(token) || normalizedCode.contains(token)
+            }
+        }
+
+        if (!matchesEveryParameter) return@mapNotNull null
+
+        SearchMatch(
+            product = product,
+            relevance = 0,
+            normalizedName = normalizedName,
+            normalizedCode = normalizedCode
+        )
+    }
+
+    return sortSearchMatches(ranked)
+}
+
+private fun sortSearchMatches(matches: List<SearchMatch>): List<Product> {
+    return matches.sortedWith(
         compareBy<SearchMatch> { it.relevance }
             .thenBy { it.normalizedName }
             .thenBy { it.product.name }
