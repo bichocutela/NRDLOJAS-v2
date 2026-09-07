@@ -182,6 +182,7 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         val document = DynamicPageCodec.decodeDocument(tab.content)
                         val tabBlocks = DynamicPageCodec.blocksFor(tab)
                         val isVisibleNow = DynamicPageCodec.isVisible(tab)
+                        val isDraft = document?.enabled == false
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -199,7 +200,11 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                         buildString {
                                             append(if (document?.mode == DynamicPageDocument.MODE_COURSE) "Curso" else "Página")
                                             append(" • ${tabBlocks.size} conteúdo(s)")
-                                            append(if (isVisibleNow) " • Visível" else " • Oculto/Agendado")
+                                            when {
+                                                isDraft -> append(" • Rascunho")
+                                                isVisibleNow -> append(" • Visível")
+                                                else -> append(" • Agendado")
+                                            }
                                         },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = if (isVisibleNow) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.tertiary
@@ -304,7 +309,10 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text("Disponível para usuários", style = MaterialTheme.typography.titleSmall)
                                     Text(
-                                        "Desative para esconder imediatamente sem excluir.",
+                                        if (enabled)
+                                            "Ativado: ao salvar, o conteúdo será publicado conforme o agendamento."
+                                        else
+                                            "Desativado: ao salvar, fica como rascunho no Painel Mestre e não aparece para os usuários.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -531,9 +539,12 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             .height(50.dp)
                     ) {
                         Text(
-                            if (isSyncingTabs) "Salvando..."
-                            else if (mode == DynamicPageDocument.MODE_COURSE) "Salvar curso"
-                            else "Salvar página"
+                            when {
+                                isSyncingTabs -> "Salvando..."
+                                !enabled -> "Salvar rascunho"
+                                mode == DynamicPageDocument.MODE_COURSE -> "Salvar curso"
+                                else -> "Salvar página"
+                            }
                         )
                     }
                 }
@@ -633,10 +644,19 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
         }
 
         tabToDelete?.let { selectedTab ->
+            val selectedDocument = DynamicPageCodec.decodeDocument(selectedTab.content)
+            val selectedIsDraft = selectedDocument?.enabled == false
             AlertDialog(
                 onDismissRequest = { if (!isSyncingTabs) tabToDelete = null },
-                title = { Text("Excluir página?") },
-                text = { Text("\"${selectedTab.title}\" será removida para todos os usuários.") },
+                title = { Text(if (selectedIsDraft) "Excluir rascunho?" else "Excluir página?") },
+                text = {
+                    Text(
+                        if (selectedIsDraft)
+                            "\"${selectedTab.title}\" será removido apenas do Painel Mestre."
+                        else
+                            "\"${selectedTab.title}\" será removida para todos os usuários."
+                    )
+                },
                 confirmButton = {
                     TextButton(
                         onClick = {
