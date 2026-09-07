@@ -64,7 +64,7 @@ fun DynamicVideoBlock(url: String, title: String, modifier: Modifier = Modifier)
     val isYoutube = youtubeId != null
     var isLoading by remember(url) { mutableStateOf(true) }
     var error by remember(url) { mutableStateOf<String?>(null) }
-    var retryKey by remember { mutableIntStateOf(0) }
+    var retryKey by remember(url) { mutableIntStateOf(0) }
 
     val exoPlayer = remember(url, isYoutube, retryKey) {
         if (!isYoutube && url.isNotBlank()) {
@@ -97,6 +97,7 @@ fun DynamicVideoBlock(url: String, title: String, modifier: Modifier = Modifier)
             }
             exoPlayer.addListener(listener)
             onDispose {
+                exoPlayer.stop()
                 exoPlayer.removeListener(listener)
                 exoPlayer.release()
             }
@@ -202,8 +203,9 @@ fun DynamicAudioBlock(url: String, title: String, modifier: Modifier = Modifier)
     var position by remember(url) { mutableLongStateOf(0L) }
     var duration by remember(url) { mutableLongStateOf(0L) }
     var error by remember(url) { mutableStateOf<String?>(null) }
+    var retryKey by remember(url) { mutableIntStateOf(0) }
 
-    val player = remember(url) {
+    val player = remember(url, retryKey) {
         runCatching {
             ExoPlayer.Builder(context).build().apply {
                 setMediaItem(MediaItem.fromUri(normalizeRemoteMediaUrl(url)))
@@ -238,6 +240,7 @@ fun DynamicAudioBlock(url: String, title: String, modifier: Modifier = Modifier)
             }
             player.addListener(listener)
             onDispose {
+                player.stop()
                 player.removeListener(listener)
                 player.release()
             }
@@ -260,6 +263,17 @@ fun DynamicAudioBlock(url: String, title: String, modifier: Modifier = Modifier)
             Text(title, style = MaterialTheme.typography.titleSmall)
             if (error != null) {
                 Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
+                OutlinedButton(onClick = {
+                    error = null
+                    isBuffering = true
+                    position = 0L
+                    duration = 0L
+                    retryKey++
+                }) {
+                    Icon(Icons.Default.Refresh, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Tentar novamente")
+                }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     FilledIconButton(
@@ -281,12 +295,8 @@ fun DynamicAudioBlock(url: String, title: String, modifier: Modifier = Modifier)
                     Column(modifier = Modifier.weight(1f)) {
                         Slider(
                             value = if (duration > 0L) position.toFloat().coerceIn(0f, duration.toFloat()) else 0f,
-                            onValueChange = { value ->
-                                position = value.toLong()
-                            },
-                            onValueChangeFinished = {
-                                player?.seekTo(position)
-                            },
+                            onValueChange = { value -> position = value.toLong() },
+                            onValueChangeFinished = { player?.seekTo(position) },
                             valueRange = 0f..(duration.coerceAtLeast(1L).toFloat())
                         )
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -306,32 +316,16 @@ fun DynamicPdfBlock(url: String, title: String, modifier: Modifier = Modifier) {
     var loading by remember(url) { mutableStateOf(true) }
     var error by remember(url) { mutableStateOf<String?>(null) }
     var file by remember(url) { mutableStateOf<File?>(null) }
+    var retryKey by remember(url) { mutableIntStateOf(0) }
 
-    LaunchedEffect(url) {
+    LaunchedEffect(url, retryKey) {
         loading = true
         error = null
         file = withContext(Dispatchers.IO) {
             runCatching {
-                val cached = File(context.cacheDir, "nrd_dynamic_${url.hashCode()}.pdf")
-                if (!cached.exists()) {
-                    if (url.startsWith("http", ignoreCase = true)) {
-                        val connection = URL(normalizeRemoteMediaUrl(url)).openConnection() as HttpURLConnection
-                        connection.connectTimeout = 20_000
-                        connection.readTimeout = 60_000
-                        connection.connect()
-                        if (connection.responseCode !in 200..299) error("HTTP ${connection.responseCode}")
-                        connection.inputStream.use { input ->
-                            FileOutputStream(cached).use { output -> input.copyTo(output) }
-                        }
-                    } else {
-                        context.contentResolver.openInputStream(android.net.Uri.parse(url))?.use { input ->
-                            FileOutputStream(cached).use { output -> input.copyTo(output) }
-                        } ?: error("Arquivo não encontrado")
-                    }
-                }
-                cached
+                loadValidatedPdfIntoCache(context.cacheDir, context, url)
             }.getOrElse {
-                error = "Não foi possível carregar este PDF."
+                error = "Não foi possível carregar este PDF. Verifique o link e tente novamente."
                 null
             }
         }
@@ -353,7 +347,21 @@ fun DynamicPdfBlock(url: String, title: String, modifier: Modifier = Modifier) {
             ) {
                 when {
                     loading -> CircularProgressIndicator()
-                    error != null -> Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
+                    error != null -> Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
+                        OutlinedButton(onClick = {
+                            file = null
+                            retryKey++
+                        }) {
+                            Icon(Icons.Default.Refresh, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Tentar novamente")
+                        }
+                    }
                     file != null -> DynamicPdfRenderer(file = file!!)
                 }
             }
@@ -361,17 +369,85 @@ fun DynamicPdfBlock(url: String, title: String, modifier: Modifier = Modifier) {
     }
 }
 
+private fun loadValidatedPdfIntoCache(cacheDir: File, context: android.content.Context, rawUrl: String): File {
+    val normalizedUrl = normalizeRemoteMediaUrl(rawUrl)
+    val cached = File(cacheDir, "nrd_dynamic_${normalizedUrl.hashCode()}.pdf")
+
+    if (cached.exists() && isValidPdf(cached)) return cached
+    if (cached.exists()) cached.delete()
+
+    val temporary = File(cacheDir, "${cached.name}.part")
+    if (temporary.exists()) temporary.delete()
+
+    try {
+        if (normalizedUrl.startsWith("http", ignoreCase = true)) {
+            val connection = URL(normalizedUrl).openConnection() as HttpURLConnection
+            try {
+                connection.instanceFollowRedirects = true
+                connection.connectTimeout = 20_000
+                connection.readTimeout = 60_000
+                connection.setRequestProperty("Accept", "application/pdf,*/*")
+                connection.connect()
+                if (connection.responseCode !in 200..299) error("HTTP ${connection.responseCode}")
+                connection.inputStream.use { input ->
+                    FileOutputStream(temporary).use { output -> input.copyTo(output) }
+                }
+            } finally {
+                connection.disconnect()
+            }
+        } else {
+            context.contentResolver.openInputStream(android.net.Uri.parse(normalizedUrl))?.use { input ->
+                FileOutputStream(temporary).use { output -> input.copyTo(output) }
+            } ?: error("Arquivo não encontrado")
+        }
+
+        if (!isValidPdf(temporary)) error("Arquivo recebido não é um PDF válido")
+        if (!temporary.renameTo(cached)) {
+            temporary.copyTo(cached, overwrite = true)
+            temporary.delete()
+        }
+        return cached
+    } catch (error: Throwable) {
+        temporary.delete()
+        cached.takeIf { it.exists() && !isValidPdf(it) }?.delete()
+        throw error
+    }
+}
+
+private fun isValidPdf(file: File): Boolean {
+    if (!file.exists() || file.length() < 5L) return false
+    val headerValid = runCatching {
+        file.inputStream().use { input ->
+            val header = ByteArray(5)
+            input.read(header) == 5 && String(header, Charsets.US_ASCII) == "%PDF-"
+        }
+    }.getOrDefault(false)
+    if (!headerValid) return false
+
+    return runCatching {
+        ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+            PdfRenderer(descriptor).use { renderer -> renderer.pageCount > 0 }
+        }
+    }.getOrDefault(false)
+}
+
 @Composable
 private fun DynamicPdfRenderer(file: File) {
     var renderer by remember(file) { mutableStateOf<PdfRenderer?>(null) }
     var descriptor by remember(file) { mutableStateOf<ParcelFileDescriptor?>(null) }
     var pageCount by remember(file) { mutableIntStateOf(0) }
+    var openError by remember(file) { mutableStateOf(false) }
 
     DisposableEffect(file) {
         runCatching {
             descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
             renderer = PdfRenderer(descriptor!!)
             pageCount = renderer?.pageCount ?: 0
+        }.onFailure {
+            openError = true
+            renderer = null
+            descriptor?.close()
+            descriptor = null
         }
         onDispose {
             renderer?.close()
@@ -380,8 +456,8 @@ private fun DynamicPdfRenderer(file: File) {
     }
 
     val activeRenderer = renderer
-    if (activeRenderer == null || pageCount <= 0) {
-        Text("O PDF não contém páginas disponíveis.")
+    if (openError || activeRenderer == null || pageCount <= 0) {
+        Text("O PDF não pôde ser aberto ou não contém páginas disponíveis.")
         return
     }
 
@@ -456,10 +532,16 @@ private fun formatMediaTime(ms: Long): String {
 
 fun normalizeRemoteMediaUrl(raw: String): String {
     val url = raw.trim()
-    val driveFileId = Regex("(?:/d/|id=)([A-Za-z0-9_-]{10,})")
-        .find(url)
-        ?.groupValues
-        ?.getOrNull(1)
+    if (url.isBlank()) return url
+
+    val driveFileId = listOf(
+        Regex("/d/([A-Za-z0-9_-]{10,})"),
+        Regex("[?&]id=([A-Za-z0-9_-]{10,})"),
+        Regex("/file/d/([A-Za-z0-9_-]{10,})")
+    ).firstNotNullOfOrNull { pattern ->
+        pattern.find(url)?.groupValues?.getOrNull(1)
+    }
+
     return if (url.contains("drive.google.com", ignoreCase = true) && driveFileId != null) {
         "https://drive.google.com/uc?export=download&id=$driveFileId"
     } else {
