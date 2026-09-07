@@ -767,19 +767,30 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             val candidate = tab.copy(displayOrder = before.size)
             val isDraft = DynamicPageCodec.decodeDocument(candidate.content)?.enabled == false
             repository.insertTab(candidate)
-            val saved = FirebaseService.syncAllDynamicTabs(repository.getAllTabs().first())
-            if (!saved) {
-                if (isDraft) {
-                    _syncMessage.emit("Rascunho salvo neste aparelho. Ele continua oculto para os usuários.")
-                } else {
-                    repository.deleteTab(candidate)
-                    _syncMessage.emit("Não foi possível publicar a aba. O rascunho local foi desfeito.")
+
+            if (isDraft) {
+                _syncMessage.emit("Rascunho salvo. Ele continua oculto para os usuários até você ativar.")
+                return@launch
+            }
+
+            val persistedCandidate = repository.getAllTabs().first()
+                .filter {
+                    it.title == candidate.title &&
+                        it.content == candidate.content &&
+                        it.displayOrder == candidate.displayOrder
                 }
-            } else {
+                .maxByOrNull { it.id }
+                ?: candidate
+
+            val saved = FirebaseService.syncAllDynamicTabs(listOf(persistedCandidate))
+            if (!saved) {
+                repository.deleteTab(persistedCandidate)
                 _syncMessage.emit(
-                    if (isDraft) "Rascunho salvo. Ele só aparecerá aos usuários quando você ativar."
-                    else "Aba criada para todos os usuários."
+                    FirebaseService.lastError?.let { "Não foi possível publicar a aba: $it" }
+                        ?: "Não foi possível publicar a aba. O conteúdo local foi desfeito."
                 )
+            } else {
+                _syncMessage.emit("Aba criada para todos os usuários.")
             }
         } finally {
             _isSyncingTabs.value = false
@@ -793,19 +804,40 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             val before = repository.getAllTabs().first()
             val previous = before.firstOrNull { it.id == tab.id }
             val isDraft = DynamicPageCodec.decodeDocument(tab.content)?.enabled == false
+            val wasDraft = previous?.let {
+                DynamicPageCodec.decodeDocument(it.content)?.enabled == false
+            } == true
+
             repository.updateTab(tab)
-            val saved = FirebaseService.syncAllDynamicTabs(repository.getAllTabs().first())
+
+            if (isDraft && wasDraft) {
+                _syncMessage.emit("Rascunho atualizado. Ele continua oculto para os usuários.")
+                return@launch
+            }
+
+            if (isDraft) {
+                val hiddenRemotely = FirebaseService.deleteDynamicTab(tab)
+                if (!hiddenRemotely) {
+                    previous?.let { repository.updateTab(it) }
+                    _syncMessage.emit(
+                        FirebaseService.lastError?.let { "Não foi possível ocultar a versão publicada: $it" }
+                            ?: "Não foi possível ocultar a versão publicada. A versão anterior foi restaurada."
+                    )
+                } else {
+                    _syncMessage.emit("Rascunho salvo. O conteúdo foi retirado dos usuários e ficou no Painel Mestre.")
+                }
+                return@launch
+            }
+
+            val saved = FirebaseService.syncAllDynamicTabs(listOf(tab))
             if (!saved) {
                 previous?.let { repository.updateTab(it) }
                 _syncMessage.emit(
-                    if (isDraft) "Não foi possível salvar o rascunho na nuvem. A versão anterior foi restaurada."
-                    else "Não foi possível publicar a alteração da aba. A versão anterior foi restaurada."
+                    FirebaseService.lastError?.let { "Não foi possível publicar a alteração: $it" }
+                        ?: "Não foi possível publicar a alteração da aba. A versão anterior foi restaurada."
                 )
             } else {
-                _syncMessage.emit(
-                    if (isDraft) "Rascunho atualizado. Ele continua oculto para os usuários."
-                    else "Aba atualizada para todos os usuários."
-                )
+                _syncMessage.emit("Aba atualizada para todos os usuários.")
             }
         } finally {
             _isSyncingTabs.value = false
@@ -827,12 +859,20 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                 add(targetIndex, moved)
             }.mapIndexed { order, item -> item.copy(displayOrder = order) }
             reordered.forEach { repository.updateTab(it) }
-            val saved = FirebaseService.syncAllDynamicTabs(reordered)
+
+            val publishableTabs = reordered.filter {
+                DynamicPageCodec.decodeDocument(it.content)?.enabled != false
+            }
+            val saved = publishableTabs.isEmpty() || FirebaseService.syncAllDynamicTabs(publishableTabs)
             if (!saved) {
                 current.forEachIndexed { order, item -> repository.updateTab(item.copy(displayOrder = order)) }
                 _syncMessage.emit("Não foi possível publicar a nova ordem. A ordem anterior foi restaurada.")
             } else {
-                _syncMessage.emit("Ordem das abas atualizada para todos.")
+                _syncMessage.emit(
+                    if (DynamicPageCodec.decodeDocument(tab.content)?.enabled == false)
+                        "Ordem do rascunho atualizada no Painel Mestre."
+                    else "Ordem das abas atualizada para todos."
+                )
             }
         } finally {
             _isSyncingTabs.value = false
@@ -852,6 +892,13 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         if (_isSyncingTabs.value) return@launch
         _isSyncingTabs.value = true
         try {
+            val isDraft = DynamicPageCodec.decodeDocument(tab.content)?.enabled == false
+            if (isDraft) {
+                repository.deleteTab(tab)
+                _syncMessage.emit("Rascunho excluído do Painel Mestre.")
+                return@launch
+            }
+
             val deleted = FirebaseService.deleteDynamicTab(tab)
             if (deleted) repository.deleteTab(tab)
             _syncMessage.emit(
