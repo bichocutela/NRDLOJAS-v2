@@ -184,7 +184,7 @@ fun DynamicCourseContent(
                         FilledTonalButton(
                             onClick = {
                                 persistProgress(emptySet())
-                                allLessons.firstOrNull()?.let(::openLesson)
+                                allLessons.firstOrNull()?.id?.let(::openLesson)
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -358,7 +358,7 @@ fun DynamicCourseContent(
                                                                 .dropWhile { it.id != lesson.id }
                                                                 .drop(1)
                                                                 .firstOrNull { it.id !in next }
-                                                            nextLesson?.let(::openLesson)
+                                                            nextLesson?.let { openLesson(it.id) }
                                                         }
                                                     },
                                                     modifier = Modifier.fillMaxWidth()
