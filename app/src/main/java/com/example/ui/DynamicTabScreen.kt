@@ -1,22 +1,25 @@
 package com.example.ui
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import com.example.data.DynamicPageBlock
+import com.example.data.DynamicPageCodec
 import com.example.data.DynamicTab
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DynamicTabScreen(tab: DynamicTab, onNavigateBack: () -> Unit) {
+    val visibleNow = DynamicPageCodec.isVisible(tab)
+    val blocks = DynamicPageCodec.blocksFor(tab)
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -29,35 +32,90 @@ fun DynamicTabScreen(tab: DynamicTab, onNavigateBack: () -> Unit) {
             )
         }
     ) { innerPadding ->
-        Column(
+        if (!visibleNow) {
+            Box(
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "Este conteúdo não está disponível neste momento.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            return@Scaffold
+        }
+
+        if (blocks.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "Nenhum conteúdo foi adicionado a esta página.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            return@Scaffold
+        }
+
+        LazyColumn(
             modifier = Modifier
                 .padding(innerPadding)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            when (tab.type) {
-                "text" -> {
-                    Text(text = tab.content, style = MaterialTheme.typography.bodyLarge)
-                }
-                "image" -> {
-                    AsyncImage(
-                        model = tab.content,
-                        contentDescription = tab.title,
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
-                        contentScale = ContentScale.Fit
-                    )
-                }
-                "video" -> {
-                    Text(
-                        "Esta aba usa um tipo não suportado. Edite-a no Painel Mestre para Texto ou Imagem.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                else -> {
-                    Text("Tipo não suportado.", color = MaterialTheme.colorScheme.error)
+            items(blocks, key = { it.id }) { block ->
+                when (block.type) {
+                    DynamicPageBlock.TYPE_TEXT -> {
+                        Text(
+                            text = block.value,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    DynamicPageBlock.TYPE_IMAGE -> {
+                        DynamicImageBlock(
+                            url = block.value,
+                            title = tab.title
+                        )
+                    }
+
+                    DynamicPageBlock.TYPE_VIDEO -> {
+                        DynamicVideoBlock(
+                            url = block.value,
+                            title = tab.title
+                        )
+                    }
+
+                    DynamicPageBlock.TYPE_AUDIO -> {
+                        DynamicAudioBlock(
+                            url = block.value,
+                            title = tab.title
+                        )
+                    }
+
+                    DynamicPageBlock.TYPE_PDF -> {
+                        DynamicPdfBlock(
+                            url = block.value,
+                            title = tab.title
+                        )
+                    }
+
+                    else -> {
+                        Text(
+                            "Tipo de conteúdo não suportado.",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         }
