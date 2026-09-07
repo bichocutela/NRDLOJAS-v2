@@ -3,6 +3,8 @@ package com.example.data
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.util.Calendar
+import java.util.TimeZone
 import java.util.UUID
 
 @Serializable
@@ -38,8 +40,18 @@ data class DynamicPageDocument(
 
     fun isVisibleAt(now: Long = System.currentTimeMillis()): Boolean {
         if (!enabled) return false
-        if (startAt != null && now < startAt) return false
-        if (endAt != null && now > endAt) return false
+
+        // Material 3 DatePicker devolve o dia selecionado como meia-noite em UTC.
+        // Comparar esse valor diretamente com System.currentTimeMillis() pode adiantar
+        // ou atrasar a ativação em fusos como America/Sao_Paulo. Para páginas/cursos,
+        // o agendamento é por DIA, não por instante: convertemos o "agora" para o dia
+        // local do aparelho e os limites para a data civil escolhida no DatePicker.
+        val today = localDateKey(now)
+        val startDay = startAt?.let(::utcDateKey)
+        val endDay = endAt?.let(::utcDateKey)
+
+        if (startDay != null && today < startDay) return false
+        if (endDay != null && today > endDay) return false
         return true
     }
 }
@@ -106,4 +118,46 @@ object DynamicPageCodec {
         }
         return listOf(DynamicPageBlock(type = legacyType, value = tab.content))
     }
+
+    /**
+     * Converte a data civil gravada pelo Material DatePicker em um timestamp seguro
+     * para exibição com formatadores que usam o fuso local, evitando mostrar o dia
+     * anterior em fusos negativos.
+     */
+    fun dateMillisForLocalDisplay(timestamp: Long): Long {
+        val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+            timeInMillis = timestamp
+        }
+        return Calendar.getInstance().apply {
+            clear()
+            set(
+                utc.get(Calendar.YEAR),
+                utc.get(Calendar.MONTH),
+                utc.get(Calendar.DAY_OF_MONTH),
+                12,
+                0,
+                0
+            )
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+}
+
+private fun localDateKey(timestamp: Long): Int {
+    val calendar = Calendar.getInstance().apply { timeInMillis = timestamp }
+    return dateKey(calendar)
+}
+
+private fun utcDateKey(timestamp: Long): Int {
+    val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        timeInMillis = timestamp
+    }
+    return dateKey(calendar)
+}
+
+private fun dateKey(calendar: Calendar): Int {
+    val year = calendar.get(Calendar.YEAR)
+    val month = calendar.get(Calendar.MONTH) + 1
+    val day = calendar.get(Calendar.DAY_OF_MONTH)
+    return (year * 10_000) + (month * 100) + day
 }
