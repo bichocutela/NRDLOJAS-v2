@@ -351,162 +351,37 @@ fun MestreScreen(
             }
 
             if (currentPage == MestrePanelPage.ADVANCED) {
-            MestreSectionHeader(
-                title = "Manutenção e diagnóstico",
-                description = "Confira o estado do catálogo local e remoto sem alterar dados"
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    val summary = maintenanceSummary
-                    if (summary == null) {
-                        Text(
-                            "Nenhum diagnóstico realizado nesta sessão.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        Text(
-                            if (summary.remoteAvailable) "Conexão remota disponível" else "Não foi possível consultar a nuvem",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = if (summary.remoteAvailable) mestreSuccessColor() else MaterialTheme.colorScheme.error
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        MaintenanceMetricRow("Produtos locais", summary.localProductCount.toString())
-                        MaintenanceMetricRow("Produtos na nuvem", if (summary.remoteAvailable) summary.remoteProductCount.toString() else "Não disponível")
-                        val productDifference = summary.remoteProductCount - summary.localProductCount
-                        val differenceLabel = if (!summary.remoteAvailable) "Não calculada" else when {
-                            productDifference == 0 -> "Nenhuma diferença"
-                            productDifference > 0 -> "+$productDifference na nuvem"
-                            else -> "$productDifference na nuvem"
-                        }
-                        MaintenanceMetricRow("Diferença de produtos", differenceLabel)
-                        MaintenanceMetricRow("Abas dinâmicas", if (summary.remoteAvailable) summary.dynamicTabCount.toString() else "Não disponível")
-                        MaintenanceMetricRow("Sugestões pendentes", if (summary.remoteAvailable) summary.pendingSuggestionCount.toString() else "Não disponível")
-                        val lastUpdate = summary.lastRemoteProductUpdate?.let {
-                            SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(it))
-                        } ?: "Não informado"
-                        MaintenanceMetricRow("Última atualização de produto", lastUpdate)
-                        MaintenanceMetricRow(
-                            "Diagnóstico verificado em",
-                            SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(summary.checkedAt))
-                        )
-                        if (summary.localCategoryCounts.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Categorias locais", style = MaterialTheme.typography.titleSmall)
-                            summary.localCategoryCounts.take(4).forEach { count ->
-                                MaintenanceMetricRow(count.category, count.count.toString())
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                isLoadingMaintenance = true
-                                try {
-                                    val result = CatalogHistoryBackend.getMaintenanceSummary(
-                                        localProductCount = allProducts.size,
-                                        localCategoryCounts = localCategoryCounts
+                MestreAdvancedSection(
+                    maintenanceSummary = maintenanceSummary,
+                    isLoadingMaintenance = isLoadingMaintenance,
+                    isLoadingCatalogHistory = isLoadingCatalogHistory,
+                    isSyncing = isSyncing,
+                    catalogSnapshots = catalogSnapshots,
+                    showAllCatalogBackups = showAllCatalogBackups,
+                    onShowAllCatalogBackupsChange = { showAllCatalogBackups = it },
+                    onUpdateMaintenance = {
+                        coroutineScope.launch {
+                            isLoadingMaintenance = true
+                            try {
+                                val result = CatalogHistoryBackend.getMaintenanceSummary(
+                                    localProductCount = allProducts.size,
+                                    localCategoryCounts = localCategoryCounts
+                                )
+                                maintenanceSummary = result
+                                if (!result.remoteAvailable) {
+                                    snackbarHostState.showSnackbar(
+                                        FirebaseService.lastError ?: "Não foi possível consultar a nuvem. Tente novamente."
                                     )
-                                    maintenanceSummary = result
-                                    if (!result.remoteAvailable) {
-                                        snackbarHostState.showSnackbar(
-                                            FirebaseService.lastError ?: "Não foi possível consultar a nuvem. Tente novamente."
-                                        )
-                                    }
-                                } finally {
-                                    isLoadingMaintenance = false
                                 }
+                            } finally {
+                                isLoadingMaintenance = false
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isLoadingMaintenance && !isLoadingCatalogHistory && !isSyncing
-                    ) {
-                        if (isLoadingMaintenance) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Consultando...")
-                        } else {
-                            Icon(Icons.Default.Sync, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Atualizar diagnóstico")
                         }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-
-            MestreSectionHeader(
-                title = "Segurança operacional",
-                description = "Crie pontos de retorno do catálogo antes de mudanças importantes"
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        "O histórico mantém até 20 backups remotos. Restaurar uma versão cria primeiro um backup automático do catálogo atual.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = { viewModel.createCatalogSnapshot() },
-                            enabled = !isLoadingCatalogHistory && !isSyncing,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Backup, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Criar backup")
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.refreshCatalogHistory() },
-                            enabled = !isLoadingCatalogHistory && !isSyncing
-                        ) {
-                            Icon(Icons.Default.Sync, contentDescription = "Atualizar histórico")
-                        }
-                    }
-                    if (isLoadingCatalogHistory) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Consultando histórico...", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                    if (!isLoadingCatalogHistory && catalogSnapshots.isEmpty()) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            "Nenhum backup disponível ou a nuvem não está acessível.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    val orderedSnapshots = catalogSnapshots.sortedByDescending { it.createdAt }
-                    val visibleSnapshots = if (showAllCatalogBackups) orderedSnapshots else orderedSnapshots.take(3)
-                    visibleSnapshots.forEach { snapshot ->
-                        Spacer(modifier = Modifier.height(10.dp))
-                        CatalogSnapshotItem(
-                            snapshot = snapshot,
-                            enabled = !isLoadingCatalogHistory,
-                            onRestore = { snapshotToRestore = it }
-                        )
-                    }
-                    if (orderedSnapshots.size > 3) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        TextButton(
-                            onClick = { showAllCatalogBackups = !showAllCatalogBackups },
-                            modifier = Modifier.align(Alignment.End)
-                        ) {
-                            Text(
-                                if (showAllCatalogBackups) "Mostrar apenas recentes"
-                                else "Ver todos os ${orderedSnapshots.size} backups"
-                            )
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
+                    },
+                    onCreateCatalogSnapshot = { viewModel.createCatalogSnapshot() },
+                    onRefreshCatalogHistory = { viewModel.refreshCatalogHistory() },
+                    onRestoreSnapshot = { snapshotToRestore = it }
+                )
             }
 
             if (currentPage == MestrePanelPage.HOME_SETTINGS) {
