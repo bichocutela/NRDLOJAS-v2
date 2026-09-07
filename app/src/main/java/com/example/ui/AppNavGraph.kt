@@ -62,6 +62,9 @@ fun AppNavGraph(
             if (authenticatedRole != null) {
                 isLoggedIn = true
                 userRole = authenticatedRole
+            } else {
+                isLoggedIn = false
+                userRole = "user"
             }
             scope.launch {
                 com.example.util.FcmTopicSubscription.reconcileMasterUpdates(
