@@ -81,10 +81,10 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
         showEditor = true
     }
 
-    fun openNewBlock(type: String) {
+    fun openNewBlock(type: String, initialValue: String = "") {
         editingBlockIndex = -1
         blockType = type
-        blockValue = ""
+        blockValue = initialValue
         showBlockDialog = true
     }
 
@@ -287,7 +287,7 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             }
                             Text(
                                 if (mode == DynamicPageDocument.MODE_COURSE)
-                                    "Modo curso: o conteúdo será apresentado como material de treinamento, sem login ou matrícula."
+                                    "Modo curso: organiza o material como treinamento em módulos e aulas, com progresso local no aparelho e sem login ou matrícula."
                                 else
                                     "Modo página: ideal para avisos, orientações e materiais rápidos.",
                                 style = MaterialTheme.typography.bodySmall,
@@ -332,15 +332,48 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     }
                 }
 
+                if (mode == DynamicPageDocument.MODE_COURSE) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.School, contentDescription = null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Como montar o curso", style = MaterialTheme.typography.titleSmall)
+                                }
+                                Text(
+                                    "Use “Novo módulo” para separar assuntos. Em “Nova aula”, a primeira linha é o título e as linhas seguintes são a descrição. Imagens, vídeos, áudios e PDFs adicionados logo depois ficam dentro daquela aula até você criar a próxima aula ou módulo.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+                    }
+                }
+
                 item {
-                    Text("Conteúdo", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (mode == DynamicPageDocument.MODE_COURSE) "Estrutura do curso" else "Conteúdo",
+                        style = MaterialTheme.typography.titleMedium
+                    )
                 }
 
                 if (blocks.isEmpty()) {
                     item {
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                "Adicione pelo menos um bloco. Você pode misturar texto, imagem, vídeo, áudio e PDF na mesma página.",
+                                if (mode == DynamicPageDocument.MODE_COURSE)
+                                    "Comece criando um módulo ou uma aula. Depois adicione texto, imagem, vídeo, áudio e PDF na ordem em que o usuário deve estudar."
+                                else
+                                    "Adicione pelo menos um bloco. Você pode misturar texto, imagem, vídeo, áudio e PDF na mesma página.",
                                 modifier = Modifier.padding(14.dp),
                                 style = MaterialTheme.typography.bodyMedium
                             )
@@ -356,10 +389,10 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                     .padding(10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(blockIcon(block.type), contentDescription = null)
+                                Icon(blockIconForMode(block, mode), contentDescription = null)
                                 Spacer(Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(blockLabel(block.type), style = MaterialTheme.typography.titleSmall)
+                                    Text(blockLabelForMode(block, mode), style = MaterialTheme.typography.titleSmall)
                                     Text(
                                         if (block.type == DynamicPageBlock.TYPE_TEXT)
                                             block.value.take(90)
@@ -408,6 +441,20 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         Column(Modifier.padding(12.dp)) {
                             Text("Adicionar conteúdo", style = MaterialTheme.typography.titleSmall)
                             Spacer(Modifier.height(8.dp))
+                            if (mode == DynamicPageDocument.MODE_COURSE) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    ContentTypeButton("Novo módulo", Icons.Default.ViewModule, Modifier.weight(1f)) {
+                                        openNewBlock(DynamicPageBlock.TYPE_TEXT, "Módulo: ")
+                                    }
+                                    ContentTypeButton("Nova aula", Icons.Default.School, Modifier.weight(1f)) {
+                                        openNewBlock(DynamicPageBlock.TYPE_TEXT, "Título da aula\n")
+                                    }
+                                }
+                                Spacer(Modifier.height(6.dp))
+                            }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -438,6 +485,10 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             }
                             if (blocks.isEmpty()) {
                                 scope.launch { snackbarHostState.showSnackbar("Adicione pelo menos um conteúdo.") }
+                                return@Button
+                            }
+                            if (mode == DynamicPageDocument.MODE_COURSE && blocks.all(::isCourseModuleMarker)) {
+                                scope.launch { snackbarHostState.showSnackbar("Adicione pelo menos uma aula ao curso.") }
                                 return@Button
                             }
                             if (startAt != null && endAt != null && endAt!! < startAt!!) {
@@ -479,7 +530,11 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             .fillMaxWidth()
                             .height(50.dp)
                     ) {
-                        Text(if (isSyncingTabs) "Salvando..." else "Salvar página")
+                        Text(
+                            if (isSyncingTabs) "Salvando..."
+                            else if (mode == DynamicPageDocument.MODE_COURSE) "Salvar curso"
+                            else "Salvar página"
+                        )
                     }
                 }
             }
@@ -488,17 +543,39 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
         if (showBlockDialog) {
             AlertDialog(
                 onDismissRequest = { if (!isUploading) showBlockDialog = false },
-                title = { Text(if (editingBlockIndex >= 0) "Editar ${blockLabel(blockType)}" else "Adicionar ${blockLabel(blockType)}") },
+                title = {
+                    Text(
+                        if (editingBlockIndex >= 0)
+                            "Editar ${blockLabelForDialog(blockType, blockValue, mode)}"
+                        else
+                            "Adicionar ${blockLabelForDialog(blockType, blockValue, mode)}"
+                    )
+                },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (blockType == DynamicPageBlock.TYPE_TEXT) {
                             OutlinedTextField(
                                 value = blockValue,
                                 onValueChange = { blockValue = it },
-                                label = { Text("Texto") },
+                                label = {
+                                    Text(
+                                        when {
+                                            mode == DynamicPageDocument.MODE_COURSE && isModuleMarkerText(blockValue) -> "Nome do módulo"
+                                            mode == DynamicPageDocument.MODE_COURSE && blockValue.startsWith("Título da aula") -> "Título e descrição da aula"
+                                            else -> "Texto"
+                                        }
+                                    )
+                                },
                                 minLines = 5,
                                 modifier = Modifier.fillMaxWidth()
                             )
+                            if (mode == DynamicPageDocument.MODE_COURSE) {
+                                Text(
+                                    "Em uma aula, use a primeira linha como título e as linhas seguintes como descrição. Para módulo, mantenha “Módulo:” no início.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         } else {
                             OutlinedTextField(
                                 value = blockValue,
@@ -547,7 +624,7 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             showBlockDialog = false
                         },
                         enabled = blockValue.isNotBlank() && !isUploading
-                    ) { Text("Adicionar") }
+                    ) { Text(if (editingBlockIndex >= 0) "Salvar" else "Adicionar") }
                 },
                 dismissButton = {
                     TextButton(onClick = { showBlockDialog = false }, enabled = !isUploading) { Text("Cancelar") }
@@ -646,6 +723,37 @@ private fun blockIcon(type: String) = when (type) {
     DynamicPageBlock.TYPE_AUDIO -> Icons.Default.Headphones
     DynamicPageBlock.TYPE_PDF -> Icons.Default.PictureAsPdf
     else -> Icons.Default.TextFields
+}
+
+private fun blockLabelForMode(block: DynamicPageBlock, mode: String): String {
+    if (mode != DynamicPageDocument.MODE_COURSE || block.type != DynamicPageBlock.TYPE_TEXT) {
+        return blockLabel(block.type)
+    }
+    return if (isCourseModuleMarker(block)) "Módulo" else "Aula / Texto"
+}
+
+private fun blockIconForMode(block: DynamicPageBlock, mode: String) = when {
+    mode == DynamicPageDocument.MODE_COURSE && isCourseModuleMarker(block) -> Icons.Default.ViewModule
+    mode == DynamicPageDocument.MODE_COURSE && block.type == DynamicPageBlock.TYPE_TEXT -> Icons.Default.School
+    else -> blockIcon(block.type)
+}
+
+private fun blockLabelForDialog(type: String, value: String, mode: String): String {
+    if (mode == DynamicPageDocument.MODE_COURSE && type == DynamicPageBlock.TYPE_TEXT) {
+        return if (isModuleMarkerText(value)) "módulo" else "aula/texto"
+    }
+    return blockLabel(type).lowercase(Locale("pt", "BR"))
+}
+
+private fun isCourseModuleMarker(block: DynamicPageBlock): Boolean =
+    block.type == DynamicPageBlock.TYPE_TEXT && isModuleMarkerText(block.value)
+
+private fun isModuleMarkerText(value: String): Boolean {
+    val firstLine = value.lineSequence().firstOrNull()?.trim().orEmpty()
+    return firstLine.startsWith("módulo:", ignoreCase = true) ||
+        firstLine.startsWith("modulo:", ignoreCase = true) ||
+        firstLine.startsWith("módulo ", ignoreCase = true) ||
+        firstLine.startsWith("modulo ", ignoreCase = true)
 }
 
 private fun mimeTypesFor(type: String): Array<String> = when (type) {
