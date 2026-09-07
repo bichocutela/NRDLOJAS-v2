@@ -98,11 +98,25 @@ fun MestreScreen(
     var isSavingHomeSettings by remember { mutableStateOf(false) }
     val categoryDefinitions by viewModel.categoryDefinitions.collectAsStateWithLifecycle()
     var showCategoryDialog by remember { mutableStateOf(false) }
-    val notificationSettings by FirebaseService.observeNotificationSettings()
+    val notificationSettingsFlow = remember(currentPage) {
+        if (currentPage == MestrePanelPage.NOTIFICATION_SETTINGS) {
+            FirebaseService.observeNotificationSettings()
+        } else {
+            kotlinx.coroutines.flow.flowOf(NotificationSettings())
+        }
+    }
+    val notificationSettings by notificationSettingsFlow
         .collectAsStateWithLifecycle(initialValue = NotificationSettings())
     var draftNotificationSettings by remember(notificationSettings) { mutableStateOf(notificationSettings) }
     var isSavingNotificationSettings by remember { mutableStateOf(false) }
-    val appearanceSettings by FirebaseService.observeAppearanceSettings()
+    val appearanceSettingsFlow = remember(currentPage) {
+        if (currentPage == MestrePanelPage.APPEARANCE_SETTINGS) {
+            FirebaseService.observeAppearanceSettings()
+        } else {
+            kotlinx.coroutines.flow.flowOf(AppearanceSettings())
+        }
+    }
+    val appearanceSettings by appearanceSettingsFlow
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
     var draftAppearanceSettings by remember(appearanceSettings) { mutableStateOf(appearanceSettings) }
     var draftThemeBackgrounds by remember(appearanceSettings.themeBackgrounds) {
