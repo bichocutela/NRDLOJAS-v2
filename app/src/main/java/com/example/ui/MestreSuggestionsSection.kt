@@ -44,6 +44,12 @@ import kotlinx.coroutines.launch
 import com.example.ui.theme.glassSoftShadow
 
 private const val SUGGESTIONS_PAGE_SIZE = 10
+private const val MAX_SUGGESTIONS_IN_PANEL = 200
+
+private fun recentSuggestionsForPanel(suggestions: List<ProductSuggestion>): List<ProductSuggestion> =
+    suggestions
+        .sortedByDescending { it.createdAt }
+        .take(MAX_SUGGESTIONS_IN_PANEL)
 
 @Composable
 internal fun MestreSuggestionsSection(
@@ -55,6 +61,7 @@ internal fun MestreSuggestionsSection(
     var suggestionPage by remember { mutableIntStateOf(0) }
     var updatingSuggestionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val coroutineScope = rememberCoroutineScope()
+    val recentSuggestions = remember(suggestions) { recentSuggestionsForPanel(suggestions) }
 
     if (showHeader) {
         MestreSectionHeader(
@@ -76,7 +83,7 @@ internal fun MestreSuggestionsSection(
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                 )
                 Text(
-                    suggestions.count { it.status == ProductSuggestion.STATUS_PENDING }.toString(),
+                    recentSuggestions.count { it.status == ProductSuggestion.STATUS_PENDING }.toString(),
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                 )
@@ -109,13 +116,15 @@ internal fun MestreSuggestionsSection(
             }
             Spacer(modifier = Modifier.height(6.dp))
 
-            val filteredSuggestions = suggestions
-                .filter { suggestion ->
-                    suggestionFilter == "all" ||
-                        (suggestionFilter == "pending" && suggestion.status == ProductSuggestion.STATUS_PENDING) ||
-                        (suggestionFilter == "fixed" && suggestion.status == ProductSuggestion.STATUS_FIXED)
-                }
-                .sortedBy { if (it.status == ProductSuggestion.STATUS_PENDING) 0 else 1 }
+            val filteredSuggestions = remember(recentSuggestions, suggestionFilter) {
+                recentSuggestions
+                    .filter { suggestion ->
+                        suggestionFilter == "all" ||
+                            (suggestionFilter == "pending" && suggestion.status == ProductSuggestion.STATUS_PENDING) ||
+                            (suggestionFilter == "fixed" && suggestion.status == ProductSuggestion.STATUS_FIXED)
+                    }
+                    .sortedBy { if (it.status == ProductSuggestion.STATUS_PENDING) 0 else 1 }
+            }
             val pagination = calculatePaginationWindow(
                 totalItems = filteredSuggestions.size,
                 requestedPage = suggestionPage,
@@ -199,9 +208,10 @@ internal fun MestreSuggestionsPreview(
     suggestions: List<ProductSuggestion>,
     onViewAll: () -> Unit
 ) {
-    val pendingSuggestions = suggestions
-        .filter { it.status == ProductSuggestion.STATUS_PENDING }
-        .sortedByDescending { it.createdAt }
+    val recentSuggestions = remember(suggestions) { recentSuggestionsForPanel(suggestions) }
+    val pendingSuggestions = remember(recentSuggestions) {
+        recentSuggestions.filter { it.status == ProductSuggestion.STATUS_PENDING }
+    }
 
     MestreSectionHeader(
         title = "Pendências recentes",
@@ -239,7 +249,7 @@ internal fun MestreSuggestionsPreview(
                     }
                 }
             }
-            if (suggestions.isNotEmpty()) {
+            if (recentSuggestions.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(6.dp))
                 TextButton(onClick = onViewAll, modifier = Modifier.align(Alignment.End)) {
                     Text(if (pendingSuggestions.isEmpty()) "Ver histórico" else "Ver todas")
