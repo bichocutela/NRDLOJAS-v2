@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.data.DynamicPageBlock
 import com.example.data.DynamicPageCodec
+import com.example.data.DynamicPageDocument
 import com.example.data.DynamicTab
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -19,6 +20,8 @@ import com.example.data.DynamicTab
 fun DynamicTabScreen(tab: DynamicTab, onNavigateBack: () -> Unit) {
     val visibleNow = DynamicPageCodec.isVisible(tab)
     val blocks = DynamicPageCodec.blocksFor(tab)
+    val document = DynamicPageCodec.decodeDocument(tab.content)
+    val isCourse = document?.mode == DynamicPageDocument.MODE_COURSE
 
     Scaffold(
         topBar = {
@@ -58,10 +61,20 @@ fun DynamicTabScreen(tab: DynamicTab, onNavigateBack: () -> Unit) {
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "Nenhum conteúdo foi adicionado a esta página.",
+                    if (isCourse) "Nenhuma aula foi adicionada a este curso."
+                    else "Nenhum conteúdo foi adicionado a esta página.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            return@Scaffold
+        }
+
+        if (isCourse) {
+            DynamicCourseContent(
+                tab = tab,
+                blocks = blocks,
+                modifier = Modifier.padding(innerPadding)
+            )
             return@Scaffold
         }
 
