@@ -15,6 +15,7 @@ import com.example.data.ProductRepository
 import com.example.data.ProductStandards
 import com.example.data.RemoteHomeSettings
 import com.example.data.UserPreferences
+import com.example.data.DynamicPageCodec
 import com.example.data.rankGloballyMostUsedProducts
 import com.example.data.rankLatestAddedProducts
 import com.example.util.FcmTopicSubscription
@@ -129,7 +130,10 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                     }
                 }
                 val remoteIds = remoteTabs.map { it.id }.toSet()
-                val tabsToDelete = localTabs.filter { it.id !in remoteIds }
+                val tabsToDelete = localTabs.filter { localTab ->
+                    localTab.id !in remoteIds &&
+                        DynamicPageCodec.decodeDocument(localTab.content)?.enabled != false
+                }
                 if (tabsToDelete.isNotEmpty() && !_isSyncingTabs.value) {
                     tabsToDelete.forEach { repository.deleteTab(it) }
                 }
@@ -761,13 +765,21 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         try {
             val before = repository.getAllTabs().first()
             val candidate = tab.copy(displayOrder = before.size)
+            val isDraft = DynamicPageCodec.decodeDocument(candidate.content)?.enabled == false
             repository.insertTab(candidate)
             val saved = FirebaseService.syncAllDynamicTabs(repository.getAllTabs().first())
             if (!saved) {
-                repository.deleteTab(candidate)
-                _syncMessage.emit("Não foi possível publicar a aba. O rascunho local foi desfeito.")
+                if (isDraft) {
+                    _syncMessage.emit("Rascunho salvo neste aparelho. Ele continua oculto para os usuários.")
+                } else {
+                    repository.deleteTab(candidate)
+                    _syncMessage.emit("Não foi possível publicar a aba. O rascunho local foi desfeito.")
+                }
             } else {
-                _syncMessage.emit("Aba criada para todos os usuários.")
+                _syncMessage.emit(
+                    if (isDraft) "Rascunho salvo. Ele só aparecerá aos usuários quando você ativar."
+                    else "Aba criada para todos os usuários."
+                )
             }
         } finally {
             _isSyncingTabs.value = false
@@ -780,13 +792,20 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         try {
             val before = repository.getAllTabs().first()
             val previous = before.firstOrNull { it.id == tab.id }
+            val isDraft = DynamicPageCodec.decodeDocument(tab.content)?.enabled == false
             repository.updateTab(tab)
             val saved = FirebaseService.syncAllDynamicTabs(repository.getAllTabs().first())
             if (!saved) {
                 previous?.let { repository.updateTab(it) }
-                _syncMessage.emit("Não foi possível publicar a alteração da aba. A versão anterior foi restaurada.")
+                _syncMessage.emit(
+                    if (isDraft) "Não foi possível salvar o rascunho na nuvem. A versão anterior foi restaurada."
+                    else "Não foi possível publicar a alteração da aba. A versão anterior foi restaurada."
+                )
             } else {
-                _syncMessage.emit("Aba atualizada para todos os usuários.")
+                _syncMessage.emit(
+                    if (isDraft) "Rascunho atualizado. Ele continua oculto para os usuários."
+                    else "Aba atualizada para todos os usuários."
+                )
             }
         } finally {
             _isSyncingTabs.value = false
