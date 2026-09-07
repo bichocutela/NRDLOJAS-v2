@@ -58,7 +58,7 @@ async function accessToken(account: Record<string, string>, scope: string) {
   const key = await jose.importPKCS8(account.private_key, "RS256");
   const now = Math.floor(Date.now() / 1000);
   const assertion = await new jose.SignJWT({ scope }).setProtectedHeader({ alg: "RS256", typ: "JWT" }).setIssuer(account.client_email).setSubject(account.client_email).setAudience("https://oauth2.googleapis.com/token").setIssuedAt(now).setExpirationTime(now + 3600).sign(key);
-  const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth2:token", assertion }) });
+  const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }) });
   const data = await response.json();
   if (!response.ok || !data.access_token) throw new Error("Não foi possível autenticar o serviço Firebase");
   return data.access_token as string;
