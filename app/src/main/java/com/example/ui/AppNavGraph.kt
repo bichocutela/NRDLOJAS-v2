@@ -143,9 +143,16 @@ fun AppNavGraph(
                 composable("dynamic_tab/{tabId}") { backStackEntry ->
                     val tabId = backStackEntry.arguments?.getString("tabId")?.toIntOrNull()
                     val dynamicTabs by viewModel.dynamicTabs.collectAsState()
-                    val tab = dynamicTabs.find { it.id == tabId }
-                    if (tab != null) DynamicTabScreen(tab = tab, onNavigateBack = { navController.popBackStack() })
-                    else Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Aba não encontrada.") }
+                    val tab = dynamicTabs.find {
+                        it.id == tabId && com.example.data.DynamicPageCodec.isVisible(it)
+                    }
+                    if (tab != null) {
+                        DynamicTabScreen(tab = tab, onNavigateBack = { navController.popBackStack() })
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Este conteúdo não está disponível no momento.")
+                        }
+                    }
                 }
                 composable("search") { SearchScreen(viewModel, onOpenDrawer = { scope.launch { drawerState.open() } }) }
                 composable("admin") {
@@ -294,9 +301,14 @@ fun LoginDrawerContent(
         Spacer(modifier = Modifier.height(10.dp))
 
         val dynamicTabs by viewModel.dynamicTabs.collectAsState()
-        val supportedDynamicTabs = dynamicTabs.filter { it.type == "text" || it.type == "image" }
+        val supportedDynamicTabs = dynamicTabs.filter { tab ->
+            val supported = tab.type == "text" ||
+                tab.type == "image" ||
+                com.example.data.DynamicPageCodec.isPage(tab.content)
+            supported && com.example.data.DynamicPageCodec.isVisible(tab)
+        }
         if (supportedDynamicTabs.isNotEmpty()) {
-            Text("Abas Adicionais", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.Start))
+            Text("Páginas e Cursos", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.Start))
             Spacer(modifier = Modifier.height(4.dp))
             supportedDynamicTabs.sortedWith(compareBy<com.example.data.DynamicTab> { it.displayOrder }.thenBy { it.id }).forEach { tab ->
                 TextButton(onClick = { onGoToDynamicTab(tab.id) }, modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp)) { Text(tab.title) }
