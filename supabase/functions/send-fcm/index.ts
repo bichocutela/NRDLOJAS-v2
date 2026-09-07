@@ -58,7 +58,7 @@ async function accessToken(account: Record<string, string>, scope: string) {
   const key = await jose.importPKCS8(account.private_key, "RS256");
   const now = Math.floor(Date.now() / 1000);
   const assertion = await new jose.SignJWT({ scope }).setProtectedHeader({ alg: "RS256", typ: "JWT" }).setIssuer(account.client_email).setSubject(account.client_email).setAudience("https://oauth2.googleapis.com/token").setIssuedAt(now).setExpirationTime(now + 3600).sign(key);
-  const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }) });
+  const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth2:token", assertion }) });
   const data = await response.json();
   if (!response.ok || !data.access_token) throw new Error("Não foi possível autenticar o serviço Firebase");
   return data.access_token as string;
@@ -142,10 +142,13 @@ async function sendEvent(
 ) {
   const fcmToken = await accessToken(account, "https://www.googleapis.com/auth/firebase.messaging");
   const type = title === "Código alterado" ? "CODE_CHANGED" : title === "Sugestão corrigida" ? "SUGGESTION_FIXED" : title === "Atualização disponível" ? "APP_UPDATE" : "NEW_PRODUCT";
-  const channel = type === "CODE_CHANGED" ? "product_code_changed" : type === "SUGGESTION_FIXED" ? "suggestion_fixed" : type === "APP_UPDATE" ? "app_update" : "product_added";
   const webLink = productCode ? "https://bichocutela.github.io/?product=" + encodeURIComponent(productCode) : "https://bichocutela.github.io/";
   const message = { data: { title, body: messageBody, type, productCode: productCode ?? "", url: webLink } };
-  const send = await fetch("https://fcm.googleapis.com/v1/projects/" + accountProject + "/messages:send", { method: "POST", headers: { Authorization: "Bearer " + fcmToken, "Content-Type": "application/json" }, body: JSON.stringify({ message: { topic: targetTopic, ...message, android: { priority: "high", notification: { channel_id: channel } } } }) });
+  // Android recebe apenas o payload data-only. A notificação visual é criada pelo app,
+  // que já escolhe o canal correto por tipo e valida título/corpo antes de exibir.
+  // Não inclua android.notification aqui: em alguns aparelhos isso faz o sistema
+  // materializar notificações vazias e agrupá-las mostrando somente o horário.
+  const send = await fetch("https://fcm.googleapis.com/v1/projects/" + accountProject + "/messages:send", { method: "POST", headers: { Authorization: "Bearer " + fcmToken, "Content-Type": "application/json" }, body: JSON.stringify({ message: { topic: targetTopic, ...message, android: { priority: "high" } } }) });
   if (!send.ok) throw new Error("FCM error " + send.status + ": " + await send.text());
   const webTokens = mirrorToWeb ? await readWebPushTokens() : [];
   const webResults = mirrorToWeb
