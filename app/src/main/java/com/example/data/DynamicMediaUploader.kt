@@ -15,11 +15,19 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
 import org.json.JSONObject
 import java.io.File
+import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 object DynamicMediaUploader {
     private const val MAX_UPLOAD_BYTES = 80L * 1024L * 1024L
+    private val allowedExtensions = setOf(
+        "jpg", "jpeg", "png", "webp",
+        "mp4", "webm", "mov",
+        "mp3", "m4a", "aac", "ogg", "wav",
+        "pdf"
+    )
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
@@ -29,10 +37,46 @@ object DynamicMediaUploader {
     suspend fun upload(context: Context, uri: Uri): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val resolver = context.contentResolver
-            val mime = resolver.getType(uri) ?: "application/octet-stream"
-            val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)
-                ?: uri.lastPathSegment?.substringAfterLast('.', "")?.takeIf { it.length in 1..8 }
+            val detectedMime = resolver.getType(uri)?.trim()?.lowercase(Locale.ROOT)
+            val fallbackExtension = uri.lastPathSegment
+                ?.substringAfterLast('.', "")
+                ?.lowercase(Locale.ROOT)
+                ?.takeIf { it.length in 1..8 }
+            val extension = detectedMime
+                ?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) }
+                ?.lowercase(Locale.ROOT)
+                ?: fallbackExtension
                 ?: "bin"
+
+            val mimeAllowed = detectedMime?.let {
+                it.startsWith("image/") ||
+                    it.startsWith("video/") ||
+                    it.startsWith("audio/") ||
+                    it == "application/pdf" ||
+                    it == "application/octet-stream"
+            } ?: true
+
+            if (!mimeAllowed || extension !in allowedExtensions) {
+                error("Formato não suportado. Use imagem, vídeo, áudio ou PDF.")
+            }
+
+            val mime = when {
+                detectedMime != null && detectedMime != "application/octet-stream" -> detectedMime
+                extension == "pdf" -> "application/pdf"
+                extension in setOf("jpg", "jpeg") -> "image/jpeg"
+                extension == "png" -> "image/png"
+                extension == "webp" -> "image/webp"
+                extension == "mp4" -> "video/mp4"
+                extension == "webm" -> "video/webm"
+                extension == "mov" -> "video/quicktime"
+                extension == "mp3" -> "audio/mpeg"
+                extension == "m4a" -> "audio/mp4"
+                extension == "aac" -> "audio/aac"
+                extension == "ogg" -> "audio/ogg"
+                extension == "wav" -> "audio/wav"
+                else -> "application/octet-stream"
+            }
+
             val temp = File.createTempFile("nrd_dynamic_", ".$extension", context.cacheDir)
             try {
                 resolver.openInputStream(uri)?.use { input ->
@@ -50,6 +94,10 @@ object DynamicMediaUploader {
                         }
                     }
                 } ?: error("Não foi possível ler o arquivo selecionado.")
+
+                if (!temp.exists() || temp.length() <= 0L) {
+                    error("O arquivo selecionado está vazio ou não pôde ser lido.")
+                }
 
                 val token = FirebaseAuth.getInstance().currentUser
                     ?.getIdToken(false)?.await()?.token
