@@ -61,7 +61,7 @@ secrets {
   defaultPropertiesFileName = ".env.example"
 }
 // Some unused dependencies are commented out below instead of being removed.
-// This makes it easy to add them back in the future if needed.
+// This makes it easy to add them back in the future when needed.
 dependencies {
   implementation("com.google.zxing:core:3.5.3")
   implementation(platform(libs.androidx.compose.bom))
@@ -89,6 +89,10 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
+  // Players reaproveitados do padrão MICRHEMA para páginas/cursos dinâmicos.
+  implementation("androidx.media3:media3-exoplayer:1.2.1")
+  implementation("androidx.media3:media3-ui:1.2.1")
+  implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:13.0.0")
   // implementation(libs.firebase.ai)
   // Uncomment to use Firestore:
   implementation(libs.firebase.firestore)
