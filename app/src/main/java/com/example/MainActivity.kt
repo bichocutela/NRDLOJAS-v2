@@ -212,29 +212,28 @@ class MainActivity : ComponentActivity() {
                         color = if (LocalGlassSoftStyle.current.enabled) Color.Transparent else MaterialTheme.colorScheme.background
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
-                        AppNavGraph(
+                        if (!showSplash) {
+                            AppNavGraph(
                             viewModel = viewModel,
                             openAboutFromNotification = openAboutFromNotification,
                             openPromotionsFromNotification = openPromotionsFromNotification
-                        )
+                            )
 
-                        androidx.compose.material3.SnackbarHost(
+                            androidx.compose.material3.SnackbarHost(
                             hostState = snackbarHostState,
                             modifier = Modifier.align(Alignment.BottomCenter)
-                        )
+                            )
+                        }
                         
                         AnimatedVisibility(
                             visible = showSplash,
                             enter = fadeIn(animationSpec = tween(500)),
-                            exit = fadeOut(animationSpec = tween(500))
+                            exit = fadeOut(animationSpec = tween(220))
                         ) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(
-                                        if (LocalGlassSoftStyle.current.enabled) Color.Transparent
-                                        else Color.White
-                                    ),
+                                    .background(MaterialTheme.colorScheme.background),
                                 contentAlignment = Alignment.Center
                             ) {
                                 coil.compose.AsyncImage(
