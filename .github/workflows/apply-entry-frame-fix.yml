@@ -1,0 +1,71 @@
+name: Apply Android entry frame fix
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-entry-frame-fix.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+      - name: Patch Android entry rendering
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('app/src/main/java/com/example/MainActivity.kt')
+          s = p.read_text()
+
+          old = '''                        Box(modifier = Modifier.fillMaxSize()) {
+                        AppNavGraph(
+                            viewModel = viewModel,
+                            openAboutFromNotification = openAboutFromNotification,
+                            openPromotionsFromNotification = openPromotionsFromNotification
+                        )
+
+                        androidx.compose.material3.SnackbarHost(
+                            hostState = snackbarHostState,
+                            modifier = Modifier.align(Alignment.BottomCenter)
+                        )
+                        
+                        AnimatedVisibility('''
+          new = '''                        Box(modifier = Modifier.fillMaxSize()) {
+                        if (!showSplash) {
+                            AppNavGraph(
+                                viewModel = viewModel,
+                                openAboutFromNotification = openAboutFromNotification,
+                                openPromotionsFromNotification = openPromotionsFromNotification
+                            )
+
+                            androidx.compose.material3.SnackbarHost(
+                                hostState = snackbarHostState,
+                                modifier = Modifier.align(Alignment.BottomCenter)
+                            )
+                        }
+                        
+                        AnimatedVisibility('''
+          if old not in s:
+              raise SystemExit('AppNavGraph block not found; no changes applied')
+          s = s.replace(old, new, 1)
+
+          old = '''                                    .background(
+                                        if (LocalGlassSoftStyle.current.enabled) Color.Transparent
+                                        else Color.White
+                                    ),'''
+          new = '''                                    .background(MaterialTheme.colorScheme.background),'''
+          if old not in s:
+              raise SystemExit('Splash background block not found; no changes applied')
+          s = s.replace(old, new, 1)
+
+          s = s.replace('exit = fadeOut(animationSpec = tween(500))', 'exit = fadeOut(animationSpec = tween(220))', 1)
+          p.write_text(s)
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/MainActivity.kt
+          git commit -m "fix: prevent entry frame flash before Android UI is ready"
+          git push
