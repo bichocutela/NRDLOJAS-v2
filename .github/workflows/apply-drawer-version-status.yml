@@ -13,64 +13,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ github.token }}
-      - name: Add installed version and update shortcut
+      - name: Patch drawer
         shell: python
         run: |
           from pathlib import Path
           p = Path('app/src/main/java/com/example/ui/AppNavGraph.kt')
           s = p.read_text()
-
-          state_old = """    var expandedCategory by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-
-    Column("""
-          state_new = """    var expandedCategory by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-    var drawerUpdateAvailable by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        drawerUpdateAvailable = when (val result = com.example.util.UpdateChecker.checkLatestRelease()) {
-            is com.example.util.ReleaseCheckResult.Success ->
-                com.example.util.UpdateChecker.isRemoteVersionNewer(
-                    com.example.BuildConfig.VERSION_NAME,
-                    result.tagName
-                )
-            else -> false
-        }
-    }
-
-    Column("""
-          if state_old not in s:
-              raise SystemExit('drawer state insertion point not found')
-          s = s.replace(state_old, state_new, 1)
-
-          about_old = """        Button(onClick = onGoToAbout, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text(\"Sobre\") }
-    }
-}"""
-          about_new = """        Button(onClick = onGoToAbout, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text(\"Sobre\") }
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = \"Versão instalada: v${com.example.BuildConfig.VERSION_NAME}\",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
-        )
-        if (drawerUpdateAvailable) {
-            Spacer(modifier = Modifier.height(6.dp))
-            Button(
-                onClick = onGoToAbout,
-                modifier = Modifier.fillMaxWidth().height(42.dp)
-            ) {
-                Text(\"Existe Atualização\", style = MaterialTheme.typography.labelLarge)
-            }
-        }
-    }
-}"""
-          if about_old not in s:
-              raise SystemExit('About button insertion point not found')
-          s = s.replace(about_old, about_new, 1)
+          old = "    var expandedCategory by remember { mutableStateOf<String?>(null) }\n    val scope = rememberCoroutineScope()\n"
+          new = old + "    var drawerUpdateAvailable by remember { mutableStateOf(false) }\n\n    LaunchedEffect(Unit) {\n        drawerUpdateAvailable = when (val result = com.example.util.UpdateChecker.checkLatestRelease()) {\n            is com.example.util.ReleaseCheckResult.Success ->\n                com.example.util.UpdateChecker.isRemoteVersionNewer(\n                    com.example.BuildConfig.VERSION_NAME,\n                    result.tagName\n                )\n            else -> false\n        }\n    }\n"
+          if old not in s:
+              raise SystemExit('state point not found')
+          s = s.replace(old, new, 1)
+          marker = '        Button(onClick = onGoToAbout, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Sobre") }\n'
+          version_expr = '$' + '{com.example.BuildConfig.VERSION_NAME}'
+          addition = marker + '        Spacer(modifier = Modifier.height(10.dp))\n        Text(\n            text = "Versão instalada: v' + version_expr + '",\n            style = MaterialTheme.typography.bodySmall,\n            color = MaterialTheme.colorScheme.onSurfaceVariant,\n            modifier = Modifier.align(Alignment.CenterHorizontally)\n        )\n        if (drawerUpdateAvailable) {\n            Spacer(modifier = Modifier.height(6.dp))\n            Button(\n                onClick = onGoToAbout,\n                modifier = Modifier.fillMaxWidth().height(42.dp)\n            ) {\n                Text("Existe Atualização", style = MaterialTheme.typography.labelLarge)\n            }\n        }\n'
+          if marker not in s:
+              raise SystemExit('about point not found')
+          s = s.replace(marker, addition, 1)
           p.write_text(s)
       - name: Commit and push
         run: |
