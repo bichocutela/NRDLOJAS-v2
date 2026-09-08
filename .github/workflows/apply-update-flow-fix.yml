@@ -1,0 +1,103 @@
+name: Apply reliable update flow fix
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-update-flow-fix.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+      - name: Patch update flow
+        shell: python
+        run: |
+          from pathlib import Path
+
+          # 1) Centraliza a abertura do instalador no término real do DownloadManager.
+          p = Path('app/src/main/java/com/example/util/UpdateChecker.kt')
+          s = p.read_text()
+          old = '''            ApkDownloadHandle(manager.enqueue(request), file.absolutePath)
+        } catch (e: Exception) {'''
+          new = '''            val downloadId = manager.enqueue(request)
+            val handle = ApkDownloadHandle(downloadId, file.absolutePath)
+
+            val onComplete = object : BroadcastReceiver() {
+                override fun onReceive(ctxt: Context, intent: Intent) {
+                    val completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+                    if (completedId != downloadId) return
+                    try {
+                        val progress = queryApkDownload(ctxt, handle)
+                        if (progress?.status == DownloadManager.STATUS_SUCCESSFUL) {
+                            installApk(ctxt, File(handle.filePath))
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Erro ao abrir instalador após download", e)
+                    } finally {
+                        runCatching { ctxt.unregisterReceiver(this) }
+                    }
+                }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(
+                    onComplete,
+                    IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                    Context.RECEIVER_EXPORTED
+                )
+            } else {
+                @Suppress("UnspecifiedRegisterReceiverFlag")
+                context.registerReceiver(onComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
+            }
+            handle
+        } catch (e: Exception) {'''
+          if old not in s:
+              raise SystemExit('startApkDownload insertion point not found')
+          s = s.replace(old, new, 1)
+          s = s.replace('.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)\n                .setDestinationInExternalFilesDir', '.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)\n                .setDestinationInExternalFilesDir', 1)
+          p.write_text(s)
+
+          # 2) Remove a segunda tentativa automática do polling da tela Sobre.
+          p = Path('app/src/main/java/com/example/ui/AboutScreen.kt')
+          s = p.read_text()
+          old = '''                                updateDownloadHandle = null
+                                com.example.util.UpdateChecker.installDownloadedApk(context, state.filePath)
+                                break'''
+          new = '''                                updateDownloadHandle = null
+                                break'''
+          if old in s:
+              s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          # 3) Mantém a versão sempre visível e o atalho de atualização logo abaixo de Sobre.
+          p = Path('app/src/main/java/com/example/ui/AppNavGraph.kt')
+          s = p.read_text()
+          old = '''        Text(
+            text = "Versão instalada: v${com.example.BuildConfig.VERSION_NAME}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        )'''
+          new = '''        Text(
+            text = "Versão instalada: v${com.example.BuildConfig.VERSION_NAME}",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )'''
+          if old not in s:
+              raise SystemExit('drawer version label not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/util/UpdateChecker.kt app/src/main/java/com/example/ui/AboutScreen.kt app/src/main/java/com/example/ui/AppNavGraph.kt
+          git commit -m "fix: make update installer reliable and keep version visible"
+          git push
