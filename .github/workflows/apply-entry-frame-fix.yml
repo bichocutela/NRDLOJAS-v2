@@ -10,52 +10,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ github.token }}
       - name: Patch Android entry rendering
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
           p = Path('app/src/main/java/com/example/MainActivity.kt')
           s = p.read_text()
-          old = '''                        Box(modifier = Modifier.fillMaxSize()) {
-                        AppNavGraph(
-                            viewModel = viewModel,
-                            openAboutFromNotification = openAboutFromNotification,
-                            openPromotionsFromNotification = openPromotionsFromNotification
-                        )
-
-                        androidx.compose.material3.SnackbarHost(
-                            hostState = snackbarHostState,
-                            modifier = Modifier.align(Alignment.BottomCenter)
-                        )
-                        
-                        AnimatedVisibility('''
-          new = '''                        Box(modifier = Modifier.fillMaxSize()) {
-                        if (!showSplash) {
-                            AppNavGraph(
-                                viewModel = viewModel,
-                                openAboutFromNotification = openAboutFromNotification,
-                                openPromotionsFromNotification = openPromotionsFromNotification
-                            )
-
-                            androidx.compose.material3.SnackbarHost(
-                                hostState = snackbarHostState,
-                                modifier = Modifier.align(Alignment.BottomCenter)
-                            )
-                        }
-                        
-                        AnimatedVisibility('''
-          if old not in s:
-              raise SystemExit('AppNavGraph block not found')
-          s = s.replace(old, new, 1)
-          old_bg = '''                                    .background(
-                                        if (LocalGlassSoftStyle.current.enabled) Color.Transparent
-                                        else Color.White
-                                    ),'''
-          if old_bg not in s:
+          pattern = re.compile(r'''(?ms)^\s*AppNavGraph\(\n\s*viewModel = viewModel,\n\s*openAboutFromNotification = openAboutFromNotification,\n\s*openPromotionsFromNotification = openPromotionsFromNotification\n\s*\)\n\n\s*androidx\.compose\.material3\.SnackbarHost\(\n\s*hostState = snackbarHostState,\n\s*modifier = Modifier\.align\(Alignment\.BottomCenter\)\n\s*\)''')
+          m = pattern.search(s)
+          if not m:
+              raise SystemExit('AppNavGraph/Snackbar block not found')
+          block = m.group(0)
+          indent = re.match(r'\s*', block).group(0)
+          body = '\n'.join(indent + '    ' + line.lstrip() if line.strip() else '' for line in block.splitlines())
+          replacement = indent + 'if (!showSplash) {\n' + body + '\n' + indent + '}'
+          s = s[:m.start()] + replacement + s[m.end():]
+          s, n = re.subn(r'''\.background\(\s*if \(LocalGlassSoftStyle\.current\.enabled\) Color\.Transparent\s*else Color\.White\s*\),''', '.background(MaterialTheme.colorScheme.background),', s, count=1, flags=re.S)
+          if n != 1:
               raise SystemExit('Splash background block not found')
-          s = s.replace(old_bg, '                                    .background(MaterialTheme.colorScheme.background),', 1)
           s = s.replace('exit = fadeOut(animationSpec = tween(500))', 'exit = fadeOut(animationSpec = tween(220))', 1)
           p.write_text(s)
           PY
