@@ -222,16 +222,14 @@ fun LoginDrawerContent(
     val activeCategoryNames by viewModel.activeCategoryNames.collectAsState()
     var expandedCategory by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    var drawerUpdateAvailable by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    com.example.util.UpdateAvailabilityState.initialize(context)
+    val drawerUpdateAvailable by com.example.util.UpdateAvailabilityState.available.collectAsState()
 
-    LaunchedEffect(Unit) {
-        drawerUpdateAvailable = when (val result = com.example.util.UpdateChecker.checkLatestRelease()) {
-            is com.example.util.ReleaseCheckResult.Success ->
-                com.example.util.UpdateChecker.isRemoteVersionNewer(
-                    com.example.BuildConfig.VERSION_NAME,
-                    result.tagName
-                )
-            else -> false
+    LaunchedEffect(isLoggedIn, userRole) {
+        com.example.util.UpdateAvailabilityState.clearIfCurrent(context)
+        if (isLoggedIn && userRole == "mestre") {
+            com.example.util.UpdateAvailabilityState.refresh(context)
         }
     }
 
