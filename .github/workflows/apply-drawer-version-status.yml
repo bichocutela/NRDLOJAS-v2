@@ -1,0 +1,85 @@
+name: Apply drawer version status
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-drawer-version-status.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+      - name: Add installed version and update status to drawer
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/example/ui/AppNavGraph.kt')
+          s = p.read_text()
+
+          old = '''    var expandedCategory by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    Column('''
+          new = '''    var expandedCategory by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    var drawerUpdateAvailable by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        drawerUpdateAvailable = when (val result = com.example.util.UpdateChecker.checkLatestRelease()) {
+            is com.example.util.ReleaseCheckResult.Success ->
+                com.example.util.UpdateChecker.isRemoteVersionNewer(
+                    com.example.BuildConfig.VERSION_NAME,
+                    result.tagName
+                )
+            else -> false
+        }
+    }
+
+    Column('''
+          if old not in s:
+              raise SystemExit('drawer state insertion point not found')
+          s = s.replace(old, new, 1)
+
+          old = '''        Button(onClick = onGoToAbout, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Sobre") }
+    }
+}'''
+          new = '''        Button(onClick = onGoToAbout, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Sobre") }
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = "Versão instalada: v${com.example.BuildConfig.VERSION_NAME}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        )
+        if (drawerUpdateAvailable) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = RoundedCornerShape(50)
+            ) {
+                Text(
+                    text = "Existe Atualização",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
+}'''
+          if old not in s:
+              raise SystemExit('About button insertion point not found')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+          PY
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/ui/AppNavGraph.kt
+          git commit -m "feat: show app version and update status in drawer"
+          git push
