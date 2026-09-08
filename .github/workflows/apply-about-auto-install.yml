@@ -18,25 +18,16 @@ jobs:
           from pathlib import Path
           p = Path('app/src/main/java/com/example/ui/AboutScreen.kt')
           s = p.read_text()
-          old = '''                            android.app.DownloadManager.STATUS_SUCCESSFUL -> {
-                                downloadedApkPath = state.filePath
-                                updateDownloadProgress = 100
-                                updateDownloadHandle = null
-                                break
-                            }'''
-          new = '''                            android.app.DownloadManager.STATUS_SUCCESSFUL -> {
-                                downloadedApkPath = state.filePath
-                                updateDownloadProgress = 100
-                                updateDownloadHandle = null
-                                // Assim que o APK termina de baixar na tela Sobre, abre
-                                // imediatamente o instalador do Android. O botão continua
-                                // disponível como fallback caso o usuário cancele a instalação.
-                                com.example.util.UpdateChecker.installDownloadedApk(context, state.filePath)
-                                break
-                            }'''
-          if old not in s:
-              raise SystemExit('download success block not found')
-          s = s.replace(old, new, 1)
+          needle = '                                updateDownloadHandle = null\n                                break\n'
+          replacement = '                                updateDownloadHandle = null\n                                com.example.util.UpdateChecker.installDownloadedApk(context, state.filePath)\n                                break\n'
+          success_marker = 'android.app.DownloadManager.STATUS_SUCCESSFUL -> {'
+          start = s.find(success_marker)
+          if start < 0:
+              raise SystemExit('success status block not found')
+          pos = s.find(needle, start)
+          if pos < 0:
+              raise SystemExit('download completion lines not found')
+          s = s[:pos] + s[pos:].replace(needle, replacement, 1)
           p.write_text(s)
           PY
       - name: Commit and push
