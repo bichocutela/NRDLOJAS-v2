@@ -35,6 +35,11 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val preferences = UserPreferences(applicationContext)
 
         runBlocking {
+            if (type == TYPE_APP_UPDATE && FcmTopicSubscription.isMasterAuthenticated()) {
+                runCatching { UpdateAvailabilityState.refresh(applicationContext) }
+                    .onFailure { Log.w(TAG, "Falha ao atualizar indicador imediato do Mestre", it) }
+            }
+
             val notificationsEnabled = preferences.notificationsEnabled.first()
             if (!notificationsEnabled) {
                 Log.d(TAG, "Mensagem FCM ignorada: notificações gerais desativadas; type=$type")
