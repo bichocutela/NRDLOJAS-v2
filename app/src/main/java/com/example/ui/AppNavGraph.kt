@@ -343,20 +343,32 @@ fun LoginDrawerContent(
         Button(onClick = onGoToSettings, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Configurações") }
         Spacer(modifier = Modifier.height(8.dp))
         Button(onClick = onGoToAbout, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Sobre") }
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = "Versão instalada: v${com.example.BuildConfig.VERSION_NAME}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
-        )
-        if (drawerUpdateAvailable) {
-            Spacer(modifier = Modifier.height(6.dp))
-            Button(
-                onClick = onGoToAbout,
-                modifier = Modifier.fillMaxWidth().height(42.dp)
+        Spacer(modifier = Modifier.height(8.dp))
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("Existe Atualização", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    text = "Versão instalada: v${com.example.BuildConfig.VERSION_NAME}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (drawerUpdateAvailable) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = onGoToAbout,
+                        modifier = Modifier.fillMaxWidth().height(40.dp)
+                    ) {
+                        Text("Existe Atualização", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    }
+                }
             }
         }
     }
