@@ -1,0 +1,70 @@
+name: Apply Pages and Courses Supabase integration
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-dynamic-tabs-supabase.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+      - name: Route Pages and Courses through Supabase
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('app/src/main/java/com/example/ui/MainViewModel.kt')
+          text = path.read_text()
+
+          if 'import com.example.data.DynamicTabsRemoteService' not in text:
+              text = text.replace(
+                  'import com.example.data.DynamicPageCodec\n',
+                  'import com.example.data.DynamicPageCodec\nimport com.example.data.DynamicTabsRemoteService\n'
+              )
+
+          replacements = {
+              'FirebaseService.observeDynamicTabs()': 'DynamicTabsRemoteService.observe()',
+              'FirebaseService.syncAllDynamicTabs(listOf(persistedCandidate))': 'DynamicTabsRemoteService.publish(listOf(persistedCandidate))',
+              'FirebaseService.syncAllDynamicTabs(listOf(tab))': 'DynamicTabsRemoteService.publish(listOf(tab))',
+              'FirebaseService.syncAllDynamicTabs(publishableTabs)': 'DynamicTabsRemoteService.publish(publishableTabs)',
+              'FirebaseService.deleteDynamicTab(tab)': 'DynamicTabsRemoteService.delete(tab)',
+              'FirebaseService.lastError?.let { "Não foi possível publicar a aba: $it" }': 'DynamicTabsRemoteService.lastError?.let { "Não foi possível publicar a aba: $it" }',
+              'FirebaseService.lastError?.let { "Não foi possível ocultar a versão publicada: $it" }': 'DynamicTabsRemoteService.lastError?.let { "Não foi possível ocultar a versão publicada: $it" }',
+              'FirebaseService.lastError?.let { "Não foi possível publicar a alteração: $it" }': 'DynamicTabsRemoteService.lastError?.let { "Não foi possível publicar a alteração: $it" }',
+              'else FirebaseService.lastError ?: "Não foi possível excluir a aba na nuvem; os dados foram preservados."': 'else DynamicTabsRemoteService.lastError ?: "Não foi possível excluir a aba na nuvem; os dados foram preservados."',
+          }
+          for old, new in replacements.items():
+              text = text.replace(old, new)
+
+          required = [
+              'DynamicTabsRemoteService.observe()',
+              'DynamicTabsRemoteService.publish(listOf(persistedCandidate))',
+              'DynamicTabsRemoteService.publish(listOf(tab))',
+              'DynamicTabsRemoteService.publish(publishableTabs)',
+              'DynamicTabsRemoteService.delete(tab)',
+          ]
+          missing = [item for item in required if item not in text]
+          if missing:
+              raise SystemExit(f'Integração incompleta; faltando: {missing}')
+          if 'FirebaseService.observeDynamicTabs()' in text or 'FirebaseService.syncAllDynamicTabs(' in text or 'FirebaseService.deleteDynamicTab(' in text:
+              raise SystemExit('Ainda existem chamadas antigas de dynamic_tabs no MainViewModel')
+
+          path.write_text(text)
+      - name: Commit and push integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/ui/MainViewModel.kt
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git commit -m "fix: sync Pages and Courses through Supabase"
+          git push
