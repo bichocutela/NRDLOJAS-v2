@@ -1,0 +1,48 @@
+name: Apply About auto install update
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-about-auto-install.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+      - name: Auto-open installer after APK download
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/example/ui/AboutScreen.kt')
+          s = p.read_text()
+          old = '''                            android.app.DownloadManager.STATUS_SUCCESSFUL -> {
+                                downloadedApkPath = state.filePath
+                                updateDownloadProgress = 100
+                                updateDownloadHandle = null
+                                break
+                            }'''
+          new = '''                            android.app.DownloadManager.STATUS_SUCCESSFUL -> {
+                                downloadedApkPath = state.filePath
+                                updateDownloadProgress = 100
+                                updateDownloadHandle = null
+                                // Assim que o APK termina de baixar na tela Sobre, abre
+                                // imediatamente o instalador do Android. O botão continua
+                                // disponível como fallback caso o usuário cancele a instalação.
+                                com.example.util.UpdateChecker.installDownloadedApk(context, state.filePath)
+                                break
+                            }'''
+          if old not in s:
+              raise SystemExit('download success block not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/ui/AboutScreen.kt
+          git commit -m "fix: open Android installer when update download finishes"
+          git push
