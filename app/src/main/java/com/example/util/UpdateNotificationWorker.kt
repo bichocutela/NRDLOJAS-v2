@@ -28,7 +28,7 @@ class UpdateNotificationWorker(
             )
             return Result.success()
         }
-        return when (val releaseResult = UpdateChecker.checkLatestRelease()) {
+        return when (val releaseResult = UpdateAvailabilityState.refresh(applicationContext)) {
             is ReleaseCheckResult.Success -> {
                 val currentVersion = BuildConfig.VERSION_NAME
                 val preferences = UserPreferences(applicationContext)
@@ -39,11 +39,9 @@ class UpdateNotificationWorker(
                         "UpdateNotificationWorker",
                         "Notificação de atualização bloqueada pela política efetiva"
                     )
-                } else {
-                    if (UpdateChecker.isRemoteVersionNewer(currentVersion, releaseResult.tagName)) {
-                        NotificationHelper.showUpdateNotification(applicationContext, releaseResult.tagName)
-                        preferences.setLastNotifiedUpdateTag(releaseResult.tagName)
-                    }
+                } else if (UpdateChecker.isRemoteVersionNewer(currentVersion, releaseResult.tagName)) {
+                    NotificationHelper.showUpdateNotification(applicationContext, releaseResult.tagName)
+                    preferences.setLastNotifiedUpdateTag(releaseResult.tagName)
                 }
                 Result.success()
             }
