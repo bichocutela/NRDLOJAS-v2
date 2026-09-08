@@ -137,6 +137,7 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                                 downloadedApkPath = state.filePath
                                 updateDownloadProgress = 100
                                 updateDownloadHandle = null
+                                com.example.util.UpdateChecker.installDownloadedApk(context, state.filePath)
                                 break
                             }
                             android.app.DownloadManager.STATUS_FAILED -> {
