@@ -226,9 +226,38 @@ object UpdateChecker {
             val request = DownloadManager.Request(Uri.parse(url))
                 .setTitle("Atualização NRDLOJAS")
                 .setDescription("Baixando versão $versionTag")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
-            ApkDownloadHandle(manager.enqueue(request), file.absolutePath)
+
+            val downloadId = manager.enqueue(request)
+            val handle = ApkDownloadHandle(downloadId, file.absolutePath)
+            val onComplete = object : BroadcastReceiver() {
+                override fun onReceive(ctxt: Context, intent: Intent) {
+                    val completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+                    if (completedId != downloadId) return
+                    try {
+                        val state = queryApkDownload(ctxt, handle)
+                        if (state?.status == DownloadManager.STATUS_SUCCESSFUL) {
+                            installApk(ctxt, File(handle.filePath))
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Falha ao abrir instalador automaticamente", e)
+                    } finally {
+                        runCatching { ctxt.unregisterReceiver(this) }
+                    }
+                }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(
+                    onComplete,
+                    IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                    Context.RECEIVER_EXPORTED
+                )
+            } else {
+                @Suppress("UnspecifiedRegisterReceiverFlag")
+                context.registerReceiver(onComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
+            }
+            handle
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao iniciar download interno", e)
             Toast.makeText(context, "Erro ao iniciar download", Toast.LENGTH_SHORT).show()
