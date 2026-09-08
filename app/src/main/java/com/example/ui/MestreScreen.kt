@@ -3,6 +3,7 @@ package com.example.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -30,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -806,7 +808,30 @@ fun MestreScreen(
                             }
                         }
                         if (expanded) {
-                            Column(modifier = Modifier.padding(start = 8.dp, top = 6.dp)) {
+                            var horizontalDragTotal by remember(themeKey) { mutableFloatStateOf(0f) }
+                            Column(
+                                modifier = Modifier
+                                    .padding(start = 8.dp, top = 6.dp)
+                                    .pointerInput(themeKey, backgroundPagination.pageIndex, backgroundPagination.pageCount) {
+                                        detectHorizontalDragGestures(
+                                            onDragStart = { horizontalDragTotal = 0f },
+                                            onHorizontalDrag = { change, dragAmount ->
+                                                change.consume()
+                                                horizontalDragTotal += dragAmount
+                                            },
+                                            onDragEnd = {
+                                                when {
+                                                    horizontalDragTotal <= -80f && backgroundPagination.pageIndex < backgroundPagination.pageCount - 1 ->
+                                                        backgroundPages = backgroundPages + (themeKey to (backgroundPagination.pageIndex + 1))
+                                                    horizontalDragTotal >= 80f && backgroundPagination.pageIndex > 0 ->
+                                                        backgroundPages = backgroundPages + (themeKey to (backgroundPagination.pageIndex - 1))
+                                                }
+                                                horizontalDragTotal = 0f
+                                            },
+                                            onDragCancel = { horizontalDragTotal = 0f }
+                                        )
+                                    }
+                            ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -866,6 +891,12 @@ fun MestreScreen(
                                             backgroundPages = backgroundPages +
                                                 (themeKey to (backgroundPagination.pageIndex + 1))
                                         }
+                                    )
+                                    Text(
+                                        "Deslize para a esquerda ou direita para trocar de página",
+                                        modifier = Modifier.fillMaxWidth(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(6.dp))
@@ -1405,6 +1436,8 @@ private fun ThemeBackgroundItem(
                 Text(background.label, style = MaterialTheme.typography.bodyMedium)
                 Spacer(modifier = Modifier.height(3.dp))
                 BackgroundStatusBadge(background)
+                Spacer(modifier = Modifier.height(4.dp))
+                BackgroundScheduleDates(background)
                 Spacer(modifier = Modifier.height(3.dp))
                 Text(
                     backgroundScheduleStatus(background),
@@ -1415,7 +1448,17 @@ private fun ThemeBackgroundItem(
             Switch(
                 checked = background.isActive,
                 onCheckedChange = onActiveChange,
-                enabled = enabled && ThemeBackground.normalizeDate(background.startDate) != null
+                enabled = enabled && ThemeBackground.normalizeDate(background.startDate) != null,
+                colors = SwitchDefaults.colors(
+                    uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    uncheckedBorderColor = MaterialTheme.colorScheme.outline,
+                    disabledUncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledUncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledUncheckedBorderColor = MaterialTheme.colorScheme.outline,
+                    disabledCheckedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    disabledCheckedTrackColor = MaterialTheme.colorScheme.primary
+                )
             )
             Box {
                 IconButton(onClick = { menuExpanded = true }, enabled = enabled) {
@@ -1454,6 +1497,21 @@ private fun ThemeBackgroundItem(
 }
 
 @Composable
+private fun BackgroundScheduleDates(background: ThemeBackground) {
+    val start = ThemeBackground.normalizeDate(background.startDate)
+    val end = ThemeBackground.normalizeDate(background.endDate)
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        ScheduleDatePill("Início", start?.let { formatThemeBackgroundDate(it) } ?: "Sem data", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+        ScheduleDatePill("Fim", end?.let { formatThemeBackgroundDate(it) } ?: "Sem fim", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
+    }
+}
+@Composable
+private fun ScheduleDatePill(label:String,value:String,containerColor:Color,contentColor:Color) {
+    Surface(color=containerColor,contentColor=contentColor,shape=RoundedCornerShape(50)) {
+        Text("$label: $value",style=MaterialTheme.typography.labelSmall,fontWeight=androidx.compose.ui.text.font.FontWeight.SemiBold,modifier=Modifier.padding(horizontal=7.dp,vertical=2.dp))
+    }
+}
+@Composable
 private fun BackgroundStatusBadge(background: ThemeBackground) {
     val today = ThemeBackground.todayIsoDate()
     val start = ThemeBackground.normalizeDate(background.startDate)
@@ -1461,9 +1519,9 @@ private fun BackgroundStatusBadge(background: ThemeBackground) {
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val (label, colors) = when {
         start == null -> "Sem data" to (MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer)
-        !background.isActive -> "Desativado" to (MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant)
+        !background.isActive -> "Desativado" to (MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer)
         today < start -> "Agendado" to (MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer)
-        end != null && today > end -> "Encerrado" to (MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant)
+        end != null && today > end -> "Encerrado" to (MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer)
         else -> "Ativo" to (
             (if (isDark) Color(0xFF1B5E20) else Color(0xFFE8F5E9)) to
                 (if (isDark) Color(0xFFC8E6C9) else Color(0xFF1B5E20))
