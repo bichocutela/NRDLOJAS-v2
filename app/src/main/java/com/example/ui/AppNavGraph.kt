@@ -222,6 +222,18 @@ fun LoginDrawerContent(
     val activeCategoryNames by viewModel.activeCategoryNames.collectAsState()
     var expandedCategory by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    var drawerUpdateAvailable by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        drawerUpdateAvailable = when (val result = com.example.util.UpdateChecker.checkLatestRelease()) {
+            is com.example.util.ReleaseCheckResult.Success ->
+                com.example.util.UpdateChecker.isRemoteVersionNewer(
+                    com.example.BuildConfig.VERSION_NAME,
+                    result.tagName
+                )
+            else -> false
+        }
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).verticalScroll(rememberScrollState()),
@@ -331,6 +343,22 @@ fun LoginDrawerContent(
         Button(onClick = onGoToSettings, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Configurações") }
         Spacer(modifier = Modifier.height(8.dp))
         Button(onClick = onGoToAbout, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Sobre") }
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = "Versão instalada: v${com.example.BuildConfig.VERSION_NAME}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        )
+        if (drawerUpdateAvailable) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Button(
+                onClick = onGoToAbout,
+                modifier = Modifier.fillMaxWidth().height(42.dp)
+            ) {
+                Text("Existe Atualização", style = MaterialTheme.typography.labelLarge)
+            }
+        }
     }
 }
 
