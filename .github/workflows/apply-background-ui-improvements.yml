@@ -1,0 +1,213 @@
+name: Apply background scheduling UI improvements
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-background-ui-improvements.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Improve background cards, contrast and swipe pagination
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('app/src/main/java/com/example/ui/MestreScreen.kt')
+          s = p.read_text()
+
+          s = s.replace(
+              'import androidx.compose.foundation.clickable\n',
+              'import androidx.compose.foundation.clickable\nimport androidx.compose.foundation.gestures.detectHorizontalDragGestures\n'
+          )
+          s = s.replace(
+              'import androidx.compose.ui.graphics.luminance\n',
+              'import androidx.compose.ui.graphics.luminance\nimport androidx.compose.ui.input.pointer.pointerInput\n'
+          )
+
+          old = '''                        if (expanded) {
+                            Column(modifier = Modifier.padding(start = 8.dp, top = 6.dp)) {'''
+          new = '''                        if (expanded) {
+                            var horizontalDragTotal by remember(themeKey) { mutableFloatStateOf(0f) }
+                            Column(
+                                modifier = Modifier
+                                    .padding(start = 8.dp, top = 6.dp)
+                                    .pointerInput(themeKey, backgroundPagination.pageIndex, backgroundPagination.pageCount) {
+                                        detectHorizontalDragGestures(
+                                            onDragStart = { horizontalDragTotal = 0f },
+                                            onHorizontalDrag = { change, dragAmount ->
+                                                change.consume()
+                                                horizontalDragTotal += dragAmount
+                                            },
+                                            onDragEnd = {
+                                                when {
+                                                    horizontalDragTotal <= -80f && backgroundPagination.pageIndex < backgroundPagination.pageCount - 1 -> {
+                                                        backgroundPages = backgroundPages +
+                                                            (themeKey to (backgroundPagination.pageIndex + 1))
+                                                    }
+                                                    horizontalDragTotal >= 80f && backgroundPagination.pageIndex > 0 -> {
+                                                        backgroundPages = backgroundPages +
+                                                            (themeKey to (backgroundPagination.pageIndex - 1))
+                                                    }
+                                                }
+                                                horizontalDragTotal = 0f
+                                            },
+                                            onDragCancel = { horizontalDragTotal = 0f }
+                                        )
+                                    }
+                            ) {'''
+          if old not in s:
+              raise SystemExit('expanded background column block not found')
+          s = s.replace(old, new, 1)
+
+          old = '''                                if (backgroundPagination.pageCount > 1) {
+                                    MestrePaginationControls(
+                                        pageIndex = backgroundPagination.pageIndex,
+                                        pageCount = backgroundPagination.pageCount,
+                                        onPrevious = {
+                                            backgroundPages = backgroundPages +
+                                                (themeKey to (backgroundPagination.pageIndex - 1))
+                                        },
+                                        onNext = {
+                                            backgroundPages = backgroundPages +
+                                                (themeKey to (backgroundPagination.pageIndex + 1))
+                                        }
+                                    )
+                                }'''
+          new = '''                                if (backgroundPagination.pageCount > 1) {
+                                    MestrePaginationControls(
+                                        pageIndex = backgroundPagination.pageIndex,
+                                        pageCount = backgroundPagination.pageCount,
+                                        onPrevious = {
+                                            backgroundPages = backgroundPages +
+                                                (themeKey to (backgroundPagination.pageIndex - 1))
+                                        },
+                                        onNext = {
+                                            backgroundPages = backgroundPages +
+                                                (themeKey to (backgroundPagination.pageIndex + 1))
+                                        }
+                                    )
+                                    Text(
+                                        "Deslize para a esquerda ou direita para trocar de página",
+                                        modifier = Modifier.fillMaxWidth(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }'''
+          if old not in s:
+              raise SystemExit('background pagination block not found')
+          s = s.replace(old, new, 1)
+
+          old = '''                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    backgroundScheduleStatus(background),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )'''
+          new = '''                Spacer(modifier = Modifier.height(4.dp))
+                BackgroundScheduleDates(background)
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    backgroundScheduleStatus(background),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )'''
+          if old not in s:
+              raise SystemExit('schedule status text block not found')
+          s = s.replace(old, new, 1)
+
+          old = '''            Switch(
+                checked = background.isActive,
+                onCheckedChange = onActiveChange,
+                enabled = enabled && ThemeBackground.normalizeDate(background.startDate) != null
+            )'''
+          new = '''            Switch(
+                checked = background.isActive,
+                onCheckedChange = onActiveChange,
+                enabled = enabled && ThemeBackground.normalizeDate(background.startDate) != null,
+                colors = SwitchDefaults.colors(
+                    uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    uncheckedBorderColor = MaterialTheme.colorScheme.outline,
+                    disabledUncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledUncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledUncheckedBorderColor = MaterialTheme.colorScheme.outline,
+                    disabledCheckedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    disabledCheckedTrackColor = MaterialTheme.colorScheme.primary
+                )
+            )'''
+          if old not in s:
+              raise SystemExit('background switch block not found')
+          s = s.replace(old, new, 1)
+
+          old = '''        !background.isActive -> "Desativado" to (MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant)
+        today < start -> "Agendado" to (MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer)
+        end != null && today > end -> "Encerrado" to (MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant)'''
+          new = '''        !background.isActive -> "Desativado" to (MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer)
+        today < start -> "Agendado" to (MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer)
+        end != null && today > end -> "Encerrado" to (MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer)'''
+          if old not in s:
+              raise SystemExit('status colors block not found')
+          s = s.replace(old, new, 1)
+
+          marker = '''@Composable
+private fun BackgroundStatusBadge(background: ThemeBackground) {'''
+          helper = '''@Composable
+private fun BackgroundScheduleDates(background: ThemeBackground) {
+    val start = ThemeBackground.normalizeDate(background.startDate)
+    val end = ThemeBackground.normalizeDate(background.endDate)
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        ScheduleDatePill(
+            label = "Início",
+            value = start?.let { formatThemeBackgroundDate(it) } ?: "Sem data",
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+        ScheduleDatePill(
+            label = "Fim",
+            value = end?.let { formatThemeBackgroundDate(it) } ?: "Sem fim",
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+        )
+    }
+}
+
+@Composable
+private fun ScheduleDatePill(
+    label: String,
+    value: String,
+    containerColor: Color,
+    contentColor: Color
+) {
+    Surface(
+        color = containerColor,
+        contentColor = contentColor,
+        shape = RoundedCornerShape(50)
+    ) {
+        Text(
+            "$label: $value",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+        )
+    }
+}
+
+@Composable
+private fun BackgroundStatusBadge(background: ThemeBackground) {'''
+          if marker not in s:
+              raise SystemExit('BackgroundStatusBadge marker not found')
+          s = s.replace(marker, helper, 1)
+
+          p.write_text(s)
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/ui/MestreScreen.kt
+          git commit -m "feat: improve background schedule visibility and swipe paging"
+          git push
