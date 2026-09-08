@@ -13,12 +13,11 @@ jobs:
         with:
           token: ${{ github.token }}
       - name: Patch Android entry rendering
-        shell: python
         run: |
+          python - <<'PY'
           from pathlib import Path
           p = Path('app/src/main/java/com/example/MainActivity.kt')
           s = p.read_text()
-
           old = '''                        Box(modifier = Modifier.fillMaxSize()) {
                         AppNavGraph(
                             viewModel = viewModel,
@@ -48,20 +47,18 @@ jobs:
                         
                         AnimatedVisibility('''
           if old not in s:
-              raise SystemExit('AppNavGraph block not found; no changes applied')
+              raise SystemExit('AppNavGraph block not found')
           s = s.replace(old, new, 1)
-
-          old = '''                                    .background(
+          old_bg = '''                                    .background(
                                         if (LocalGlassSoftStyle.current.enabled) Color.Transparent
                                         else Color.White
                                     ),'''
-          new = '''                                    .background(MaterialTheme.colorScheme.background),'''
-          if old not in s:
-              raise SystemExit('Splash background block not found; no changes applied')
-          s = s.replace(old, new, 1)
-
+          if old_bg not in s:
+              raise SystemExit('Splash background block not found')
+          s = s.replace(old_bg, '                                    .background(MaterialTheme.colorScheme.background),', 1)
           s = s.replace('exit = fadeOut(animationSpec = tween(500))', 'exit = fadeOut(animationSpec = tween(220))', 1)
           p.write_text(s)
+          PY
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
