@@ -16,6 +16,7 @@ import com.example.data.ProductStandards
 import com.example.data.RemoteHomeSettings
 import com.example.data.UserPreferences
 import com.example.data.DynamicPageCodec
+import com.example.data.DynamicTabsRemoteService
 import com.example.data.rankGloballyMostUsedProducts
 import com.example.data.rankLatestAddedProducts
 import com.example.util.FcmTopicSubscription
@@ -121,7 +122,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             FcmTopicSubscription.reconcileSuggestionTopic(notificationsEnabled, installationId)
         }
         viewModelScope.launch {
-            FirebaseService.observeDynamicTabs().collect { remoteTabs ->
+            DynamicTabsRemoteService.observe().collect { remoteTabs ->
                 val localTabs = repository.getAllTabs().first()
                 remoteTabs.forEach { remoteTab ->
                     val localTab = localTabs.find { it.id == remoteTab.id }
@@ -782,11 +783,11 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                 .maxByOrNull { it.id }
                 ?: candidate
 
-            val saved = FirebaseService.syncAllDynamicTabs(listOf(persistedCandidate))
+            val saved = DynamicTabsRemoteService.publish(listOf(persistedCandidate))
             if (!saved) {
                 repository.deleteTab(persistedCandidate)
                 _syncMessage.emit(
-                    FirebaseService.lastError?.let { "Não foi possível publicar a aba: $it" }
+                    DynamicTabsRemoteService.lastError?.let { "Não foi possível publicar a aba: $it" }
                         ?: "Não foi possível publicar a aba. O conteúdo local foi desfeito."
                 )
             } else {
@@ -816,11 +817,11 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             }
 
             if (isDraft) {
-                val hiddenRemotely = FirebaseService.deleteDynamicTab(tab)
+                val hiddenRemotely = DynamicTabsRemoteService.delete(tab)
                 if (!hiddenRemotely) {
                     previous?.let { repository.updateTab(it) }
                     _syncMessage.emit(
-                        FirebaseService.lastError?.let { "Não foi possível ocultar a versão publicada: $it" }
+                        DynamicTabsRemoteService.lastError?.let { "Não foi possível ocultar a versão publicada: $it" }
                             ?: "Não foi possível ocultar a versão publicada. A versão anterior foi restaurada."
                     )
                 } else {
@@ -829,11 +830,11 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                 return@launch
             }
 
-            val saved = FirebaseService.syncAllDynamicTabs(listOf(tab))
+            val saved = DynamicTabsRemoteService.publish(listOf(tab))
             if (!saved) {
                 previous?.let { repository.updateTab(it) }
                 _syncMessage.emit(
-                    FirebaseService.lastError?.let { "Não foi possível publicar a alteração: $it" }
+                    DynamicTabsRemoteService.lastError?.let { "Não foi possível publicar a alteração: $it" }
                         ?: "Não foi possível publicar a alteração da aba. A versão anterior foi restaurada."
                 )
             } else {
@@ -863,7 +864,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             val publishableTabs = reordered.filter {
                 DynamicPageCodec.decodeDocument(it.content)?.enabled != false
             }
-            val saved = publishableTabs.isEmpty() || FirebaseService.syncAllDynamicTabs(publishableTabs)
+            val saved = publishableTabs.isEmpty() || DynamicTabsRemoteService.publish(publishableTabs)
             if (!saved) {
                 current.forEachIndexed { order, item -> repository.updateTab(item.copy(displayOrder = order)) }
                 _syncMessage.emit("Não foi possível publicar a nova ordem. A ordem anterior foi restaurada.")
@@ -899,11 +900,11 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                 return@launch
             }
 
-            val deleted = FirebaseService.deleteDynamicTab(tab)
+            val deleted = DynamicTabsRemoteService.delete(tab)
             if (deleted) repository.deleteTab(tab)
             _syncMessage.emit(
                 if (deleted) "Aba excluída para todos os usuários."
-                else FirebaseService.lastError ?: "Não foi possível excluir a aba na nuvem; os dados foram preservados."
+                else DynamicTabsRemoteService.lastError ?: "Não foi possível excluir a aba na nuvem; os dados foram preservados."
             )
         } finally {
             _isSyncingTabs.value = false
