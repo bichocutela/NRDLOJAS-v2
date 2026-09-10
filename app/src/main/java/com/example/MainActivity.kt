@@ -83,14 +83,21 @@ class MainActivity : ComponentActivity() {
 
     private var openAboutFromNotification by mutableStateOf(false)
     private var openPromotionsFromNotification by mutableStateOf(false)
+    private var productCodeFromNotification: String? = null
+    private var productNotificationNavigationKey by mutableStateOf(0L)
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
         super.onCreate(savedInstanceState)
         openAboutFromNotification = shouldOpenAbout(intent)
         openPromotionsFromNotification = shouldOpenPromotions(intent)
+        productCodeFromNotification = extractProductCode(intent)
+        if (productCodeFromNotification != null) {
+            productNotificationNavigationKey = 1L
+        }
         
         com.example.data.FirebaseService.initialize(this)
+        productCodeFromNotification?.let(viewModel::updateSearchQuery)
 
         lifecycleScope.launch {
             val notificationsEnabled = userPreferences.notificationsEnabled.first()
@@ -213,11 +220,13 @@ class MainActivity : ComponentActivity() {
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
                         if (!showSplash) {
-                            AppNavGraph(
-                            viewModel = viewModel,
-                            openAboutFromNotification = openAboutFromNotification,
-                            openPromotionsFromNotification = openPromotionsFromNotification
-                            )
+                            androidx.compose.runtime.key(productNotificationNavigationKey) {
+                                AppNavGraph(
+                                viewModel = viewModel,
+                                openAboutFromNotification = openAboutFromNotification,
+                                openPromotionsFromNotification = openPromotionsFromNotification
+                                )
+                            }
 
                             androidx.compose.material3.SnackbarHost(
                             hostState = snackbarHostState,
@@ -260,6 +269,11 @@ class MainActivity : ComponentActivity() {
         if (shouldOpenPromotions(intent)) {
             openPromotionsFromNotification = true
         }
+        extractProductCode(intent)?.let { code ->
+            productCodeFromNotification = code
+            viewModel.updateSearchQuery(code)
+            productNotificationNavigationKey += 1L
+        }
     }
 
     private fun shouldOpenAbout(intent: Intent?): Boolean {
@@ -272,9 +286,16 @@ class MainActivity : ComponentActivity() {
             intent?.getStringExtra("type") == "PROMOTION_UPDATED"
     }
 
+    private fun extractProductCode(intent: Intent?): String? {
+        val type = intent?.getStringExtra("type")
+        if (type != "NEW_PRODUCT" && type != "CODE_CHANGED") return null
+        return intent.getStringExtra(EXTRA_OPEN_PRODUCT_CODE)?.trim()?.takeIf { it.isNotBlank() }
+    }
+
     companion object {
         const val EXTRA_OPEN_ABOUT = "open_about"
         const val EXTRA_OPEN_PROMOTIONS = "open_promotions"
+        const val EXTRA_OPEN_PRODUCT_CODE = "open_product_code"
         const val EXTRA_UPDATE_TAG = "update_tag"
     }
 }
