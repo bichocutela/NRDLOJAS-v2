@@ -170,7 +170,21 @@ object NotificationHelper {
         )
     }
 
-    fun showNotification(context: Context, type: String, title: String, body: String) {
+    private fun productPendingIntent(context: Context, type: String, productCode: String): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_OPEN_PRODUCT_CODE, productCode)
+            putExtra("type", type)
+        }
+        return PendingIntent.getActivity(
+            context,
+            (type + productCode).hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    fun showNotification(context: Context, type: String, title: String, body: String, productCode: String? = null) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 Log.w("NotificationHelper", "Notificação local ignorada: permissão POST_NOTIFICATIONS ausente; type=$type")
@@ -195,6 +209,11 @@ object NotificationHelper {
             .setAutoCancel(true)
 
         when (type) {
+            "NEW_PRODUCT", "CODE_CHANGED" -> {
+                productCode?.takeIf { it.isNotBlank() }?.let { code ->
+                    builder.setContentIntent(productPendingIntent(context, type, code))
+                }
+            }
             "APP_UPDATE" -> builder.setContentIntent(appUpdatePendingIntent(context))
             "PROMOTION_UPDATED" -> builder.setContentIntent(promotionsPendingIntent(context))
         }
