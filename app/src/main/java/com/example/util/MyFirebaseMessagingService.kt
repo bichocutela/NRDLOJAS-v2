@@ -18,6 +18,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val title = message.data["title"]?.trim()
         val body = message.data["body"]?.trim()
         val type = message.data["type"]?.trim()
+        val productCode = message.data["productCode"]?.trim()?.takeIf { it.isNotBlank() }
         val messageStoreCode = message.data["storeCode"]?.trim()
             ?: message.data["loja"]?.trim()
 
@@ -113,7 +114,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 )
             )
             Log.d("MyFirebaseMessaging", "Exibindo notificação local: type=$type, canal=$channelId")
-            NotificationHelper.showNotification(applicationContext, type, title, body)
+            NotificationHelper.showNotification(applicationContext, type, title, body, productCode)
         }
     }
 
