@@ -43,6 +43,21 @@ class AcpProductsTest {
         assertFalse(item.offers().any { it.detail.contains("2099") })
     }
 
+    @Test fun posterReferencesKeepClubAndPreviousPricesSeparate() {
+        val offers = product(""""value":14.29,"previousValue":16.5,"clubValue":9.99""").offers()
+        assertEquals("R$ 16,50", offers.first { it.title == "De/Por" }.referencePrice?.brl())
+        assertEquals("R$ 14,29", offers.first { it.title == "Clube de Vantagens" }.referencePrice?.brl())
+        assertEquals("R$ 9,99", offers.first { it.title == "Clube de Vantagens" }.price?.brl())
+    }
+
+    @Test fun missingNormalPriceIsNotInventedAndSecondUnitDoesNotInventAverage() {
+        assertNull(product(""""value":null,"clubValue":9.99""").offers().single().referencePrice)
+        val offer = product(""""value":45.49,"secondUnitDiscount":50""").offers().single()
+        assertEquals("50% DE DESCONTO", offer.headline)
+        assertEquals("R$ 45,49", offer.referencePrice?.brl())
+        assertNull(offer.price)
+    }
+
     @Test(expected = AcpFailure::class) fun malformedContractIsNotAnEmptySearch() {
         AcpProductParser.page(JSONObject("""{"unexpected":[]}"""), 0)
     }

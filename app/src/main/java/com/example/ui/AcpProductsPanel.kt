@@ -12,7 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -123,7 +122,7 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
                         Text(product.description, style = MaterialTheme.typography.titleMedium)
                         Text("Código: ${product.code.ifBlank { "não informado" }}", style = MaterialTheme.typography.bodySmall)
                         Text("Preço cadastrado: ${product.value?.brl() ?: "não informado"}", style = MaterialTheme.typography.titleMedium)
-                        product.offers().forEach { offer -> AcpOfferHighlight(offer, compact = true) }
+                        product.offers().forEach { offer -> AcpOfferPoster(offer, compact = true) }
                         if (product.offers().isNotEmpty()) Text("Vigência não confirmada", style = MaterialTheme.typography.labelSmall)
                         Text(if (product.offers().isEmpty()) "Ver preço e detalhes" else "Ver condições de oferta cadastradas",
                             style = MaterialTheme.typography.bodySmall)
@@ -154,10 +153,13 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
                 Text("Preço principal: ${product.value?.brl() ?: "não informado"}" + (product.unit?.let { " / $it" } ?: ""),
                     style = MaterialTheme.typography.titleMedium)
                 val offers = product.offers()
-                if (offers.isEmpty()) Text("Nenhum preço promocional identificado neste cadastro. Isso não confirma a ausência de campanhas.")
+                if (offers.isEmpty()) {
+                    AcpOfferPoster(AcpOffer("Preço cadastrado", "Nenhuma condição promocional informada neste cadastro.", product.value), compact = false)
+                    Text("Isso não confirma a ausência de campanhas.")
+                }
                 offers.forEach { offer ->
                     HorizontalDivider()
-                    AcpOfferHighlight(offer, compact = false)
+                    AcpOfferPoster(offer, compact = false)
                 }
                 product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite cadastrado: ${it.quantity()} unidades por CPF.") }
                 if (product.categories.isNotEmpty()) Text("Categorias: ${product.categories.joinToString()}", style = MaterialTheme.typography.bodySmall)
@@ -167,25 +169,5 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall)
             }
         }, confirmButton = { TextButton(onClick = { selected = null }) { Text("Fechar") } })
-    }
-}
-
-
-@Composable
-private fun AcpOfferHighlight(offer: AcpOffer, compact: Boolean) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-    ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(offer.title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-            offer.price?.let {
-                Text(it.brl(), style = if (compact) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold)
-            }
-            if (!compact || offer.price == null) Text(offer.detail, style = MaterialTheme.typography.bodySmall)
-        }
     }
 }
