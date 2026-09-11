@@ -1,6 +1,7 @@
 package com.example.data.acp
 
 import android.content.Context
+import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Cookie
@@ -19,8 +20,9 @@ internal class AcpUnauthorized : IOException("Confirme novamente seu acesso à A
 internal class AcpFailure(message: String) : IOException(message)
 
 /** Isolated NextAuth session; never changes NRD/Firebase/Nossa Gente authentication. */
-internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient.Builder = OkHttpClient.Builder()) {
-    constructor(context: Context) : this(AcpSecureStore(context))
+internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient.Builder = OkHttpClient.Builder(),
+    private val bundledLogin: String = "", private val bundledPassword: String = "") {
+    constructor(context: Context) : this(AcpSecureStore(context), bundledLogin = BuildConfig.ACP_LOGIN, bundledPassword = BuildConfig.ACP_PASSWORD)
     private val cookies = AcpCookieJar(store.read("session")) { store.write("session", it) }
     private val client = clientBuilder
         .cookieJar(cookies)
@@ -63,9 +65,14 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         }
     }
 
-    private fun credentials(): JSONObject? = store.read("access")?.let {
+    fun hasBundledAccess(): Boolean = bundledLogin.isNotBlank() && bundledPassword.isNotBlank()
+
+    private fun credentials(): JSONObject? {
+        if (hasBundledAccess()) return JSONObject().put("login", bundledLogin).put("password", bundledPassword)
+        return store.read("access")?.let {
         runCatching { JSONObject(it) }.getOrNull()
     }?.takeIf { it.nonBlankString("login") != null && it.nonBlankString("password") != null }
+    }
 
     private fun session(): JSONObject {
         val data = requestJson(Request.Builder().url("$ORIGIN/api/auth/session").get().build())

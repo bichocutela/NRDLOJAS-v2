@@ -2,8 +2,10 @@
 
 Entrada no menu: **Consultar Produtos**. A tela **Confirme** apresenta campos
 mascarados e somente leitura. O primeiro acesso de cada aparelho precisa ser
-configurado por um administrador NRD na própria tela; não existe senha global
-embutida no código, no APK, nas variáveis de build ou nos workflows.
+configurado por um administrador somente em builds sem credencial incorporada.
+A build de distribuição recebe ACP_LOGIN e ACP_PASSWORD dos Actions secrets e
+incorpora esses valores ao APK, conforme solicitado pelo responsável. Os valores
+não ficam no código versionado, mas podem ser extraídos do APK.
 
 Credenciais e cookies ACP são cifrados com AES-GCM e uma chave Android Keystore,
 em `noBackupFilesDir`. O acesso ACP é independente de Firebase, Nossa Gente e
@@ -116,3 +118,17 @@ compatibilidade da API ainda não foram confirmados.
 Campanhas simultâneas, campos nulos reais, atualização dos preços e vigência
 comercial continuam sem validação ao vivo. A implementação não resolve a
 precedência entre campanhas nesta etapa.
+
+## Acesso pronto no APK
+
+Cadastrar uma única vez os repository Actions secrets `ACP_LOGIN` e `ACP_PASSWORD`
+antes da build de distribuição. O workflow interrompe a build se estiverem ausentes.
+Não há backend novo. Em builds configuradas, qualquer usuário do NRD vê os campos
+mascarados e bloqueados e toca em Entrar; não precisa configurar cada aparelho.
+A autenticação ACP só começa ao tocar no botão. A credencial da build tem prioridade
+sobre uma configuração antiga local quando for necessário autenticar novamente.
+Sessões válidas são reaproveitadas. A senha incorporada é recuperável por quem
+inspecionar o APK; os asteriscos são apenas apresentação visual.
+
+O conector disponível nesta sessão não permite cadastrar Actions secrets.
+O responsável precisa preencher esses dois valores nas configurações do GitHub.

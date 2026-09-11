@@ -9,6 +9,10 @@ plugins {
   alias(libs.plugins.google.services)
   
 }
+fun acpJavaString(value: String): String = "\"" + value
+    .replace("\\", "\\\\").replace("\"", "\\\"")
+    .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\""
+
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
@@ -18,6 +22,8 @@ android {
     targetSdk = 36
     versionCode = System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: 59
     versionName = System.getenv("APP_VERSION_NAME") ?: "1.0.59"
+    buildConfigField("String", "ACP_LOGIN", acpJavaString(System.getenv("ACP_LOGIN") ?: ""))
+    buildConfigField("String", "ACP_PASSWORD", acpJavaString(System.getenv("ACP_PASSWORD") ?: ""))
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         val supabaseUrl = System.getenv("SUPABASE_URL") ?: "https://kkayksyzksexoarpfxyj.supabase.co"
     buildConfigField("String", "SUPABASE_URL", "\"${supabaseUrl}\"")

@@ -2,7 +2,7 @@ name: ACP consultation checks
 
 on:
   push:
-    branches: [feat/acp-product-consultation]
+    branches: [feat/acp-product-consultation, feat/acp-ready-access]
   workflow_dispatch:
 
 permissions:
