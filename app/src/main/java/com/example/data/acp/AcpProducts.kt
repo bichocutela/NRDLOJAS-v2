@@ -10,7 +10,8 @@ internal enum class AcpSearchField(val parameter: String, val label: String) {
 
 internal data class AcpCategory(val id: String, val description: String)
 internal data class AcpProductPage(val items: List<AcpProduct>, val pageIndex: Int, val totalPages: Int)
-internal data class AcpOffer(val title: String, val detail: String, val price: BigDecimal? = null)
+internal data class AcpOffer(val title: String, val detail: String, val price: BigDecimal? = null,
+    val referencePrice: BigDecimal? = null, val headline: String? = null)
 
 internal data class AcpProduct(
     val id: String, val code: String, val barcode: String, val description: String,
@@ -23,15 +24,15 @@ internal data class AcpProduct(
     /** These are recorded conditions, not a claim that a campaign is currently valid. */
     fun offers(): List<AcpOffer> = buildList {
         if (previousValue != null && value != null && previousValue > value && value > BigDecimal.ZERO) {
-            add(AcpOffer("De/Por", "De ${previousValue.brl()} por ${value.brl()}. Condição de Clube não informada neste campo.", value))
+            add(AcpOffer("De/Por", "De ${previousValue.brl()} por ${value.brl()}. Condição de Clube não informada neste campo.", value, previousValue))
         }
         if (clubValue != null && clubValue > BigDecimal.ZERO) {
-            add(AcpOffer("Clube de Vantagens", "Preço Clube: ${clubValue.brl()}. Condicionado ao Clube; elegibilidade e exigência de CPF no caixa não verificadas.", clubValue))
+            add(AcpOffer("Clube de Vantagens", "Preço Clube: ${clubValue.brl()}. Condicionado ao Clube; elegibilidade e exigência de CPF no caixa não verificadas.", clubValue, value?.takeIf { it > BigDecimal.ZERO }))
         }
         if (wholesaleValue != null && wholesaleValue > BigDecimal.ZERO) {
             val condition = wholesaleQuantity?.takeIf { it > BigDecimal.ZERO }
                 ?.let { "A partir de ${it.quantity()} unidades." } ?: "Quantidade mínima não informada."
-            add(AcpOffer("Atacado", "${wholesaleValue.brl()} por unidade. $condition", wholesaleValue))
+            add(AcpOffer("Atacado", "${wholesaleValue.brl()} por unidade. $condition", wholesaleValue, value?.takeIf { it > BigDecimal.ZERO }))
         }
         if (quantityTake != null && quantityPay != null && quantityTake > quantityPay &&
             quantityPay > BigDecimal.ZERO && quantityTake.stripTrailingZeros().scale() <= 0 &&
@@ -42,7 +43,7 @@ internal data class AcpProduct(
                 (equivalent?.let { " Equivalente a ${it.brl()} por unidade ao completar a quantidade, calculado sobre o valor principal." } ?: "")))
         }
         secondUnitDiscount?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let {
-            add(AcpOffer("Segunda unidade", "${it.quantity()}% de desconto na segunda unidade. Base de preço e combinação com Clube ainda não verificadas."))
+            add(AcpOffer("Segunda unidade", "${it.quantity()}% de desconto na segunda unidade. Base de preço e combinação com Clube ainda não verificadas.", referencePrice = value?.takeIf { price -> price > BigDecimal.ZERO }, headline = "${it.quantity()}% DE DESCONTO"))
         }
         cashback?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let {
             add(AcpOffer("Cashback", "${it.quantity()}% de retorno. Não é desconto imediato; confira as condições de crédito."))

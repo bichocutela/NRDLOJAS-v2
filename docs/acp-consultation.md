@@ -132,3 +132,13 @@ inspecionar o APK; os asteriscos são apenas apresentação visual.
 
 O conector disponível nesta sessão não permite cadastrar Actions secrets.
 O responsável precisa preencher esses dois valores nas configurações do GitHub.
+
+## Cartões inspirados nos cartazes
+
+Consulta e balão usam cartões amarelos, cabeçalho azul para Clube e vermelho
+para outras condições, preço destacado e faixa de cores. Sem fotos, QR,
+parcelamento ou datas copiadas das referências. De/Por usa previousValue como
+referência riscada; Clube e Atacado usam value positivo como preço normal
+cadastrado, sem confundi-lo com previousValue. Referência ausente não é inventada.
+Segunda unidade exibe percentual, sem calcular um preço médio cuja base não foi
+confirmada. Várias condições permanecem separadas; a estética não confirma vigência.
