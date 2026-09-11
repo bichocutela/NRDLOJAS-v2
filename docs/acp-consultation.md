@@ -62,3 +62,57 @@ APK. A branch de trabalho evita o workflow de publicação da main.
 Próxima etapa acordada: validar login real no Android, JSON autenticado, campos
 nulos, expiração/renovação, campanhas concorrentes, vigências, atualização de
 preços e leitura de câmera em aparelho físico, antes da publicação de uma versão.
+
+## Validação no navegador — 11/09/2026
+
+Login realizado com sucesso pelo formulário seguro da ACP. A página autenticada
+identificou Nordestão 12 e permitiu abrir `/print-template`. Isso confirma o login
+no navegador, mas não valida a autenticação nativa implementada no Android.
+
+No template Promoção Clube, código 32, a busca pelo EAN `7891000412855` retornou:
+
+| Informação | Valor exibido na ACP |
+| --- | --- |
+| Produto | Achocolatado em Pó Nescau Lata 350g |
+| Código interno | 2038420 |
+| Código de barras | 7891000412855 |
+| Valor | R$ 14,29 |
+| Valor Clube de Vantagens | R$ 9,99 |
+| Categorias | Varejo; Clube de Vantagens |
+
+O campo de validade estava vazio, enquanto a prévia mostrava 18/09/2026.
+Esse comportamento é compatível com o fallback de sete dias identificado no
+frontend; a data da prévia não deve ser tratada como vigência comercial confirmada.
+Não foi feita consulta de elegibilidade por CPF, nem capturado JSON autenticado.
+Não foram acionados Salvar Tudo ou Imprimir.
+
+A página inicial também informou que este acesso será descontinuado e orientou
+obter novo acesso com o responsável indicado pela ACP. Prazo, novo endereço e
+compatibilidade da API ainda não foram confirmados.
+
+## Roteiro de teste no Android
+
+1. Instalar a build que contenha `feat/acp-product-consultation`. Entrar no NRD
+   como administrador e abrir **Consultar Produtos**. Configurar as credenciais
+   ACP uma vez no aparelho, pela própria tela. Não colocá-las em issues ou logs.
+2. Confirmar que os campos ficam mascarados e bloqueados na tela **Confirme**;
+   tocar em Entrar e verificar se a consulta abre. Registrar a mensagem de erro,
+   caso falhe, sem compartilhar senha, cookies ou tokens.
+3. Buscar `7891000412855` por código de barras e `2038420` por código interno.
+   Buscar também Nescau por descrição. Comparar identificação e preços com a
+   ACP no mesmo momento: os valores acima são uma observação, não preços fixos.
+4. Abrir o produto e conferir a separação de preço normal e clube e o aviso
+   **Validade não confirmada**. Não interpretar falta de dados como ausência de
+   promoção nem como preço zero.
+5. Permitir câmera, apontar para um código de barras e confirmar preenchimento
+   e busca automática únicos. Testar também cancelar, negar a permissão e
+   continuar pela digitação manual.
+6. Fechar e reabrir o app; verificar a persistência do acesso. Testar consulta
+   sem internet e conferir se o erro permite nova tentativa. Expiração real da
+   sessão e renovação continuam pendentes até serem observadas.
+7. Conferir Home, busca existente, Promoções e navegação do NRD. Registrar modelo
+   do aparelho, versão Android, build testada e passos de qualquer falha.
+
+Campanhas simultâneas, campos nulos reais, atualização dos preços e vigência
+comercial continuam sem validação ao vivo. A implementação não resolve a
+precedência entre campanhas nesta etapa.
