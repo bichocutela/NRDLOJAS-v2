@@ -39,10 +39,14 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
             IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar") }
         })
     }) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()),
+        Column(Modifier.padding(padding).fillMaxSize().padding(20.dp)
+            .then(if (authenticated) Modifier else Modifier.verticalScroll(rememberScrollState())),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (authenticated) {
-                Text("Acesso à ACP confirmado", style = MaterialTheme.typography.titleMedium)
+                AcpProductsPanel(api, onSessionExpired = {
+                    authenticated = false
+                    error = "Sua sessão terminou. Confirme novamente o acesso."
+                })
             } else {
                 Text("Confirme", style = MaterialTheme.typography.headlineSmall)
                 Text("Acesse a consulta de preços do Nordestão.")
