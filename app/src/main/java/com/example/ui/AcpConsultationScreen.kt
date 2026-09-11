@@ -69,7 +69,7 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
                     Text(if (busy) "Entrando…" else "Entrar")
                 }
                 if (!configured && !checking) Text("O administrador precisa configurar o acesso neste aparelho uma única vez.")
-                if (canConfigure) TextButton(onClick = { configure = true }, enabled = !busy && !checking) {
+                if (canConfigure && !api.hasBundledAccess()) TextButton(onClick = { configure = true }, enabled = !busy && !checking) {
                     Text(if (configured) "Atualizar acesso neste aparelho" else "Configurar acesso neste aparelho")
                 }
             }

@@ -61,6 +61,29 @@ class AcpAuthenticationTest {
         assertTrue(server.requests.all { it.url.host == "nordestao12.acp.app.br" })
     }
 
+    @Test fun bundledAccessWorksOnFreshInstallWithoutConfiguration() = runBlocking {
+        val store = MemoryStore().apply { data.clear() }
+        val server = Server(Reply("{}"), Reply("""{"csrfToken":"test-csrf"}"""),
+            Reply("""{"url":"/home"}"""), session())
+        val client = AcpApi(store, OkHttpClient.Builder().addInterceptor(server), "bundled-test", "test-password")
+        assertTrue(client.hasCredentials())
+        assertTrue(server.requests.isEmpty())
+        client.confirmAccess()
+        val form = server.requests[2].body as FormBody
+        assertEquals("bundled-test", form.value(0))
+        assertEquals("test-password", form.value(1))
+        assertNull(store.data["access"])
+    }
+
+    @Test fun bundledAccessOverridesOldDeviceConfiguration() = runBlocking {
+        val server = Server(Reply("{}"), Reply("""{"csrfToken":"test-csrf"}"""),
+            Reply("""{"url":"/home"}"""), session())
+        AcpApi(MemoryStore(), OkHttpClient.Builder().addInterceptor(server), "new-test", "new-password").confirmAccess()
+        val form = server.requests[2].body as FormBody
+        assertEquals("new-test", form.value(0))
+        assertEquals("new-password", form.value(1))
+    }
+
     @Test fun existingSessionDoesNotResendPassword() = runBlocking {
         val server = Server(session())
         api(server).confirmAccess()
