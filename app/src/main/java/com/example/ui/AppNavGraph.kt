@@ -131,6 +131,7 @@ fun AppNavGraph(
                         navController.navigate(if (nossaGenteApi.hasSession()) "promotions" else "promotions_login")
                     },
                     onGoToSettings = { scope.launch { drawerState.close() }; navController.navigate("settings") },
+                    onGoToAcp = { scope.launch { drawerState.close() }; navController.navigate("acp_consultation") { launchSingleTop = true } },
                     onGoToAdmin = {
                         scope.launch { drawerState.close() }
                         navController.navigate(if (userRole == "mestre") "mestre" else "admin")
@@ -181,6 +182,10 @@ fun AppNavGraph(
                 composable("promotions_login") { PromotionsLoginScreen(nossaGenteApi, { navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true } }, { navController.popBackStack() }) }
                 composable("promotions") { PromotionsScreen(nossaGenteApi, { navController.popBackStack() }, { navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true } } }, { nossaGenteApi.logout(); navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true }; launchSingleTop = true } }) }
                 composable("settings") { SettingsScreen(viewModel, onNavigateBack = { navController.popBackStack() }) }
+                composable("acp_consultation") {
+                    AcpConsultationScreen(canConfigure = isLoggedIn && userRole in setOf("admin", "mestre"),
+                        onNavigateBack = { navController.popBackStack() })
+                }
                 composable("about") { AboutScreen(onNavigateBack = { navController.popBackStack() }) }
             }
         }
@@ -213,7 +218,8 @@ fun LoginDrawerContent(
     onGoToPromotions: () -> Unit,
     onGoToSettings: () -> Unit,
     onGoToAbout: () -> Unit,
-    onGoToDynamicTab: (Int) -> Unit
+    onGoToDynamicTab: (Int) -> Unit,
+    onGoToAcp: () -> Unit = {}
 ) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -336,6 +342,8 @@ fun LoginDrawerContent(
         }
 
         Spacer(modifier = Modifier.height(12.dp)); HorizontalDivider(); Spacer(modifier = Modifier.height(10.dp))
+        Button(onClick = onGoToAcp, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Consultar Produtos") }
+        Spacer(modifier = Modifier.height(8.dp))
         Button(onClick = onGoToPromotions, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Promoções") }
         Spacer(modifier = Modifier.height(8.dp))
         Button(onClick = onGoToSettings, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Configurações") }
