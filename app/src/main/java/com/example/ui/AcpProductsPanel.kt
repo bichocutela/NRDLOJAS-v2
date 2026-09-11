@@ -36,6 +36,7 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
     var selected by remember { mutableStateOf<AcpProduct?>(null) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
     var generation by remember { mutableIntStateOf(0) }
+    var scanning by remember { mutableStateOf(false) }
 
     fun invalidateResults() {
         generation++
@@ -105,6 +106,9 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         Button(onClick = { search() }, enabled = !busy && query.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
             Text(if (busy) "Buscando…" else "Buscar")
         }
+        OutlinedButton(onClick = { scanning = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+            Text("Ler código com a câmera")
+        }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         val result = page
@@ -129,6 +133,15 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
             TextButton(onClick = { search(result.pageIndex + 1) }, enabled = !busy && result.pageIndex + 1 < result.totalPages) { Text("Próxima") }
         }
     }
+
+    if (scanning) AcpBarcodeScanner(onDismiss = { scanning = false }, onResult = { code ->
+        scanning = false
+        invalidateResults()
+        field = AcpSearchField.BARCODE
+        category = null
+        query = code
+        search()
+    })
 
     selected?.let { product ->
         AlertDialog(onDismissRequest = { selected = null }, title = { Text(product.description) }, text = {
