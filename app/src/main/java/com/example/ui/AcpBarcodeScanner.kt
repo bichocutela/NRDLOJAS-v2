@@ -107,7 +107,11 @@ private fun AcpCameraPreview(modifier: Modifier, onResult: (String) -> Unit) {
                 proxy.close()
             } else {
                 val media = proxy.image
-                if (media == null) { proxy.close(); processing.set(false) }
+                if (media == null) {
+                    proxy.close()
+                    processing.set(false)
+                    if (disposed.get()) closeScanner()
+                }
                 else try {
                     scanner.process(InputImage.fromMediaImage(media, proxy.imageInfo.rotationDegrees))
                         .addOnSuccessListener(main) { barcodes ->
@@ -152,7 +156,12 @@ private fun AcpCameraPreview(modifier: Modifier, onResult: (String) -> Unit) {
         AndroidView(factory = { previewView }, modifier = Modifier.weight(1f).fillMaxWidth())
         if (camera?.cameraInfo?.hasFlashUnit() == true) OutlinedButton(onClick = {
             val enabled = !torch
-            camera?.cameraControl?.enableTorch(enabled)?.addListener({ torch = enabled }, ContextCompat.getMainExecutor(context))
+            camera?.cameraControl?.enableTorch(enabled)?.let { change ->
+                change.addListener({
+                    runCatching { change.get() }.onSuccess { torch = enabled }
+                        .onFailure { error = "Não foi possível alterar a lanterna." }
+                }, ContextCompat.getMainExecutor(context))
+            }
         }) { Text(if (torch) "Desligar lanterna" else "Ligar lanterna") }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error); TextButton(onClick = { attempt++ }) { Text("Tentar novamente") } }
     }

@@ -68,7 +68,7 @@ internal class AcpApi(context: Context) {
     private fun session(): JSONObject {
         val data = requestJson(Request.Builder().url("$ORIGIN/api/auth/session").get().build())
         val user = data.optJSONObject("user")
-        if (user == null || user.optString("accessToken").isBlank()) {
+        if (user == null || user.isNull("accessToken") || user.optString("accessToken").isBlank()) {
             cookies.clear()
             throw AcpUnauthorized()
         }

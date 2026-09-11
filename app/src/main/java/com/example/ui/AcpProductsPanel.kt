@@ -1,6 +1,7 @@
 package com.example.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -78,7 +79,7 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             AcpSearchField.entries.forEach { option ->
                 FilterChip(selected = field == option, onClick = { field = option; invalidateResults() },
                     label = { Text(option.label) })
