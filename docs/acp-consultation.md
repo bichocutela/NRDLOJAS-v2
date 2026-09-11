@@ -50,6 +50,11 @@ elegibilidade do cliente. Não é coletado CPF nesta funcionalidade.
 
 ## Verificação
 
+Os testes de autenticação usam respostas HTTP sintéticas, sem rede nem credenciais
+reais. Cobrem a sequência CSRF/callback/sessão, reaproveitamento da sessão, recusa
+de login, token ausente ou inválido, limpeza após 401, seleção do proxy, parâmetros
+repetidos e bloqueio de redirects. Eles não substituem a validação no servidor ACP.
+
 Workflow `acp-validation.yml`: compila a aplicação e executa testes ACP sem
 processar configuração de produção do Google Services, gerar release ou publicar
 APK. A branch de trabalho evita o workflow de publicação da main.

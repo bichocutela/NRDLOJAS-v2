@@ -13,11 +13,16 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /** ACP-only storage. Ciphertext is excluded from cloud backup and device transfer. */
-internal class AcpSecureStore(context: Context) {
+internal interface AcpStorage {
+    fun write(name: String, value: String)
+    fun read(name: String): String?
+}
+
+internal class AcpSecureStore(context: Context) : AcpStorage {
     private val directory = File(context.applicationContext.noBackupFilesDir, "acp").apply { mkdirs() }
 
     @Synchronized
-    fun write(name: String, value: String) {
+    override fun write(name: String, value: String) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         val encoded = Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + ":" +
@@ -34,7 +39,7 @@ internal class AcpSecureStore(context: Context) {
     }
 
     @Synchronized
-    fun read(name: String): String? {
+    override fun read(name: String): String? {
         val file = AtomicFile(File(directory, name))
         if (!file.baseFile.exists()) return null
         return try {

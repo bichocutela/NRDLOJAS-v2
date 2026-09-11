@@ -19,10 +19,10 @@ internal class AcpUnauthorized : IOException("Confirme novamente seu acesso à A
 internal class AcpFailure(message: String) : IOException(message)
 
 /** Isolated NextAuth session; never changes NRD/Firebase/Nossa Gente authentication. */
-internal class AcpApi(context: Context) {
-    private val store = AcpSecureStore(context)
+internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient.Builder = OkHttpClient.Builder()) {
+    constructor(context: Context) : this(AcpSecureStore(context))
     private val cookies = AcpCookieJar(store.read("session")) { store.write("session", it) }
-    private val client = OkHttpClient.Builder()
+    private val client = clientBuilder
         .cookieJar(cookies)
         .followRedirects(false).followSslRedirects(false)
         .connectTimeout(15, TimeUnit.SECONDS).readTimeout(25, TimeUnit.SECONDS)
@@ -43,7 +43,7 @@ internal class AcpApi(context: Context) {
             val access = credentials() ?: throw AcpFailure("Peça ao administrador para configurar o acesso neste aparelho.")
             cookies.clear()
             val csrf = requestJson(Request.Builder().url("$ORIGIN/api/auth/csrf").get().build())
-                .optString("csrfToken").takeIf { it.isNotBlank() }
+                .nonBlankString("csrfToken")
                 ?: throw AcpFailure("A ACP não disponibilizou o formulário de acesso. Tente novamente.")
             val form = FormBody.Builder()
                 .add("login", access.getString("login"))
@@ -52,7 +52,9 @@ internal class AcpApi(context: Context) {
                 .add("json", "true").build()
             val result = requestJson(Request.Builder().url("$ORIGIN/api/auth/callback/credentials")
                 .header("Origin", ORIGIN).header("Referer", "$ORIGIN/login").post(form).build())
-            val error = result.optString("url").let { runCatching { it.toHttpUrl().queryParameter("error") }.getOrNull() }
+            val error = result.nonBlankString("error") ?: result.nonBlankString("url")?.let {
+                ORIGIN.toHttpUrl().resolve(it)?.queryParameter("error")
+            }
             if (!error.isNullOrBlank()) {
                 cookies.clear()
                 throw AcpFailure("A ACP não aceitou o acesso. Peça ao administrador para conferir a configuração.")
@@ -63,12 +65,12 @@ internal class AcpApi(context: Context) {
 
     private fun credentials(): JSONObject? = store.read("access")?.let {
         runCatching { JSONObject(it) }.getOrNull()
-    }?.takeIf { it.optString("login").isNotBlank() && it.optString("password").isNotBlank() }
+    }?.takeIf { it.nonBlankString("login") != null && it.nonBlankString("password") != null }
 
     private fun session(): JSONObject {
         val data = requestJson(Request.Builder().url("$ORIGIN/api/auth/session").get().build())
         val user = data.optJSONObject("user")
-        if (user == null || user.isNull("accessToken") || user.optString("accessToken").isBlank()) {
+        if (user == null || user.nonBlankString("accessToken") == null) {
             cookies.clear()
             throw AcpUnauthorized()
         }
@@ -92,6 +94,9 @@ internal class AcpApi(context: Context) {
             if (response.code == 401 || (response.code in 300..399 &&
                     response.header("Location").orEmpty().contains("/login"))) {
                 cookies.clear()
+                if (request.url.encodedPath == "/api/auth/callback/credentials") {
+                    throw AcpFailure("A ACP não aceitou o acesso. Peça ao administrador para conferir a configuração.")
+                }
                 throw AcpUnauthorized()
             }
             if (response.code == 403) throw AcpFailure("A ACP não autorizou esta consulta.")
@@ -103,6 +108,9 @@ internal class AcpApi(context: Context) {
             }
         }
     }
+
+    private fun JSONObject.nonBlankString(name: String): String? =
+        (opt(name) as? String)?.takeIf { it.isNotBlank() && it != "null" }
 
     companion object {
         const val ORIGIN = "https://nordestao12.acp.app.br"
