@@ -471,17 +471,6 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                         Text("Código: ${product.code.ifBlank { "não informado" }}\nCód. barras: ${product.barcode.ifBlank { "não informado" }}")
                         Text("Preço principal: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}", style = MaterialTheme.typography.titleMedium)
 
-                        val commercialFacts = product.commercialFacts()
-                        if (commercialFacts.isNotEmpty()) {
-                            HorizontalDivider()
-                            commercialFacts.forEach { (label, value) ->
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                                    Text(value, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                                }
-                            }
-                        }
-
                         val hasUsefulProductInfo = product.characteristic != null || product.productFamily != null ||
                             product.categories.isNotEmpty() || product.unitLimitPerCPF?.signum() == 1
                         if (hasUsefulProductInfo) {

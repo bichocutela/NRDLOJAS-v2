@@ -10,6 +10,7 @@
 
 
 ## Ajuste visual — detalhe da consulta ACP
+- [ ] Remover também todas as linhas da seção comercial que permaneceu visível: preços, estoque, embalagem e validade.
 - [ ] Remover o título “Dados comerciais retornados pela ACP”, mantendo os valores abaixo.
 - [ ] Criar commit e enviar a correção para `main`.
 - [ ] Acompanhar o Android CI.

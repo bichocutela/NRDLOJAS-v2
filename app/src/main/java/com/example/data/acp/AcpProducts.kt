@@ -57,28 +57,6 @@ internal data class AcpProduct(
         return categories.any { category -> category.lowercase().replace(Regex("[^a-z0-9]"), "") == normalizedExpected }
     }
 
-    fun commercialFacts(): List<Pair<String, String>> = buildList {
-        value?.let { add("Preço atual" to it.brl()) }
-        previousValue?.let { add("Preço anterior" to it.brl()) }
-        clubValue?.takeIf { it > BigDecimal.ZERO }?.let { add("Preço Clube" to it.brl()) }
-        wholesaleValue?.takeIf { it > BigDecimal.ZERO }?.let { add("Preço atacado" to it.brl()) }
-        wholesaleQuantity?.takeIf { it > BigDecimal.ZERO }?.let { add("Mínimo atacado" to "${it.quantity()} unidades") }
-        quantityTake?.let { add("Leve" to "${it.quantity()} unidades") }
-        quantityPay?.let { add("Pague" to "${it.quantity()} unidades") }
-        cashback?.takeIf { it > BigDecimal.ZERO }?.let { add("Cashback percentual" to "${it.quantity()}%") }
-        cashbackValue?.takeIf { it > BigDecimal.ZERO }?.let { add("Cashback em valor" to it.brl()) }
-        secondUnitDiscount?.takeIf { it > BigDecimal.ZERO }?.let { add("Desconto 2ª unidade" to "${it.quantity()}%") }
-        unitLimitPerCPF?.takeIf { it > BigDecimal.ZERO }?.let { add("Limite por CPF" to "${it.quantity()} unidades") }
-        stockQuantity?.let { add("Estoque informado" to it.quantity()) }
-        dueDate?.let { add("Validade cadastrada" to acpDateLabel(it)!!) }
-        validFrom?.let { add("Início da oferta" to acpDateLabel(it)!!) }
-        validTo?.let { add("Fim da oferta" to acpDateLabel(it)!!) }
-        packageQuantity?.let { add("Quantidade na embalagem" to it.quantity()) }
-        packageType?.let { add("Tipo de embalagem" to it) }
-        contentQuantity?.let { add("Conteúdo" to "${it.quantity()} ${contentUnit.orEmpty()}".trim()) }
-        characteristic?.let { add("Característica" to it) }
-    }
-
     fun offers(): List<AcpOffer> = buildList {
         if (hasCategory("De-Por") && previousValue != null && value != null && previousValue > value && value > BigDecimal.ZERO) {
             add(AcpOffer("De/Por", "De ${previousValue.brl()} por ${value.brl()}.", value, previousValue))
