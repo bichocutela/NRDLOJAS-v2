@@ -75,10 +75,12 @@ internal data class AcpCampaign(
                     headline = "${it.quantity()}% DE DESCONTO"))
             }
             rule.cashback?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let {
-                add(AcpOffer("Cashback", "${it.quantity()}% de retorno. $source"))
+                add(AcpOffer("Cashback", "${it.quantity()}% de retorno. Não é desconto imediato; confira as condições de crédito. $source",
+                    headline = "${it.quantity()}% DE VOLTA"))
             }
             rule.cashbackValue?.takeIf { it > BigDecimal.ZERO }?.let {
-                add(AcpOffer("Cashback em valor", "${it.brl()} de retorno. $source"))
+                add(AcpOffer("Cashback em valor", "${it.brl()} de retorno. Não é desconto imediato; confira as condições de crédito. $source",
+                    headline = "${it.brl()} DE VOLTA"))
             }
         }
     }.distinctBy { Triple(it.title, it.price, it.detail) }
