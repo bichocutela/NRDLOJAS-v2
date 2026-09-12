@@ -86,6 +86,15 @@ class AcpProductsTest {
         assertNull(offer.price)
     }
 
+    @Test fun pagePreservesTotalCountFromProductAll() {
+        val page = AcpProductParser.page(JSONObject("""
+            {"items":[{"id":"1","description":"KitKat"}],"pageIndex":1,"totalPages":3,"totalCount":43}
+        """), 1)
+        assertEquals(1, page.pageIndex)
+        assertEquals(3, page.totalPages)
+        assertEquals(43, page.totalCount)
+    }
+
     @Test(expected = AcpFailure::class) fun malformedContractIsNotAnEmptySearch() {
         AcpProductParser.page(JSONObject("""{"unexpected":[]}"""), 0)
     }

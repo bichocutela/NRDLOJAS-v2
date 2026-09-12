@@ -6,7 +6,7 @@ import java.math.RoundingMode
 
 internal enum class AcpSearchField(val parameter: String, val label: String) { BARCODE("barCode", "Cód. barras"), CODE("code", "Código"), DESCRIPTION("description", "Descrição") }
 internal data class AcpCategory(val id: String, val description: String)
-internal data class AcpProductPage(val items: List<AcpProduct>, val pageIndex: Int, val totalPages: Int)
+internal data class AcpProductPage(val items: List<AcpProduct>, val pageIndex: Int, val totalPages: Int, val totalCount: Int)
 internal data class AcpOffer(val title: String, val detail: String, val price: BigDecimal? = null, val referencePrice: BigDecimal? = null, val headline: String? = null)
 
 internal data class AcpProduct(
@@ -44,8 +44,9 @@ internal object AcpProductParser {
         val array = root.optJSONArray("items") ?: throw AcpFailure("A ACP retornou produtos em um formato não reconhecido.")
         val items = (0 until array.length()).map { product(array.optJSONObject(it) ?: throw AcpFailure("A ACP retornou um produto inválido.")) }
         val page = root.optInt("pageIndex", requestedPage).coerceAtLeast(0)
-        val total = root.optInt("totalPages", if (items.isEmpty()) 0 else page + 1).coerceAtLeast(0)
-        return AcpProductPage(items, page, total)
+        val totalPages = root.optInt("totalPages", if (items.isEmpty()) 0 else page + 1).coerceAtLeast(0)
+        val totalCount = root.optInt("totalCount", items.size).coerceAtLeast(0)
+        return AcpProductPage(items, page, totalPages, totalCount)
     }
 
     private fun product(item: JSONObject): AcpProduct {
@@ -87,9 +88,9 @@ internal suspend fun AcpApi.categories(): List<AcpCategory> {
     val result = mutableListOf<AcpCategory>()
     for (page in 0 until 20) {
         val root = get("ProductCategory/all", listOf("pageSize" to "100", "pageIndex" to page.toString()))
-        val items = root.optJSONArray("items") ?: throw AcpFailure("Não foi possível carregar os tipos de oferta.")
+        val items = root.optJSONArray("items") ?: throw AcpFailure("Não foi possível carregar as categorias ACP.")
         for (index in 0 until items.length()) { val item = items.optJSONObject(index) ?: continue; if (!item.isNull("id") && !item.isNull("description")) result.add(AcpCategory(item.get("id").toString(), item.getString("description"))) }
         if (page + 1 >= root.optInt("totalPages", 1) || items.length() == 0) return result.distinctBy { it.id }
     }
-    throw AcpFailure("A lista de tipos de oferta excedeu o limite da consulta.")
+    throw AcpFailure("A lista de categorias ACP excedeu o limite da consulta.")
 }

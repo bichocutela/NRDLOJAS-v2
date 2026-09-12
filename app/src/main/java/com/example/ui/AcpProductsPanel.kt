@@ -162,6 +162,10 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         val result = page
         if (result == null && !busy && error == null) Text("Busque um produto para consultar os preços na ACP.")
         if (result != null && result.items.isEmpty() && !busy) Text("Nenhum produto encontrado. Confira o código ou tente outro filtro.")
+        if (result != null && result.items.isNotEmpty()) {
+            val label = if (result.totalCount == 1) "produto encontrado" else "produtos encontrados"
+            Text("${result.totalCount} $label • página ${result.pageIndex + 1} de ${result.totalPages.coerceAtLeast(1)}", style = MaterialTheme.typography.labelMedium)
+        }
 
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(result?.items.orEmpty(), key = { index, product -> "${product.id}:$index" }) { _, product ->
