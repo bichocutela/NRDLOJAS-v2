@@ -63,6 +63,15 @@ contentUnit), embalagem, quantidade de embalagem, parcelamento, cashback e limit
 por CPF. Esses controles não comprovam modalidades comerciais aplicáveis ao
 produto; não foram transformados em novas ofertas no aplicativo.
 
+## Compatibilidade com a main atual
+
+A main 415f59d já contém consulta de campanhas, diagnóstico copiável, estoque,
+vencimento, dados cadastrais e correção de De/Por baseada em categoria explícita.
+Essas funcionalidades foram preservadas ao integrar este trabalho. O parser de
+campanhas existente aceita aliases adicionais de campos; sua presença no código
+NRD não constitui evidência de que a ACP realmente os forneça. Esta investigação
+não certifica esses aliases nem acrescenta regras baseadas neles.
+
 ## O que falta obter antes de implementar novas regras
 
 - Resposta autenticada mínima do Tiroliro contendo, se existentes,
