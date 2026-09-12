@@ -13,7 +13,7 @@ class AcpProductsTest {
     private fun product(fields: String) = AcpProductParser.page(JSONObject("""{"items":[{"description":"Teste",$fields}],"pageIndex":0,"totalPages":1}"""), 0).items.single()
 
     @Test fun separatesPrincipalClubAndPreviousPricesAndPreservesShortCodes() {
-        val item = product(""""code":"00025","barCode":"500","value":14.29,"clubValue":9.99,"previousValue":16.5""")
+        val item = product(""""code":"00025","barCode":"500","value":14.29,"clubValue":9.99,"previousValue":16.5,"productCategories":[{"id":3,"description":"De-Por"},{"id":5,"description":"Clube de Vantagens"}]""")
         assertEquals("00025", item.code)
         assertEquals("500", item.barcode)
         assertEquals("R$ 14,29", item.value?.brl())
@@ -22,15 +22,30 @@ class AcpProductsTest {
     }
 
     @Test fun realKitKatPayloadKeepsDePorClubAndStockTogether() {
-        val item = product(""""code":"2013995003","barCode":"7891000248768","value":3.49,"previousValue":6.69,"clubValue":3.49,"stockQuantity":682,"packageQuantity":3,"packageType":{"id":7,"description":"SUB"},"unit":{"id":2,"description":"cada"},"productCategories":[{"id":1,"description":"Varejo"},{"id":3,"description":"De-Por"},{"id":5,"description":"Clube de Vantagens"}]""")
+        val item = product(""""code":"2013995003","barCode":"7891000248768","value":3.49,"previousValue":6.69,"clubValue":3.49,"stockQuantity":624,"packageQuantity":3,"packageType":{"id":7,"description":"SUB"},"unit":{"id":2,"description":"cada"},"productCategories":[{"id":1,"description":"Varejo"},{"id":3,"description":"De-Por"},{"id":5,"description":"Clube de Vantagens"}]""")
         assertEquals("R$ 3,49", item.value?.brl())
         assertEquals("R$ 6,69", item.previousValue?.brl())
         assertEquals("R$ 3,49", item.clubValue?.brl())
-        assertEquals("682", item.stockQuantity?.quantity())
+        assertEquals("624", item.stockQuantity?.quantity())
         assertEquals("3", item.packageQuantity?.quantity())
         assertEquals("SUB", item.packageType)
         assertEquals("cada", item.unit)
         assertEquals(listOf("De/Por", "Clube de Vantagens"), item.offers().map { it.title })
+        assertEquals("R$ 6,69", item.offers().first { it.title == "Clube de Vantagens" }.referencePrice?.brl())
+    }
+
+    @Test fun realClubOnlyKitKatDoesNotInventDePorFromPreviousValue() {
+        val item = product(""""code":"2013995014","barCode":"7891000469569","value":3.49,"previousValue":6.69,"clubValue":3.49,"stockQuantity":0,"productCategories":[{"id":1,"description":"Varejo"},{"id":5,"description":"Clube de Vantagens"}]""")
+        val offers = item.offers()
+        assertEquals(listOf("Clube de Vantagens"), offers.map { it.title })
+        assertEquals("R$ 3,49", offers.single().price?.brl())
+        assertEquals("R$ 6,69", offers.single().referencePrice?.brl())
+        assertFalse(offers.any { it.title == "De/Por" })
+    }
+
+    @Test fun previousValueAloneIsReferenceDataNotProofOfDePor() {
+        val item = product(""""value":8.99,"previousValue":12.99,"productCategories":[{"id":1,"description":"Varejo"}]""")
+        assertTrue(item.offers().isEmpty())
     }
 
     @Test fun realRavanalPayloadIsLevePagueAndUsesProductStock() {
@@ -93,11 +108,18 @@ class AcpProductsTest {
         assertFalse(offers.any { it.detail.contains("2099") })
     }
 
-    @Test fun posterReferencesKeepClubAndPreviousPricesSeparate() {
-        val offers = product(""""value":14.29,"previousValue":16.5,"clubValue":9.99""").offers()
+    @Test fun posterReferencesKeepCurrentPreviousAndClubPricesSeparate() {
+        val offers = product(""""value":14.29,"previousValue":16.5,"clubValue":9.99,"productCategories":[{"id":3,"description":"De-Por"},{"id":5,"description":"Clube de Vantagens"}]""").offers()
         assertEquals("R$ 16,50", offers.first { it.title == "De/Por" }.referencePrice?.brl())
         assertEquals("R$ 14,29", offers.first { it.title == "Clube de Vantagens" }.referencePrice?.brl())
         assertEquals("R$ 9,99", offers.first { it.title == "Clube de Vantagens" }.price?.brl())
+    }
+
+    @Test fun clubFallsBackToPreviousReferenceOnlyWhenCurrentEqualsClub() {
+        val offer = product(""""value":3.49,"previousValue":6.69,"clubValue":3.49,"productCategories":[{"id":5,"description":"Clube de Vantagens"}]""").offers().single()
+        assertEquals("Clube de Vantagens", offer.title)
+        assertEquals("R$ 6,69", offer.referencePrice?.brl())
+        assertEquals("R$ 3,49", offer.price?.brl())
     }
 
     @Test fun missingNormalPriceIsNotInventedAndSecondUnitDoesNotInventAverage() {
