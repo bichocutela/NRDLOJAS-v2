@@ -18,6 +18,8 @@ enum class FlyerOfferType {
     FLYER_PRICE
 }
 
+enum class FlyerClubCondition { NOT_INFORMED, REQUIRED, NOT_REQUIRED }
+
 enum class FlyerOfferScope { PRODUCT, GROUP }
 
 enum class FlyerMatchStatus { CONFIRMED, REVIEW, UNRESOLVED }
@@ -47,20 +49,54 @@ data class FlyerOffer(
     val takeUnit: String? = null,
     val payUnit: String? = null,
     val cashbackPercent: Double? = null,
-    val cashbackValue: Double? = null
+    val cashbackValue: Double? = null,
+    val sourceText: String = "",
+    val reviewed: Boolean = false,
+    val clubCondition: FlyerClubCondition = FlyerClubCondition.NOT_INFORMED
 ) {
+    /** Identity suggestions from OCR are never commercial approval. */
+    fun reviewError(): String? {
+        fun positive(v: Double?) = v != null && v.isFinite() && v > 0
+        fun percent(v: Double?) = positive(v) && v!! <= 100
+        if (sourceDescription.isBlank()) return "Informe a descrição do encarte."
+        if (productCodes.none { it.isNotBlank() } && barcodes.none { it.isNotBlank() }) return "Selecione o produto correspondente na ACP."
+        if (listOf(flyerPrice, regularPrice, cashbackValue).any { it != null && !positive(it) }) return "Confira os preços: devem ser maiores que zero."
+        val valid = when (type) {
+            FlyerOfferType.SECOND_UNIT_PERCENT -> percent(secondUnitDiscountPercent) && positive(regularPrice)
+            FlyerOfferType.TAKE_PAY_QUANTITY -> positive(takeQuantity) && positive(payQuantity) && takeQuantity!! > payQuantity!! && takeQuantity % 1.0 == 0.0 && payQuantity % 1.0 == 0.0
+            FlyerOfferType.TAKE_PAY_MEASURE -> {
+                val take = measure(takeQuantity, takeUnit)
+                val pay = measure(payQuantity, payUnit)
+                take != null && pay != null && take.first == pay.first && take.second > pay.second
+            }
+            FlyerOfferType.DE_POR -> positive(regularPrice) && positive(flyerPrice) && regularPrice!! > flyerPrice!!
+            FlyerOfferType.CASHBACK -> (percent(cashbackPercent) || positive(cashbackValue)) && (cashbackPercent == null || percent(cashbackPercent))
+            FlyerOfferType.FLYER_PRICE -> positive(flyerPrice)
+        }
+        return if (valid) null else "Confira os valores e a regra da oferta no encarte."
+    }
+
+    fun confirmedForPublication(): FlyerOffer? {
+        if (reviewError() != null) return null
+        val second = if (type == FlyerOfferType.SECOND_UNIT_PERCENT) calculateSecondUnit(regularPrice!!, secondUnitDiscountPercent!!) else null
+        val average = if (type == FlyerOfferType.TAKE_PAY_QUANTITY && regularPrice != null) calculateTakePayAverage(regularPrice, takeQuantity!!, payQuantity!!) else null
+        return copy(reviewed = true, matchStatus = FlyerMatchStatus.CONFIRMED,
+            secondUnitPrice = second?.first, equivalentUnitPrice = second?.second ?: average)
+    }
+
+    fun matchesAcp(code: String, barcode: String): Boolean = reviewed &&
+        matchStatus == FlyerMatchStatus.CONFIRMED && reviewError() == null &&
+        ((code.isNotBlank() && productCodes.any { it.trim() == code.trim() }) ||
+            (barcode.isNotBlank() && barcodes.any { it.trim() == barcode.trim() }))
+
     fun matches(product: Product): Boolean {
-        if (matchStatus != FlyerMatchStatus.CONFIRMED) return false
+        if (!reviewed || matchStatus != FlyerMatchStatus.CONFIRMED || reviewError() != null) return false
         val productCode = normalizeIdentifier(product.code)
+        if (productCode.isBlank()) return false
         if (productCodes.any { normalizeIdentifier(it) == productCode }) return true
         if (barcodes.any { normalizeIdentifier(it) == productCode }) return true
 
-        if (scope != FlyerOfferScope.PRODUCT || confidence < 0.92) return false
-        val expected = normalizeText(matchedProductName ?: sourceDescription)
-        val actual = normalizeText(product.name)
-        if (expected.isBlank() || actual.isBlank()) return false
-        if (expected == actual) return true
-        return tokenSimilarity(expected, actual) >= 0.90
+        return false
     }
 
     fun displayTitle(): String = when (type) {
@@ -157,4 +193,15 @@ internal fun tokenSimilarity(left: String, right: String): Double {
     val intersection = a.intersect(b).size.toDouble()
     val union = a.union(b).size.toDouble()
     return if (union == 0.0) 0.0 else intersection / union
+}
+
+private fun measure(quantity: Double?, unit: String?): Pair<String, Double>? {
+    if (quantity == null || !quantity.isFinite() || quantity <= 0) return null
+    return when (unit?.trim()?.lowercase()) {
+        "l", "litro", "litros" -> "volume" to quantity * 1000
+        "ml" -> "volume" to quantity
+        "kg" -> "mass" to quantity * 1000
+        "g" -> "mass" to quantity
+        else -> null
+    }
 }

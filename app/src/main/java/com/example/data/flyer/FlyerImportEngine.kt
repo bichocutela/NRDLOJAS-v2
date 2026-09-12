@@ -33,8 +33,8 @@ internal data class FlyerAnalysisResult(
     val sourceType: String,
     val sourceLabel: String
 ) {
-    val confirmedCount: Int get() = offers.count { it.matchStatus == FlyerMatchStatus.CONFIRMED }
-    val reviewCount: Int get() = offers.count { it.matchStatus == FlyerMatchStatus.REVIEW }
+    val confirmedCount: Int get() = offers.count { it.reviewed && it.matchStatus == FlyerMatchStatus.CONFIRMED }
+    val reviewCount: Int get() = offers.count { !it.reviewed && it.matchStatus != FlyerMatchStatus.UNRESOLVED }
     val unresolvedCount: Int get() = offers.count { it.matchStatus == FlyerMatchStatus.UNRESOLVED }
 }
 
@@ -133,26 +133,12 @@ internal object FlyerImportEngine {
                 continue
             }
 
-            val base = product.value?.toDouble()
-            var secondPrice: Double? = null
-            var equivalent: Double? = null
-            if (offer.type == FlyerOfferType.SECOND_UNIT_PERCENT && base != null) {
-                val calculation = offer.secondUnitDiscountPercent?.let { calculateSecondUnit(base, it) }
-                secondPrice = calculation?.first
-                equivalent = calculation?.second
-            } else if (offer.type == FlyerOfferType.TAKE_PAY_QUANTITY && base != null) {
-                equivalent = calculateTakePayAverage(base, offer.takeQuantity ?: 0.0, offer.payQuantity ?: 0.0)
-            }
-
             resolved[offer.id] = offer.copy(
                 confidence = max(offer.confidence, score),
                 matchStatus = FlyerMatchStatus.CONFIRMED,
                 productCodes = listOfNotNull(product.code.takeIf { it.isNotBlank() }),
                 barcodes = listOfNotNull(product.barcode.takeIf { it.isNotBlank() }),
-                matchedProductName = product.description,
-                regularPrice = offer.regularPrice ?: base,
-                secondUnitPrice = secondPrice,
-                equivalentUnitPrice = equivalent
+                matchedProductName = product.description
             )
         }
         return offers.map { resolved[it.id] ?: it }
