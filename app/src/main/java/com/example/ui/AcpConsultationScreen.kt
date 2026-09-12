@@ -33,7 +33,14 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
     LaunchedEffect(api) {
         try {
             configured = api.hasCredentials()
-            authenticated = api.restoreSession()
+            if (configured) {
+                // Keep the ACP experience effectively signed in: a valid server session is reused,
+                // and an expired/missing one is renewed silently with the protected device access.
+                api.confirmAccess()
+                authenticated = true
+            } else {
+                authenticated = false
+            }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: Exception) { error = acpErrorMessage(failure) }
         finally { checking = false }
@@ -57,11 +64,11 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
             if (authenticated) {
                 AcpProductsPanel(api, canAddToNrd = canConfigure, onSessionExpired = {
                     authenticated = false
-                    error = "Sua sessão terminou. Confirme novamente o acesso."
+                    error = "Não foi possível renovar a sessão automaticamente. Tente novamente."
                 })
             } else {
-                Text("Confirme", style = MaterialTheme.typography.headlineSmall)
-                Text("Acesse a consulta de preços do Nordestão.")
+                Text("Acesso ACP", style = MaterialTheme.typography.headlineSmall)
+                Text(if (configured) "A sessão é renovada automaticamente. Tente novamente apenas se a ACP não responder." else "Acesse a consulta de preços do Nordestão.")
                 OutlinedTextField(value = if (configured) "********" else "", onValueChange = {},
                     readOnly = true, label = { Text("Login") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = if (configured) "********" else "", onValueChange = {},
@@ -78,7 +85,7 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
                         finally { busy = false }
                     }
                 }, enabled = configured && !checking && !busy, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (busy) "Entrando…" else "Entrar")
+                    Text(if (busy) "Reconectando…" else "Tentar novamente")
                 }
                 if (!configured && !checking) Text("O administrador precisa configurar o acesso neste aparelho uma única vez.")
                 if (canConfigure && !api.hasBundledAccess()) TextButton(onClick = { configure = true }, enabled = !busy && !checking) {
@@ -122,7 +129,7 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
 }
 
 internal fun acpErrorMessage(error: Exception): String = when (error) {
-    is AcpUnauthorized -> "Sua sessão terminou. Confirme novamente o acesso."
+    is AcpUnauthorized -> "Sua sessão terminou. Não foi possível renová-la automaticamente."
     is AcpFailure -> error.message ?: "Não foi possível consultar a ACP."
     else -> "Não foi possível conectar à ACP. Verifique a internet e tente novamente."
 }
