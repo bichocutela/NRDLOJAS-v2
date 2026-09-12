@@ -11,6 +11,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.example.data.acp.AcpOffer
 import com.example.data.acp.brl
+import com.example.data.acp.family
 
 /** Poster styling only; prices and eligibility are never inferred from the artwork. */
 @Composable
@@ -126,6 +127,57 @@ internal fun AcpOfferPoster(offer: AcpOffer, compact: Boolean) {
             Row(Modifier.fillMaxWidth().height(if (compact) 3.dp else 4.dp)) {
                 listOf(red, Color(0xFF00863D), Color(0xFFFFA000), blue).forEach { color ->
                     Box(Modifier.weight(1f).fillMaxHeight().background(color))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun AcpOfferLandscapePoster(productName: String, offer: AcpOffer) {
+    val yellow = Color(0xFFFFEB27)
+    val red = Color(0xFFB90012)
+    val blue = Color(0xFF005A9C)
+    val club = offer.family == com.example.data.acp.AcpOfferFamily.CLUB
+    val headerColor = if (club) blue else red
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = yellow,
+        contentColor = Color.Black
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1.15f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = when (offer.family) {
+                        com.example.data.acp.AcpOfferFamily.DE_POR -> "DE / POR"
+                        com.example.data.acp.AcpOfferFamily.CLUB -> "PREÇO CLUBE"
+                        com.example.data.acp.AcpOfferFamily.TAKE_PAY -> "LEVE / PAGUE"
+                        com.example.data.acp.AcpOfferFamily.SECOND_UNIT -> "NA SEGUNDA UNIDADE"
+                        com.example.data.acp.AcpOfferFamily.CASHBACK,
+                        com.example.data.acp.AcpOfferFamily.CASHBACK_VALUE -> "CASHBACK"
+                        else -> offer.title.uppercase()
+                    },
+                    modifier = Modifier.background(headerColor).padding(horizontal = 10.dp, vertical = 5.dp),
+                    color = Color.White,
+                    fontWeight = FontWeight.Black,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(productName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(offer.detail, style = MaterialTheme.typography.bodySmall)
+            }
+            Column(horizontalAlignment = androidx.compose.ui.Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                offer.referencePrice?.let {
+                    Text(it.brl(), style = MaterialTheme.typography.titleMedium, textDecoration = if (offer.family == com.example.data.acp.AcpOfferFamily.DE_POR) TextDecoration.LineThrough else TextDecoration.None)
+                }
+                offer.headline?.let { Text(it, color = red, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium) }
+                offer.price?.let {
+                    Text(it.brl(), color = if (club) Color.White else red, fontWeight = FontWeight.Black, style = MaterialTheme.typography.displaySmall,
+                        modifier = Modifier.background(if (club) red else yellow).padding(horizontal = 8.dp, vertical = 2.dp))
                 }
             }
         }

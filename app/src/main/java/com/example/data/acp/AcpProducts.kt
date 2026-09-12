@@ -9,6 +9,38 @@ internal data class AcpCategory(val id: String, val description: String)
 internal data class AcpProductPage(val items: List<AcpProduct>, val pageIndex: Int, val totalPages: Int, val totalCount: Int, val queriedAtMillis: Long = System.currentTimeMillis())
 internal data class AcpOffer(val title: String, val detail: String, val price: BigDecimal? = null, val referencePrice: BigDecimal? = null, val headline: String? = null)
 
+internal enum class AcpOfferFamily {
+    DE_POR, CLUB, WHOLESALE, TAKE_PAY, SECOND_UNIT, CASHBACK, CASHBACK_VALUE, PRICE
+}
+
+internal val AcpOffer.family: AcpOfferFamily
+    get() = when (title) {
+        "De/Por" -> AcpOfferFamily.DE_POR
+        "Clube de Vantagens" -> AcpOfferFamily.CLUB
+        "Atacado" -> AcpOfferFamily.WHOLESALE
+        "Leve/Pague" -> AcpOfferFamily.TAKE_PAY
+        "Segunda unidade" -> AcpOfferFamily.SECOND_UNIT
+        "Cashback" -> AcpOfferFamily.CASHBACK
+        "Cashback em valor" -> AcpOfferFamily.CASHBACK_VALUE
+        else -> AcpOfferFamily.PRICE
+    }
+
+/** Keeps every detected condition, while selecting one deterministic family for the automatic poster. */
+internal fun List<AcpOffer>.forAutomaticDisplay(): List<AcpOffer> {
+    val priority = mapOf(
+        AcpOfferFamily.SECOND_UNIT to 0,
+        AcpOfferFamily.TAKE_PAY to 1,
+        AcpOfferFamily.CLUB to 2,
+        AcpOfferFamily.DE_POR to 3,
+        AcpOfferFamily.WHOLESALE to 4,
+        AcpOfferFamily.CASHBACK to 5,
+        AcpOfferFamily.CASHBACK_VALUE to 6,
+        AcpOfferFamily.PRICE to 7
+    )
+    return distinctBy { Triple(it.title, it.price, it.detail) }
+        .sortedWith(compareBy<AcpOffer> { priority[it.family] ?: Int.MAX_VALUE }.thenBy { it.title })
+}
+
 internal data class AcpProduct(
     val id: String, val code: String, val barcode: String, val description: String,
     val value: BigDecimal?, val previousValue: BigDecimal?, val clubValue: BigDecimal?,
