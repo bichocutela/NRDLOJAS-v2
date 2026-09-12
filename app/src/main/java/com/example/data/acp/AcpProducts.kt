@@ -19,7 +19,17 @@ internal data class AcpProduct(
     val wholesaleValue: BigDecimal?, val wholesaleQuantity: BigDecimal?,
     val quantityTake: BigDecimal?, val quantityPay: BigDecimal?,
     val cashback: BigDecimal?, val cashbackValue: BigDecimal?, val secondUnitDiscount: BigDecimal?,
-    val unitLimitPerCPF: BigDecimal?, val unit: String?, val categories: List<String>
+    val unitLimitPerCPF: BigDecimal?, val unit: String?, val categories: List<String>,
+    // Campos abaixo foram confirmados em respostas reais de Product/all em 11/09/2026.
+    val stockQuantity: BigDecimal? = null,
+    val dueDate: String? = null,
+    val packageQuantity: BigDecimal? = null,
+    val packageType: String? = null,
+    val characteristic: String? = null,
+    val contentQuantity: BigDecimal? = null,
+    val contentUnit: String? = null,
+    val productFamily: String? = null,
+    val auxDescriptions: List<String> = emptyList()
 ) {
     /** These are recorded conditions, not a claim that a campaign is currently valid. */
     fun offers(): List<AcpOffer> = buildList {
@@ -73,6 +83,7 @@ internal object AcpProductParser {
         val barcode = item.text("barCode").orEmpty()
         val description = item.text("description") ?: throw AcpFailure("A ACP retornou um produto sem descrição.")
         val categories = item.optJSONArray("productCategories")
+        val auxDescriptions = item.optJSONArray("auxDescriptions")
         return AcpProduct(
             id = item.text("id") ?: "$code|$barcode|$description", code = code, barcode = barcode, description = description,
             value = item.decimal("value"), previousValue = item.decimal("previousValue"), clubValue = item.decimal("clubValue"),
@@ -83,6 +94,17 @@ internal object AcpProductParser {
             unit = item.optJSONObject("unit")?.text("description"),
             categories = if (categories == null) emptyList() else (0 until categories.length()).mapNotNull {
                 categories.optJSONObject(it)?.text("description")
+            },
+            stockQuantity = item.decimal("stockQuantity"),
+            dueDate = item.text("dueDate"),
+            packageQuantity = item.decimal("packageQuantity"),
+            packageType = item.optJSONObject("packageType")?.text("description"),
+            characteristic = item.text("characteristic"),
+            contentQuantity = item.decimal("contentQuantity"),
+            contentUnit = item.text("contentUnit"),
+            productFamily = item.optJSONObject("productFamily")?.text("description"),
+            auxDescriptions = if (auxDescriptions == null) emptyList() else (0 until auxDescriptions.length()).mapNotNull {
+                auxDescriptions.optString(it).trim().takeIf { text -> text.isNotEmpty() && text != "null" }
             }
         )
     }
