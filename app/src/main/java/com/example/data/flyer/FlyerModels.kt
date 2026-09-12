@@ -4,10 +4,9 @@ import com.example.data.Product
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.Normalizer
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 enum class FlyerOfferType {
@@ -89,12 +88,13 @@ data class FlyerCampaign(
 ) {
     fun statusAt(nowMillis: Long = System.currentTimeMillis()): FlyerCampaignStatus {
         if (!enabled) return FlyerCampaignStatus.DISABLED
-        val today = Instant.ofEpochMilli(nowMillis).atZone(ZoneId.systemDefault()).toLocalDate()
         val start = parseIsoDate(validFrom) ?: return FlyerCampaignStatus.DISABLED
         val end = parseIsoDate(validTo) ?: return FlyerCampaignStatus.DISABLED
+        val dayFormat = isoDateFormat()
+        val today = dayFormat.parse(dayFormat.format(Date(nowMillis))) ?: return FlyerCampaignStatus.DISABLED
         return when {
-            today.isBefore(start) -> FlyerCampaignStatus.SCHEDULED
-            today.isAfter(end) -> FlyerCampaignStatus.EXPIRED
+            today.before(start) -> FlyerCampaignStatus.SCHEDULED
+            today.after(end) -> FlyerCampaignStatus.EXPIRED
             else -> FlyerCampaignStatus.ACTIVE
         }
     }
@@ -123,9 +123,17 @@ internal fun calculateTakePayAverage(basePrice: Double, take: Double, pay: Doubl
         .toDouble()
 }
 
-internal fun parseIsoDate(value: String?): LocalDate? = runCatching {
-    value?.trim()?.takeIf { it.isNotEmpty() }?.let { LocalDate.parse(it, DateTimeFormatter.ISO_LOCAL_DATE) }
+internal fun parseIsoDate(value: String?): Date? = runCatching {
+    val text = value?.trim()?.takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) } ?: return@runCatching null
+    isoDateFormat().parse(text)
 }.getOrNull()
+
+internal fun formatIsoDate(value: String?, pattern: String = "dd/MM/yyyy"): String? {
+    val date = parseIsoDate(value) ?: return null
+    return SimpleDateFormat(pattern, Locale("pt", "BR")).format(date)
+}
+
+private fun isoDateFormat(): SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
 
 internal fun formatMoney(value: Double): String = "R$ " +
     BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).toPlainString().replace('.', ',')
