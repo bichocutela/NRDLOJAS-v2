@@ -42,7 +42,7 @@ fun Product.categoryNames(): List<String> {
         .split(CATEGORY_MEMBERSHIP_SEPARATOR)
         .map { it.trim() }
         .filter { it.isNotBlank() }
-    return normalizeProductCategories(if (memberships.isEmpty()) listOf(category) else memberships)
+    return normalizeProductCategories(listOf(category) + memberships)
 }
 
 fun Product.withCategoryNames(categories: Collection<String>): Product {
