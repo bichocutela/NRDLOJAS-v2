@@ -23,16 +23,25 @@ internal data class AcpProduct(
         if (previousValue != null && value != null && previousValue > value && value > BigDecimal.ZERO) add(AcpOffer("De/Por", "De ${previousValue.brl()} por ${value.brl()}.", value, previousValue))
         clubValue?.takeIf { it > BigDecimal.ZERO }?.let { add(AcpOffer("Clube de Vantagens", "Preço Clube: ${it.brl()}. Condicionado ao Clube.", it, value?.takeIf { p -> p > BigDecimal.ZERO })) }
         wholesaleValue?.takeIf { it > BigDecimal.ZERO }?.let { price ->
-            val condition = wholesaleQuantity?.takeIf { it > BigDecimal.ZERO }?.let { "A partir de ${it.quantity()} unidades." } ?: "Quantidade mínima não informada."
-            add(AcpOffer("Atacado", "${price.brl()} por unidade. $condition", price, value?.takeIf { it > BigDecimal.ZERO }))
+            val minimum = wholesaleQuantity?.takeIf { it > BigDecimal.ZERO }
+            val condition = minimum?.let { "A partir de ${it.quantity()} unidades." } ?: "Quantidade mínima não informada."
+            val headline = minimum?.let { "A PARTIR DE ${it.quantity()} UN." }
+            add(AcpOffer("Atacado", "${price.brl()} por unidade. $condition", price, value?.takeIf { it > BigDecimal.ZERO }, headline))
         }
         if (quantityTake != null && quantityPay != null && quantityTake > quantityPay && quantityPay > BigDecimal.ZERO && quantityTake.stripTrailingZeros().scale() <= 0 && quantityPay.stripTrailingZeros().scale() <= 0) {
             val equivalent = value?.takeIf { it > BigDecimal.ZERO }?.multiply(quantityPay)?.divide(quantityTake, 2, RoundingMode.HALF_UP)
-            add(AcpOffer("Leve/Pague", "Leve ${quantityTake.quantity()}, pague ${quantityPay.quantity()}." + (equivalent?.let { " Equivalente a ${it.brl()} por unidade ao completar a quantidade, calculado sobre o valor principal." } ?: "")))
+            val headline = "LEVE ${quantityTake.quantity()} • PAGUE ${quantityPay.quantity()}"
+            val detail = "Leve ${quantityTake.quantity()}, pague ${quantityPay.quantity()}." +
+                (equivalent?.let { " Média equivalente de ${it.brl()} por unidade ao completar a quantidade, calculada sobre o preço principal." } ?: "")
+            add(AcpOffer("Leve/Pague", detail, equivalent, value?.takeIf { it > BigDecimal.ZERO }, headline))
         }
         secondUnitDiscount?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let { add(AcpOffer("Segunda unidade", "${it.quantity()}% de desconto na segunda unidade. Base de preço e combinação com Clube ainda não verificadas.", referencePrice = value?.takeIf { p -> p > BigDecimal.ZERO }, headline = "${it.quantity()}% DE DESCONTO")) }
-        cashback?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let { add(AcpOffer("Cashback", "${it.quantity()}% de retorno. Não é desconto imediato; confira as condições de crédito.")) }
-        cashbackValue?.takeIf { it > BigDecimal.ZERO }?.let { add(AcpOffer("Cashback em valor", "${it.brl()} de retorno. Não é desconto imediato; confira as condições de crédito.")) }
+        cashback?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let {
+            add(AcpOffer("Cashback", "${it.quantity()}% de retorno. Não é desconto imediato; confira as condições de crédito.", referencePrice = value?.takeIf { p -> p > BigDecimal.ZERO }, headline = "${it.quantity()}% DE VOLTA"))
+        }
+        cashbackValue?.takeIf { it > BigDecimal.ZERO }?.let {
+            add(AcpOffer("Cashback em valor", "${it.brl()} de retorno. Não é desconto imediato; confira as condições de crédito.", referencePrice = value?.takeIf { p -> p > BigDecimal.ZERO }, headline = "${it.brl()} DE VOLTA"))
+        }
     }
 }
 
