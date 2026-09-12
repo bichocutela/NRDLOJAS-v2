@@ -175,8 +175,11 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
                         Text(product.description, style = MaterialTheme.typography.titleMedium)
                         Text("Código: ${product.code.ifBlank { "não informado" }}", style = MaterialTheme.typography.bodySmall)
                         if (product.barcode.isNotBlank()) Text("EAN: ${product.barcode}", style = MaterialTheme.typography.bodySmall)
-                        Text("Preço cadastrado: ${product.value?.brl() ?: "não informado"}", style = MaterialTheme.typography.titleMedium)
-                        product.stockQuantity?.let { Text("Estoque ACP: ${it.quantity()}", style = MaterialTheme.typography.bodySmall) }
+                        Text("Preço ACP: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}", style = MaterialTheme.typography.titleMedium)
+                        product.stockQuantity?.let {
+                            Text("Estoque ACP: ${it.quantity()}", color = if (it.signum() == 0) MaterialTheme.colorScheme.error else LocalContentColor.current, style = MaterialTheme.typography.bodySmall)
+                        }
+                        product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite: ${it.quantity()} un. por CPF", style = MaterialTheme.typography.bodySmall) }
                         if (product.categories.isNotEmpty()) Text("Categorias: ${product.categories.joinToString()}", style = MaterialTheme.typography.labelSmall)
                         directOffers.forEach { AcpOfferPoster(it, compact = true) }
                         if (directOffers.isEmpty()) Text("Sem promoção explícita identificada no cadastro do produto.", style = MaterialTheme.typography.labelSmall)
@@ -209,7 +212,7 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
                     HorizontalDivider()
                     Text("Cadastro do produto", style = MaterialTheme.typography.titleMedium)
                     Text("Estoque: ${product.stockQuantity?.quantity() ?: "não informado"}")
-                    Text("Vencimento do produto: ${product.dueDate ?: "não informado"}")
+                    Text("Vencimento do produto: ${acpDateLabel(product.dueDate) ?: "não informado"}")
                     product.unit?.let { Text("Unidade: $it") }
                     product.packageQuantity?.let { quantity -> Text("Embalagem: ${quantity.quantity()}${product.packageType?.let { " • $it" } ?: ""}") }
                     if (product.packageQuantity == null) product.packageType?.let { Text("Tipo de embalagem: $it") }
@@ -233,28 +236,29 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
                     Text("Sincronização ACP", style = MaterialTheme.typography.titleMedium)
                     if (detailBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
                     integration?.let { info ->
-                        Text("Status: ${info.status?.toString() ?: "não informado"}")
-                        Text("Última execução: ${info.lastRun ?: "não informada"}")
-                        Text("Última execução completa: ${info.lastCompleteRun ?: "não informada"}")
+                        Text("Código de status: ${info.status?.toString() ?: "não informado"}")
+                        Text("Última execução: ${acpDateLabel(info.lastRun, includeTime = true) ?: "não informada"}")
+                        Text("Última execução completa: ${acpDateLabel(info.lastCompleteRun, includeTime = true) ?: "não informada"}")
                         info.message?.let { Text("Mensagem: $it") }
                         info.id?.let { Text("ID da integração: $it", style = MaterialTheme.typography.bodySmall) }
                     }
                     if (!detailBusy && integration == null) Text("A ACP não retornou o status de sincronização.")
                     Text("Estoque e vencimento do produto vêm do Product/all. O status de sincronização não é usado como validade da oferta.", style = MaterialTheme.typography.labelSmall)
 
-                    HorizontalDivider()
-                    Text("Campanhas vinculadas", style = MaterialTheme.typography.titleMedium)
-                    if (!detailBusy && campaigns.isEmpty()) Text("Nenhuma campanha vinculada foi identificada na resposta da ACP.")
-                    campaigns.forEach { c ->
-                        ElevatedCard(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text(c.name, style = MaterialTheme.typography.titleSmall)
-                                c.code?.let { Text("Código: $it") }
-                                c.description?.takeIf { it != c.name }?.let { Text(it) }
-                                Text("Início: ${c.startDate ?: "não informado"} • Fim: ${c.endDate ?: "não informado"}")
-                                Text("Ativa: ${c.active?.let { if (it) "sim" else "não" } ?: "não informado"} • Autoexclusão: ${c.autoExclusion?.let { if (it) "sim" else "não" } ?: "não informado"}")
-                                val rules = c.productRules.count { it.matches(product) }
-                                if (rules > 0) Text("Regras promocionais vinculadas ao produto: $rules", style = MaterialTheme.typography.labelSmall)
+                    if (campaigns.isNotEmpty()) {
+                        HorizontalDivider()
+                        Text("Campanhas vinculadas", style = MaterialTheme.typography.titleMedium)
+                        campaigns.forEach { c ->
+                            ElevatedCard(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Text(c.name, style = MaterialTheme.typography.titleSmall)
+                                    c.code?.let { Text("Código: $it") }
+                                    c.description?.takeIf { it != c.name }?.let { Text(it) }
+                                    Text("Início: ${acpDateLabel(c.startDate) ?: "não informado"} • Fim: ${acpDateLabel(c.endDate) ?: "não informado"}")
+                                    Text("Ativa: ${c.active?.let { if (it) "sim" else "não" } ?: "não informado"} • Autoexclusão: ${c.autoExclusion?.let { if (it) "sim" else "não" } ?: "não informado"}")
+                                    val rules = c.productRules.count { it.matches(product) }
+                                    if (rules > 0) Text("Regras promocionais vinculadas ao produto: $rules", style = MaterialTheme.typography.labelSmall)
+                                }
                             }
                         }
                     }
