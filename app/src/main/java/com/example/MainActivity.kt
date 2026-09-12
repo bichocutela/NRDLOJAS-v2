@@ -67,7 +67,7 @@ class MainActivity : ComponentActivity() {
         Room.databaseBuilder(
             applicationContext,
             AppDatabase::class.java, "products.db"
-        ).fallbackToDestructiveMigration().build()
+        ).addMigrations(AppDatabase.MIGRATION_5_6).fallbackToDestructiveMigration().build()
     }
     
     private val repository by lazy {
