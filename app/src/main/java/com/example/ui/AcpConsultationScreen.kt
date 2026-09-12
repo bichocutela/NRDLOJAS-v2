@@ -31,7 +31,12 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
     var configure by remember { mutableStateOf(false) }
 
     LaunchedEffect(api) {
-        try { configured = api.hasCredentials() } finally { checking = false }
+        try {
+            configured = api.hasCredentials()
+            authenticated = api.restoreSession()
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: Exception) { error = acpErrorMessage(failure) }
+        finally { checking = false }
     }
 
     Scaffold(topBar = {

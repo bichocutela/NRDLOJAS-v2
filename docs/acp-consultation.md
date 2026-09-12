@@ -25,7 +25,8 @@ Supabase. Remover os dados do aplicativo remove a configuração local.
 
 - NextAuth: GET `/api/auth/csrf`, POST `/api/auth/callback/credentials` com
   `login`, `password`, `csrfToken`, `callbackUrl`, `json=true`, seguido de GET
-  `/api/auth/session`. Sem redirects automáticos ou repetição automática de senha.
+  `/api/auth/session`. Sem redirects automáticos. Após acesso confirmado/restaurado, um 401 permite uma
+  única autenticação normal e repetição da consulta; 403, 429 e falhas de rede não.
 - API: `https://api.acp.app.br/api/v1/`; quando `user.proxyEnable` estiver ativo,
   usa o proxy do tenant `/api/proxy/api/v1/`. Bearer obtido de `user.accessToken`.
 - Consulta: GET `Product/all` com `pageIndex` base zero, `pageSize`, filtro
@@ -125,7 +126,8 @@ Cadastrar uma única vez os repository Actions secrets `ACP_LOGIN` e `ACP_PASSWO
 antes da build de distribuição. O workflow interrompe a build se estiverem ausentes.
 Não há backend novo. Em builds configuradas, qualquer usuário do NRD vê os campos
 mascarados e bloqueados e toca em Entrar; não precisa configurar cada aparelho.
-A autenticação ACP só começa ao tocar no botão. A credencial da build tem prioridade
+A tela primeiro verifica cookies existentes sem enviar senha; sem sessão válida,
+o primeiro login começa ao tocar no botão. A credencial da build tem prioridade
 sobre uma configuração antiga local quando for necessário autenticar novamente.
 Sessões válidas são reaproveitadas. A senha incorporada é recuperável por quem
 inspecionar o APK; os asteriscos são apenas apresentação visual.
@@ -142,3 +144,20 @@ referência riscada; Clube e Atacado usam value positivo como preço normal
 cadastrado, sem confundi-lo com previousValue. Referência ausente não é inventada.
 Segunda unidade exibe percentual, sem calcular um preço médio cuja base não foi
 confirmada. Várias condições permanecem separadas; a estética não confirma vigência.
+
+
+## Sessão e atualização sob demanda
+
+A entrada restaura cookies existentes e consulta a sessão no servidor. Consultas
+serializadas impedem renovações concorrentes. Após uma confirmação ou restauração
+bem-sucedida, um 401 permite somente um novo login normal e uma repetição do GET.
+Falha nessa recuperação encerra a autorização para novas tentativas automáticas.
+Não há tentativa de prolongar a validade imposta pelo servidor.
+
+Abrir uma ficha refaz Product/all pelos códigos selecionados, exige identidade
+exata e rejeita duplicatas. A ficha não apresenta o preço anterior como recém
+consultado durante carregamento ou erro. Há atualização manual na busca e na
+ficha, com horário da consulta (não é data de atualização comercial da ACP).
+
+Testes HTTP de recuperação e atualização são sintéticos: não comprovam que a ACP
+aceitará renovar uma sessão real. Persistência e câmera ainda exigem aparelho.

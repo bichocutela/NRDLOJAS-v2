@@ -3,6 +3,8 @@ package com.example.data.acp
 import android.content.Context
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.Cookie
 import okhttp3.CookieJar
@@ -23,6 +25,8 @@ internal class AcpFailure(message: String) : IOException(message)
 internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient.Builder = OkHttpClient.Builder(),
     private val bundledLogin: String = "", private val bundledPassword: String = "") {
     constructor(context: Context) : this(AcpSecureStore(context), bundledLogin = BuildConfig.ACP_LOGIN, bundledPassword = BuildConfig.ACP_PASSWORD)
+    private val sessionLock = Mutex()
+    private var accessConfirmed = false
     private val cookies = AcpCookieJar(store.read("session")) { store.write("session", it) }
     private val client = clientBuilder
         .cookieJar(cookies)
@@ -32,37 +36,57 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
 
     suspend fun hasCredentials(): Boolean = withContext(Dispatchers.IO) { credentials() != null }
 
-    suspend fun configure(login: String, password: String) = withContext(Dispatchers.IO) {
-        require(login.isNotBlank() && password.isNotBlank())
-        store.write("access", JSONObject().put("login", login.trim()).put("password", password).toString())
-        cookies.clear()
+    suspend fun configure(login: String, password: String) = sessionLock.withLock {
+        withContext(Dispatchers.IO) {
+            require(login.isNotBlank() && password.isNotBlank())
+            store.write("access", JSONObject().put("login", login.trim()).put("password", password).toString())
+            accessConfirmed = false
+            cookies.clear()
+        }
     }
 
-    suspend fun confirmAccess() = withContext(Dispatchers.IO) {
-        try {
-            session()
-        } catch (_: AcpUnauthorized) {
-            val access = credentials() ?: throw AcpFailure("Peça ao administrador para configurar o acesso neste aparelho.")
-            cookies.clear()
-            val csrf = requestJson(Request.Builder().url("$ORIGIN/api/auth/csrf").get().build())
-                .nonBlankString("csrfToken")
-                ?: throw AcpFailure("A ACP não disponibilizou o formulário de acesso. Tente novamente.")
-            val form = FormBody.Builder()
-                .add("login", access.getString("login"))
-                .add("password", access.getString("password"))
-                .add("csrfToken", csrf).add("callbackUrl", "$ORIGIN/print-template")
-                .add("json", "true").build()
-            val result = requestJson(Request.Builder().url("$ORIGIN/api/auth/callback/credentials")
-                .header("Origin", ORIGIN).header("Referer", "$ORIGIN/login").post(form).build())
-            val error = result.nonBlankString("error") ?: result.nonBlankString("url")?.let {
-                ORIGIN.toHttpUrl().resolve(it)?.queryParameter("error")
-            }
-            if (!error.isNullOrBlank()) {
-                cookies.clear()
-                throw AcpFailure("A ACP não aceitou o acesso. Peça ao administrador para conferir a configuração.")
-            }
-            session() // A successful callback alone is not proof of authentication.
+    /** Restore only an existing server session; never submit credentials on initial screen entry. */
+    suspend fun restoreSession(): Boolean = sessionLock.withLock {
+        withContext(Dispatchers.IO) {
+            accessConfirmed = false
+            if (cookies.loadForRequest("$ORIGIN/api/auth/session".toHttpUrl()).isEmpty()) return@withContext false
+            try {
+                session()
+                accessConfirmed = true
+                true
+            } catch (_: AcpUnauthorized) { false }
         }
+    }
+
+    suspend fun confirmAccess() = sessionLock.withLock {
+        withContext(Dispatchers.IO) {
+            accessConfirmed = false
+            try { session() } catch (_: AcpUnauthorized) { signIn() }
+            accessConfirmed = true
+        }
+    }
+
+    private fun signIn() {
+        val access = credentials() ?: throw AcpFailure("Peça ao administrador para configurar o acesso neste aparelho.")
+        cookies.clear()
+        val csrf = requestJson(Request.Builder().url("$ORIGIN/api/auth/csrf").get().build())
+            .nonBlankString("csrfToken")
+            ?: throw AcpFailure("A ACP não disponibilizou o formulário de acesso. Tente novamente.")
+        val form = FormBody.Builder()
+            .add("login", access.getString("login"))
+            .add("password", access.getString("password"))
+            .add("csrfToken", csrf).add("callbackUrl", "$ORIGIN/print-template")
+            .add("json", "true").build()
+        val result = requestJson(Request.Builder().url("$ORIGIN/api/auth/callback/credentials")
+            .header("Origin", ORIGIN).header("Referer", "$ORIGIN/login").post(form).build())
+        val error = result.nonBlankString("error") ?: result.nonBlankString("url")?.let {
+            ORIGIN.toHttpUrl().resolve(it)?.queryParameter("error")
+        }
+        if (!error.isNullOrBlank()) {
+            cookies.clear()
+            throw AcpFailure("A ACP não aceitou o acesso. Peça ao administrador para conferir a configuração.")
+        }
+        session() // A successful callback alone is not proof of authentication.
     }
 
     fun hasBundledAccess(): Boolean = bundledLogin.isNotBlank() && bundledPassword.isNotBlank()
@@ -85,15 +109,30 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     }
 
     /** Read-only endpoints. Bearer is obtained from the existing ACP session, never logged. */
-    internal suspend fun get(path: String, parameters: List<Pair<String, String>>): JSONObject = withContext(Dispatchers.IO) {
-        require(path in setOf("Product/all", "ProductCategory/all"))
+    internal suspend fun get(path: String, parameters: List<Pair<String, String>>): JSONObject = sessionLock.withLock {
+        withContext(Dispatchers.IO) {
+            require(path in setOf("Product/all", "ProductCategory/all"))
+            try { readOnce(path, parameters) } catch (expired: AcpUnauthorized) {
+                val mayRenew = accessConfirmed
+                accessConfirmed = false
+                if (!mayRenew) throw expired
+                // One normal sign-in and one GET retry. Forbidden/rate-limit/network errors never submit a password.
+                signIn()
+                val result = readOnce(path, parameters)
+                accessConfirmed = true
+                result
+            }
+        }
+    }
+
+    private fun readOnce(path: String, parameters: List<Pair<String, String>>): JSONObject {
         val session = session()
         val base = if (session.optBoolean("proxyEnable")) "$ORIGIN/api/proxy/api/v1/" else "$API_ORIGIN/api/v1/"
         val url = (base + path).toHttpUrl().newBuilder().apply {
             parameters.forEach { (key, value) -> addQueryParameter(key, value) }
         }.build()
-        requestJson(Request.Builder().url(url).header("Authorization", "Bearer ${session.getString("accessToken")}")
-            .header("Accept", "application/json").get().build())
+        return requestJson(Request.Builder().url(url).header("Authorization", "Bearer ${session.getString("accessToken")}")
+            .header("Cache-Control", "no-cache").header("Accept", "application/json").get().build())
     }
 
     private fun requestJson(request: Request): JSONObject {

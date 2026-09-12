@@ -15,6 +15,9 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import com.example.data.acp.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -38,13 +41,55 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
     var searchJob by remember { mutableStateOf<Job?>(null) }
     var generation by remember { mutableIntStateOf(0) }
     var scanning by remember { mutableStateOf(false) }
+    var detail by remember { mutableStateOf<AcpProduct?>(null) }
+    var detailBusy by remember { mutableStateOf(false) }
+    var detailError by remember { mutableStateOf<String?>(null) }
+    var detailTime by remember { mutableStateOf<Long?>(null) }
+    var detailJob by remember { mutableStateOf<Job?>(null) }
+    var detailGeneration by remember { mutableIntStateOf(0) }
+
+    fun closeDetail() {
+        detailGeneration++
+        detailJob?.cancel()
+        selected = null
+        detail = null
+        detailTime = null
+        detailError = null
+        detailBusy = false
+    }
+
+    fun openProduct(product: AcpProduct) {
+        detailJob?.cancel()
+        val ticket = ++detailGeneration
+        selected = product
+        detail = null
+        detailTime = null
+        detailError = null
+        detailBusy = true
+        detailJob = scope.launch {
+            try {
+                val refreshed = api.refreshProduct(product)
+                if (ticket == detailGeneration) {
+                    detail = refreshed
+                    detailTime = System.currentTimeMillis()
+                    // Replace the corresponding list entry without claiming the whole list was refreshed.
+                    page = page?.let { old -> old.copy(items = old.items.map { item ->
+                        if (item.id == product.id && item.code == product.code && item.barcode == product.barcode) refreshed else item
+                    }) }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: AcpUnauthorized) { if (ticket == detailGeneration) { closeDetail(); onSessionExpired() } }
+            catch (failure: Exception) { if (ticket == detailGeneration) detailError = acpErrorMessage(failure) }
+            finally { if (ticket == detailGeneration) detailBusy = false }
+        }
+    }
 
     fun invalidateResults() {
         generation++
         searchJob?.cancel()
         busy = false
         page = null
-        selected = null
+        closeDetail()
         error = null
     }
 
@@ -57,7 +102,8 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         val searchCategory = category
         busy = true
         error = null
-        selected = null
+        closeDetail()
+        page = null
         keyboard?.hide()
         searchJob = scope.launch {
             try {
@@ -113,11 +159,16 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         val result = page
+        if (result != null && !busy) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Consulta: ${acpQueryTime(result.queriedAtMillis)}", style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f).padding(top = 12.dp))
+            TextButton(onClick = { search(result.pageIndex) }) { Text("Atualizar") }
+        }
         if (result == null && !busy && error == null) Text("Busque um produto para consultar os preços na ACP.")
         if (result != null && result.items.isEmpty() && !busy) Text("Nenhum produto encontrado. Confira o código ou tente outro filtro.")
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(result?.items.orEmpty(), key = { index, product -> "${product.id}:$index" }) { _, product ->
-                OutlinedCard(onClick = { selected = product }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                OutlinedCard(onClick = { openProduct(product) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Text(product.description, style = MaterialTheme.typography.titleMedium)
                         Text("Código: ${product.code.ifBlank { "não informado" }}", style = MaterialTheme.typography.bodySmall)
@@ -146,28 +197,43 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         search()
     })
 
-    selected?.let { product ->
-        AlertDialog(onDismissRequest = { selected = null }, title = { Text(product.description) }, text = {
+    selected?.let { requested ->
+        AlertDialog(onDismissRequest = { closeDetail() }, title = { Text(detail?.description ?: requested.description) }, text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Código: ${product.code.ifBlank { "não informado" }}\nCód. barras: ${product.barcode.ifBlank { "não informado" }}")
-                Text("Preço principal: ${product.value?.brl() ?: "não informado"}" + (product.unit?.let { " / $it" } ?: ""),
-                    style = MaterialTheme.typography.titleMedium)
-                val offers = product.offers()
-                if (offers.isEmpty()) {
-                    AcpOfferPoster(AcpOffer("Preço cadastrado", "Nenhuma condição promocional informada neste cadastro.", product.value), compact = false)
-                    Text("Isso não confirma a ausência de campanhas.")
+                if (detailBusy) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text("Consultando preços na ACP…")
                 }
-                offers.forEach { offer ->
+                detailError?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                    Text("Não foi possível confirmar os preços agora.")
+                    TextButton(onClick = { openProduct(requested) }) { Text("Tentar novamente") }
+                }
+                detail?.let { product ->
+                    detailTime?.let { Text("Consultado em ${acpQueryTime(it)}", style = MaterialTheme.typography.bodySmall) }
+                    Text("Código: ${product.code.ifBlank { "não informado" }}\nCód. barras: ${product.barcode.ifBlank { "não informado" }}")
+                    Text("Preço principal: ${product.value?.brl() ?: "não informado"}" + (product.unit?.let { " / $it" } ?: ""),
+                        style = MaterialTheme.typography.titleMedium)
+                    val offers = product.offers()
+                    if (offers.isEmpty()) {
+                        AcpOfferPoster(AcpOffer("Preço cadastrado", "Nenhuma condição promocional informada neste cadastro.", product.value), compact = false)
+                        Text("Isso não confirma a ausência de campanhas.")
+                    }
+                    offers.forEach { offer ->
+                        HorizontalDivider()
+                        AcpOfferPoster(offer, compact = false)
+                    }
+                    product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite cadastrado: ${it.quantity()} unidades por CPF.") }
+                    if (product.categories.isNotEmpty()) Text("Categorias: ${product.categories.joinToString()}", style = MaterialTheme.typography.bodySmall)
                     HorizontalDivider()
-                    AcpOfferPoster(offer, compact = false)
+                    Text("Validade não confirmada", style = MaterialTheme.typography.titleSmall)
+                    Text("Valores e condições cadastrados na ACP. Vigência e combinação entre campanhas ainda precisam ser confirmadas.",
+                        style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { openProduct(product) }) { Text("Atualizar preços") }
                 }
-                product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite cadastrado: ${it.quantity()} unidades por CPF.") }
-                if (product.categories.isNotEmpty()) Text("Categorias: ${product.categories.joinToString()}", style = MaterialTheme.typography.bodySmall)
-                HorizontalDivider()
-                Text("Validade não confirmada", style = MaterialTheme.typography.titleSmall)
-                Text("Valores e condições cadastrados na ACP. Vigência e combinação entre campanhas ainda precisam ser confirmadas.",
-                    style = MaterialTheme.typography.bodySmall)
             }
-        }, confirmButton = { TextButton(onClick = { selected = null }) { Text("Fechar") } })
+        }, confirmButton = { TextButton(onClick = { closeDetail() }) { Text("Fechar") } })
     }
 }
+
+private fun acpQueryTime(value: Long): String = SimpleDateFormat("dd/MM HH:mm:ss", Locale("pt", "BR")).format(Date(value))
