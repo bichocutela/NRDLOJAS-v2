@@ -221,72 +221,206 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
         }
     }
 
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            AcpSearchField.entries.forEach { option ->
-                FilterChip(selected = field == option, onClick = { field = option; invalidateResults() }, label = { Text(option.label) })
+    val result = page
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                AcpSearchField.entries.forEach { option ->
+                    FilterChip(
+                        selected = field == option,
+                        onClick = { field = option; invalidateResults() },
+                        label = { Text(option.label) }
+                    )
+                }
             }
         }
-        OutlinedTextField(value = query, onValueChange = { query = it.take(200); invalidateResults() }, label = { Text(field.label) }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = if (field == AcpSearchField.DESCRIPTION) KeyboardType.Text else KeyboardType.Number, imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { search() }))
-        Box {
-            OutlinedButton(onClick = { menu = true }, modifier = Modifier.fillMaxWidth()) { Text("Categoria ACP: ${category?.description ?: "Todas"} ▾") }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("Todas") }, onClick = { category = null; menu = false; invalidateResults() })
-                categories.forEach { option -> DropdownMenuItem(text = { Text(option.description) }, onClick = { category = option; menu = false; invalidateResults() }) }
-            }
-        }
-        categoryError?.let { Text(it, style = MaterialTheme.typography.bodySmall); TextButton(onClick = { categoryAttempt++ }) { Text("Recarregar categorias") } }
-        Button(onClick = { search() }, enabled = !busy && query.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Buscando…" else "Buscar") }
-        OutlinedButton(onClick = { scanning = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Ler código com a câmera") }
-        if (page != null) {
-            OutlinedButton(onClick = {
-                val text = api.diagnosticText()
-                if (text == null) diagnosticMessage = "Faça uma busca antes de copiar o diagnóstico."
-                else { clipboard.setText(AnnotatedString(text)); diagnosticMessage = "Diagnóstico ACP copiado. Cole no ChatGPT para análise." }
-            }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Copiar diagnóstico ACP") }
-            Text("O diagnóstico registra respostas, endpoints e parâmetros das consultas desta busca. Campos sensíveis são mascarados e senha, cookies e cabeçalhos de autorização não são incluídos.", style = MaterialTheme.typography.labelSmall)
-        }
-        diagnosticMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
-        val result = page
-        if (result != null && !busy) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Consulta: ${acpQueryTime(result.queriedAtMillis)}", style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.weight(1f).padding(top = 12.dp))
-            TextButton(onClick = { search(result.pageIndex) }) { Text("Atualizar") }
-        }
-        if (result == null && !busy && error == null) Text("Busque um produto para consultar os preços na ACP.")
-        if (result != null && result.items.isEmpty() && !busy) Text("Nenhum produto encontrado. Confira o código ou tente outro filtro.")
-        if (result != null && result.items.isNotEmpty()) {
-            val label = if (result.totalCount == 1) "produto encontrado" else "produtos encontrados"
-            Text("${result.totalCount} $label • página ${result.pageIndex + 1} de ${result.totalPages.coerceAtLeast(1)}", style = MaterialTheme.typography.labelMedium)
+        item {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it.take(200); invalidateResults() },
+                label = { Text(field.label) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = if (field == AcpSearchField.DESCRIPTION) KeyboardType.Text else KeyboardType.Number,
+                    imeAction = ImeAction.Search
+                ),
+                keyboardActions = KeyboardActions(onSearch = { search() })
+            )
         }
 
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            itemsIndexed(result?.items.orEmpty(), key = { index, product -> "${product.id}:$index" }) { _, product ->
-                val directOffers = product.offers()
-                OutlinedCard(onClick = { openProduct(product) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text(product.description, style = MaterialTheme.typography.titleMedium)
-                        Text("Código: ${product.code.ifBlank { "não informado" }}", style = MaterialTheme.typography.bodySmall)
-                        if (product.barcode.isNotBlank()) Text("EAN: ${product.barcode}", style = MaterialTheme.typography.bodySmall)
-                        Text("Preço ACP: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}", style = MaterialTheme.typography.titleMedium)
-                        product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite: ${it.quantity()} un. por CPF", style = MaterialTheme.typography.bodySmall) }
-                        if (product.categories.isNotEmpty()) Text("Categorias: ${product.categories.joinToString()}", style = MaterialTheme.typography.labelSmall)
-                        directOffers.forEach { AcpOfferPoster(it, compact = true) }
-                        if (directOffers.isEmpty()) Text("Sem promoção explícita identificada no cadastro do produto.", style = MaterialTheme.typography.labelSmall)
-                        Text("Ver ficha completa ACP", style = MaterialTheme.typography.bodySmall)
+        item {
+            Box {
+                OutlinedButton(onClick = { menu = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Categoria ACP: ${category?.description ?: "Todas"} ▾")
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Todas") }, onClick = {
+                        category = null
+                        menu = false
+                        invalidateResults()
+                    })
+                    categories.forEach { option ->
+                        DropdownMenuItem(text = { Text(option.description) }, onClick = {
+                            category = option
+                            menu = false
+                            invalidateResults()
+                        })
                     }
                 }
             }
         }
 
+        categoryError?.let { message ->
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(message, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { categoryAttempt++ }) { Text("Recarregar") }
+                }
+            }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = { search() },
+                    enabled = !busy && query.isNotBlank(),
+                    modifier = Modifier.weight(1f)
+                ) { Text(if (busy) "Buscando…" else "Buscar") }
+                OutlinedButton(
+                    onClick = { scanning = true },
+                    enabled = !busy,
+                    modifier = Modifier.weight(1f)
+                ) { Text("Câmera") }
+            }
+        }
+
+        if (page != null) {
+            item {
+                OutlinedButton(onClick = {
+                    val text = api.diagnosticText()
+                    if (text == null) diagnosticMessage = "Faça uma busca antes de copiar o diagnóstico."
+                    else {
+                        clipboard.setText(AnnotatedString(text))
+                        diagnosticMessage = "Diagnóstico ACP copiado. Cole no ChatGPT para análise."
+                    }
+                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Text("Copiar diagnóstico ACP")
+                }
+            }
+            item {
+                Text(
+                    "O diagnóstico registra respostas, endpoints e parâmetros desta busca. Dados sensíveis não são incluídos.",
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
+
+        diagnosticMessage?.let { message ->
+            item { Text(message, style = MaterialTheme.typography.bodySmall) }
+        }
+        if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
+
+        if (result != null && !busy) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("Consulta: ${acpQueryTime(result.queriedAtMillis)}", style = MaterialTheme.typography.bodySmall)
+                        if (result.items.isNotEmpty()) {
+                            val label = if (result.totalCount == 1) "produto encontrado" else "produtos encontrados"
+                            Text(
+                                "${result.totalCount} $label • página ${result.pageIndex + 1} de ${result.totalPages.coerceAtLeast(1)}",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                    }
+                    TextButton(onClick = { search(result.pageIndex) }) { Text("Atualizar") }
+                }
+            }
+        }
+
+        if (result == null && !busy && error == null) {
+            item { Text("Busque um produto para consultar os preços na ACP.") }
+        }
+        if (result != null && result.items.isEmpty() && !busy) {
+            item { Text("Nenhum produto encontrado. Confira o código ou tente outro filtro.") }
+        }
+
+        itemsIndexed(result?.items.orEmpty(), key = { index, product -> "${product.id}:$index" }) { _, product ->
+            val directOffers = product.offers()
+            OutlinedCard(
+                onClick = { openProduct(product) },
+                enabled = !busy,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(product.description, style = MaterialTheme.typography.titleMedium)
+                    val identifiers = buildString {
+                        append("Código: ${product.code.ifBlank { "não informado" }}")
+                        if (product.barcode.isNotBlank()) append(" • EAN: ${product.barcode}")
+                    }
+                    Text(identifiers, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "Preço ACP: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let {
+                        Text("Limite: ${it.quantity()} un. por CPF", style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (product.categories.isNotEmpty()) {
+                        Text("Categorias: ${product.categories.joinToString()}", style = MaterialTheme.typography.labelSmall)
+                    }
+                    if (directOffers.isNotEmpty()) {
+                        Spacer(Modifier.height(2.dp))
+                        directOffers.forEach { AcpOfferPoster(it, compact = true) }
+                    } else {
+                        Text("Sem promoção explícita identificada no cadastro do produto.", style = MaterialTheme.typography.labelSmall)
+                    }
+                    Text("Ver ficha completa", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+
         if (result != null && result.totalPages > 1) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = { search(result.pageIndex - 1) }, enabled = !busy && result.pageIndex > 0) { Text("Anterior") }
-                Text("${result.pageIndex + 1} / ${result.totalPages}", modifier = Modifier.padding(top = 12.dp))
-                TextButton(onClick = { search(result.pageIndex + 1) }, enabled = !busy && result.pageIndex + 1 < result.totalPages) { Text("Próxima") }
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = { search(result.pageIndex - 1) },
+                        enabled = !busy && result.pageIndex > 0
+                    ) { Text("Anterior") }
+                    Text("${result.pageIndex + 1} / ${result.totalPages}", style = MaterialTheme.typography.labelLarge)
+                    TextButton(
+                        onClick = { search(result.pageIndex + 1) },
+                        enabled = !busy && result.pageIndex + 1 < result.totalPages
+                    ) { Text("Próxima") }
+                }
             }
         }
     }
