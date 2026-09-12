@@ -248,12 +248,12 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
             try {
                 delay(SILENT_REFRESH_DELAY_MILLIS)
                 var page = 0
-                var totalPages = 1
-                while (page < totalPages && page < MAX_SILENT_PAGES) {
+                var pageCount = 1
+                while (page < pageCount && page < MAX_SILENT_PAGES) {
                     val parameters = baseParameters + ("pageIndex" to page.toString())
                     val fresh = authenticatedRead(path, parameters, record = false)
                     writeCachedResponse(path, parameters, fresh)
-                    totalPages = totalPages(fresh).coerceAtLeast(1)
+                    pageCount = responseTotalPages(fresh).coerceAtLeast(1)
                     page++
                 }
             } catch (_: Exception) {
@@ -267,7 +267,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     private fun pageIndex(parameters: List<Pair<String, String>>): Int =
         parameters.lastOrNull { it.first == "pageIndex" }?.second?.toIntOrNull()?.coerceAtLeast(0) ?: 0
 
-    private fun totalPages(root: JSONObject): Int {
+    private fun responseTotalPages(root: JSONObject): Int {
         val data = root.optJSONObject("data")
         return root.optInt("totalPages", data?.optInt("totalPages", 1) ?: 1)
     }
