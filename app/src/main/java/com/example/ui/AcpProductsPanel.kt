@@ -1,39 +1,58 @@
 package com.example.ui
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.example.data.CategoryDefinition
 import com.example.data.FirebaseService
 import com.example.data.NrdProductImportService
 import com.example.data.acp.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.LinkedHashMap
 import java.util.Locale
+import java.security.MessageDigest
 
 private enum class NrdIdentifier { BARCODE, PRODUCT_CODE }
 
 @Composable
 internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpired: () -> Unit) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val freshStore = remember(context) { AcpSecureStore(context.applicationContext) }
     val keyboard = LocalSoftwareKeyboardController.current
     val clipboard = LocalClipboardManager.current
     val nrdCategoriesFlow = remember { FirebaseService.observeCategories() }
@@ -45,12 +64,6 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
     }
 
     var query by remember { mutableStateOf("") }
-    var field by remember { mutableStateOf(AcpSearchField.BARCODE) }
-    var category by remember { mutableStateOf<AcpCategory?>(null) }
-    var categories by remember { mutableStateOf<List<AcpCategory>>(emptyList()) }
-    var categoryError by remember { mutableStateOf<String?>(null) }
-    var categoryAttempt by remember { mutableIntStateOf(0) }
-    var menu by remember { mutableStateOf(false) }
     var page by remember { mutableStateOf<AcpProductPage?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -70,6 +83,15 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
     var detailError by remember { mutableStateOf<String?>(null) }
     var detailTime by remember { mutableStateOf<Long?>(null) }
     var detailAttempt by remember { mutableIntStateOf(0) }
+
+    var clubProducts by remember { mutableStateOf<List<AcpProduct>>(emptyList()) }
+    var clubBusy by remember { mutableStateOf(false) }
+    var clubError by remember { mutableStateOf<String?>(null) }
+    var clubLastSync by remember { mutableStateOf<Long?>(null) }
+    var clubRefreshToken by remember { mutableIntStateOf(0) }
+    var showClubProducts by remember { mutableStateOf(false) }
+    var clubQuery by remember { mutableStateOf("") }
+    val clubCarouselState = rememberLazyListState()
 
     var addToNrdProduct by remember { mutableStateOf<AcpProduct?>(null) }
     var nrdIdentifier by remember { mutableStateOf(NrdIdentifier.BARCODE) }
@@ -116,41 +138,27 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
         detailAttempt++
     }
 
-    fun invalidateResults() {
-        generation++
-        searchJob?.cancel()
-        busy = false
-        page = null
-        previewCampaignOffers = emptyMap()
-        closeDetail()
-        error = null
-        diagnosticMessage = null
-    }
-
     fun search(index: Int = 0) {
-        if (query.isBlank()) { error = "Digite um código ou descrição."; return }
+        if (query.isBlank()) {
+            error = "Digite um código, código de barras ou descrição."
+            return
+        }
         searchJob?.cancel()
         val ticket = ++generation
         val searchText = query.trim()
-        val searchField = field
-        val searchCategory = category
         busy = true
         diagnosticMessage = null
         error = null
         closeDetail()
-        page = null
         keyboard?.hide()
         if (index == 0) api.beginDiagnosticSession()
         searchJob = scope.launch {
             try {
-                val result = api.searchProducts(searchField, searchText, searchCategory, index)
+                val result = api.searchProductsUnified(searchText, index)
                 if (ticket != generation) return@launch
-                // Restore the fast two-phase flow used before campaign enrichment was coupled
-                // to the visible search state: Product/all releases the UI immediately.
+                // Só troca a lista quando a nova pesquisa terminou. Enquanto o funcionário
+                // digita ou enquanto a rede responde, o resultado anterior permanece visível.
                 page = result
-                busy = false
-
-                // Promotions are auxiliary enrichment and must never keep "Buscando…" on screen.
                 previewCampaignOffers = try {
                     api.campaignOffersFor(result.items)
                 } catch (cancelled: CancellationException) {
@@ -164,21 +172,44 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: AcpUnauthorized) {
-                if (ticket == generation) { page = null; onSessionExpired() }
+                if (ticket == generation) onSessionExpired()
             } catch (failure: Exception) {
-                if (ticket == generation) { page = null; error = acpErrorMessage(failure) }
+                if (ticket == generation) error = acpErrorMessage(failure)
             } finally {
                 if (ticket == generation) busy = false
             }
         }
     }
 
-    LaunchedEffect(api, categoryAttempt) {
-        categoryError = null
-        try { categories = api.categories() }
-        catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: AcpUnauthorized) { onSessionExpired() }
-        catch (_: Exception) { categoryError = "Categorias ACP indisponíveis. A busca geral continua disponível." }
+    LaunchedEffect(api, clubRefreshToken) {
+        clubBusy = true
+        clubError = null
+        try {
+            // Monta a lista em memória e só publica quando TODAS as páginas terminarem.
+            // Assim uma falha no meio da sincronização nunca substitui a lista por dados parciais.
+            val fresh = api.loadFreshClubProducts(freshStore)
+            clubProducts = fresh
+            clubLastSync = System.currentTimeMillis()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: AcpUnauthorized) {
+            clubError = "A sessão ACP expirou durante a sincronização do Clube."
+            onSessionExpired()
+        } catch (failure: Exception) {
+            clubError = acpErrorMessage(failure)
+        } finally {
+            clubBusy = false
+        }
+    }
+
+    val carouselProducts = remember(clubProducts) { clubProducts.take(18) }
+    LaunchedEffect(carouselProducts.map { it.id }) {
+        if (carouselProducts.size <= 1) return@LaunchedEffect
+        while (isActive) {
+            delay(5_000L)
+            val next = (clubCarouselState.firstVisibleItemIndex + 1) % carouselProducts.size
+            clubCarouselState.animateScrollToItem(next)
+        }
     }
 
     LaunchedEffect(selected, detailAttempt) {
@@ -192,7 +223,7 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
         detailBusy = true
         val warnings = mutableListOf<String>()
         val product = try {
-            api.refreshProduct(requested)
+            api.refreshProductFreshForUi(requested, freshStore)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: AcpUnauthorized) {
@@ -209,6 +240,9 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
         page = page?.let { old -> old.copy(items = old.items.map { item ->
             if (item.id == requested.id && item.code == requested.code && item.barcode == requested.barcode) product else item
         }) }
+        clubProducts = clubProducts.map { item ->
+            if (item.id == requested.id && item.code == requested.code && item.barcode == requested.barcode && product.clubValue != null) product else item
+        }
         try {
             campaigns = api.campaignsFor(product)
         } catch (cancelled: CancellationException) {
@@ -242,88 +276,115 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item {
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                AcpSearchField.entries.forEach { option ->
-                    FilterChip(
-                        selected = field == option,
-                        onClick = { field = option; invalidateResults() },
-                        label = { Text(option.label) }
-                    )
-                }
-            }
-        }
-
         item {
             OutlinedTextField(
                 value = query,
-                onValueChange = { query = it.take(200); invalidateResults() },
-                label = { Text(field.label) },
+                onValueChange = { query = it.take(200); error = null },
+                placeholder = { Text("Faça sua busca") },
+                supportingText = { Text("Código, código de barras ou descrição do produto") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    IconButton(onClick = { scanning = true }, enabled = !busy) {
+                        Icon(Icons.Default.CameraAlt, contentDescription = "Ler código de barras")
+                    }
+                },
                 singleLine = true,
+                shape = RoundedCornerShape(28.dp),
                 modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = if (field == AcpSearchField.DESCRIPTION) KeyboardType.Text else KeyboardType.Number,
-                    imeAction = ImeAction.Search
-                ),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { search() })
             )
         }
 
         item {
-            Box {
-                OutlinedButton(onClick = { menu = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Categoria ACP: ${category?.description ?: "Todas"} ▾")
-                }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text("Todas") }, onClick = {
-                        category = null
-                        menu = false
-                        invalidateResults()
-                    })
-                    categories.forEach { option ->
-                        DropdownMenuItem(text = { Text(option.description) }, onClick = {
-                            category = option
-                            menu = false
-                            invalidateResults()
-                        })
-                    }
-                }
-            }
-        }
-
-        categoryError?.let { message ->
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(message, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { categoryAttempt++ }) { Text("Recarregar") }
-                }
+            Button(
+                onClick = { search() },
+                enabled = !busy && query.isNotBlank(),
+                shape = RoundedCornerShape(26.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                modifier = Modifier.fillMaxWidth().height(54.dp)
+            ) {
+                Icon(Icons.Default.Search, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (busy) "Pesquisando…" else "Pesquisar produto", fontWeight = FontWeight.Bold)
             }
         }
 
         item {
-            Row(
+            ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f))
             ) {
-                Button(
-                    onClick = { search() },
-                    enabled = !busy && query.isNotBlank(),
-                    modifier = Modifier.weight(1f)
-                ) { Text(if (busy) "Buscando…" else "Buscar") }
-                OutlinedButton(
-                    onClick = { scanning = true },
-                    enabled = !busy,
-                    modifier = Modifier.weight(1f)
-                ) { Text("Câmera") }
+                Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Clube de Vantagens", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            clubLastSync?.let {
+                                Text("Sincronizado com a ACP às ${acpQueryTime(it)}", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                        TextButton(onClick = {
+                            showClubProducts = true
+                            val age = clubLastSync?.let { System.currentTimeMillis() - it } ?: Long.MAX_VALUE
+                            if (!clubBusy && age > 5 * 60 * 1000L) clubRefreshToken++
+                        }) { Text("Ver Todos") }
+                    }
+
+                    if (clubBusy && clubProducts.isEmpty()) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 14.dp))
+                    }
+                    clubError?.let { message ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { clubRefreshToken++ }, enabled = !clubBusy) {
+                                Icon(Icons.Default.Refresh, contentDescription = "Sincronizar Clube")
+                            }
+                        }
+                    }
+                    if (!clubBusy && clubProducts.isEmpty() && clubError == null) {
+                        Text("Nenhum produto com preço Clube foi retornado pela ACP.", modifier = Modifier.padding(horizontal = 14.dp), style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (carouselProducts.isNotEmpty()) {
+                        LazyRow(
+                            state = clubCarouselState,
+                            contentPadding = PaddingValues(horizontal = 14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            itemsIndexed(carouselProducts, key = { _, product -> "club:${product.id}:${product.code}" }) { _, product ->
+                                ElevatedCard(
+                                    onClick = { openProduct(product) },
+                                    modifier = Modifier.width(218.dp).heightIn(min = 118.dp),
+                                    shape = RoundedCornerShape(18.dp),
+                                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                ) {
+                                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                        Text(product.description, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        Text(
+                                            product.clubValue?.brl() ?: "Preço Clube indisponível",
+                                            style = MaterialTheme.typography.titleLarge,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        val id = product.barcode.ifBlank { product.code }
+                                        if (id.isNotBlank()) Text("Cód.: $id", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -340,21 +401,13 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                     Text("Copiar diagnóstico ACP")
                 }
             }
-            item {
-                Text(
-                    "O diagnóstico registra respostas, endpoints e parâmetros desta busca. Dados sensíveis não são incluídos.",
-                    style = MaterialTheme.typography.labelSmall
-                )
-            }
         }
 
-        diagnosticMessage?.let { message ->
-            item { Text(message, style = MaterialTheme.typography.bodySmall) }
-        }
+        diagnosticMessage?.let { message -> item { Text(message, style = MaterialTheme.typography.bodySmall) } }
         if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
 
-        if (result != null && !busy) {
+        if (result != null) {
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -364,23 +417,20 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("Consulta: ${acpQueryTime(result.queriedAtMillis)}", style = MaterialTheme.typography.bodySmall)
                         if (result.items.isNotEmpty()) {
-                            val label = if (result.totalCount == 1) "produto encontrado" else "produtos encontrados"
-                            Text(
-                                "${result.totalCount} $label • página ${result.pageIndex + 1} de ${result.totalPages.coerceAtLeast(1)}",
-                                style = MaterialTheme.typography.labelMedium
-                            )
+                            val label = if (result.items.size == 1) "resultado nesta página" else "resultados nesta página"
+                            Text("${result.items.size} $label", style = MaterialTheme.typography.labelMedium)
                         }
                     }
-                    TextButton(onClick = { search(result.pageIndex) }) { Text("Atualizar") }
+                    TextButton(onClick = { search(result.pageIndex) }, enabled = !busy) { Text("Atualizar") }
                 }
             }
         }
 
         if (result == null && !busy && error == null) {
-            item { Text("Busque um produto para consultar os preços na ACP.") }
+            item { Text("Busque por código, código de barras ou descrição. O NRD consulta os três campos automaticamente.") }
         }
         if (result != null && result.items.isEmpty() && !busy) {
-            item { Text("Nenhum produto encontrado. Confira o código ou tente outro filtro.") }
+            item { Text("Nenhum produto encontrado. Confira o termo e tente novamente.") }
         }
 
         itemsIndexed(result?.items.orEmpty(), key = { index, product -> "${product.id}:$index" }) { _, product ->
@@ -407,9 +457,6 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                     )
                     product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let {
                         Text("Limite: ${it.quantity()} un. por CPF", style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (product.categories.isNotEmpty()) {
-                        Text("Categorias: ${product.categories.joinToString()}", style = MaterialTheme.typography.labelSmall)
                     }
                     if (previewOffers.isNotEmpty()) {
                         Spacer(Modifier.height(2.dp))
@@ -443,7 +490,88 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
         }
     }
 
-    if (scanning) AcpBarcodeScanner(onDismiss = { scanning = false }, onResult = { code -> scanning = false; invalidateResults(); field = AcpSearchField.BARCODE; category = null; query = code; search() })
+    if (scanning) {
+        AcpBarcodeScanner(
+            onDismiss = { scanning = false },
+            onResult = { code ->
+                scanning = false
+                query = code
+                search()
+            }
+        )
+    }
+
+    if (showClubProducts) {
+        val normalized = clubQuery.trim().lowercase(Locale.getDefault())
+        val filteredClubProducts = remember(clubProducts, normalized) {
+            if (normalized.isBlank()) clubProducts else clubProducts.filter { product ->
+                product.code.lowercase(Locale.getDefault()).contains(normalized) ||
+                    product.barcode.lowercase(Locale.getDefault()).contains(normalized) ||
+                    product.description.lowercase(Locale.getDefault()).contains(normalized)
+            }
+        }
+        Dialog(onDismissRequest = { showClubProducts = false }) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.88f),
+                shape = RoundedCornerShape(28.dp),
+                tonalElevation = 6.dp
+            ) {
+                Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Produtos no Clube", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                            Text("${clubProducts.size} produtos sincronizados", style = MaterialTheme.typography.bodySmall)
+                        }
+                        IconButton(onClick = { clubRefreshToken++ }, enabled = !clubBusy) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Atualizar lista do Clube")
+                        }
+                    }
+                    clubLastSync?.let {
+                        Text("Última sincronização completa: ${acpQueryTime(it)}", style = MaterialTheme.typography.labelSmall)
+                    }
+                    if (clubBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    clubError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                    OutlinedTextField(
+                        value = clubQuery,
+                        onValueChange = { clubQuery = it.take(200) },
+                        placeholder = { Text("Pesquisar no Clube") },
+                        supportingText = { Text("Código, código de barras ou descrição") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(24.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text("${filteredClubProducts.size} encontrados", style = MaterialTheme.typography.labelMedium)
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        itemsIndexed(filteredClubProducts, key = { _, product -> "club-all:${product.id}:${product.code}" }) { _, product ->
+                            OutlinedCard(onClick = {
+                                showClubProducts = false
+                                openProduct(product)
+                            }, modifier = Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(product.description, style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        "Clube: ${product.clubValue?.brl() ?: "não informado"}",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        "Código: ${product.code.ifBlank { "-" }} • EAN: ${product.barcode.ifBlank { "-" }}",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    TextButton(onClick = { showClubProducts = false }, modifier = Modifier.align(Alignment.End)) { Text("Fechar") }
+                }
+            }
+        }
+    }
 
     selected?.let { requested ->
         AlertDialog(
@@ -502,11 +630,12 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                             }
                         }
                         if (!detailBusy && allOffers.none { it.title == "Cashback" || it.title == "Cashback em valor" }) {
-                            Text(if (detailWarning == null) "Cashback não informado nos dados consultados da ACP."
+                            Text(
+                                if (detailWarning == null) "Cashback não informado nos dados consultados da ACP."
                                 else "Cashback não confirmado: a consulta complementar ficou incompleta.",
-                                style = MaterialTheme.typography.bodySmall)
+                                style = MaterialTheme.typography.bodySmall
+                            )
                         }
-
 
                         HorizontalDivider()
                         OutlinedCard(onClick = { syncExpanded = !syncExpanded }, modifier = Modifier.fillMaxWidth()) {
@@ -654,6 +783,118 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
             dismissButton = { TextButton(onClick = { closeAddToNrd() }, enabled = !nrdSaving) { Text("Cancelar") } }
         )
     }
+}
+
+private suspend fun AcpApi.searchProductsUnified(query: String, pageIndex: Int): AcpProductPage = coroutineScope {
+    val clean = query.trim()
+    require(clean.isNotBlank() && clean.length <= 200 && pageIndex >= 0)
+    val orderedFields = if (clean.all(Char::isDigit)) {
+        listOf(AcpSearchField.BARCODE, AcpSearchField.CODE, AcpSearchField.DESCRIPTION)
+    } else {
+        listOf(AcpSearchField.DESCRIPTION, AcpSearchField.CODE, AcpSearchField.BARCODE)
+    }
+    val attempts = orderedFields.map { field ->
+        async { field to runCatching { searchProducts(field, clean, null, pageIndex) } }
+    }.awaitAll()
+
+    attempts.firstOrNull { it.second.exceptionOrNull() is AcpUnauthorized }
+        ?.second?.exceptionOrNull()?.let { throw it }
+
+    val pages = attempts.mapNotNull { it.second.getOrNull() }
+    if (pages.isEmpty()) {
+        val failure = attempts.firstNotNullOfOrNull { it.second.exceptionOrNull() }
+        throw (failure as? Exception ?: AcpFailure("Não foi possível pesquisar na ACP agora."))
+    }
+
+    val unique = LinkedHashMap<String, AcpProduct>()
+    pages.flatMap { it.items }.forEach { product ->
+        val key = product.id.ifBlank { "${product.code}|${product.barcode}|${product.description}" }
+        unique.putIfAbsent(key, product)
+    }
+    fun rank(product: AcpProduct): Int = when {
+        product.barcode.equals(clean, ignoreCase = true) -> 0
+        product.code.equals(clean, ignoreCase = true) -> 1
+        product.description.equals(clean, ignoreCase = true) -> 2
+        product.description.contains(clean, ignoreCase = true) -> 3
+        else -> 4
+    }
+    val merged = unique.values.sortedWith(compareBy<AcpProduct> { rank(it) }.thenBy { it.description })
+    AcpProductPage(
+        items = merged,
+        pageIndex = pageIndex,
+        totalPages = pages.maxOfOrNull { it.totalPages } ?: 0,
+        totalCount = merged.size,
+        queriedAtMillis = System.currentTimeMillis()
+    )
+}
+
+private suspend fun AcpApi.loadFreshClubProducts(store: AcpSecureStore): List<AcpProduct> {
+    val all = LinkedHashMap<String, AcpProduct>()
+    var pageIndex = 0
+    var totalPages = 1
+    do {
+        val parameters = listOf("pageSize" to "100", "pageIndex" to pageIndex.toString())
+        val root = getFreshForUi(store, "Product/all", parameters)
+        val page = AcpProductParser.page(root, pageIndex)
+        page.items.asSequence()
+            .filter { it.clubValue?.signum() == 1 }
+            .forEach { product ->
+                val key = product.id.ifBlank { "${product.code}|${product.barcode}|${product.description}" }
+                all[key] = product
+            }
+        totalPages = page.totalPages.coerceAtLeast(1)
+        pageIndex++
+        if (pageIndex > 500) throw AcpFailure("A lista do Clube excedeu o limite seguro de sincronização.")
+    } while (pageIndex < totalPages)
+
+    return all.values.sortedBy { it.description.lowercase(Locale.getDefault()) }
+}
+
+private suspend fun AcpApi.refreshProductFreshForUi(selected: AcpProduct, store: AcpSecureStore): AcpProduct {
+    val filters = buildList {
+        if (selected.code.isNotBlank()) add("code" to selected.code)
+        if (selected.barcode.isNotBlank()) add("barCode" to selected.barcode)
+    }
+    if (filters.isEmpty()) throw AcpFailure("Produto sem código para atualizar. Faça uma nova busca.")
+    val matches = mutableListOf<AcpProduct>()
+    for (index in 0 until 10) {
+        val page = AcpProductParser.page(
+            getFreshForUi(store, "Product/all", filters + listOf("pageIndex" to index.toString(), "pageSize" to "50")),
+            index
+        )
+        matches.addAll(page.items.filter { candidate ->
+            (selected.code.isBlank() || candidate.code == selected.code) &&
+                (selected.barcode.isBlank() || candidate.barcode == selected.barcode)
+        })
+        if (matches.size > 1) throw AcpFailure("A ACP retornou mais de um cadastro com esses códigos. Confira o produto na ACP.")
+        if (page.items.isEmpty() || index + 1 >= page.totalPages) {
+            return matches.singleOrNull() ?: throw AcpFailure("Produto não encontrado na atualização. Faça uma nova busca.")
+        }
+    }
+    throw AcpFailure("Não foi possível confirmar o produto entre os resultados da ACP. Refine a busca.")
+}
+
+private suspend fun AcpApi.getFreshForUi(
+    store: AcpSecureStore,
+    path: String,
+    parameters: List<Pair<String, String>>
+): org.json.JSONObject {
+    // Limpa somente a chave exata desta leitura para obrigar uma consulta de rede.
+    // O próprio AcpApi repovoa o cache depois da resposta bem-sucedida.
+    store.clear(acpResponseCacheName(path, parameters))
+    return get(path, parameters)
+}
+
+private fun acpResponseCacheName(path: String, parameters: List<Pair<String, String>>): String {
+    val rawKey = buildString {
+        append(path)
+        parameters.sortedWith(compareBy<Pair<String, String>> { it.first }.thenBy { it.second }).forEach { (key, value) ->
+            append('|').append(key).append('=').append(value)
+        }
+    }
+    val digest = MessageDigest.getInstance("SHA-256").digest(rawKey.toByteArray(Charsets.UTF_8))
+    val hex = digest.joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    return "response_cache_$hex"
 }
 
 private fun acpQueryTime(value: Long): String = SimpleDateFormat("dd/MM HH:mm:ss", Locale("pt", "BR")).format(Date(value))
