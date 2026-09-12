@@ -40,4 +40,15 @@ class FlyerReviewTest {
         assertNull(cashback.secondUnitPrice)
         assertNull(cashback.copy(cashbackPercent = 130.0).confirmedForPublication())
     }
+    @Test fun publishedCampaignUsesDatesAndEnabledFlag() {
+        val campaign = FlyerCampaign(name = "Semanal", sourceType = "gallery", sourceLabel = "teste.pdf",
+            validFrom = "2026-09-09", validTo = "2026-09-15", offers = listOf(offer().confirmedForPublication()!!))
+        val now = parseIsoDate("2026-09-12")!!.time
+        assertTrue(campaign.isActiveAt(now))
+        assertFalse(campaign.copy(enabled = false).isActiveAt(now))
+        assertFalse(campaign.isActiveAt(parseIsoDate("2026-09-16")!!.time))
+        assertFalse(campaign.isActiveAt(parseIsoDate("2026-09-08")!!.time))
+        assertEquals(45.49, campaign.offers.single().regularPrice!!, 0.0)
+    }
+
 }

@@ -72,6 +72,18 @@ class FlyerOfferParserTest {
     }
 
     @Test
+    fun preservesMultidigitQuantityAndOcrEvidenceForReview() {
+        val text = "Leve 12 Pague 11"
+        val draft = FlyerOfferParser.parse("encarte.pdf", listOf(
+            block(1, "Papel Higiênico Neutro 30m", 100, 300, 400, 350),
+            block(1, text, 100, 360, 400, 400)))
+        val offer = draft.offers.single { it.type == FlyerOfferType.TAKE_PAY_QUANTITY }
+        assertEquals(11.0, offer.payQuantity!!, 0.0)
+        assertEquals(text, offer.sourceText)
+        assertFalse(offer.reviewed)
+    }
+
+    @Test
     fun secondUnitMathMatchesKnownTiroliroExample() {
         val result = calculateSecondUnit(45.49, 50.0)
         assertNotNull(result)

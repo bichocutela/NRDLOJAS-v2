@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.data.acp.AcpProduct
 import com.example.data.Product
 import com.example.data.flyer.*
 import com.example.ui.theme.glassSoftShadow
@@ -406,7 +407,7 @@ private fun CampaignManagementCard(
     }
 }
 
-/** Shows only high-confidence, confirmed flyer rules. Club is never sourced from flyers. */
+/** Flyer conditions require explicit administrator review. */
 @Composable
 internal fun ActiveFlyerOffersForProduct(product: Product) {
     val campaignsFlow = remember { FlyerRepository.observeCampaigns() }
@@ -440,14 +441,45 @@ internal fun ActiveFlyerOffersForProduct(product: Product) {
 }
 
 @Composable
+internal fun ActiveFlyerOffersForAcpProduct(product: AcpProduct) {
+    val campaignsFlow = remember { FlyerRepository.observeCampaigns() }
+    val campaigns by campaignsFlow.collectAsState(initial = emptyList())
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000)
+            now = System.currentTimeMillis()
+        }
+    }
+    val matches = remember(product.code, product.barcode, campaigns, now) {
+        campaigns.filter { it.isActiveAt(now) }.flatMap { campaign ->
+            campaign.offers.filter { it.matchesAcp(product.code, product.barcode) }.map { campaign to it }
+        }.sortedBy { it.first.validTo }
+    }
+    if (matches.isEmpty()) return
+    HorizontalDivider()
+    Text("OFERTAS DO ENCARTE", style = MaterialTheme.typography.titleMedium)
+    Text("Condições revisadas no NRD. Não substituem o preço ACP e não são somadas automaticamente a outras promoções.", style = MaterialTheme.typography.bodySmall)
+    matches.forEach { (campaign, offer) ->
+        FlyerOfferDisplayCard(campaign, offer)
+        val advertised = offer.flyerPrice ?: offer.regularPrice
+        val acpPrice = product.value
+        if (advertised != null && acpPrice != null && java.math.BigDecimal.valueOf(advertised).compareTo(acpPrice) != 0) {
+            Text("Valores diferentes: ACP ${formatMoney(acpPrice.toDouble())}; encarte ${formatMoney(advertised)}. Confira as condições antes de aplicar a oferta.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+    }
+}
+
+@Composable
 private fun FlyerOfferDisplayCard(campaign: FlyerCampaign, offer: FlyerOffer) {
     val shape = RoundedCornerShape(16.dp)
-    ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = shape) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = shape, colors = CardDefaults.elevatedCardColors(contentColor = androidx.compose.ui.graphics.Color.Black)) {
         Column(
-            Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.32f)).padding(12.dp),
+            Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Color(0xFFFFEB3B)).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(offer.displayTitle(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+            Text(offer.displayTitle(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = androidx.compose.ui.graphics.Color(0xFFB90016))
             when (offer.type) {
                 FlyerOfferType.SECOND_UNIT_PERCENT -> {
                     offer.regularPrice?.let { Text("1ª unidade: ${formatMoney(it)}") }
@@ -459,14 +491,22 @@ private fun FlyerOfferDisplayCard(campaign: FlyerCampaign, offer: FlyerOffer) {
                 FlyerOfferType.TAKE_PAY_QUANTITY -> {
                     offer.equivalentUnitPrice?.let { Text("Média equivalente: ${formatMoney(it)} por unidade") }
                 }
-                FlyerOfferType.TAKE_PAY_MEASURE -> Text(offer.detail)
+                FlyerOfferType.TAKE_PAY_MEASURE -> Unit
                 FlyerOfferType.DE_POR -> {
                     offer.regularPrice?.let { Text("De ${formatMoney(it)}") }
                     offer.flyerPrice?.let { Text("Por ${formatMoney(it)}", fontWeight = FontWeight.Bold) }
                 }
-                FlyerOfferType.CASHBACK -> Text(offer.detail)
+                FlyerOfferType.CASHBACK -> {
+                    offer.flyerPrice?.let { Text("Preço anunciado: ${formatMoney(it)}", fontWeight = FontWeight.Bold) }
+                    offer.cashbackPercent?.let { Text("Retorno: ${formatQuantity(it)}%") }
+                    offer.cashbackValue?.let { Text("Retorno informado: ${formatMoney(it)}") }
+                    Text("Cashback é retorno posterior; não foi descontado do preço.")
+                }
                 FlyerOfferType.FLYER_PRICE -> offer.flyerPrice?.let { Text(formatMoney(it), fontWeight = FontWeight.Bold) }
             }
+            if (offer.detail.isNotBlank()) Text(offer.detail, style = MaterialTheme.typography.bodySmall)
+            Text(offer.clubCondition.reviewLabel(), fontWeight = FontWeight.Bold)
+            Text("Fonte: encarte • página ${offer.page}", style = MaterialTheme.typography.labelSmall)
             Text(
                 "${campaign.name} • válido de ${dateLabel(campaign.validFrom)} até ${dateLabel(campaign.validTo)}",
                 style = MaterialTheme.typography.labelSmall,

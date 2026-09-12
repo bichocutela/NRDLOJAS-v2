@@ -92,15 +92,11 @@ data class FlyerOffer(
     fun matches(product: Product): Boolean {
         if (!reviewed || matchStatus != FlyerMatchStatus.CONFIRMED || reviewError() != null) return false
         val productCode = normalizeIdentifier(product.code)
+        if (productCode.isBlank()) return false
         if (productCodes.any { normalizeIdentifier(it) == productCode }) return true
         if (barcodes.any { normalizeIdentifier(it) == productCode }) return true
 
-        if (scope != FlyerOfferScope.PRODUCT || confidence < 0.92) return false
-        val expected = normalizeText(matchedProductName ?: sourceDescription)
-        val actual = normalizeText(product.name)
-        if (expected.isBlank() || actual.isBlank()) return false
-        if (expected == actual) return true
-        return tokenSimilarity(expected, actual) >= 0.90
+        return false
     }
 
     fun displayTitle(): String = when (type) {

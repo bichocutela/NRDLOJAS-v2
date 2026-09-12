@@ -461,6 +461,7 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                         }
 
                         HorizontalDivider()
+                        ActiveFlyerOffersForAcpProduct(product)
                         OutlinedCard(onClick = { syncExpanded = !syncExpanded }, modifier = Modifier.fillMaxWidth()) {
                             Column(
                                 Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
