@@ -474,7 +474,6 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                         val commercialFacts = product.commercialFacts()
                         if (commercialFacts.isNotEmpty()) {
                             HorizontalDivider()
-                            Text("Dados comerciais retornados pela ACP", style = MaterialTheme.typography.titleMedium)
                             commercialFacts.forEach { (label, value) ->
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text(label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))

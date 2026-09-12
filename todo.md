@@ -9,6 +9,11 @@
 - [ ] Validar campanhas simultâneas, precedência visual, expiração e ausência de campos. (A validação local ficou bloqueada porque o SDK exige componentes/licenças que não estão instalados no sandbox; CI será acompanhado após o push.)
 
 
+## Ajuste visual — detalhe da consulta ACP
+- [ ] Remover o título “Dados comerciais retornados pela ACP”, mantendo os valores abaixo.
+- [ ] Criar commit e enviar a correção para `main`.
+- [ ] Acompanhar o Android CI.
+
 ## Publicação autorizada — consulta comercial Android
 - [ ] Revisar o conjunto final de arquivos e excluir o PWA e workflows de banners.
 - [ ] Criar commit da consulta comercial ACP no Android.
