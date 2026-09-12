@@ -18,7 +18,14 @@ class ProductRepository(
     val favorites: Flow<List<Product>> = dao.getFavorites()
     fun mostUsed(limit: Int): Flow<List<Product>> = dao.getMostUsed(limit)
     val history: Flow<List<Product>> = dao.getHistory()
-    val productsCountByCategory: Flow<List<CategoryCount>> = dao.getProductsCountByCategory()
+    val productsCountByCategory: Flow<List<CategoryCount>> = dao.getAllProducts().map { products ->
+        products
+            .flatMap { product -> product.categoryNames().distinct().map { category -> category to product.code } }
+            .groupingBy { it.first }
+            .eachCount()
+            .map { (category, count) -> CategoryCount(category, count) }
+            .sortedByDescending { it.count }
+    }
     val latestProductLocal = dao.getLatestProduct()
 
     fun searchProducts(query: String): Flow<List<Product>> =
@@ -35,13 +42,14 @@ class ProductRepository(
         val products = dao.getAllProductsSync()
         return if (query.isBlank()) products else rankProductsByRelevance(products, query)
     }
-    
-    fun getProductsByCategory(category: String): Flow<List<Product>> {
-        return dao.getProductsByCategory(category)
+
+    fun getProductsByCategory(category: String): Flow<List<Product>> = dao.getAllProducts().map { products ->
+        products.filter { product -> product.categoryNames().any { it.equals(category, ignoreCase = true) } }
+            .sortedBy { it.name }
     }
 
     fun searchProductsByCategory(category: String, query: String): Flow<List<Product>> =
-        dao.getProductsByCategory(category).map { products ->
+        getProductsByCategory(category).map { products ->
             if (query.isBlank()) products else rankProductsByRelevance(products, query)
         }
 
@@ -59,17 +67,31 @@ class ProductRepository(
 
     suspend fun insertProducts(products: List<Product>) {
         val existingProducts = dao.getAllProductsSync().associateBy { it.code }
-        val updatedProducts = products.map { remote ->
+        if (existingProducts.isEmpty() && products.isNotEmpty()) {
+            NrdProductImportService.refreshCategoryCache()
+        }
+        val allowSingleDocumentLookup = existingProducts.isNotEmpty() && products.size <= 20
+        val updatedProducts = mutableListOf<Product>()
+        for (remote in products) {
             val local = existingProducts[remote.code]
-            if (local != null) {
+            val cachedCategories = NrdProductImportService.cachedCategories(remote.code)
+                ?: if (local == null && allowSingleDocumentLookup) NrdProductImportService.categoriesForCode(remote.code) else null
+            val memberships = when {
+                remote.categoryMemberships.isNotBlank() -> remote.categoryMemberships
+                !cachedCategories.isNullOrEmpty() -> encodeProductCategories(cachedCategories)
+                local?.categoryMemberships?.isNotBlank() == true -> local.categoryMemberships
+                else -> encodeProductCategories(listOfNotNull(remote.category.takeIf { it.isNotBlank() }))
+            }
+            updatedProducts += if (local != null) {
                 remote.copy(
                     id = local.id,
                     isFavorite = local.isFavorite,
                     searchCount = local.searchCount,
-                    lastSearchedAt = local.lastSearchedAt
+                    lastSearchedAt = local.lastSearchedAt,
+                    categoryMemberships = memberships
                 )
             } else {
-                remote
+                remote.copy(categoryMemberships = memberships)
             }
         }
         dao.insertProducts(updatedProducts)
@@ -92,7 +114,19 @@ class ProductRepository(
     }
 
     suspend fun populateInitialDataIfNeeded() {
-        // Removido para forçar o download da nuvem (instalação nova)
+        val memberships = NrdProductImportService.refreshCategoryCache()
+        if (memberships.isEmpty()) return
+        val current = dao.getAllProductsSync()
+        val changed = current.mapNotNull { product ->
+            val categories = memberships[product.code] ?: return@mapNotNull null
+            val encoded = encodeProductCategories(categories)
+            if (encoded == product.categoryMemberships && product.category == categories.firstOrNull()) null
+            else product.copy(
+                category = categories.firstOrNull() ?: product.category,
+                categoryMemberships = encoded
+            )
+        }
+        if (changed.isNotEmpty()) dao.insertProducts(changed)
     }
 }
 

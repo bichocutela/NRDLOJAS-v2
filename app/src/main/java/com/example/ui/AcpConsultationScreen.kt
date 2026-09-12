@@ -48,7 +48,7 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
             .then(if (authenticated) Modifier else Modifier.verticalScroll(rememberScrollState())),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (authenticated) {
-                AcpProductsPanel(api, onSessionExpired = {
+                AcpProductsPanel(api, canAddToNrd = canConfigure, onSessionExpired = {
                     authenticated = false
                     error = "Sua sessão terminou. Confirme novamente o acesso."
                 })
