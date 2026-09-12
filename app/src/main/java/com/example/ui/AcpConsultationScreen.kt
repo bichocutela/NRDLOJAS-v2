@@ -1,11 +1,11 @@
 package com.example.ui
 
 import android.graphics.BitmapFactory
-import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -42,12 +43,9 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
     val activeConsultationBackground = appearanceSettings.activeConsultationBackground()
     val bannerBitmap = remember(context) {
         runCatching {
-            val encoded = (0..6).joinToString(separator = "") { part ->
-                val fileName = "acp_banner/banner_${part.toString().padStart(2, '0')}.b64"
-                context.assets.open(fileName).bufferedReader().use { it.readText() }
+            context.assets.open("acp_banner/banner.webp").use { input ->
+                BitmapFactory.decodeStream(input)?.asImageBitmap()
             }
-            val bytes = Base64.decode(encoded, Base64.DEFAULT)
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
         }.getOrNull()
     }
     var configured by remember { mutableStateOf(false) }
@@ -101,77 +99,83 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
-        Surface(tonalElevation = 2.dp) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .height(92.dp)
-                    .padding(horizontal = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onNavigateBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar")
-                }
-                if (bannerBitmap != null) {
-                    Image(
-                        bitmap = bannerBitmap,
-                        contentDescription = "Consultar Produtos",
+                Surface(tonalElevation = 2.dp) {
+                    Column(
                         modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .padding(vertical = 4.dp),
-                        contentScale = ContentScale.Fit
-                    )
-                } else {
-                    Spacer(Modifier.weight(1f))
-                }
-                Spacer(Modifier.width(48.dp))
-            }
-        }
-    }) { padding ->
-        val horizontalPadding = if (authenticated) 12.dp else 20.dp
-        val verticalPadding = if (authenticated) 8.dp else 20.dp
-        Column(
-            Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .padding(horizontal = horizontalPadding, vertical = verticalPadding)
-                .then(if (authenticated) Modifier else Modifier.verticalScroll(rememberScrollState())),
-            verticalArrangement = Arrangement.spacedBy(if (authenticated) 8.dp else 16.dp)
-        ) {
-            if (authenticated) {
-                AcpProductsPanel(api, canAddToNrd = canConfigure, onSessionExpired = {
-                    authenticated = false
-                    error = "Não foi possível renovar a sessão automaticamente. Tente novamente."
-                })
-            } else {
-                Text("Acesso ACP", style = MaterialTheme.typography.headlineSmall)
-                Text(if (configured) "A sessão é renovada automaticamente. Tente novamente apenas se a ACP não responder." else "Acesse a consulta de preços do Nordestão.")
-                OutlinedTextField(value = if (configured) "********" else "", onValueChange = {},
-                    readOnly = true, label = { Text("Login") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = if (configured) "********" else "", onValueChange = {},
-                    readOnly = true, label = { Text("Senha") }, modifier = Modifier.fillMaxWidth())
-                if (checking || busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                Button(onClick = {
-                    busy = true
-                    error = null
-                    scope.launch {
-                        try { api.confirmAccess(); authenticated = true }
-                        catch (cancelled: CancellationException) { throw cancelled }
-                        catch (failure: Exception) { error = acpErrorMessage(failure) }
-                        finally { busy = false }
+                            .fillMaxWidth()
+                            .windowInsetsPadding(WindowInsets.statusBars)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .padding(horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = onNavigateBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar")
+                            }
+                        }
+
+                        if (bannerBitmap != null) {
+                            val bannerShape = RoundedCornerShape(24.dp)
+                            Image(
+                                bitmap = bannerBitmap,
+                                contentDescription = "Consultar Produtos",
+                                modifier = Modifier
+                                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                                    .fillMaxWidth()
+                                    .aspectRatio(3f)
+                                    .clip(bannerShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
                     }
-                }, enabled = configured && !checking && !busy, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (busy) "Reconectando…" else "Tentar novamente")
-                }
-                if (!configured && !checking) Text("O administrador precisa configurar o acesso neste aparelho uma única vez.")
-                if (canConfigure && !api.hasBundledAccess()) TextButton(onClick = { configure = true }, enabled = !busy && !checking) {
-                    Text(if (configured) "Atualizar acesso neste aparelho" else "Configurar acesso neste aparelho")
                 }
             }
-        }
+        ) { padding ->
+            val horizontalPadding = if (authenticated) 12.dp else 20.dp
+            val verticalPadding = if (authenticated) 8.dp else 20.dp
+            Column(
+                Modifier
+                    .padding(padding)
+                    .fillMaxSize()
+                    .padding(horizontal = horizontalPadding, vertical = verticalPadding)
+                    .then(if (authenticated) Modifier else Modifier.verticalScroll(rememberScrollState())),
+                verticalArrangement = Arrangement.spacedBy(if (authenticated) 8.dp else 16.dp)
+            ) {
+                if (authenticated) {
+                    AcpProductsPanel(api, canAddToNrd = canConfigure, onSessionExpired = {
+                        authenticated = false
+                        error = "Não foi possível renovar a sessão automaticamente. Tente novamente."
+                    })
+                } else {
+                    Text("Acesso ACP", style = MaterialTheme.typography.headlineSmall)
+                    Text(if (configured) "A sessão é renovada automaticamente. Tente novamente apenas se a ACP não responder." else "Acesse a consulta de preços do Nordestão.")
+                    OutlinedTextField(value = if (configured) "********" else "", onValueChange = {},
+                        readOnly = true, label = { Text("Login") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = if (configured) "********" else "", onValueChange = {},
+                        readOnly = true, label = { Text("Senha") }, modifier = Modifier.fillMaxWidth())
+                    if (checking || busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    Button(onClick = {
+                        busy = true
+                        error = null
+                        scope.launch {
+                            try { api.confirmAccess(); authenticated = true }
+                            catch (cancelled: CancellationException) { throw cancelled }
+                            catch (failure: Exception) { error = acpErrorMessage(failure) }
+                            finally { busy = false }
+                        }
+                    }, enabled = configured && !checking && !busy, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (busy) "Reconectando…" else "Tentar novamente")
+                    }
+                    if (!configured && !checking) Text("O administrador precisa configurar o acesso neste aparelho uma única vez.")
+                    if (canConfigure && !api.hasBundledAccess()) TextButton(onClick = { configure = true }, enabled = !busy && !checking) {
+                        Text(if (configured) "Atualizar acesso neste aparelho" else "Configurar acesso neste aparelho")
+                    }
+                }
+            }
         }
     }
 
