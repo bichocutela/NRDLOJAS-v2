@@ -33,7 +33,6 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     constructor(context: Context) : this(AcpSecureStore(context), bundledLogin = BuildConfig.ACP_LOGIN, bundledPassword = BuildConfig.ACP_PASSWORD)
     private val sessionLock = Mutex()
     private var accessConfirmed = false
-    private var cachedSessionUser: JSONObject? = null
     private var clubCategoryId: String? = null
     private var clubCategoryResolved = false
     private val cookies = AcpCookieJar(store.read("session")) { store.write("session", it) }
@@ -55,7 +54,6 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
             require(login.isNotBlank() && password.isNotBlank())
             store.write("access", JSONObject().put("login", login.trim()).put("password", password).toString())
             accessConfirmed = false
-            cachedSessionUser = null
             clubCategoryId = null
             clubCategoryResolved = false
             cookies.clear()
@@ -66,10 +64,9 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     suspend fun restoreSession(): Boolean = sessionLock.withLock {
         withContext(Dispatchers.IO) {
             accessConfirmed = false
-            cachedSessionUser = null
             if (cookies.loadForRequest("$ORIGIN/api/auth/session".toHttpUrl()).isEmpty()) return@withContext false
             try {
-                session(forceRefresh = true)
+                session()
                 accessConfirmed = true
                 true
             } catch (_: AcpUnauthorized) { false }
@@ -79,14 +76,13 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     suspend fun confirmAccess() = sessionLock.withLock {
         withContext(Dispatchers.IO) {
             accessConfirmed = false
-            try { session(forceRefresh = true) } catch (_: AcpUnauthorized) { signIn() }
+            try { session() } catch (_: AcpUnauthorized) { signIn() }
             accessConfirmed = true
         }
     }
 
     private fun signIn() {
         val access = credentials() ?: throw AcpFailure("Peça ao administrador para configurar o acesso neste aparelho.")
-        cachedSessionUser = null
         cookies.clear()
         val csrf = requestJson(Request.Builder().url("$ORIGIN/api/auth/csrf").get().build())
             .nonBlankString("csrfToken")
@@ -102,11 +98,10 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
             ORIGIN.toHttpUrl().resolve(it)?.queryParameter("error")
         }
         if (!error.isNullOrBlank()) {
-            cachedSessionUser = null
             cookies.clear()
             throw AcpFailure("A ACP não aceitou o acesso. Peça ao administrador para conferir a configuração.")
         }
-        session(forceRefresh = true) // A successful callback alone is not proof of authentication.
+        session() // A successful callback alone is not proof of authentication.
     }
 
     fun hasBundledAccess(): Boolean = bundledLogin.isNotBlank() && bundledPassword.isNotBlank()
@@ -118,16 +113,13 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         }?.takeIf { it.nonBlankString("login") != null && it.nonBlankString("password") != null }
     }
 
-    private fun session(forceRefresh: Boolean = false): JSONObject {
-        if (!forceRefresh) cachedSessionUser?.let { return it }
+    private fun session(): JSONObject {
         val data = requestJson(Request.Builder().url("$ORIGIN/api/auth/session").get().build())
         val user = data.optJSONObject("user")
         if (user == null || user.nonBlankString("accessToken") == null) {
-            cachedSessionUser = null
             cookies.clear()
             throw AcpUnauthorized()
         }
-        cachedSessionUser = user
         return user
     }
 
@@ -249,7 +241,6 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
                 try { readOnce(path, parameters, record) } catch (expired: AcpUnauthorized) {
                     val mayRenew = accessConfirmed
                     accessConfirmed = false
-                    cachedSessionUser = null
                     if (!mayRenew) throw expired
                     // One normal sign-in and one GET retry. Forbidden/rate-limit/network errors never submit a password.
                     signIn()
@@ -422,7 +413,6 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         client.newCall(request).execute().use { response ->
             if (response.code == 401 || (response.code in 300..399 &&
                     response.header("Location").orEmpty().contains("/login"))) {
-                cachedSessionUser = null
                 cookies.clear()
                 if (request.url.encodedPath == "/api/auth/callback/credentials") {
                     throw AcpFailure("A ACP não aceitou o acesso. Peça ao administrador para conferir a configuração.")
