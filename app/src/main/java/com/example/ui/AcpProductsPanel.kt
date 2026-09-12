@@ -477,10 +477,11 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                         if (allOffers.isEmpty()) {
                             AcpOfferPoster(AcpOffer("Preço cadastrado", "Nenhuma condição promocional explícita foi identificada nos dados consultados.", product.value), compact = false)
                         } else {
-                            Text("Prévia automática do destaque", style = MaterialTheme.typography.titleSmall)
-                            AcpOfferLandscapePoster(product.description, allOffers.first())
-                            if (allOffers.size > 1) Text("Outras condições encontradas", style = MaterialTheme.typography.titleSmall)
-                            allOffers.forEach { HorizontalDivider(); AcpOfferPoster(it, compact = false) }
+                            Text("Cartazes automáticos em paisagem", style = MaterialTheme.typography.titleSmall)
+                            allOffers.forEachIndexed { index, offer ->
+                                if (index > 0) HorizontalDivider()
+                                AcpOfferLandscapePoster(product.description, offer)
+                            }
                         }
                         if (!detailBusy && allOffers.none { it.title == "Cashback" || it.title == "Cashback em valor" }) {
                             Text(if (detailWarning == null) "Cashback não informado nos dados consultados da ACP."
