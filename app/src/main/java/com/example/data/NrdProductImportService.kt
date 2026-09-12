@@ -33,6 +33,7 @@ internal data class NrdProductImportResult(
  */
 internal object NrdProductImportService {
     private const val TAG = "NrdProductImport"
+    private const val MEMBERSHIP_MARKER = "categoryMembershipsV2"
     private val client = OkHttpClient()
     private val categoryCache = ConcurrentHashMap<String, List<String>>()
 
@@ -49,8 +50,10 @@ internal object NrdProductImportService {
                 ((document.get("categories") as? List<*>)?.mapNotNull { it as? String }).orEmpty()
                     .ifEmpty { listOfNotNull(document.getString("category")) }
             )
-            if (categories.isNotEmpty()) categoryCache[cleanCode] = categories
-            categories.takeIf { it.isNotEmpty() }
+            if (categories.isNotEmpty() && document.getBoolean(MEMBERSHIP_MARKER) == true) {
+                categoryCache[cleanCode] = categories
+                categories
+            } else null
         } catch (error: Exception) {
             Log.w(TAG, "Não foi possível consultar categorias de $cleanCode", error)
             null
@@ -60,7 +63,11 @@ internal object NrdProductImportService {
     suspend fun refreshCategoryCache(): Map<String, List<String>> {
         if (!FirebaseService.isFirebaseConfigured()) return emptyMap()
         return try {
-            val documents = FirebaseFirestore.getInstance().collection("products").get().await().documents
+            val documents = FirebaseFirestore.getInstance().collection("products")
+                .whereEqualTo(MEMBERSHIP_MARKER, true)
+                .get()
+                .await()
+                .documents
             val loaded = mutableMapOf<String, List<String>>()
             documents.forEach { document ->
                 val code = document.getString("code")?.trim().orEmpty().ifBlank { document.id }
@@ -143,6 +150,7 @@ internal object NrdProductImportService {
                 put("searchName", JSONObject().put("stringValue", product.searchName))
                 put("category", JSONObject().put("stringValue", product.category))
                 put("categories", JSONObject().put("arrayValue", JSONObject().put("values", categoryValues)))
+                put(MEMBERSHIP_MARKER, JSONObject().put("booleanValue", true))
                 put("unit", JSONObject().put("stringValue", product.unit))
                 put("searchCount", JSONObject().put("integerValue", "0"))
                 put("createdAt", JSONObject().put("timestampValue", timestamp))
