@@ -1,8 +1,5 @@
 package com.example.data.flyer
 
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.hypot
 
@@ -56,6 +53,9 @@ internal object FlyerOfferParser {
     private val fullValidityRegex = Regex(
         "(?i)(\\d{1,2})[./-](\\d{1,2})[./-](\\d{2,4})\\s*(?:a|at[eé]|-)\\s*(\\d{1,2})[./-](\\d{1,2})[./-](\\d{2,4})"
     )
+    private val namedMonthValidityRegex = Regex(
+        "(?i)(?:ofertas?\\s+v[aá]lidas?\\s+)?(?:de\\s+)?(\\d{1,2})\\s*(?:a|at[eé]|-)\\s*(\\d{1,2})\\s+de\\s+(janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\\s+de\\s+(\\d{4})"
+    )
 
     fun parse(sourceName: String, blocks: List<FlyerTextBlock>): FlyerParseDraft {
         val cleaned = blocks.filter { it.text.isNotBlank() }
@@ -65,26 +65,26 @@ internal object FlyerOfferParser {
         if (validity == null) warnings += "A vigência não foi identificada automaticamente. Confira as datas antes de salvar."
 
         val offers = mutableListOf<FlyerOffer>()
-        cleaned.forEach { block ->
+        cleaned.forEach blockLoop@{ block ->
             val compactText = block.text.replace('\n', ' ').replace(Regex("\\s+"), " ").trim()
-            if (isClubText(compactText)) return@forEach
+            if (isClubText(compactText) || nearClubBadge(block, cleaned)) return@blockLoop
 
-            secondUnitRegex.findAll(compactText).forEach { match ->
-                val percent = decimal(match.groupValues[1]) ?: return@forEach
-                if (percent !in 1.0..100.0) return@forEach
+            secondUnitRegex.findAll(compactText).forEach secondLoop@{ match ->
+                val percent = decimal(match.groupValues[1]) ?: return@secondLoop
+                if (percent !in 1.0..100.0) return@secondLoop
                 val description = nearestDescription(block, cleaned)
                 offers += baseOffer(
                     type = FlyerOfferType.SECOND_UNIT_PERCENT,
                     block = block,
                     description = description,
-                    detail = "$percent% de desconto na segunda unidade.",
+                    detail = "${formatQuantity(percent)}% de desconto na segunda unidade.",
                     secondUnitDiscountPercent = percent
                 )
             }
 
-            takePayMeasureRegex.findAll(compactText).forEach { match ->
-                val take = decimal(match.groupValues[1]) ?: return@forEach
-                val pay = decimal(match.groupValues[3]) ?: return@forEach
+            takePayMeasureRegex.findAll(compactText).forEach measureLoop@{ match ->
+                val take = decimal(match.groupValues[1]) ?: return@measureLoop
+                val pay = decimal(match.groupValues[3]) ?: return@measureLoop
                 val takeUnit = normalizeMeasureUnit(match.groupValues[2])
                 val payUnit = normalizeMeasureUnit(match.groupValues[4])
                 val description = nearestDescription(block, cleaned)
@@ -101,10 +101,10 @@ internal object FlyerOfferParser {
             }
 
             if (!takePayMeasureRegex.containsMatchIn(compactText)) {
-                takePayQuantityRegex.findAll(compactText).forEach { match ->
-                    val take = decimal(match.groupValues[1]) ?: return@forEach
-                    val pay = decimal(match.groupValues[2]) ?: return@forEach
-                    if (take <= pay || pay <= 0.0 || take > 200.0) return@forEach
+                takePayQuantityRegex.findAll(compactText).forEach quantityLoop@{ match ->
+                    val take = decimal(match.groupValues[1]) ?: return@quantityLoop
+                    val pay = decimal(match.groupValues[2]) ?: return@quantityLoop
+                    if (take <= pay || pay <= 0.0 || take > 200.0) return@quantityLoop
                     val description = nearestDescription(block, cleaned)
                     offers += baseOffer(
                         type = FlyerOfferType.TAKE_PAY_QUANTITY,
@@ -117,21 +117,21 @@ internal object FlyerOfferParser {
                 }
             }
 
-            cashbackPercentRegex.findAll(compactText).forEach { match ->
-                val percent = decimal(match.groupValues[1]) ?: return@forEach
-                if (percent !in 1.0..100.0) return@forEach
+            cashbackPercentRegex.findAll(compactText).forEach cashbackLoop@{ match ->
+                val percent = decimal(match.groupValues[1]) ?: return@cashbackLoop
+                if (percent !in 1.0..100.0) return@cashbackLoop
                 val description = nearestDescription(block, cleaned)
                 offers += baseOffer(
                     type = FlyerOfferType.CASHBACK,
                     block = block,
                     description = description,
-                    detail = "$percent% de cashback/retorno conforme o encarte.",
+                    detail = "${formatQuantity(percent)}% de cashback/retorno conforme o encarte.",
                     cashbackPercent = percent
                 )
             }
 
-            cashbackMoneyRegex.findAll(compactText).forEach { match ->
-                val value = decimal(match.groupValues[1]) ?: return@forEach
+            cashbackMoneyRegex.findAll(compactText).forEach cashbackValueLoop@{ match ->
+                val value = decimal(match.groupValues[1]) ?: return@cashbackValueLoop
                 val description = nearestDescription(block, cleaned)
                 offers += baseOffer(
                     type = FlyerOfferType.CASHBACK,
@@ -142,10 +142,10 @@ internal object FlyerOfferParser {
                 )
             }
 
-            dePorRegex.findAll(compactText).forEach { match ->
-                val regular = decimal(match.groupValues[1]) ?: return@forEach
-                val offer = decimal(match.groupValues[2]) ?: return@forEach
-                if (regular <= offer || offer <= 0.0) return@forEach
+            dePorRegex.findAll(compactText).forEach dePorLoop@{ match ->
+                val regular = decimal(match.groupValues[1]) ?: return@dePorLoop
+                val offer = decimal(match.groupValues[2]) ?: return@dePorLoop
+                if (regular <= offer || offer <= 0.0) return@dePorLoop
                 val description = nearestDescription(block, cleaned)
                 offers += baseOffer(
                     type = FlyerOfferType.DE_POR,
@@ -158,28 +158,8 @@ internal object FlyerOfferParser {
             }
         }
 
-        // Price-only entries are useful as a commercial cross-check, but are intentionally
-        // conservative: only blocks with an explicit unit marker are accepted and only when
-        // a nearby product description can be located.
-        cleaned.forEach { block ->
-            val text = block.text.replace('\n', ' ').replace(Regex("\\s+"), " ").trim()
-            if (isClubText(text) || containsCommercialRule(text) || !Regex("(?i)\\b(cada|kg|un\\.?|unidade)\\b").containsMatchIn(text)) return@forEach
-            val prices = explicitPriceRegex.findAll(text).toList()
-            if (prices.size != 1) return@forEach
-            val price = decimal(prices.single().groupValues[1]) ?: return@forEach
-            if (price <= 0.0 || price > 100000.0) return@forEach
-            val description = nearestDescription(block, cleaned)
-            if (description.isBlank() || description == text) return@forEach
-            offers += baseOffer(
-                type = FlyerOfferType.FLYER_PRICE,
-                block = block,
-                description = description,
-                detail = "Preço anunciado no encarte: ${formatMoney(price)}.",
-                flyerPrice = price,
-                baseConfidence = 0.66
-            )
-        }
-
+        // Preço normal e Clube continuam sendo responsabilidade da ACP. Não criamos uma
+        // oferta apenas porque o OCR encontrou uma etiqueta de preço no encarte.
         val deduped = offers
             .filterNot { isClubText(it.sourceDescription) }
             .distinctBy { offer ->
@@ -262,8 +242,6 @@ internal object FlyerOfferParser {
             .toList()
         if (candidates.isEmpty()) return ""
 
-        // Prefer a block above/overlapping the rule. Promotional badges usually sit under
-        // the product title in the flyers used by the operation.
         return candidates.minByOrNull { (candidate, score) ->
             val belowPenalty = if (candidate.centerY > anchor.centerY + anchor.pageHeight * 0.06) 0.35 else 0.0
             score + belowPenalty
@@ -282,12 +260,17 @@ internal object FlyerOfferParser {
         return hypot(dx * 1.25, dy * 2.4) - overlapBonus
     }
 
+    private fun nearClubBadge(anchor: FlyerTextBlock, blocks: List<FlyerTextBlock>): Boolean = blocks.any { candidate ->
+        candidate.page == anchor.page && candidate !== anchor && isClubText(candidate.text) &&
+            descriptionDistance(anchor, candidate) < 0.16
+    }
+
     private fun isPossibleDescription(raw: String): Boolean {
         val text = raw.replace('\n', ' ').replace(Regex("\\s+"), " ").trim()
         val normalized = normalizeText(text)
         if (normalized.length < 4 || normalized.length > 180) return false
         if (isClubText(text) || containsCommercialRule(text)) return false
-        if (validityRegex.containsMatchIn(text) || fullValidityRegex.containsMatchIn(text)) return false
+        if (validityRegex.containsMatchIn(text) || fullValidityRegex.containsMatchIn(text) || namedMonthValidityRegex.containsMatchIn(text)) return false
         if (Regex("(?i)\\b(r\\$|cada|kg)\\b").containsMatchIn(text) && explicitPriceRegex.containsMatchIn(text)) return false
         if (normalized in setOf("baixe o app", "peca agora", "aniversario premiado", "perfeito")) return false
         return normalized.count(Char::isLetter) >= 4
@@ -309,9 +292,10 @@ internal object FlyerOfferParser {
 
     private fun parseValidity(text: String): Pair<String, String>? {
         fullValidityRegex.find(text)?.let { match ->
-            val start = date(match.groupValues[1], match.groupValues[2], match.groupValues[3]) ?: return@let
-            val end = date(match.groupValues[4], match.groupValues[5], match.groupValues[6]) ?: return@let
-            if (!end.isBefore(start)) return start.toString() to end.toString()
+            validRange(
+                date(match.groupValues[1], match.groupValues[2], match.groupValues[3]),
+                date(match.groupValues[4], match.groupValues[5], match.groupValues[6])
+            )?.let { return it }
         }
         validityRegex.find(text)?.let { match ->
             val endDay = match.groupValues[4]
@@ -319,21 +303,56 @@ internal object FlyerOfferParser {
             val endYear = match.groupValues[6]
             val startMonth = match.groupValues[2].ifBlank { endMonth }
             val startYear = match.groupValues[3].ifBlank { endYear }
-            val start = date(match.groupValues[1], startMonth, startYear) ?: return@let
-            val end = date(endDay, endMonth, endYear) ?: return@let
-            if (!end.isBefore(start)) return start.toString() to end.toString()
+            validRange(
+                date(match.groupValues[1], startMonth, startYear),
+                date(endDay, endMonth, endYear)
+            )?.let { return it }
+        }
+        namedMonthValidityRegex.find(text)?.let { match ->
+            val month = monthNumber(match.groupValues[3]) ?: return@let
+            validRange(
+                date(match.groupValues[1], month.toString(), match.groupValues[4]),
+                date(match.groupValues[2], month.toString(), match.groupValues[4])
+            )?.let { return it }
         }
         return null
     }
 
-    private fun date(day: String, month: String, year: String): LocalDate? = runCatching {
+    private fun validRange(start: String?, end: String?): Pair<String, String>? {
+        val startDate = parseIsoDate(start) ?: return null
+        val endDate = parseIsoDate(end) ?: return null
+        return if (endDate.before(startDate)) null else start!! to end!!
+    }
+
+    private fun date(day: String, month: String, year: String): String? {
         val normalizedYear = when (year.length) {
-            2 -> 2000 + year.toInt()
-            4 -> year.toInt()
-            else -> return@runCatching null
+            2 -> 2000 + year.toIntOrNull().orZero()
+            4 -> year.toIntOrNull() ?: return null
+            else -> return null
         }
-        LocalDate.of(normalizedYear, month.toInt(), day.toInt())
-    }.getOrNull()
+        val dayValue = day.toIntOrNull() ?: return null
+        val monthValue = month.toIntOrNull() ?: return null
+        val iso = "%04d-%02d-%02d".format(normalizedYear, monthValue, dayValue)
+        return iso.takeIf { parseIsoDate(it) != null }
+    }
+
+    private fun Int?.orZero(): Int = this ?: 0
+
+    private fun monthNumber(raw: String): Int? = when (normalizeText(raw)) {
+        "janeiro" -> 1
+        "fevereiro" -> 2
+        "marco" -> 3
+        "abril" -> 4
+        "maio" -> 5
+        "junho" -> 6
+        "julho" -> 7
+        "agosto" -> 8
+        "setembro" -> 9
+        "outubro" -> 10
+        "novembro" -> 11
+        "dezembro" -> 12
+        else -> null
+    }
 
     private fun suggestedName(sourceName: String, validity: Pair<String, String>?): String {
         val base = sourceName.substringAfterLast('/').substringBefore('?')
@@ -341,12 +360,14 @@ internal object FlyerOfferParser {
             .replace(Regex("[-_]+"), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
+            .replace(Regex("\\s+\\d{4,}$"), "")
+            .trim()
             .takeIf { it.length >= 3 && !it.all(Char::isDigit) }
         if (!base.isNullOrBlank()) return base
-        val formatter = DateTimeFormatter.ofPattern("dd/MM", Locale("pt", "BR"))
         return validity?.let { (start, end) ->
-            val s = parseIsoDate(start); val e = parseIsoDate(end)
-            if (s != null && e != null) "Encarte ${s.format(formatter)} a ${e.format(formatter)}" else null
+            val s = formatIsoDate(start, "dd/MM")
+            val e = formatIsoDate(end, "dd/MM")
+            if (s != null && e != null) "Encarte $s a $e" else null
         } ?: "Novo encarte"
     }
 
