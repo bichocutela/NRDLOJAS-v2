@@ -38,6 +38,25 @@ internal object NrdProductImportService {
 
     fun cachedCategories(code: String): List<String>? = categoryCache[code.trim()]?.takeIf { it.isNotEmpty() }
 
+    suspend fun categoriesForCode(code: String): List<String>? {
+        val cleanCode = code.trim()
+        if (cleanCode.isBlank() || !FirebaseService.isFirebaseConfigured()) return null
+        cachedCategories(cleanCode)?.let { return it }
+        return try {
+            val document = FirebaseFirestore.getInstance().collection("products").document(cleanCode).get().await()
+            if (!document.exists()) return null
+            val categories = normalizeProductCategories(
+                ((document.get("categories") as? List<*>)?.mapNotNull { it as? String }).orEmpty()
+                    .ifEmpty { listOfNotNull(document.getString("category")) }
+            )
+            if (categories.isNotEmpty()) categoryCache[cleanCode] = categories
+            categories.takeIf { it.isNotEmpty() }
+        } catch (error: Exception) {
+            Log.w(TAG, "Não foi possível consultar categorias de $cleanCode", error)
+            null
+        }
+    }
+
     suspend fun refreshCategoryCache(): Map<String, List<String>> {
         if (!FirebaseService.isFirebaseConfigured()) return emptyMap()
         return try {
