@@ -1,5 +1,8 @@
 package com.example.ui
 
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -7,7 +10,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -23,6 +29,16 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
     val context = LocalContext.current
     val api = remember { AcpApi(context.applicationContext) }
     val scope = rememberCoroutineScope()
+    val bannerBitmap = remember(context) {
+        runCatching {
+            val encoded = (0..6).joinToString(separator = "") { part ->
+                val fileName = "acp_banner/banner_${part.toString().padStart(2, '0')}.b64"
+                context.assets.open(fileName).bufferedReader().use { it.readText() }
+            }
+            val bytes = Base64.decode(encoded, Base64.DEFAULT)
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+        }.getOrNull()
+    }
     var configured by remember { mutableStateOf(false) }
     var checking by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
@@ -47,9 +63,34 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
     }
 
     Scaffold(topBar = {
-        TopAppBar(title = { Text("Consultar Produtos") }, navigationIcon = {
-            IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar") }
-        })
+        Surface(tonalElevation = 2.dp) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .height(92.dp)
+                    .padding(horizontal = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onNavigateBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar")
+                }
+                if (bannerBitmap != null) {
+                    Image(
+                        bitmap = bannerBitmap,
+                        contentDescription = "Consultar Produtos",
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .padding(vertical = 4.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    Spacer(Modifier.weight(1f))
+                }
+                Spacer(Modifier.width(48.dp))
+            }
+        }
     }) { padding ->
         val horizontalPadding = if (authenticated) 12.dp else 20.dp
         val verticalPadding = if (authenticated) 8.dp else 20.dp
