@@ -21,6 +21,9 @@ import com.example.data.acp.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
@@ -47,12 +50,34 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
     var detailBusy by remember { mutableStateOf(false) }
     var detailWarning by remember { mutableStateOf<String?>(null) }
 
+    var detail by remember { mutableStateOf<AcpProduct?>(null) }
+    var detailError by remember { mutableStateOf<String?>(null) }
+    var detailTime by remember { mutableStateOf<Long?>(null) }
+    var detailAttempt by remember { mutableIntStateOf(0) }
+
+    fun closeDetail() {
+        selected = null
+        detail = null
+        campaigns = emptyList()
+        integration = null
+        detailTime = null
+        detailError = null
+        detailWarning = null
+    }
+
+    fun openProduct(product: AcpProduct) {
+        closeDetail()
+        detailBusy = true
+        selected = product
+        detailAttempt++
+    }
+
     fun invalidateResults() {
         generation++
         searchJob?.cancel()
         busy = false
         page = null
-        selected = null
+        closeDetail()
         error = null
         diagnosticMessage = null
     }
@@ -67,7 +92,8 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         busy = true
         diagnosticMessage = null
         error = null
-        selected = null
+        closeDetail()
+        page = null
         keyboard?.hide()
         if (index == 0) api.beginDiagnosticSession()
         searchJob = scope.launch {
@@ -95,19 +121,40 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         catch (_: Exception) { categoryError = "Categorias ACP indisponíveis. A busca geral continua disponível." }
     }
 
-    LaunchedEffect(selected) {
-        val product = selected ?: return@LaunchedEffect
+    LaunchedEffect(selected, detailAttempt) {
+        val requested = selected ?: return@LaunchedEffect
+        detail = null
+        detailError = null
+        detailTime = null
         campaigns = emptyList()
         integration = null
         detailWarning = null
         detailBusy = true
         val warnings = mutableListOf<String>()
+        val product = try {
+            api.refreshProduct(requested)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: AcpUnauthorized) {
+            closeDetail()
+            onSessionExpired()
+            return@LaunchedEffect
+        } catch (failure: Exception) {
+            detailError = acpErrorMessage(failure)
+            detailBusy = false
+            return@LaunchedEffect
+        }
+        detail = product
+        detailTime = System.currentTimeMillis()
+        page = page?.let { old -> old.copy(items = old.items.map { item ->
+            if (item.id == requested.id && item.code == requested.code && item.barcode == requested.barcode) product else item
+        }) }
         try {
             campaigns = api.campaignsFor(product)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: AcpUnauthorized) {
-            selected = null
+            closeDetail()
             onSessionExpired()
             detailBusy = false
             return@LaunchedEffect
@@ -119,7 +166,7 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: AcpUnauthorized) {
-            selected = null
+            closeDetail()
             onSessionExpired()
             detailBusy = false
             return@LaunchedEffect
@@ -161,6 +208,11 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
         val result = page
+        if (result != null && !busy) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Consulta: ${acpQueryTime(result.queriedAtMillis)}", style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f).padding(top = 12.dp))
+            TextButton(onClick = { search(result.pageIndex) }) { Text("Atualizar") }
+        }
         if (result == null && !busy && error == null) Text("Busque um produto para consultar os preços na ACP.")
         if (result != null && result.items.isEmpty() && !busy) Text("Nenhum produto encontrado. Confira o código ou tente outro filtro.")
         if (result != null && result.items.isNotEmpty()) {
@@ -171,7 +223,7 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(result?.items.orEmpty(), key = { index, product -> "${product.id}:$index" }) { _, product ->
                 val directOffers = product.offers()
-                OutlinedCard(onClick = { selected = product }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                OutlinedCard(onClick = { openProduct(product) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Text(product.description, style = MaterialTheme.typography.titleMedium)
                         Text("Código: ${product.code.ifBlank { "não informado" }}", style = MaterialTheme.typography.bodySmall)
@@ -201,72 +253,87 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
 
     if (scanning) AcpBarcodeScanner(onDismiss = { scanning = false }, onResult = { code -> scanning = false; invalidateResults(); field = AcpSearchField.BARCODE; category = null; query = code; search() })
 
-    selected?.let { product ->
+    selected?.let { requested ->
         AlertDialog(
-            onDismissRequest = { selected = null },
-            title = { Text(product.description) },
+            onDismissRequest = { closeDetail() },
+            title = { Text(detail?.description ?: requested.description) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Código: ${product.code.ifBlank { "não informado" }}\nCód. barras: ${product.barcode.ifBlank { "não informado" }}")
-                    Text("Preço principal: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}", style = MaterialTheme.typography.titleMedium)
-
-                    HorizontalDivider()
-                    Text("Cadastro do produto", style = MaterialTheme.typography.titleMedium)
-                    Text("Estoque: ${product.stockQuantity?.quantity() ?: "não informado"}")
-                    Text("Vencimento do produto: ${acpDateLabel(product.dueDate) ?: "não informado"}")
-                    product.unit?.let { Text("Unidade: $it") }
-                    product.packageQuantity?.let { quantity -> Text("Embalagem: ${quantity.quantity()}${product.packageType?.let { " • $it" } ?: ""}") }
-                    if (product.packageQuantity == null) product.packageType?.let { Text("Tipo de embalagem: $it") }
-                    product.contentQuantity?.let { quantity -> Text("Conteúdo: ${quantity.quantity()}${product.contentUnit?.let { " $it" } ?: ""}") }
-                    if (product.contentQuantity == null) product.contentUnit?.let { Text("Unidade de conteúdo: $it") }
-                    product.characteristic?.let { Text("Característica: $it") }
-                    product.productFamily?.let { Text("Família: $it") }
-                    if (product.auxDescriptions.isNotEmpty()) Text("Descrições auxiliares: ${product.auxDescriptions.joinToString()}")
-                    if (product.categories.isNotEmpty()) Text("Categorias: ${product.categories.joinToString()}")
-                    product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite cadastrado: ${it.quantity()} unidades por CPF.") }
-
-                    val directOffers = product.offers()
-                    val campaignDetailOffers = campaigns.flatMap { it.offersFor(product) }
-                    val allOffers = (directOffers + campaignDetailOffers).distinctBy { Triple(it.title, it.price, it.detail) }
-                    HorizontalDivider()
-                    Text("Preços e condições", style = MaterialTheme.typography.titleMedium)
-                    if (allOffers.isEmpty()) AcpOfferPoster(AcpOffer("Preço cadastrado", "Nenhuma condição promocional explícita foi identificada nos dados consultados.", product.value), compact = false)
-                    else allOffers.forEach { HorizontalDivider(); AcpOfferPoster(it, compact = false) }
-
-                    HorizontalDivider()
-                    Text("Sincronização ACP", style = MaterialTheme.typography.titleMedium)
-                    if (detailBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    integration?.let { info ->
-                        Text("Código de status: ${info.status?.toString() ?: "não informado"}")
-                        Text("Última execução: ${acpDateLabel(info.lastRun, includeTime = true) ?: "não informada"}")
-                        Text("Última execução completa: ${acpDateLabel(info.lastCompleteRun, includeTime = true) ?: "não informada"}")
-                        info.message?.let { Text("Mensagem: $it") }
-                        info.id?.let { Text("ID da integração: $it", style = MaterialTheme.typography.bodySmall) }
+                    if (detail == null && detailBusy) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Text("Consultando preços na ACP…")
                     }
-                    if (!detailBusy && integration == null) Text("A ACP não retornou o status de sincronização.")
-                    Text("Estoque e vencimento do produto vêm do Product/all. O status de sincronização não é usado como validade da oferta.", style = MaterialTheme.typography.labelSmall)
+                    detailError?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error)
+                        Text("Não foi possível confirmar os preços agora.")
+                        TextButton(onClick = { openProduct(requested) }) { Text("Tentar novamente") }
+                    }
+                    detail?.let { product ->
+                        detailTime?.let { Text("Consultado em ${acpQueryTime(it)}", style = MaterialTheme.typography.bodySmall) }
+                        TextButton(onClick = { openProduct(product) }, enabled = !detailBusy) { Text("Atualizar preços") }
+                        Text("Código: ${product.code.ifBlank { "não informado" }}\nCód. barras: ${product.barcode.ifBlank { "não informado" }}")
+                        Text("Preço principal: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}", style = MaterialTheme.typography.titleMedium)
 
-                    if (campaigns.isNotEmpty()) {
                         HorizontalDivider()
-                        Text("Campanhas vinculadas", style = MaterialTheme.typography.titleMedium)
-                        campaigns.forEach { c ->
-                            ElevatedCard(Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                    Text(c.name, style = MaterialTheme.typography.titleSmall)
-                                    c.code?.let { Text("Código: $it") }
-                                    c.description?.takeIf { it != c.name }?.let { Text(it) }
-                                    Text("Início: ${acpDateLabel(c.startDate) ?: "não informado"} • Fim: ${acpDateLabel(c.endDate) ?: "não informado"}")
-                                    Text("Ativa: ${c.active?.let { if (it) "sim" else "não" } ?: "não informado"} • Autoexclusão: ${c.autoExclusion?.let { if (it) "sim" else "não" } ?: "não informado"}")
-                                    val rules = c.productRules.count { it.matches(product) }
-                                    if (rules > 0) Text("Regras promocionais vinculadas ao produto: $rules", style = MaterialTheme.typography.labelSmall)
+                        Text("Cadastro do produto", style = MaterialTheme.typography.titleMedium)
+                        Text("Estoque: ${product.stockQuantity?.quantity() ?: "não informado"}")
+                        Text("Vencimento do produto: ${acpDateLabel(product.dueDate) ?: "não informado"}")
+                        product.unit?.let { Text("Unidade: $it") }
+                        product.packageQuantity?.let { quantity -> Text("Embalagem: ${quantity.quantity()}${product.packageType?.let { " • $it" } ?: ""}") }
+                        if (product.packageQuantity == null) product.packageType?.let { Text("Tipo de embalagem: $it") }
+                        product.contentQuantity?.let { quantity -> Text("Conteúdo: ${quantity.quantity()}${product.contentUnit?.let { " $it" } ?: ""}") }
+                        if (product.contentQuantity == null) product.contentUnit?.let { Text("Unidade de conteúdo: $it") }
+                        product.characteristic?.let { Text("Característica: $it") }
+                        product.productFamily?.let { Text("Família: $it") }
+                        if (product.auxDescriptions.isNotEmpty()) Text("Descrições auxiliares: ${product.auxDescriptions.joinToString()}")
+                        if (product.categories.isNotEmpty()) Text("Categorias: ${product.categories.joinToString()}")
+                        product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite cadastrado: ${it.quantity()} unidades por CPF.") }
+
+                        val directOffers = product.offers()
+                        val campaignDetailOffers = campaigns.flatMap { it.offersFor(product) }
+                        val allOffers = (directOffers + campaignDetailOffers).distinctBy { Triple(it.title, it.price, it.detail) }
+                        HorizontalDivider()
+                        Text("Preços e condições", style = MaterialTheme.typography.titleMedium)
+                        if (allOffers.isEmpty()) AcpOfferPoster(AcpOffer("Preço cadastrado", "Nenhuma condição promocional explícita foi identificada nos dados consultados.", product.value), compact = false)
+                        else allOffers.forEach { HorizontalDivider(); AcpOfferPoster(it, compact = false) }
+
+                        HorizontalDivider()
+                        Text("Sincronização ACP", style = MaterialTheme.typography.titleMedium)
+                        if (detailBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                        integration?.let { info ->
+                            Text("Código de status: ${info.status?.toString() ?: "não informado"}")
+                            Text("Última execução: ${acpDateLabel(info.lastRun, includeTime = true) ?: "não informada"}")
+                            Text("Última execução completa: ${acpDateLabel(info.lastCompleteRun, includeTime = true) ?: "não informada"}")
+                            info.message?.let { Text("Mensagem: $it") }
+                            info.id?.let { Text("ID da integração: $it", style = MaterialTheme.typography.bodySmall) }
+                        }
+                        if (!detailBusy && integration == null) Text("A ACP não retornou o status de sincronização.")
+                        Text("Estoque e vencimento do produto vêm do Product/all. O status de sincronização não é usado como validade da oferta.", style = MaterialTheme.typography.labelSmall)
+
+                        if (campaigns.isNotEmpty()) {
+                            HorizontalDivider()
+                            Text("Campanhas vinculadas", style = MaterialTheme.typography.titleMedium)
+                            campaigns.forEach { c ->
+                                ElevatedCard(Modifier.fillMaxWidth()) {
+                                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        Text(c.name, style = MaterialTheme.typography.titleSmall)
+                                        c.code?.let { Text("Código: $it") }
+                                        c.description?.takeIf { it != c.name }?.let { Text(it) }
+                                        Text("Início: ${acpDateLabel(c.startDate) ?: "não informado"} • Fim: ${acpDateLabel(c.endDate) ?: "não informado"}")
+                                        Text("Ativa: ${c.active?.let { if (it) "sim" else "não" } ?: "não informado"} • Autoexclusão: ${c.autoExclusion?.let { if (it) "sim" else "não" } ?: "não informado"}")
+                                        val rules = c.productRules.count { it.matches(product) }
+                                        if (rules > 0) Text("Regras promocionais vinculadas ao produto: $rules", style = MaterialTheme.typography.labelSmall)
+                                    }
                                 }
                             }
                         }
+                        detailWarning?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     }
-                    detailWarning?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             },
-            confirmButton = { TextButton(onClick = { selected = null }) { Text("Fechar") } }
+            confirmButton = { TextButton(onClick = { closeDetail() }) { Text("Fechar") } }
         )
     }
 }
+
+private fun acpQueryTime(value: Long): String = SimpleDateFormat("dd/MM HH:mm:ss", Locale("pt", "BR")).format(Date(value))

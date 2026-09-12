@@ -159,4 +159,76 @@ class AcpAuthenticationTest {
         assertTrue(failure is AcpFailure)
         assertFalse(failure?.message.orEmpty().contains("private-server-detail"))
     }
+    @Test fun screenEntryWithoutCookieDoesNotTransmitCredentials() = runBlocking {
+        val server = Server()
+        assertFalse(api(server).restoreSession())
+        assertTrue(server.requests.isEmpty())
+    }
+
+    @Test fun persistedCookieRestoresSessionWithoutLogin() = runBlocking {
+        val store = MemoryStore().apply {
+            data["session"] = """["next-auth.session-token=test-only-cookie; path=/; secure; httponly"]"""
+        }
+        val server = Server(session())
+        assertTrue(api(server, store).restoreSession())
+        assertEquals(listOf("GET"), server.requests.map { it.method })
+    }
+
+    @Test fun confirmedAccessRenewsOnceAfterUnauthorizedProduct() = runBlocking {
+        val server = Server(session(), session(), Reply("{}", 401),
+            Reply("""{"csrfToken":"test-csrf"}"""), Reply("{}"), session(), session(),
+            Reply("""{"items":[]}"""))
+        val client = api(server)
+        client.confirmAccess()
+        assertTrue(client.get("Product/all", emptyList()).has("items"))
+        assertEquals(1, server.requests.count { it.method == "POST" })
+        assertEquals(2, server.requests.count { it.url.encodedPath.endsWith("Product/all") })
+        assertEquals("no-cache", server.requests.last().header("Cache-Control"))
+    }
+
+    @Test fun rejectedRenewalDoesNotLoopOrRetryOnNextRequest() = runBlocking {
+        val server = Server(session(), Reply("{}"), Reply("""{"csrfToken":"test-csrf"}"""),
+            Reply("{}", 401), Reply("{}"))
+        val client = api(server)
+        client.confirmAccess()
+        assertTrue(runCatching { client.get("Product/all", emptyList()) }.exceptionOrNull() is AcpFailure)
+        assertTrue(runCatching { client.get("Product/all", emptyList()) }.exceptionOrNull() is AcpUnauthorized)
+        assertEquals(1, server.requests.count { it.method == "POST" })
+    }
+
+    @Test fun forbiddenRateLimitAndServerFailureNeverRenew() = runBlocking {
+        for (status in listOf(403, 429, 503)) {
+            val server = Server(session(), session(), Reply("{}", status))
+            val client = api(server)
+            client.confirmAccess()
+            assertTrue(runCatching { client.get("Product/all", emptyList()) }.exceptionOrNull() is AcpFailure)
+            assertTrue(server.requests.all { it.method == "GET" })
+        }
+    }
+
+    private fun item(code: String, value: Double = 45.49) =
+        """{"description":"Test product","code":"$code","barCode":"5604885098906","value":$value}"""
+    private fun selectedProduct() = AcpProductParser.page(org.json.JSONObject(
+        """{"items":[${item("2012568001")}],"totalPages":1}"""), 0).items.single()
+
+    @Test fun detailRefreshSkipsPartialMatchesAndReturnsChangedPrice() = runBlocking {
+        val server = Server(session(), Reply("""{"items":[${item("12012568001")}],"totalPages":2,"pageIndex":0}"""),
+            session(), Reply("""{"items":[${item("2012568001", 42.99)}],"totalPages":2,"pageIndex":1}"""))
+        val result = api(server).refreshProduct(selectedProduct())
+        assertEquals("R$ 42,99", result.value?.brl())
+        assertEquals("2012568001", server.requests.last().url.queryParameter("code"))
+        assertEquals("5604885098906", server.requests.last().url.queryParameter("barCode"))
+        assertEquals("1", server.requests.last().url.queryParameter("pageIndex"))
+    }
+
+    @Test fun detailRefreshRejectsMissingAndAmbiguousIdentity() = runBlocking {
+        for (items in listOf("", item("2012568001") + "," + item("2012568001"))) {
+            val server = Server(session(), Reply("""{"items":[$items],"totalPages":1}"""))
+            assertTrue(runCatching { api(server).refreshProduct(selectedProduct()) }.exceptionOrNull() is AcpFailure)
+        }
+        val server = Server()
+        assertTrue(runCatching { api(server).refreshProduct(selectedProduct().copy(code = "", barcode = "")) }.exceptionOrNull() is AcpFailure)
+        assertTrue(server.requests.isEmpty())
+    }
+
 }

@@ -6,7 +6,7 @@ import java.math.RoundingMode
 
 internal enum class AcpSearchField(val parameter: String, val label: String) { BARCODE("barCode", "Cód. barras"), CODE("code", "Código"), DESCRIPTION("description", "Descrição") }
 internal data class AcpCategory(val id: String, val description: String)
-internal data class AcpProductPage(val items: List<AcpProduct>, val pageIndex: Int, val totalPages: Int, val totalCount: Int)
+internal data class AcpProductPage(val items: List<AcpProduct>, val pageIndex: Int, val totalPages: Int, val totalCount: Int, val queriedAtMillis: Long = System.currentTimeMillis())
 internal data class AcpOffer(val title: String, val detail: String, val price: BigDecimal? = null, val referencePrice: BigDecimal? = null, val headline: String? = null)
 
 internal data class AcpProduct(
@@ -123,6 +123,28 @@ internal suspend fun AcpApi.searchProducts(field: AcpSearchField, query: String,
     if (retry.items.isNotEmpty()) return retry
     val alternate = if (field == AcpSearchField.BARCODE) AcpSearchField.CODE else AcpSearchField.BARCODE
     return searchProductsOnce(alternate, clean, category, 0)
+}
+
+/** Re-query the selected identity, never pick the first partial barcode match. */
+internal suspend fun AcpApi.refreshProduct(selected: AcpProduct): AcpProduct {
+    val filters = buildList {
+        if (selected.code.isNotBlank()) add("code" to selected.code)
+        if (selected.barcode.isNotBlank()) add("barCode" to selected.barcode)
+    }
+    if (filters.isEmpty()) throw AcpFailure("Produto sem código para atualizar. Faça uma nova busca.")
+    val matches = mutableListOf<AcpProduct>()
+    for (index in 0 until 10) {
+        val page = AcpProductParser.page(get("Product/all", filters + listOf("pageIndex" to index.toString(), "pageSize" to "50")), index)
+        matches.addAll(page.items.filter { candidate ->
+            (selected.code.isBlank() || candidate.code == selected.code) &&
+                (selected.barcode.isBlank() || candidate.barcode == selected.barcode)
+        })
+        if (matches.size > 1) throw AcpFailure("A ACP retornou mais de um cadastro com esses códigos. Confira o produto na ACP.")
+        if (page.items.isEmpty() || index + 1 >= page.totalPages) {
+            return matches.singleOrNull() ?: throw AcpFailure("Produto não encontrado na atualização. Faça uma nova busca.")
+        }
+    }
+    throw AcpFailure("Não foi possível confirmar o produto entre os resultados da ACP. Refine a busca.")
 }
 
 internal suspend fun AcpApi.categories(): List<AcpCategory> {

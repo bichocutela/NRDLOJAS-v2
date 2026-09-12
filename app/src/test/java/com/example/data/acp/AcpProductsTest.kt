@@ -165,4 +165,20 @@ class AcpProductsTest {
     @Test(expected = AcpFailure::class) fun malformedContractIsNotAnEmptySearch() {
         AcpProductParser.page(JSONObject("""{"unexpected":[]}"""), 0)
     }
+    @Test fun reportedTiroliroPartialPayloadDoesNotInventSecondUnitOrMultiBuy() {
+        // Fields reported by the owner from Product/all; not a fresh captured HTTP response.
+        // The fixture intentionally omits unobserved fields and uses a synthetic page envelope.
+        val observed = JSONObject("""{
+            "description":"Vinho Branco Tiroliro GF 750ml",
+            "code":"2012568001","barCode":"5604885098906",
+            "value":45.49,"quantityTake":3,"quantityPay":null
+        }""")
+        val item = AcpProductParser.page(JSONObject().put("items", org.json.JSONArray().put(observed)), 0).items.single()
+        assertEquals("R$ 45,49", item.value?.brl())
+        assertEquals("3", item.quantityTake?.quantity())
+        assertNull(item.quantityPay)
+        assertNull(item.secondUnitDiscount)
+        assertTrue(item.offers().isEmpty())
+    }
+
 }
