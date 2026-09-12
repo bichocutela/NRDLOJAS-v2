@@ -156,14 +156,47 @@ private suspend fun AcpApi.searchProductsOnce(field: AcpSearchField, query: Stri
     return AcpProductParser.page(get("Product/all", parameters), page).prioritizeExact(field, query)
 }
 
+private fun AcpProductPage.hasExact(field: AcpSearchField, query: String): Boolean = when (field) {
+    AcpSearchField.BARCODE -> items.any { it.barcode == query }
+    AcpSearchField.CODE -> items.any { it.code == query }
+    AcpSearchField.DESCRIPTION -> items.any { it.description.equals(query, ignoreCase = true) }
+}
+
+/**
+ * The Consultar Produtos screen asks all three fields at once. AcpApi serializes authenticated
+ * reads, so allowing all three to hit Product/all turned one tap into several sequential HTTP
+ * round-trips. Only the field that can realistically answer the typed value performs I/O here.
+ * Numeric identifiers try the most likely kind first and only fall back to the other identifier
+ * when there is no exact match. Text goes straight to description.
+ */
 internal suspend fun AcpApi.searchProducts(field: AcpSearchField, query: String, category: AcpCategory?, page: Int): AcpProductPage {
     require(query.isNotBlank() && query.length <= 200 && page >= 0)
-    val clean = query.trim(); val first = searchProductsOnce(field, clean, category, page)
-    if (first.items.isNotEmpty() || page != 0 || field == AcpSearchField.DESCRIPTION) return first
-    val retry = searchProductsOnce(field, clean, category, 0)
-    if (retry.items.isNotEmpty()) return retry
-    val alternate = if (field == AcpSearchField.BARCODE) AcpSearchField.CODE else AcpSearchField.BARCODE
-    return searchProductsOnce(alternate, clean, category, 0)
+    val clean = query.trim()
+    val numeric = clean.all(Char::isDigit)
+    val looksLikeBarcode = numeric && clean.length in setOf(8, 12, 13, 14)
+    val preferredField = when {
+        !numeric -> AcpSearchField.DESCRIPTION
+        looksLikeBarcode -> AcpSearchField.BARCODE
+        else -> AcpSearchField.CODE
+    }
+
+    // The unified UI invokes this method for BARCODE, CODE and DESCRIPTION. Returning an empty
+    // page for the two non-preferred invocations prevents duplicate network work while preserving
+    // the single search box contract.
+    if (field != preferredField) return AcpProductPage(emptyList(), page, 0, 0)
+
+    val first = searchProductsOnce(preferredField, clean, category, page)
+    if (page != 0 || preferredField == AcpSearchField.DESCRIPTION || first.hasExact(preferredField, clean)) {
+        return first
+    }
+
+    val alternate = if (preferredField == AcpSearchField.BARCODE) AcpSearchField.CODE else AcpSearchField.BARCODE
+    val second = searchProductsOnce(alternate, clean, category, 0)
+    return when {
+        second.hasExact(alternate, clean) -> second
+        first.items.isNotEmpty() -> first
+        else -> second
+    }
 }
 
 /** Re-query the selected identity, never pick the first partial barcode match. */
