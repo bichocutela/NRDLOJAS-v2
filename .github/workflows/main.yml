@@ -114,6 +114,7 @@ jobs:
           --tests 'com.example.data.DynamicPageScheduleTest' \
           --tests 'com.example.data.DynamicPageCodecTest' \
           --tests 'com.example.data.acp.*' \
+          --tests 'com.example.data.flyer.*' \
           --tests 'com.example.ui.DynamicMediaUrlTest' \
           --tests 'com.example.ui.theme.GlassSoftThemeTest'
         ./gradlew assembleRelease \
