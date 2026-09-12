@@ -19,9 +19,23 @@ internal data class AcpProduct(
     val packageType: String? = null, val characteristic: String? = null, val contentQuantity: BigDecimal? = null,
     val contentUnit: String? = null, val productFamily: String? = null, val auxDescriptions: List<String> = emptyList()
 ) {
+    private fun hasCategory(expected: String): Boolean {
+        val normalizedExpected = expected.lowercase().replace(Regex("[^a-z0-9]"), "")
+        return categories.any { category -> category.lowercase().replace(Regex("[^a-z0-9]"), "") == normalizedExpected }
+    }
+
     fun offers(): List<AcpOffer> = buildList {
-        if (previousValue != null && value != null && previousValue > value && value > BigDecimal.ZERO) add(AcpOffer("De/Por", "De ${previousValue.brl()} por ${value.brl()}.", value, previousValue))
-        clubValue?.takeIf { it > BigDecimal.ZERO }?.let { add(AcpOffer("Clube de Vantagens", "Preço Clube: ${it.brl()}. Condicionado ao Clube.", it, value?.takeIf { p -> p > BigDecimal.ZERO })) }
+        if (hasCategory("De-Por") && previousValue != null && value != null && previousValue > value && value > BigDecimal.ZERO) {
+            add(AcpOffer("De/Por", "De ${previousValue.brl()} por ${value.brl()}.", value, previousValue))
+        }
+        clubValue?.takeIf { it > BigDecimal.ZERO }?.let { clubPrice ->
+            val reference = when {
+                value != null && value > clubPrice -> value
+                previousValue != null && previousValue > clubPrice -> previousValue
+                else -> null
+            }
+            add(AcpOffer("Clube de Vantagens", "Preço Clube: ${clubPrice.brl()}. Condicionado ao Clube.", clubPrice, reference))
+        }
         wholesaleValue?.takeIf { it > BigDecimal.ZERO }?.let { price ->
             val minimum = wholesaleQuantity?.takeIf { it > BigDecimal.ZERO }
             val condition = minimum?.let { "A partir de ${it.quantity()} unidades." } ?: "Quantidade mínima não informada."
