@@ -103,6 +103,7 @@ class FlyerOfferParserTest {
             type = FlyerOfferType.TAKE_PAY_QUANTITY,
             sourceDescription = "Chocolate KitKat 4 Fingers",
             confidence = 0.95,
+            reviewed = true, takeQuantity = 4.0, payQuantity = 3.0,
             matchStatus = FlyerMatchStatus.CONFIRMED,
             barcodes = listOf("7891000248768")
         )

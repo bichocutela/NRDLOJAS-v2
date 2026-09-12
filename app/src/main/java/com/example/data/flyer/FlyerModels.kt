@@ -50,6 +50,7 @@ data class FlyerOffer(
     val payUnit: String? = null,
     val cashbackPercent: Double? = null,
     val cashbackValue: Double? = null,
+    val sourceText: String = "",
     val reviewed: Boolean = false,
     val clubCondition: FlyerClubCondition = FlyerClubCondition.NOT_INFORMED
 ) {
@@ -89,7 +90,7 @@ data class FlyerOffer(
             (barcode.isNotBlank() && barcodes.any { it.trim() == barcode.trim() }))
 
     fun matches(product: Product): Boolean {
-        if (matchStatus != FlyerMatchStatus.CONFIRMED) return false
+        if (!reviewed || matchStatus != FlyerMatchStatus.CONFIRMED || reviewError() != null) return false
         val productCode = normalizeIdentifier(product.code)
         if (productCodes.any { normalizeIdentifier(it) == productCode }) return true
         if (barcodes.any { normalizeIdentifier(it) == productCode }) return true

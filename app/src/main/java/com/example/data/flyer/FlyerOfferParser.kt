@@ -214,6 +214,7 @@ internal object FlyerOfferParser {
             type = type,
             scope = if (group) FlyerOfferScope.GROUP else FlyerOfferScope.PRODUCT,
             sourceDescription = description.ifBlank { block.text.trim() },
+            sourceText = block.text.take(3000),
             detail = detail,
             page = block.page,
             confidence = confidence,

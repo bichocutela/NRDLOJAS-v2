@@ -162,6 +162,7 @@ object FlyerRepository {
         "payUnit" to offer.payUnit,
         "cashbackPercent" to offer.cashbackPercent,
         "cashbackValue" to offer.cashbackValue,
+        "sourceText" to offer.sourceText,
         "reviewed" to offer.reviewed,
         "clubCondition" to offer.clubCondition.name
     )
@@ -217,6 +218,7 @@ object FlyerRepository {
             payUnit = data["payUnit"]?.toString()?.takeIf { it.isNotBlank() },
             cashbackPercent = number(data["cashbackPercent"]),
             cashbackValue = number(data["cashbackValue"]),
+            sourceText = data["sourceText"]?.toString().orEmpty(),
             reviewed = data["reviewed"] as? Boolean ?: false,
             clubCondition = enumValueOrNull<FlyerClubCondition>(data["clubCondition"]?.toString()) ?: FlyerClubCondition.NOT_INFORMED
         )
