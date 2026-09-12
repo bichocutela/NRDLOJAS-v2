@@ -145,58 +145,28 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
                 FilterChip(selected = field == option, onClick = { field = option; invalidateResults() }, label = { Text(option.label) })
             }
         }
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it.take(200); invalidateResults() },
-            label = { Text(field.label) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = if (field == AcpSearchField.DESCRIPTION) KeyboardType.Text else KeyboardType.Number,
-                imeAction = ImeAction.Search
-            ),
-            keyboardActions = KeyboardActions(onSearch = { search() })
-        )
+        OutlinedTextField(value = query, onValueChange = { query = it.take(200); invalidateResults() }, label = { Text(field.label) }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = if (field == AcpSearchField.DESCRIPTION) KeyboardType.Text else KeyboardType.Number, imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { search() }))
         Box {
-            OutlinedButton(onClick = { menu = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("Tipo de oferta: ${category?.description ?: "Todas"} ▾")
-            }
+            OutlinedButton(onClick = { menu = true }, modifier = Modifier.fillMaxWidth()) { Text("Tipo de oferta: ${category?.description ?: "Todas"} ▾") }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("Todas") }, onClick = { category = null; menu = false; invalidateResults() })
-                categories.forEach { option ->
-                    DropdownMenuItem(text = { Text(option.description) }, onClick = { category = option; menu = false; invalidateResults() })
-                }
+                categories.forEach { option -> DropdownMenuItem(text = { Text(option.description) }, onClick = { category = option; menu = false; invalidateResults() }) }
             }
         }
-        categoryError?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = { categoryAttempt++ }) { Text("Recarregar tipos de oferta") }
-        }
-        Button(onClick = { search() }, enabled = !busy && query.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-            Text(if (busy) "Buscando…" else "Buscar")
-        }
-        OutlinedButton(onClick = { scanning = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text("Ler código com a câmera")
-        }
+        categoryError?.let { Text(it, style = MaterialTheme.typography.bodySmall); TextButton(onClick = { categoryAttempt++ }) { Text("Recarregar tipos de oferta") } }
+        Button(onClick = { search() }, enabled = !busy && query.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Buscando…" else "Buscar") }
+        OutlinedButton(onClick = { scanning = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Ler código com a câmera") }
         if (page != null) {
             OutlinedButton(onClick = {
                 val text = api.diagnosticText()
                 if (text == null) diagnosticMessage = "Faça uma busca antes de copiar o diagnóstico."
-                else {
-                    clipboard.setText(AnnotatedString(text))
-                    diagnosticMessage = "Diagnóstico ACP copiado. Cole no ChatGPT para análise."
-                }
-            }, enabled = !busy && !promotionBusy, modifier = Modifier.fillMaxWidth()) {
-                Text("Copiar diagnóstico ACP")
-            }
+                else { clipboard.setText(AnnotatedString(text)); diagnosticMessage = "Diagnóstico ACP copiado. Cole no ChatGPT para análise." }
+            }, enabled = !busy && !promotionBusy, modifier = Modifier.fillMaxWidth()) { Text("Copiar diagnóstico ACP") }
             Text("O diagnóstico contém apenas respostas de consultas ACP e mascara campos sensíveis conhecidos. Não inclui senha, cookies ou cabeçalhos de autorização.", style = MaterialTheme.typography.labelSmall)
         }
         diagnosticMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-        if (promotionBusy) {
-            LinearProgressIndicator(Modifier.fillMaxWidth())
-            Text("Cruzando campanhas e promoções da ACP…", style = MaterialTheme.typography.labelSmall)
-        }
+        if (promotionBusy) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Cruzando campanhas e promoções da ACP…", style = MaterialTheme.typography.labelSmall) }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         promotionWarning?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 
@@ -232,14 +202,7 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         }
     }
 
-    if (scanning) AcpBarcodeScanner(onDismiss = { scanning = false }, onResult = { code ->
-        scanning = false
-        invalidateResults()
-        field = AcpSearchField.BARCODE
-        category = null
-        query = code
-        search()
-    })
+    if (scanning) AcpBarcodeScanner(onDismiss = { scanning = false }, onResult = { code -> scanning = false; invalidateResults(); field = AcpSearchField.BARCODE; category = null; query = code; search() })
 
     selected?.let { product ->
         AlertDialog(
@@ -250,28 +213,36 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
                     Text("Código: ${product.code.ifBlank { "não informado" }}\nCód. barras: ${product.barcode.ifBlank { "não informado" }}")
                     Text("Preço principal: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}", style = MaterialTheme.typography.titleMedium)
 
+                    HorizontalDivider()
+                    Text("Cadastro do produto", style = MaterialTheme.typography.titleMedium)
+                    Text("Estoque: ${product.stockQuantity?.quantity() ?: "não informado"}")
+                    Text("Vencimento: ${product.dueDate ?: "não informado"}")
+                    product.unit?.let { Text("Unidade: $it") }
+                    product.packageQuantity?.let { quantity -> Text("Embalagem: ${quantity.quantity()}${product.packageType?.let { " • $it" } ?: ""}") }
+                    if (product.packageQuantity == null) product.packageType?.let { Text("Tipo de embalagem: $it") }
+                    product.contentQuantity?.let { quantity -> Text("Conteúdo: ${quantity.quantity()}${product.contentUnit?.let { " $it" } ?: ""}") }
+                    if (product.contentQuantity == null) product.contentUnit?.let { Text("Unidade de conteúdo: $it") }
+                    product.characteristic?.let { Text("Característica: $it") }
+                    product.productFamily?.let { Text("Família: $it") }
+                    if (product.auxDescriptions.isNotEmpty()) Text("Descrições auxiliares: ${product.auxDescriptions.joinToString()}")
+                    if (product.categories.isNotEmpty()) Text("Categorias: ${product.categories.joinToString()}")
+                    product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite cadastrado: ${it.quantity()} unidades por CPF.") }
+
                     val directOffers = product.offers()
                     val campaignDetailOffers = campaigns.flatMap { it.offersFor(product) }
-                    val allOffers = (directOffers + campaignOffers[product.id].orEmpty() + campaignDetailOffers)
-                        .distinctBy { Triple(it.title, it.price, it.detail) }
-                    if (allOffers.isEmpty()) {
-                        AcpOfferPoster(AcpOffer("Preço cadastrado", "Nenhuma condição promocional informada neste cadastro ou nas campanhas vinculadas.", product.value), compact = false)
-                    } else {
-                        allOffers.forEach { HorizontalDivider(); AcpOfferPoster(it, compact = false) }
-                    }
-
-                    product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite cadastrado: ${it.quantity()} unidades por CPF.") }
-                    if (product.categories.isNotEmpty()) Text("Categorias: ${product.categories.joinToString()}")
+                    val allOffers = (directOffers + campaignOffers[product.id].orEmpty() + campaignDetailOffers).distinctBy { Triple(it.title, it.price, it.detail) }
+                    HorizontalDivider()
+                    Text("Preços e condições", style = MaterialTheme.typography.titleMedium)
+                    if (allOffers.isEmpty()) AcpOfferPoster(AcpOffer("Preço cadastrado", "Nenhuma condição promocional informada neste cadastro ou nas campanhas vinculadas.", product.value), compact = false)
+                    else allOffers.forEach { HorizontalDivider(); AcpOfferPoster(it, compact = false) }
 
                     HorizontalDivider()
                     Text("Integração ACP", style = MaterialTheme.typography.titleMedium)
                     if (detailBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
                     integration?.let { info ->
-                        Text("Estoque: ${info.stock ?: "não informado"}")
-                        Text("Vencimento: ${info.dueDate ?: "não informado"}")
-                        if (info.rawSummary.isNotEmpty()) {
-                            Text(info.rawSummary.joinToString("\n") { "${it.first}: ${it.second}" }, style = MaterialTheme.typography.bodySmall)
-                        }
+                        if (product.stockQuantity == null) Text("Estoque complementar: ${info.stock ?: "não informado"}")
+                        if (product.dueDate == null) Text("Vencimento complementar: ${info.dueDate ?: "não informado"}")
+                        if (info.rawSummary.isNotEmpty()) Text(info.rawSummary.joinToString("\n") { "${it.first}: ${it.second}" }, style = MaterialTheme.typography.bodySmall)
                     }
                     if (!detailBusy && integration == null) Text("A ACP não retornou informação complementar para este produto.")
 
