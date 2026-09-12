@@ -60,6 +60,7 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
     var generation by remember { mutableIntStateOf(0) }
     var scanning by remember { mutableStateOf(false) }
     var campaigns by remember { mutableStateOf<List<AcpCampaign>>(emptyList()) }
+    var previewCampaignOffers by remember { mutableStateOf<Map<String, List<AcpOffer>>>(emptyMap()) }
     var integration by remember { mutableStateOf<AcpIntegrationInfo?>(null) }
     var detailBusy by remember { mutableStateOf(false) }
     var detailWarning by remember { mutableStateOf<String?>(null) }
@@ -120,6 +121,7 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
         searchJob?.cancel()
         busy = false
         page = null
+        previewCampaignOffers = emptyMap()
         closeDetail()
         error = null
         diagnosticMessage = null
@@ -144,6 +146,16 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                 val result = api.searchProducts(searchField, searchText, searchCategory, index)
                 if (ticket != generation) return@launch
                 page = result
+                previewCampaignOffers = try {
+                    api.campaignOffersFor(result.items)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: AcpUnauthorized) {
+                    if (ticket == generation) onSessionExpired()
+                    emptyMap()
+                } catch (_: Exception) {
+                    emptyMap()
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: AcpUnauthorized) {
@@ -367,7 +379,8 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
         }
 
         itemsIndexed(result?.items.orEmpty(), key = { index, product -> "${product.id}:$index" }) { _, product ->
-            val directOffers = product.offers().forAutomaticDisplay()
+            val directOffers = product.offers()
+            val previewOffers = (directOffers + previewCampaignOffers[product.id].orEmpty()).forAutomaticDisplay()
             OutlinedCard(
                 onClick = { openProduct(product) },
                 enabled = !busy,
@@ -393,9 +406,9 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                     if (product.categories.isNotEmpty()) {
                         Text("Categorias: ${product.categories.joinToString()}", style = MaterialTheme.typography.labelSmall)
                     }
-                    if (directOffers.isNotEmpty()) {
+                    if (previewOffers.isNotEmpty()) {
                         Spacer(Modifier.height(2.dp))
-                        directOffers.forEach { AcpOfferPoster(it, compact = true) }
+                        previewOffers.forEach { AcpOfferPoster(it, compact = true) }
                     } else {
                         Text("Sem promoção explícita identificada no cadastro do produto.", style = MaterialTheme.typography.labelSmall)
                     }
@@ -457,6 +470,18 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                         nrdActionMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
                         Text("Código: ${product.code.ifBlank { "não informado" }}\nCód. barras: ${product.barcode.ifBlank { "não informado" }}")
                         Text("Preço principal: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}", style = MaterialTheme.typography.titleMedium)
+
+                        val commercialFacts = product.commercialFacts()
+                        if (commercialFacts.isNotEmpty()) {
+                            HorizontalDivider()
+                            Text("Dados comerciais retornados pela ACP", style = MaterialTheme.typography.titleMedium)
+                            commercialFacts.forEach { (label, value) ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                                    Text(value, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
 
                         val hasUsefulProductInfo = product.characteristic != null || product.productFamily != null ||
                             product.categories.isNotEmpty() || product.unitLimitPerCPF?.signum() == 1

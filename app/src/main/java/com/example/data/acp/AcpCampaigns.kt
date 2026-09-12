@@ -19,7 +19,10 @@ internal data class AcpCampaignProductRule(
     val cashback: BigDecimal?,
     val cashbackValue: BigDecimal?,
     val secondUnitDiscount: BigDecimal?,
-    val unitLimitPerCPF: BigDecimal?
+    val unitLimitPerCPF: BigDecimal?,
+    val startDate: String? = null,
+    val endDate: String? = null,
+    val conditionText: String? = null
 ) {
     fun matches(product: AcpProduct): Boolean =
         productId != null && productId == product.id ||
@@ -49,7 +52,10 @@ internal data class AcpCampaign(
         val source = buildString {
             append("Campanha: ").append(name)
             code?.let { append(" (#").append(it).append(')') }
-            if (startDate != null || endDate != null) append(". Vigência: ").append(startDate ?: "?").append(" até ").append(endDate ?: "?")
+            val effectiveStart = rule.startDate ?: startDate
+            val effectiveEnd = rule.endDate ?: endDate
+            if (effectiveStart != null || effectiveEnd != null) append(". Vigência: ").append(acpDateLabel(effectiveStart) ?: "?").append(" até ").append(acpDateLabel(effectiveEnd) ?: "?")
+            rule.conditionText?.takeIf { it.isNotBlank() }?.let { append(". Condição: ").append(it) }
             active?.let { append(if (it) ". Ativa" else ". Inativa") }
         }
         buildList {
@@ -134,7 +140,15 @@ internal object AcpCampaignParser {
                 cashback = firstDecimal(objects, "cashback", "cashbackPercent", "cashbackPercentage"),
                 cashbackValue = firstDecimal(objects, "cashbackValue", "valueCashback"),
                 secondUnitDiscount = parsedSecondUnit,
-                unitLimitPerCPF = firstDecimal(objects, "unitLimitPerCPF", "unitLimit", "maxUnits", "maximumQuantity", "limitQuantity")
+                unitLimitPerCPF = firstDecimal(objects, "unitLimitPerCPF", "unitLimit", "maxUnits", "maximumQuantity", "limitQuantity"),
+                startDate = firstText(promotion, "startDate", "initialDate", "dateStart", "beginDate", "initialValidity", "validFrom", "startAt")
+                    ?: firstText(wrapper, "startDate", "initialDate", "dateStart", "beginDate", "initialValidity", "validFrom", "startAt"),
+                endDate = firstText(promotion, "endDate", "finalDate", "dateEnd", "finishDate", "finalValidity", "validTo", "endAt")
+                    ?: firstText(wrapper, "endDate", "finalDate", "dateEnd", "finishDate", "finalValidity", "validTo", "endAt"),
+                conditionText = listOfNotNull(
+                    promotion.text("eligibility"), promotion.text("condition"), promotion.text("conditions"), promotion.text("restriction"),
+                    wrapper.text("eligibility"), wrapper.text("condition"), wrapper.text("conditions"), wrapper.text("restriction")
+                ).distinct().joinToString(" ").takeIf { it.isNotBlank() }
             )
         }
         val ids = rules.mapNotNull { it.productId }.toSet()

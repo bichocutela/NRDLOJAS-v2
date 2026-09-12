@@ -165,6 +165,20 @@ class AcpProductsTest {
     @Test(expected = AcpFailure::class) fun malformedContractIsNotAnEmptySearch() {
         AcpProductParser.page(JSONObject("""{"unexpected":[]}"""), 0)
     }
+    @Test fun commercialFactsExposeEveryStructuredCommercialFieldWithoutInventingZeros() {
+        val item = product(""""value":45.49,"previousValue":60.0,"clubValue":42.99,"wholesaleValue":39.99,"wholesaleQuantity":6,"quantityTake":3,"quantityPay":2,"cashback":10,"cashbackValue":4.5,"secondUnitDiscount":40,"unitLimitPerCPF":2,"stockQuantity":18,"dueDate":"2026-09-30","startDate":"2026-09-12","endDate":"2026-09-15","packageQuantity":2,"packageType":{"description":"Caixa"},"contentQuantity":2.2,"contentUnit":"kg","characteristic":"Concentrado"""")
+        val facts = item.commercialFacts().toMap()
+        assertEquals("R$ 42,99", facts["Preço Clube"])
+        assertEquals("R$ 4,50", facts["Cashback em valor"])
+        assertEquals("40%", facts["Desconto 2ª unidade"])
+        assertEquals("12/09/2026", facts["Início da oferta"])
+        assertEquals("15/09/2026", facts["Fim da oferta"])
+        assertTrue(item.offers().first { it.title == "Atacado" }.detail.contains("A partir de 6 unidades"))
+        assertEquals("2,2 kg", facts["Conteúdo"])
+        assertEquals("Caixa", facts["Tipo de embalagem"])
+        assertFalse(facts.containsKey("Preço inexistente"))
+    }
+
     @Test fun reportedTiroliroPartialPayloadDoesNotInventSecondUnitOrMultiBuy() {
         // Fields reported by the owner from Product/all; not a fresh captured HTTP response.
         // The fixture intentionally omits unobserved fields and uses a synthetic page envelope.

@@ -72,6 +72,20 @@ class AcpCampaignsTest {
         assertNull(info.message)
         assertEquals("1", info.id)
     }
+    @Test fun productCampaignRuleKeepsItsOwnValidityAndEligibility() {
+        val p = product("""{"id":"p-rule","code":"rule-code","description":"Teste","value":20}""")
+        val c = AcpCampaignParser.page(JSONObject("""{"items":[{
+            "id":"campaign-rule","name":"Campanha geral","startDate":"2026-09-01","endDate":"2026-09-30",
+            "products":[{"product":{"id":"p-rule"},"secondUnitDiscount":40,
+                "startDate":"2026-09-12","endDate":"2026-09-15","eligibility":"Máximo 2 por CPF"}]
+        }]}""")).single()
+        val offer = c.offersFor(p).single()
+        assertEquals("40% DE DESCONTO", offer.headline)
+        assertTrue(offer.detail.contains("2026-09-12"))
+        assertTrue(offer.detail.contains("2026-09-15"))
+        assertTrue(offer.detail.contains("Máximo 2 por CPF"))
+    }
+
     @Test fun campaignCashbackHasHeadlineAndNeverBecomesImmediatePrice() {
         // Synthetic presentation fixture, not evidence of Aurora eligibility or campaign values.
         val p = product("""{"id":"p-cash","code":"test-code","description":"Teste","value":36.99}""")

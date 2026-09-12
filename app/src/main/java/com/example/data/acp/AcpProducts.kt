@@ -49,11 +49,34 @@ internal data class AcpProduct(
     val unitLimitPerCPF: BigDecimal?, val unit: String?, val categories: List<String>,
     val stockQuantity: BigDecimal? = null, val dueDate: String? = null, val packageQuantity: BigDecimal? = null,
     val packageType: String? = null, val characteristic: String? = null, val contentQuantity: BigDecimal? = null,
-    val contentUnit: String? = null, val productFamily: String? = null, val auxDescriptions: List<String> = emptyList()
+    val contentUnit: String? = null, val productFamily: String? = null, val auxDescriptions: List<String> = emptyList(),
+    val validFrom: String? = null, val validTo: String? = null
 ) {
     private fun hasCategory(expected: String): Boolean {
         val normalizedExpected = expected.lowercase().replace(Regex("[^a-z0-9]"), "")
         return categories.any { category -> category.lowercase().replace(Regex("[^a-z0-9]"), "") == normalizedExpected }
+    }
+
+    fun commercialFacts(): List<Pair<String, String>> = buildList {
+        value?.let { add("Preço atual" to it.brl()) }
+        previousValue?.let { add("Preço anterior" to it.brl()) }
+        clubValue?.takeIf { it > BigDecimal.ZERO }?.let { add("Preço Clube" to it.brl()) }
+        wholesaleValue?.takeIf { it > BigDecimal.ZERO }?.let { add("Preço atacado" to it.brl()) }
+        wholesaleQuantity?.takeIf { it > BigDecimal.ZERO }?.let { add("Mínimo atacado" to "${it.quantity()} unidades") }
+        quantityTake?.let { add("Leve" to "${it.quantity()} unidades") }
+        quantityPay?.let { add("Pague" to "${it.quantity()} unidades") }
+        cashback?.takeIf { it > BigDecimal.ZERO }?.let { add("Cashback percentual" to "${it.quantity()}%") }
+        cashbackValue?.takeIf { it > BigDecimal.ZERO }?.let { add("Cashback em valor" to it.brl()) }
+        secondUnitDiscount?.takeIf { it > BigDecimal.ZERO }?.let { add("Desconto 2ª unidade" to "${it.quantity()}%") }
+        unitLimitPerCPF?.takeIf { it > BigDecimal.ZERO }?.let { add("Limite por CPF" to "${it.quantity()} unidades") }
+        stockQuantity?.let { add("Estoque informado" to it.quantity()) }
+        dueDate?.let { add("Validade cadastrada" to acpDateLabel(it)!!) }
+        validFrom?.let { add("Início da oferta" to acpDateLabel(it)!!) }
+        validTo?.let { add("Fim da oferta" to acpDateLabel(it)!!) }
+        packageQuantity?.let { add("Quantidade na embalagem" to it.quantity()) }
+        packageType?.let { add("Tipo de embalagem" to it) }
+        contentQuantity?.let { add("Conteúdo" to "${it.quantity()} ${contentUnit.orEmpty()}".trim()) }
+        characteristic?.let { add("Característica" to it) }
     }
 
     fun offers(): List<AcpOffer> = buildList {
@@ -88,6 +111,11 @@ internal data class AcpProduct(
         cashbackValue?.takeIf { it > BigDecimal.ZERO }?.let {
             add(AcpOffer("Cashback em valor", "${it.brl()} de retorno. Não é desconto imediato; confira as condições de crédito.", referencePrice = value?.takeIf { p -> p > BigDecimal.ZERO }, headline = "${it.brl()} DE VOLTA"))
         }
+    }.map { offer ->
+        val start = validFrom?.let(::acpDateLabel)
+        val end = validTo?.let(::acpDateLabel)
+        if (start == null && end == null) offer
+        else offer.copy(detail = "${offer.detail} Vigência: ${start ?: "?"} até ${end ?: "?"}.")
     }
 }
 
@@ -134,9 +162,12 @@ internal object AcpProductParser {
             unit = item.optJSONObject("unit")?.text("description"), categories = if (categories == null) emptyList() else (0 until categories.length()).mapNotNull { categories.optJSONObject(it)?.text("description") },
             stockQuantity = item.decimal("stockQuantity"), dueDate = item.text("dueDate"), packageQuantity = item.decimal("packageQuantity"), packageType = item.optJSONObject("packageType")?.text("description"),
             characteristic = item.text("characteristic"), contentQuantity = item.decimal("contentQuantity"), contentUnit = item.text("contentUnit"), productFamily = item.optJSONObject("productFamily")?.text("description"),
-            auxDescriptions = if (aux == null) emptyList() else (0 until aux.length()).mapNotNull { aux.optString(it).trim().takeIf { text -> text.isNotEmpty() && text != "null" } }
+            auxDescriptions = if (aux == null) emptyList() else (0 until aux.length()).mapNotNull { aux.optString(it).trim().takeIf { text -> text.isNotEmpty() && text != "null" } },
+            validFrom = firstText(item, "startDate", "initialDate", "validFrom", "startAt", "offerStartDate"),
+            validTo = firstText(item, "endDate", "finalDate", "validTo", "endAt", "offerEndDate")
         )
     }
+    private fun firstText(item: JSONObject, vararg keys: String): String? = keys.asSequence().mapNotNull { item.text(it) }.firstOrNull()
     private fun JSONObject.text(key: String): String? = if (isNull(key)) null else optString(key).trim().takeIf { it.isNotEmpty() && it != "null" }
     private fun JSONObject.decimal(key: String): BigDecimal? { val raw = text(key) ?: return null; if (!Regex("[0-9]+([.,][0-9]+)?").matches(raw)) return null; return raw.replace(',', '.').toBigDecimalOrNull() }
 }
