@@ -60,8 +60,6 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
         try {
             configured = api.hasCredentials()
             if (configured) {
-                // Keep the ACP experience effectively signed in: a valid server session is reused,
-                // and an expired/missing one is renewed silently with the protected device access.
                 api.confirmAccess()
                 authenticated = true
             } else {
@@ -84,8 +82,9 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .windowInsetsPadding(WindowInsets.statusBars)
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                            // A janela já entrega esta área abaixo da status bar. Não aplicar
+                            // statusBars de novo evita o "vazio" extra que aparecia acima do banner.
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -102,9 +101,6 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
                             contentAlignment = Alignment.Center
                         ) {
                             if (activeConsultationBackground != null) {
-                                // A aparência da consulta usa o mesmo renderizador da Home.
-                                // Assim o Painel Mestre reaproveita Fit, zoom, posição,
-                                // deformação e máscara sem transformar a imagem no fundo inteiro.
                                 MaskedThemeBanner(
                                     appTheme = "multicolor",
                                     backgroundUrl = activeConsultationBackground.url,
