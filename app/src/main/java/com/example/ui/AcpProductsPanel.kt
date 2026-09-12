@@ -2,9 +2,7 @@ package com.example.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -12,7 +10,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,9 +22,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import com.example.data.CategoryDefinition
 import com.example.data.FirebaseService
 import com.example.data.NrdProductImportService
@@ -37,14 +32,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.LinkedHashMap
 import java.util.Locale
-import java.security.MessageDigest
 
 private enum class NrdIdentifier { BARCODE, PRODUCT_CODE }
 
@@ -83,15 +76,6 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
     var detailError by remember { mutableStateOf<String?>(null) }
     var detailTime by remember { mutableStateOf<Long?>(null) }
     var detailAttempt by remember { mutableIntStateOf(0) }
-
-    var clubProducts by remember { mutableStateOf<List<AcpProduct>>(emptyList()) }
-    var clubBusy by remember { mutableStateOf(false) }
-    var clubError by remember { mutableStateOf<String?>(null) }
-    var clubLastSync by remember { mutableStateOf<Long?>(null) }
-    var clubRefreshToken by remember { mutableIntStateOf(0) }
-    var showClubProducts by remember { mutableStateOf(false) }
-    var clubQuery by remember { mutableStateOf("") }
-    val clubCarouselState = rememberLazyListState()
 
     var addToNrdProduct by remember { mutableStateOf<AcpProduct?>(null) }
     var nrdIdentifier by remember { mutableStateOf(NrdIdentifier.BARCODE) }
@@ -156,8 +140,7 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
             try {
                 val result = api.searchProductsUnified(searchText, index)
                 if (ticket != generation) return@launch
-                // Só troca a lista quando a nova pesquisa terminou. Enquanto o funcionário
-                // digita ou enquanto a rede responde, o resultado anterior permanece visível.
+                // O resultado anterior continua visível enquanto a nova busca está em andamento.
                 page = result
                 previewCampaignOffers = try {
                     api.campaignOffersFor(result.items)
@@ -178,37 +161,6 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
             } finally {
                 if (ticket == generation) busy = false
             }
-        }
-    }
-
-    LaunchedEffect(api, clubRefreshToken) {
-        clubBusy = true
-        clubError = null
-        try {
-            // Monta a lista em memória e só publica quando TODAS as páginas terminarem.
-            // Assim uma falha no meio da sincronização nunca substitui a lista por dados parciais.
-            val fresh = api.loadFreshClubProducts(freshStore)
-            clubProducts = fresh
-            clubLastSync = System.currentTimeMillis()
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: AcpUnauthorized) {
-            clubError = "A sessão ACP expirou durante a sincronização do Clube."
-            onSessionExpired()
-        } catch (failure: Exception) {
-            clubError = acpErrorMessage(failure)
-        } finally {
-            clubBusy = false
-        }
-    }
-
-    val carouselProducts = remember(clubProducts) { clubProducts.take(18) }
-    LaunchedEffect(carouselProducts.map { it.id }) {
-        if (carouselProducts.size <= 1) return@LaunchedEffect
-        while (isActive) {
-            delay(5_000L)
-            val next = (clubCarouselState.firstVisibleItemIndex + 1) % carouselProducts.size
-            clubCarouselState.animateScrollToItem(next)
         }
     }
 
@@ -237,11 +189,10 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
         }
         detail = product
         detailTime = System.currentTimeMillis()
-        page = page?.let { old -> old.copy(items = old.items.map { item ->
-            if (item.id == requested.id && item.code == requested.code && item.barcode == requested.barcode) product else item
-        }) }
-        clubProducts = clubProducts.map { item ->
-            if (item.id == requested.id && item.code == requested.code && item.barcode == requested.barcode && product.clubValue != null) product else item
+        page = page?.let { old ->
+            old.copy(items = old.items.map { item ->
+                if (item.id == requested.id && item.code == requested.code && item.barcode == requested.barcode) product else item
+            })
         }
         try {
             campaigns = api.campaignsFor(product)
@@ -315,89 +266,21 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
             }
         }
 
-        item {
-            ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f))
-            ) {
-                Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Clube de Vantagens", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            clubLastSync?.let {
-                                Text("Sincronizado com a ACP às ${acpQueryTime(it)}", style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
-                        TextButton(onClick = {
-                            showClubProducts = true
-                            val age = clubLastSync?.let { System.currentTimeMillis() - it } ?: Long.MAX_VALUE
-                            if (!clubBusy && age > 5 * 60 * 1000L) clubRefreshToken++
-                        }) { Text("Ver Todos") }
-                    }
-
-                    if (clubBusy && clubProducts.isEmpty()) {
-                        LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 14.dp))
-                    }
-                    clubError?.let { message ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                            IconButton(onClick = { clubRefreshToken++ }, enabled = !clubBusy) {
-                                Icon(Icons.Default.Refresh, contentDescription = "Sincronizar Clube")
-                            }
-                        }
-                    }
-                    if (!clubBusy && clubProducts.isEmpty() && clubError == null) {
-                        Text("Nenhum produto com preço Clube foi retornado pela ACP.", modifier = Modifier.padding(horizontal = 14.dp), style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (carouselProducts.isNotEmpty()) {
-                        LazyRow(
-                            state = clubCarouselState,
-                            contentPadding = PaddingValues(horizontal = 14.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            itemsIndexed(carouselProducts, key = { _, product -> "club:${product.id}:${product.code}" }) { _, product ->
-                                ElevatedCard(
-                                    onClick = { openProduct(product) },
-                                    modifier = Modifier.width(218.dp).heightIn(min = 118.dp),
-                                    shape = RoundedCornerShape(18.dp),
-                                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-                                ) {
-                                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                        Text(product.description, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                        Text(
-                                            product.clubValue?.brl() ?: "Preço Clube indisponível",
-                                            style = MaterialTheme.typography.titleLarge,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        val id = product.barcode.ifBlank { product.code }
-                                        if (id.isNotBlank()) Text("Cód.: $id", style = MaterialTheme.typography.labelSmall)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         if (page != null) {
             item {
-                OutlinedButton(onClick = {
-                    val text = api.diagnosticText()
-                    if (text == null) diagnosticMessage = "Faça uma busca antes de copiar o diagnóstico."
-                    else {
-                        clipboard.setText(AnnotatedString(text))
-                        diagnosticMessage = "Diagnóstico ACP copiado. Cole no ChatGPT para análise."
-                    }
-                }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = {
+                        val text = api.diagnosticText()
+                        if (text == null) {
+                            diagnosticMessage = "Faça uma busca antes de copiar o diagnóstico."
+                        } else {
+                            clipboard.setText(AnnotatedString(text))
+                            diagnosticMessage = "Diagnóstico ACP copiado. Cole no ChatGPT para análise."
+                        }
+                    },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text("Copiar diagnóstico ACP")
                 }
             }
@@ -501,78 +384,6 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
         )
     }
 
-    if (showClubProducts) {
-        val normalized = clubQuery.trim().lowercase(Locale.getDefault())
-        val filteredClubProducts = remember(clubProducts, normalized) {
-            if (normalized.isBlank()) clubProducts else clubProducts.filter { product ->
-                product.code.lowercase(Locale.getDefault()).contains(normalized) ||
-                    product.barcode.lowercase(Locale.getDefault()).contains(normalized) ||
-                    product.description.lowercase(Locale.getDefault()).contains(normalized)
-            }
-        }
-        Dialog(onDismissRequest = { showClubProducts = false }) {
-            Surface(
-                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.88f),
-                shape = RoundedCornerShape(28.dp),
-                tonalElevation = 6.dp
-            ) {
-                Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Produtos no Clube", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                            Text("${clubProducts.size} produtos sincronizados", style = MaterialTheme.typography.bodySmall)
-                        }
-                        IconButton(onClick = { clubRefreshToken++ }, enabled = !clubBusy) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Atualizar lista do Clube")
-                        }
-                    }
-                    clubLastSync?.let {
-                        Text("Última sincronização completa: ${acpQueryTime(it)}", style = MaterialTheme.typography.labelSmall)
-                    }
-                    if (clubBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    clubError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                    OutlinedTextField(
-                        value = clubQuery,
-                        onValueChange = { clubQuery = it.take(200) },
-                        placeholder = { Text("Pesquisar no Clube") },
-                        supportingText = { Text("Código, código de barras ou descrição") },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(24.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Text("${filteredClubProducts.size} encontrados", style = MaterialTheme.typography.labelMedium)
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        itemsIndexed(filteredClubProducts, key = { _, product -> "club-all:${product.id}:${product.code}" }) { _, product ->
-                            OutlinedCard(onClick = {
-                                showClubProducts = false
-                                openProduct(product)
-                            }, modifier = Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(product.description, style = MaterialTheme.typography.titleSmall)
-                                    Text(
-                                        "Clube: ${product.clubValue?.brl() ?: "não informado"}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        "Código: ${product.code.ifBlank { "-" }} • EAN: ${product.barcode.ifBlank { "-" }}",
-                                        style = MaterialTheme.typography.labelSmall
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    TextButton(onClick = { showClubProducts = false }, modifier = Modifier.align(Alignment.End)) { Text("Fechar") }
-                }
-            }
-        }
-    }
-
     selected?.let { requested ->
         AlertDialog(
             onDismissRequest = { closeDetail() },
@@ -602,7 +413,10 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                         }
                         nrdActionMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
                         Text("Código: ${product.code.ifBlank { "não informado" }}\nCód. barras: ${product.barcode.ifBlank { "não informado" }}")
-                        Text("Preço principal: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Preço principal: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}",
+                            style = MaterialTheme.typography.titleMedium
+                        )
 
                         val hasUsefulProductInfo = product.characteristic != null || product.productFamily != null ||
                             product.categories.isNotEmpty() || product.unitLimitPerCPF?.signum() == 1
@@ -612,7 +426,9 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                             product.characteristic?.let { Text("Característica: $it") }
                             product.productFamily?.let { Text("Família: $it") }
                             if (product.categories.isNotEmpty()) Text("Categorias ACP: ${product.categories.joinToString()}")
-                            product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite cadastrado: ${it.quantity()} unidades por CPF.") }
+                            product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let {
+                                Text("Limite cadastrado: ${it.quantity()} unidades por CPF.")
+                            }
                         }
 
                         val directOffers = product.offers()
@@ -621,7 +437,14 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                         HorizontalDivider()
                         Text("Preços e condições", style = MaterialTheme.typography.titleMedium)
                         if (allOffers.isEmpty()) {
-                            AcpOfferPoster(AcpOffer("Preço cadastrado", "Nenhuma condição promocional explícita foi identificada nos dados consultados.", product.value), compact = false)
+                            AcpOfferPoster(
+                                AcpOffer(
+                                    "Preço cadastrado",
+                                    "Nenhuma condição promocional explícita foi identificada nos dados consultados.",
+                                    product.value
+                                ),
+                                compact = false
+                            )
                         } else {
                             Text("Cartazes automáticos em paisagem", style = MaterialTheme.typography.titleSmall)
                             allOffers.forEachIndexed { index, offer ->
@@ -639,8 +462,15 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
 
                         HorizontalDivider()
                         OutlinedCard(onClick = { syncExpanded = !syncExpanded }, modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column(
+                                Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(7.dp)
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Text("Sincronização", style = MaterialTheme.typography.titleMedium)
                                     Text(if (syncExpanded) "▲" else "▼")
                                 }
@@ -661,16 +491,18 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                         if (campaigns.isNotEmpty()) {
                             HorizontalDivider()
                             Text("Campanhas vinculadas", style = MaterialTheme.typography.titleMedium)
-                            campaigns.forEach { c ->
+                            campaigns.forEach { campaign ->
                                 ElevatedCard(Modifier.fillMaxWidth()) {
                                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                        Text(c.name, style = MaterialTheme.typography.titleSmall)
-                                        c.code?.let { Text("Código: $it") }
-                                        c.description?.takeIf { it != c.name }?.let { Text(it) }
-                                        Text("Início: ${acpDateLabel(c.startDate) ?: "não informado"} • Fim: ${acpDateLabel(c.endDate) ?: "não informado"}")
-                                        Text("Ativa: ${c.active?.let { if (it) "sim" else "não" } ?: "não informado"} • Autoexclusão: ${c.autoExclusion?.let { if (it) "sim" else "não" } ?: "não informado"}")
-                                        val rules = c.productRules.count { it.matches(product) }
-                                        if (rules > 0) Text("Regras promocionais vinculadas ao produto: $rules", style = MaterialTheme.typography.labelSmall)
+                                        Text(campaign.name, style = MaterialTheme.typography.titleSmall)
+                                        campaign.code?.let { Text("Código: $it") }
+                                        campaign.description?.takeIf { it != campaign.name }?.let { Text(it) }
+                                        Text("Início: ${acpDateLabel(campaign.startDate) ?: "não informado"} • Fim: ${acpDateLabel(campaign.endDate) ?: "não informado"}")
+                                        Text("Ativa: ${campaign.active?.let { if (it) "sim" else "não" } ?: "não informado"} • Autoexclusão: ${campaign.autoExclusion?.let { if (it) "sim" else "não" } ?: "não informado"}")
+                                        val rules = campaign.productRules.count { it.matches(product) }
+                                        if (rules > 0) {
+                                            Text("Regras promocionais vinculadas ao produto: $rules", style = MaterialTheme.typography.labelSmall)
+                                        }
                                     }
                                 }
                             }
@@ -701,20 +533,35 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                     Text("Código que será usado no NRD", style = MaterialTheme.typography.titleSmall)
                     if (product.barcode.isNotBlank()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = nrdIdentifier == NrdIdentifier.BARCODE, onClick = { if (!nrdSaving) nrdIdentifier = NrdIdentifier.BARCODE }, enabled = !nrdSaving)
+                            RadioButton(
+                                selected = nrdIdentifier == NrdIdentifier.BARCODE,
+                                onClick = { if (!nrdSaving) nrdIdentifier = NrdIdentifier.BARCODE },
+                                enabled = !nrdSaving
+                            )
                             Text("Código de barras • ${product.barcode}")
                         }
                     }
                     if (product.code.isNotBlank()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = nrdIdentifier == NrdIdentifier.PRODUCT_CODE, onClick = { if (!nrdSaving) nrdIdentifier = NrdIdentifier.PRODUCT_CODE }, enabled = !nrdSaving)
+                            RadioButton(
+                                selected = nrdIdentifier == NrdIdentifier.PRODUCT_CODE,
+                                onClick = { if (!nrdSaving) nrdIdentifier = NrdIdentifier.PRODUCT_CODE },
+                                enabled = !nrdSaving
+                            )
                             Text("Código do produto • ${product.code}")
                         }
                     }
 
-                    OutlinedCard(onClick = { if (!nrdSaving) nrdCategoriesExpanded = !nrdCategoriesExpanded }, modifier = Modifier.fillMaxWidth()) {
+                    OutlinedCard(
+                        onClick = { if (!nrdSaving) nrdCategoriesExpanded = !nrdCategoriesExpanded },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text("Categorias (${selectedNrdCategories.size})", style = MaterialTheme.typography.titleSmall)
                                 Text(if (nrdCategoriesExpanded) "▲" else "▼")
                             }
@@ -730,7 +577,13 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                                             Checkbox(
                                                 checked = categoryName in selectedNrdCategories,
                                                 onCheckedChange = { checked ->
-                                                    if (!nrdSaving) selectedNrdCategories = if (checked) selectedNrdCategories + categoryName else selectedNrdCategories - categoryName
+                                                    if (!nrdSaving) {
+                                                        selectedNrdCategories = if (checked) {
+                                                            selectedNrdCategories + categoryName
+                                                        } else {
+                                                            selectedNrdCategories - categoryName
+                                                        }
+                                                    }
                                                 },
                                                 enabled = !nrdSaving
                                             )
@@ -780,7 +633,9 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                     }
                 ) { Text(if (nrdSaving) "Salvando…" else "Salvar") }
             },
-            dismissButton = { TextButton(onClick = { closeAddToNrd() }, enabled = !nrdSaving) { Text("Cancelar") } }
+            dismissButton = {
+                TextButton(onClick = { closeAddToNrd() }, enabled = !nrdSaving) { Text("Cancelar") }
+            }
         )
     }
 }
@@ -828,28 +683,6 @@ private suspend fun AcpApi.searchProductsUnified(query: String, pageIndex: Int):
     )
 }
 
-private suspend fun AcpApi.loadFreshClubProducts(store: AcpSecureStore): List<AcpProduct> {
-    val all = LinkedHashMap<String, AcpProduct>()
-    var pageIndex = 0
-    var totalPages = 1
-    do {
-        val parameters = listOf("pageSize" to "100", "pageIndex" to pageIndex.toString())
-        val root = getFreshForUi(store, "Product/all", parameters)
-        val page = AcpProductParser.page(root, pageIndex)
-        page.items.asSequence()
-            .filter { it.clubValue?.signum() == 1 }
-            .forEach { product ->
-                val key = product.id.ifBlank { "${product.code}|${product.barcode}|${product.description}" }
-                all[key] = product
-            }
-        totalPages = page.totalPages.coerceAtLeast(1)
-        pageIndex++
-        if (pageIndex > 500) throw AcpFailure("A lista do Clube excedeu o limite seguro de sincronização.")
-    } while (pageIndex < totalPages)
-
-    return all.values.sortedBy { it.description.lowercase(Locale.getDefault()) }
-}
-
 private suspend fun AcpApi.refreshProductFreshForUi(selected: AcpProduct, store: AcpSecureStore): AcpProduct {
     val filters = buildList {
         if (selected.code.isNotBlank()) add("code" to selected.code)
@@ -866,9 +699,12 @@ private suspend fun AcpApi.refreshProductFreshForUi(selected: AcpProduct, store:
             (selected.code.isBlank() || candidate.code == selected.code) &&
                 (selected.barcode.isBlank() || candidate.barcode == selected.barcode)
         })
-        if (matches.size > 1) throw AcpFailure("A ACP retornou mais de um cadastro com esses códigos. Confira o produto na ACP.")
+        if (matches.size > 1) {
+            throw AcpFailure("A ACP retornou mais de um cadastro com esses códigos. Confira o produto na ACP.")
+        }
         if (page.items.isEmpty() || index + 1 >= page.totalPages) {
-            return matches.singleOrNull() ?: throw AcpFailure("Produto não encontrado na atualização. Faça uma nova busca.")
+            return matches.singleOrNull()
+                ?: throw AcpFailure("Produto não encontrado na atualização. Faça uma nova busca.")
         }
     }
     throw AcpFailure("Não foi possível confirmar o produto entre os resultados da ACP. Refine a busca.")
@@ -879,8 +715,6 @@ private suspend fun AcpApi.getFreshForUi(
     path: String,
     parameters: List<Pair<String, String>>
 ): org.json.JSONObject {
-    // Limpa somente a chave exata desta leitura para obrigar uma consulta de rede.
-    // O próprio AcpApi repovoa o cache depois da resposta bem-sucedida.
     store.clear(acpResponseCacheName(path, parameters))
     return get(path, parameters)
 }
@@ -897,4 +731,5 @@ private fun acpResponseCacheName(path: String, parameters: List<Pair<String, Str
     return "response_cache_$hex"
 }
 
-private fun acpQueryTime(value: Long): String = SimpleDateFormat("dd/MM HH:mm:ss", Locale("pt", "BR")).format(Date(value))
+private fun acpQueryTime(value: Long): String =
+    SimpleDateFormat("dd/MM HH:mm:ss", Locale("pt", "BR")).format(Date(value))
