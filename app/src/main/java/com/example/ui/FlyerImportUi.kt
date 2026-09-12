@@ -250,7 +250,10 @@ private fun FlyerImportDialog(onDismiss: () -> Unit) {
                                         sourceLabel = result.sourceLabel,
                                         validFrom = validFrom,
                                         validTo = validTo,
-                                        offers = result.offers
+                                        offers = result.offers.map { offer ->
+                                            if (offer.reviewed && offer.reviewError() == null) offer
+                                            else offer.copy(reviewed = false, matchStatus = FlyerMatchStatus.REVIEW)
+                                        }
                                     )
                                     val saved = FlyerRepository.saveCampaign(campaign)
                                     if (saved) {
@@ -389,7 +392,7 @@ private fun CampaignManagementCard(
                 Text(statusLabel, style = MaterialTheme.typography.labelSmall, color = if (status == FlyerCampaignStatus.ACTIVE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(
-                "${campaign.offers.count { it.reviewed && it.matchStatus == FlyerMatchStatus.CONFIRMED }} oferta(s) confirmada(s) • ${campaign.offers.count { it.matchStatus == FlyerMatchStatus.REVIEW }} para revisão",
+                "${campaign.offers.count { it.reviewed && it.matchStatus == FlyerMatchStatus.CONFIRMED }} oferta(s) confirmada(s) • ${campaign.offers.count { !it.reviewed }} para revisão",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -510,7 +513,7 @@ private fun FlyerOfferDisplayCard(campaign: FlyerCampaign, offer: FlyerOffer) {
             Text(
                 "${campaign.name} • válido de ${dateLabel(campaign.validFrom)} até ${dateLabel(campaign.validTo)}",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = androidx.compose.ui.graphics.Color.Black
             )
         }
     }
