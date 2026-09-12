@@ -1,0 +1,85 @@
+name: Apply Consultation Appearance
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'scripts/apply_consultation_appearance.py'
+      - '.github/workflows/apply_consultation_appearance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-validate-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply focused source patch
+        run: python scripts/apply_consultation_appearance.py
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Fix Gradle wrapper jar
+        run: |
+          rm -f gradle/wrapper/gradle-wrapper.jar
+          curl -fsSL -o gradle/wrapper/gradle-wrapper.jar "https://raw.githubusercontent.com/gradle/gradle/v9.3.1/gradle/wrapper/gradle-wrapper.jar"
+          chmod +x gradlew
+
+      - name: Create google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          mkdir -p app
+          printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          test -s app/google-services.json
+
+      - name: Validate ACP build inputs
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          test -n "$ACP_LOGIN"
+          test -n "$ACP_PASSWORD"
+
+      - name: Check patch formatting
+        run: git diff --check
+
+      - name: Run consultation appearance tests
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: ./gradlew testDebugUnitTest --tests 'com.example.data.ConsultationAppearanceSettingsTest' --stacktrace
+
+      - name: Compile debug app
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Commit validated source changes and remove one-shot helpers
+        run: |
+          rm -f scripts/apply_consultation_appearance.py
+          rm -f .github/workflows/apply_consultation_appearance.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "feat: adicionar aparência da consulta de produtos"
+          git push origin HEAD:main
