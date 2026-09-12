@@ -44,9 +44,16 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
             IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar") }
         })
     }) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().padding(20.dp)
-            .then(if (authenticated) Modifier else Modifier.verticalScroll(rememberScrollState())),
-            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        val horizontalPadding = if (authenticated) 12.dp else 20.dp
+        val verticalPadding = if (authenticated) 8.dp else 20.dp
+        Column(
+            Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .padding(horizontal = horizontalPadding, vertical = verticalPadding)
+                .then(if (authenticated) Modifier else Modifier.verticalScroll(rememberScrollState())),
+            verticalArrangement = Arrangement.spacedBy(if (authenticated) 8.dp else 16.dp)
+        ) {
             if (authenticated) {
                 AcpProductsPanel(api, canAddToNrd = canConfigure, onSessionExpired = {
                     authenticated = false
