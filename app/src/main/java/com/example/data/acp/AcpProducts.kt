@@ -39,6 +39,13 @@ internal data class AcpProduct(
 internal fun BigDecimal.brl(): String = "R$ " + setScale(2, RoundingMode.HALF_UP).toPlainString().replace('.', ',')
 internal fun BigDecimal.quantity(): String = stripTrailingZeros().toPlainString().replace('.', ',')
 
+internal fun acpDateLabel(raw: String?, includeTime: Boolean = false): String? {
+    val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val match = Regex("^(\\d{4})-(\\d{2})-(\\d{2})(?:T(\\d{2}):(\\d{2})(?::\\d{2}(?:\\.\\d+)?)?(?:Z|[+-]\\d{2}:?\\d{2})?)?$").matchEntire(value) ?: return value
+    val date = "${match.groupValues[3]}/${match.groupValues[2]}/${match.groupValues[1]}"
+    return if (includeTime && match.groupValues[4].isNotEmpty()) "$date ${match.groupValues[4]}:${match.groupValues[5]}" else date
+}
+
 internal object AcpProductParser {
     fun page(root: JSONObject, requestedPage: Int): AcpProductPage {
         val array = root.optJSONArray("items") ?: throw AcpFailure("A ACP retornou produtos em um formato não reconhecido.")
