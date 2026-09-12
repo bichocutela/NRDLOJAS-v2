@@ -34,6 +34,14 @@ service cloud.firestore {
       );
     }
 
+    // Encartes e regras promocionais adicionais precisam ser visíveis na consulta
+    // de códigos de todos os aparelhos. Somente Admin/Mestre publica, altera ou
+    // remove campanhas. Clube de Vantagens não é persistido aqui: continua ACP.
+    match /flyers/{flyerId} {
+      allow read: if true;
+      allow create, update, delete: if isManager();
+    }
+
     // Configurações globais precisam ser lidas por todos os aparelhos, mas só
     // podem ser publicadas por perfis administrativos autenticados.
     match /config/{document} {
