@@ -39,6 +39,24 @@ internal data class AcpProduct(
 internal fun BigDecimal.brl(): String = "R$ " + setScale(2, RoundingMode.HALF_UP).toPlainString().replace('.', ',')
 internal fun BigDecimal.quantity(): String = stripTrailingZeros().toPlainString().replace('.', ',')
 
+internal fun acpDateLabel(raw: String?, includeTime: Boolean = false): String? {
+    val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val match = Regex("^(\\d{4})-(\\d{2})-(\\d{2})(?:T(\\d{2}):(\\d{2})(?::\\d{2}(?:\\.\\d+)?)?(?:Z|[+-]\\d{2}:?\\d{2})?)?$").matchEntire(value) ?: return value
+    val date = "${match.groupValues[3]}/${match.groupValues[2]}/${match.groupValues[1]}"
+    return if (includeTime && match.groupValues[4].isNotEmpty()) "$date ${match.groupValues[4]}:${match.groupValues[5]}" else date
+}
+
+internal fun AcpProductPage.prioritizeExact(field: AcpSearchField, query: String): AcpProductPage {
+    if (field == AcpSearchField.DESCRIPTION || items.size < 2) return this
+    val exact: (AcpProduct) -> Boolean = when (field) {
+        AcpSearchField.BARCODE -> { product -> product.barcode == query }
+        AcpSearchField.CODE -> { product -> product.code == query }
+        AcpSearchField.DESCRIPTION -> { _ -> false }
+    }
+    if (items.none(exact) || exact(items.first())) return this
+    return copy(items = items.sortedByDescending(exact))
+}
+
 internal object AcpProductParser {
     fun page(root: JSONObject, requestedPage: Int): AcpProductPage {
         val array = root.optJSONArray("items") ?: throw AcpFailure("A ACP retornou produtos em um formato não reconhecido.")
@@ -71,7 +89,7 @@ internal object AcpProductParser {
 private suspend fun AcpApi.searchProductsOnce(field: AcpSearchField, query: String, category: AcpCategory?, page: Int): AcpProductPage {
     val parameters = mutableListOf("pageSize" to "20", "pageIndex" to page.toString(), field.parameter to query)
     category?.let { parameters.add("productCategoryIds" to it.id) }
-    return AcpProductParser.page(get("Product/all", parameters), page)
+    return AcpProductParser.page(get("Product/all", parameters), page).prioritizeExact(field, query)
 }
 
 internal suspend fun AcpApi.searchProducts(field: AcpSearchField, query: String, category: AcpCategory?, page: Int): AcpProductPage {

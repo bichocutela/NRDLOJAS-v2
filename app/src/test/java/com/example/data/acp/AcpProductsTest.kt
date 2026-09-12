@@ -95,6 +95,29 @@ class AcpProductsTest {
         assertEquals(43, page.totalCount)
     }
 
+    @Test fun acpDatesAreFormattedWithoutChangingUnknownValues() {
+        assertEquals("12/09/2026", acpDateLabel("2026-09-12"))
+        assertEquals("12/09/2026", acpDateLabel("2026-09-12T02:25:08"))
+        assertEquals("12/09/2026 02:25", acpDateLabel("2026-09-12T02:25:08", includeTime = true))
+        assertEquals("texto da ACP", acpDateLabel("texto da ACP", includeTime = true))
+        assertNull(acpDateLabel(null))
+    }
+
+    @Test fun exactBarcodeAndCodeArePrioritizedWithoutChangingCount() {
+        val page = AcpProductParser.page(JSONObject("""
+            {"items":[
+              {"id":"1","description":"Outro","code":"111","barCode":"123"},
+              {"id":"2","description":"Alvo","code":"222","barCode":"7891000248768"}
+            ],"pageIndex":0,"totalPages":1,"totalCount":2}
+        """), 0)
+        val byBarcode = page.prioritizeExact(AcpSearchField.BARCODE, "7891000248768")
+        assertEquals("2", byBarcode.items.first().id)
+        assertEquals(2, byBarcode.totalCount)
+        val byCode = page.prioritizeExact(AcpSearchField.CODE, "111")
+        assertEquals("1", byCode.items.first().id)
+        assertEquals(listOf("1", "2"), page.prioritizeExact(AcpSearchField.DESCRIPTION, "Alvo").items.map { it.id })
+    }
+
     @Test(expected = AcpFailure::class) fun malformedContractIsNotAnEmptySearch() {
         AcpProductParser.page(JSONObject("""{"unexpected":[]}"""), 0)
     }
