@@ -241,6 +241,8 @@ internal fun MestreContentHub(
         onClick = onImportProducts,
         enabled = importEnabled
     )
+    Spacer(modifier = Modifier.height(6.dp))
+    FlyerImportEntryCard()
 }
 
 @Composable
