@@ -17,14 +17,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.example.data.AppearanceSettings
 import com.example.data.FirebaseService
 import com.example.data.acp.AcpApi
@@ -75,63 +72,57 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
         finally { checking = false }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        activeConsultationBackground?.let { background ->
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(background.url)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = background.imageScale * background.imageStretchX
-                        scaleY = background.imageScale * background.imageStretchY
-                        translationX = size.width * background.imageOffsetX
-                        translationY = size.height * background.imageOffsetY
-                    }
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.12f))
-            )
-        }
-
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
                 Surface(tonalElevation = 2.dp) {
-                    Column(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .windowInsetsPadding(WindowInsets.statusBars)
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp)
-                                .padding(horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(onClick = onNavigateBack) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar")
-                            }
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar")
                         }
 
-                        if (bannerBitmap != null) {
-                            Image(
-                                bitmap = bannerBitmap,
-                                contentDescription = "Consultar Produtos",
-                                modifier = Modifier
-                                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                                    .fillMaxWidth()
-                                    .aspectRatio(3f)
-                                    .clip(RoundedCornerShape(24.dp)),
-                                contentScale = ContentScale.Crop
-                            )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(3f)
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(MaterialTheme.colorScheme.surface),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (activeConsultationBackground != null) {
+                                // A aparência da consulta usa o mesmo renderizador da Home.
+                                // Assim o Painel Mestre reaproveita Fit, zoom, posição,
+                                // deformação e máscara sem transformar a imagem no fundo inteiro.
+                                MaskedThemeBanner(
+                                    appTheme = "multicolor",
+                                    backgroundUrl = activeConsultationBackground.url,
+                                    imageScale = activeConsultationBackground.imageScale,
+                                    imageOffsetX = activeConsultationBackground.imageOffsetX,
+                                    imageOffsetY = activeConsultationBackground.imageOffsetY,
+                                    imageStretchX = activeConsultationBackground.imageStretchX,
+                                    imageStretchY = activeConsultationBackground.imageStretchY,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else if (bannerBitmap != null) {
+                                Image(
+                                    bitmap = bannerBitmap,
+                                    contentDescription = "Consultar Produtos",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
                         }
                     }
                 }
