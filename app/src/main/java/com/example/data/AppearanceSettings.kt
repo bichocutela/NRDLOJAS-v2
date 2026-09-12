@@ -10,6 +10,7 @@ class AppearanceSettings(
     val theme: String = "multicolor",
     val appearanceMode: String = "system",
     val themeBackgrounds: Map<String, List<ThemeBackground>> = emptyMap(),
+    val consultationBackgrounds: List<ThemeBackground> = emptyList(),
     val revision: Long = 0L
 ) {
     /**
@@ -37,17 +38,26 @@ class AppearanceSettings(
             ?.maxByOrNull { ThemeBackground.normalizeDate(it.startDate).orEmpty() }
     }
 
+    /** Fundo exclusivo da aba Consultar Produtos, independente do tema da Home. */
+    fun activeConsultationBackground(
+        date: String = ThemeBackground.todayIsoDate()
+    ): ThemeBackground? = consultationBackgrounds
+        .filter { it.isAvailableOn(date) }
+        .maxByOrNull { ThemeBackground.normalizeDate(it.startDate).orEmpty() }
+
     fun copy(
         overrideLocalTheme: Boolean = this.overrideLocalTheme,
         theme: String = this.theme,
         appearanceMode: String = this.appearanceMode,
         themeBackgrounds: Map<String, List<ThemeBackground>> = this.themeBackgrounds,
+        consultationBackgrounds: List<ThemeBackground> = this.consultationBackgrounds,
         revision: Long = this.revision
     ): AppearanceSettings = AppearanceSettings(
         overrideLocalTheme = overrideLocalTheme,
         theme = theme,
         appearanceMode = appearanceMode,
         themeBackgrounds = themeBackgrounds,
+        consultationBackgrounds = consultationBackgrounds,
         revision = revision
     )
 
@@ -58,6 +68,7 @@ class AppearanceSettings(
             theme == other.theme &&
             appearanceMode == other.appearanceMode &&
             themeBackgrounds == other.themeBackgrounds &&
+            consultationBackgrounds == other.consultationBackgrounds &&
             revision == other.revision
     }
 
@@ -66,12 +77,13 @@ class AppearanceSettings(
         result = 31 * result + theme.hashCode()
         result = 31 * result + appearanceMode.hashCode()
         result = 31 * result + themeBackgrounds.hashCode()
+        result = 31 * result + consultationBackgrounds.hashCode()
         result = 31 * result + revision.hashCode()
         return result
     }
 
     override fun toString(): String =
-        "AppearanceSettings(overrideLocalTheme=$overrideLocalTheme, theme=$theme, appearanceMode=$appearanceMode, themeBackgrounds=$themeBackgrounds, revision=$revision)"
+        "AppearanceSettings(overrideLocalTheme=$overrideLocalTheme, theme=$theme, appearanceMode=$appearanceMode, themeBackgrounds=$themeBackgrounds, consultationBackgrounds=$consultationBackgrounds, revision=$revision)"
 
     private fun normalizeThemeKey(value: String): String = when (value.trim().lowercase()) {
         "multicolor" -> "multicolor"

@@ -3,6 +3,7 @@ package com.example.ui
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -12,11 +13,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.data.AppearanceSettings
+import com.example.data.FirebaseService
 import com.example.data.acp.AcpApi
 import com.example.data.acp.AcpFailure
 import com.example.data.acp.AcpUnauthorized
@@ -29,6 +37,9 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
     val context = LocalContext.current
     val api = remember { AcpApi(context.applicationContext) }
     val scope = rememberCoroutineScope()
+    val appearanceSettings by FirebaseService.observeAppearanceSettings()
+        .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
+    val activeConsultationBackground = appearanceSettings.activeConsultationBackground()
     val bannerBitmap = remember(context) {
         runCatching {
             val encoded = (0..6).joinToString(separator = "") { part ->
@@ -62,7 +73,34 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
         finally { checking = false }
     }
 
-    Scaffold(topBar = {
+    Box(modifier = Modifier.fillMaxSize()) {
+        activeConsultationBackground?.let { background ->
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(background.url)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = background.imageScale * background.imageStretchX
+                        scaleY = background.imageScale * background.imageStretchY
+                        translationX = size.width * background.imageOffsetX
+                        translationY = size.height * background.imageOffsetY
+                    }
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.12f))
+            )
+        }
+
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
         Surface(tonalElevation = 2.dp) {
             Row(
                 modifier = Modifier
@@ -133,6 +171,7 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
                     Text(if (configured) "Atualizar acesso neste aparelho" else "Configurar acesso neste aparelho")
                 }
             }
+        }
         }
     }
 

@@ -55,6 +55,7 @@ import com.example.ui.theme.glassSoftShadow
 private const val NEW_CATEGORY_ACTION_KEY = "__new_category__"
 private const val CATEGORY_PAGE_SIZE = 15
 private const val BACKGROUND_PAGE_SIZE = 6
+private const val CONSULTATION_BACKGROUND_KEY = "__consultar_produtos__"
 
 private enum class MestrePanelPage(val title: String) {
     DASHBOARD("Painel Mestre"),
@@ -65,6 +66,7 @@ private enum class MestrePanelPage(val title: String) {
     HOME_SETTINGS("Configurações da Home"),
     NOTIFICATION_SETTINGS("Notificações globais"),
     APPEARANCE_SETTINGS("Fundos por tema"),
+    CONSULTATION_APPEARANCE_SETTINGS("Aparência Consultar Produtos"),
     ADVANCED("Ferramentas avançadas")
 }
 @OptIn(ExperimentalMaterial3Api::class)
@@ -112,7 +114,9 @@ fun MestreScreen(
     var draftNotificationSettings by remember(notificationSettings) { mutableStateOf(notificationSettings) }
     var isSavingNotificationSettings by remember { mutableStateOf(false) }
     val appearanceSettingsFlow = remember(currentPage) {
-        if (currentPage == MestrePanelPage.APPEARANCE_SETTINGS) {
+        if (currentPage == MestrePanelPage.APPEARANCE_SETTINGS ||
+            currentPage == MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS
+        ) {
             FirebaseService.observeAppearanceSettings()
         } else {
             kotlinx.coroutines.flow.flowOf(AppearanceSettings())
@@ -124,6 +128,10 @@ fun MestreScreen(
     var draftThemeBackgrounds by remember(appearanceSettings.themeBackgrounds) {
         mutableStateOf(appearanceSettings.themeBackgrounds)
     }
+    var draftConsultationBackgrounds by remember(appearanceSettings.consultationBackgrounds) {
+        mutableStateOf(appearanceSettings.consultationBackgrounds)
+    }
+    var consultationBackgroundPage by rememberSaveable { mutableIntStateOf(0) }
     var showDiscardChangesDialog by remember { mutableStateOf(false) }
     var isSavingAppearanceSettings by remember { mutableStateOf(false) }
     var expandedBackgroundThemes by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -161,9 +169,14 @@ fun MestreScreen(
             isUploadingThemeBackground = true
             backgroundInputError = null
             try {
+                val uploadFolder = if (themeKey == CONSULTATION_BACKGROUND_KEY) {
+                    "consultation_backgrounds"
+                } else {
+                    "theme_backgrounds/$themeKey"
+                }
                 val uploadedUrl = FirebaseService.uploadImageToStorage(
                     uri,
-                    "theme_backgrounds/$themeKey/${UUID.randomUUID()}.jpg"
+                    "$uploadFolder/${UUID.randomUUID()}.jpg"
                 )
                 if (uploadedUrl.isNullOrBlank()) {
                     backgroundInputError = FirebaseService.lastError ?: "Não foi possível enviar a imagem."
@@ -228,17 +241,32 @@ fun MestreScreen(
 
     fun dateToPickerMillis(value: String): Long? = ThemeBackground.parseDate(value)?.time
 
+    fun backgroundsForKey(themeKey: String): List<ThemeBackground> =
+        if (themeKey == CONSULTATION_BACKGROUND_KEY) {
+            draftConsultationBackgrounds
+        } else {
+            draftThemeBackgrounds[themeKey].orEmpty()
+        }
+
     fun updateBackgrounds(themeKey: String, backgrounds: List<ThemeBackground>) {
-        draftThemeBackgrounds = draftThemeBackgrounds + (themeKey to backgrounds)
+        if (themeKey == CONSULTATION_BACKGROUND_KEY) {
+            draftConsultationBackgrounds = backgrounds
+        } else {
+            draftThemeBackgrounds = draftThemeBackgrounds + (themeKey to backgrounds)
+        }
     }
     val homeHasChanges = draftHomeSettings != homeSettings
     val notificationsHaveChanges = draftNotificationSettings != notificationSettings
-    val appearanceDraft = draftAppearanceSettings.copy(themeBackgrounds = draftThemeBackgrounds)
+    val appearanceDraft = draftAppearanceSettings.copy(
+        themeBackgrounds = draftThemeBackgrounds,
+        consultationBackgrounds = draftConsultationBackgrounds
+    )
     val appearanceHasChanges = appearanceDraft != appearanceSettings
     val currentPageHasChanges = when (currentPage) {
         MestrePanelPage.HOME_SETTINGS -> homeHasChanges
         MestrePanelPage.NOTIFICATION_SETTINGS -> notificationsHaveChanges
-        MestrePanelPage.APPEARANCE_SETTINGS -> appearanceHasChanges
+        MestrePanelPage.APPEARANCE_SETTINGS,
+        MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS -> appearanceHasChanges
         else -> false
     }
     val performPanelBack: () -> Unit = {
@@ -347,6 +375,7 @@ fun MestreScreen(
                 MestreSettingsHub(
                     onOpenHome = { openPage(MestrePanelPage.HOME_SETTINGS) },
                     onOpenAppearance = { openPage(MestrePanelPage.APPEARANCE_SETTINGS) },
+                    onOpenConsultationAppearance = { openPage(MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS) },
                     onOpenNotifications = { openPage(MestrePanelPage.NOTIFICATION_SETTINGS) }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -947,6 +976,143 @@ fun MestreScreen(
             Spacer(modifier = Modifier.height(16.dp))
             }
 
+
+            if (currentPage == MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS) {
+                MestrePageIntro(
+                    description = "Escolha, agende e ajuste o fundo exclusivo da aba Consultar Produtos.",
+                    hasUnsavedChanges = appearanceHasChanges
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        val backgrounds = draftConsultationBackgrounds
+                        val activeBackground = appearanceDraft.activeConsultationBackground()
+                        val pagination = calculatePaginationWindow(
+                            totalItems = backgrounds.size,
+                            requestedPage = consultationBackgroundPage,
+                            pageSize = BACKGROUND_PAGE_SIZE
+                        )
+                        LaunchedEffect(backgrounds.size) {
+                            if (consultationBackgroundPage != pagination.pageIndex) {
+                                consultationBackgroundPage = pagination.pageIndex
+                            }
+                        }
+
+                        Text(
+                            "Fundo da aba Consultar Produtos",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        )
+                        Text(
+                            activeBackground?.let { "Ativo agora: ${it.label}" }
+                                ?: "Fundo padrão da aba ativo",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "Você pode manter vários fundos programados por data. A prévia permite ajustar zoom, posição e proporção sem alterar os fundos da Home.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(
+                            onClick = {
+                                updateBackgrounds(
+                                    CONSULTATION_BACKGROUND_KEY,
+                                    backgrounds.map { it.copy(isActive = false) }
+                                )
+                            },
+                            enabled = backgrounds.any { it.isActive }
+                        ) {
+                            Text("Usar fundo padrão")
+                        }
+
+                        if (backgrounds.isNotEmpty()) {
+                            Text(
+                                "Exibindo ${pagination.fromIndex + 1}–${pagination.toIndex} de ${backgrounds.size}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        backgrounds
+                            .subList(pagination.fromIndex, pagination.toIndex)
+                            .forEach { background ->
+                                Spacer(modifier = Modifier.height(6.dp))
+                                ThemeBackgroundItem(
+                                    background = background,
+                                    enabled = true,
+                                    onActiveChange = { isActive ->
+                                        updateBackgrounds(
+                                            CONSULTATION_BACKGROUND_KEY,
+                                            backgrounds.map {
+                                                if (it.id == background.id) it.copy(isActive = isActive) else it
+                                            }
+                                        )
+                                    },
+                                    onPreview = {
+                                        backgroundToPreview = CONSULTATION_BACKGROUND_KEY to background
+                                    },
+                                    onEdit = {
+                                        openBackgroundEditor(CONSULTATION_BACKGROUND_KEY, background)
+                                    },
+                                    onDelete = {
+                                        backgroundToDelete = CONSULTATION_BACKGROUND_KEY to background
+                                    }
+                                )
+                            }
+                        if (pagination.pageCount > 1) {
+                            MestrePaginationControls(
+                                pageIndex = pagination.pageIndex,
+                                pageCount = pagination.pageCount,
+                                onPrevious = { consultationBackgroundPage = pagination.pageIndex - 1 },
+                                onNext = { consultationBackgroundPage = pagination.pageIndex + 1 }
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = { openBackgroundEditor(CONSULTATION_BACKGROUND_KEY, null) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Adicionar fundo para Consultar Produtos")
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    isSavingAppearanceSettings = true
+                                    val saved = FirebaseService.saveAppearanceSettings(appearanceDraft)
+                                    isSavingAppearanceSettings = false
+                                    snackbarHostState.showSnackbar(
+                                        if (saved) "Aparência de Consultar Produtos publicada para todos."
+                                        else FirebaseService.lastError
+                                            ?: "Não foi possível publicar a aparência de Consultar Produtos."
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = appearanceHasChanges && !isSavingAppearanceSettings
+                        ) {
+                            if (isSavingAppearanceSettings) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Publicando...")
+                            } else if (appearanceHasChanges) {
+                                Text("Salvar fundo da consulta")
+                            } else {
+                                Text("Tudo atualizado")
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             if (showDiscardChangesDialog) {
                 AlertDialog(
                     onDismissRequest = { showDiscardChangesDialog = false },
@@ -958,9 +1124,11 @@ fun MestreScreen(
                                 when (currentPage) {
                                     MestrePanelPage.HOME_SETTINGS -> draftHomeSettings = homeSettings
                                     MestrePanelPage.NOTIFICATION_SETTINGS -> draftNotificationSettings = notificationSettings
-                                    MestrePanelPage.APPEARANCE_SETTINGS -> {
+                                    MestrePanelPage.APPEARANCE_SETTINGS,
+                                    MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS -> {
                                         draftAppearanceSettings = appearanceSettings
                                         draftThemeBackgrounds = appearanceSettings.themeBackgrounds
+                                        draftConsultationBackgrounds = appearanceSettings.consultationBackgrounds
                                     }
                                     else -> Unit
                                 }
@@ -1151,7 +1319,14 @@ fun MestreScreen(
                 AlertDialog(
                     onDismissRequest = { showThemeBackgroundDialog = false },
                     title = {
-                        Text(if (editingBackground == null) "Adicionar fundo ao tema" else "Editar fundo do tema")
+                        val consultation = editingBackgroundTheme == CONSULTATION_BACKGROUND_KEY
+                        Text(
+                            if (editingBackground == null) {
+                                if (consultation) "Adicionar fundo da consulta" else "Adicionar fundo ao tema"
+                            } else {
+                                if (consultation) "Editar fundo da consulta" else "Editar fundo do tema"
+                            }
+                        )
                     },
                     text = {
                         Column {
@@ -1248,7 +1423,7 @@ fun MestreScreen(
                                     val normalizedStartDate = ThemeBackground.normalizeDate(backgroundStartDateInput)
                                     val normalizedEndDate = ThemeBackground.normalizeDate(backgroundEndDateInput)
                                     val themeKey = editingBackgroundTheme
-                                    val current = themeKey?.let { draftThemeBackgrounds[it].orEmpty() }.orEmpty()
+                                    val current = themeKey?.let(::backgroundsForKey).orEmpty()
                                     when {
                                         themeKey == null -> backgroundInputError = "Tema inválido."
                                         normalizedUrl.isBlank() || !(normalizedUrl.startsWith("https://") || normalizedUrl.startsWith("http://")) ->
@@ -1303,22 +1478,36 @@ fun MestreScreen(
 
   backgroundToPreview?.let { (themeKey, background) ->
       BannerPreviewEditor(
-          themeKey = themeKey,
-          themeLabel = themeOptions.firstOrNull { it.first == themeKey }?.second ?: themeKey,
+          themeKey = if (themeKey == CONSULTATION_BACKGROUND_KEY) "multicolor" else themeKey,
+          themeLabel = if (themeKey == CONSULTATION_BACKGROUND_KEY) {
+              "Consultar Produtos"
+          } else {
+              themeOptions.firstOrNull { it.first == themeKey }?.second ?: themeKey
+          },
           background = background,
           isSaving = isSavingAppearanceSettings,
           onDismiss = {
               if (!isSavingAppearanceSettings) backgroundToPreview = null
           },
           onSave = { updatedBackground, maskSettings ->
-              val updatedBackgrounds = draftThemeBackgrounds + (
-                  themeKey to draftThemeBackgrounds[themeKey].orEmpty().map { item ->
-                      if (item.id == updatedBackground.id) updatedBackground else item
-                  }
-              )
-              draftThemeBackgrounds = updatedBackgrounds
+              val updatedList = backgroundsForKey(themeKey).map { item ->
+                  if (item.id == updatedBackground.id) updatedBackground else item
+              }
+              val updatedThemeBackgrounds = if (themeKey == CONSULTATION_BACKGROUND_KEY) {
+                  draftThemeBackgrounds
+              } else {
+                  draftThemeBackgrounds + (themeKey to updatedList)
+              }
+              val updatedConsultationBackgrounds = if (themeKey == CONSULTATION_BACKGROUND_KEY) {
+                  updatedList
+              } else {
+                  draftConsultationBackgrounds
+              }
+              draftThemeBackgrounds = updatedThemeBackgrounds
+              draftConsultationBackgrounds = updatedConsultationBackgrounds
               val settingsToSave = draftAppearanceSettings.copy(
-                  themeBackgrounds = updatedBackgrounds
+                  themeBackgrounds = updatedThemeBackgrounds,
+                  consultationBackgrounds = updatedConsultationBackgrounds
               )
 
               coroutineScope.launch {
@@ -1333,17 +1522,25 @@ fun MestreScreen(
                       return@launch
                   }
 
-                  val maskSaved = com.example.data.BannerMaskStore.save(
-                      themeKey = themeKey,
-                      backgroundUrl = updatedBackground.url,
-                      settings = maskSettings
-                  )
+                  val maskSaved = if (themeKey == CONSULTATION_BACKGROUND_KEY) {
+                      true
+                  } else {
+                      com.example.data.BannerMaskStore.save(
+                          themeKey = themeKey,
+                          backgroundUrl = updatedBackground.url,
+                          settings = maskSettings
+                      )
+                  }
                   isSavingAppearanceSettings = false
 
                   if (maskSaved) {
                       backgroundToPreview = null
                       snackbarHostState.showSnackbar(
-                          "Prévia salva. Enquadramento e máscara já serão usados na Home."
+                          if (themeKey == CONSULTATION_BACKGROUND_KEY) {
+                              "Enquadramento salvo para Consultar Produtos."
+                          } else {
+                              "Prévia salva. Enquadramento e máscara já serão usados na Home."
+                          }
                       )
                   } else {
                       backgroundToPreview = themeKey to updatedBackground
@@ -1365,7 +1562,7 @@ fun MestreScreen(
                     confirmButton = {
                         TextButton(
                             onClick = {
-                                updateBackgrounds(themeKey, draftThemeBackgrounds[themeKey].orEmpty().filterNot { it.id == background.id })
+                                updateBackgrounds(themeKey, backgroundsForKey(themeKey).filterNot { it.id == background.id })
                                 backgroundToDelete = null
                             }
                         ) {

@@ -887,6 +887,32 @@ object FirebaseService {
         }.toMap()
     }
 
+    private fun parseConsultationBackgrounds(raw: Any?): List<ThemeBackground> {
+        return (raw as? List<*>)
+            ?.mapNotNull { item ->
+                val map = item as? Map<*, *> ?: return@mapNotNull null
+                val id = map["id"] as? String ?: return@mapNotNull null
+                val url = (map["url"] as? String)
+                    ?.trim()
+                    ?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+                    ?: return@mapNotNull null
+                ThemeBackground(
+                    id = id,
+                    label = (map["label"] as? String)?.trim().orEmpty().ifBlank { "Fundo personalizado" },
+                    url = url,
+                    isActive = map["isActive"] as? Boolean ?: false,
+                    startDate = normalizePersistedThemeBackgroundDate(map["startDate"] as? String),
+                    endDate = normalizePersistedThemeBackgroundDate(map["endDate"] as? String),
+                    imageScale = ((map["imageScale"] as? Number)?.toFloat() ?: 1f).coerceIn(0.5f, 3f),
+                    imageOffsetX = ((map["imageOffsetX"] as? Number)?.toFloat() ?: 0f).coerceIn(-1f, 1f),
+                    imageOffsetY = ((map["imageOffsetY"] as? Number)?.toFloat() ?: 0f).coerceIn(-1f, 1f),
+                    imageStretchX = ((map["imageStretchX"] as? Number)?.toFloat() ?: 1f).coerceIn(0.5f, 2.5f),
+                    imageStretchY = ((map["imageStretchY"] as? Number)?.toFloat() ?: 1f).coerceIn(0.5f, 2.5f)
+                )
+            }
+            .orEmpty()
+    }
+
     private fun normalizePersistedThemeBackgroundDate(value: String?): String? {
         val trimmed = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
         return ThemeBackground.normalizeDate(trimmed) ?: trimmed
@@ -939,6 +965,7 @@ object FirebaseService {
                             ?.takeIf { it in setOf("system", "light", "dark") }
                             ?: "system",
                         themeBackgrounds = parseThemeBackgrounds(snapshot?.get("appearanceThemeBackgrounds")),
+                        consultationBackgrounds = parseConsultationBackgrounds(snapshot?.get("appearanceConsultationBackgrounds")),
                         revision = snapshot?.getLong("appearanceRevision") ?: 0L
                     )
                 }
@@ -965,7 +992,7 @@ object FirebaseService {
             it in setOf("system", "light", "dark")
         } ?: "system"
         val revision = System.currentTimeMillis()
-        val hasInvalidDateWindow = settings.themeBackgrounds.values.flatten().any { background ->
+        val hasInvalidDateWindow = (settings.themeBackgrounds.values.flatten() + settings.consultationBackgrounds).any { background ->
             val startInput = background.startDate?.trim()?.takeIf { it.isNotBlank() }
             val endInput = background.endDate?.trim()?.takeIf { it.isNotBlank() }
             val startDate = ThemeBackground.normalizeDate(startInput)
@@ -1005,11 +1032,36 @@ object FirebaseService {
                 }
         }
 
+        val safeConsultationBackgrounds = settings.consultationBackgrounds
+            .filter { background ->
+                val url = background.url.trim()
+                url.startsWith("https://") || url.startsWith("http://")
+            }
+            .map { background ->
+                val startDate = ThemeBackground.normalizeDate(background.startDate)
+                val endDate = ThemeBackground.normalizeDate(background.endDate)
+                linkedMapOf<String, Any>(
+                    "id" to background.id.ifBlank { UUID.randomUUID().toString() },
+                    "label" to background.label.trim().take(80).ifBlank { "Fundo personalizado" },
+                    "url" to background.url.trim(),
+                    "isActive" to (background.isActive && startDate != null),
+                    "imageScale" to background.imageScale.coerceIn(0.5f, 3f),
+                    "imageOffsetX" to background.imageOffsetX.coerceIn(-1f, 1f),
+                    "imageOffsetY" to background.imageOffsetY.coerceIn(-1f, 1f),
+                    "imageStretchX" to background.imageStretchX.coerceIn(0.5f, 2.5f),
+                    "imageStretchY" to background.imageStretchY.coerceIn(0.5f, 2.5f)
+                ).apply {
+                    if (startDate != null) put("startDate", startDate)
+                    if (endDate != null) put("endDate", endDate)
+                }
+            }
+
         val manifest = buildAppearanceManifest(
             overrideLocalTheme = settings.overrideLocalTheme,
             theme = safeTheme,
             appearanceMode = safeMode,
             themeBackgrounds = safeBackgrounds,
+            consultationBackgrounds = safeConsultationBackgrounds,
             revision = revision
         )
         val publicManifestSaved = runCatching {
@@ -1036,6 +1088,7 @@ object FirebaseService {
                         "appearanceTheme" to safeTheme,
                         "appearanceMode" to safeMode,
                         "appearanceThemeBackgrounds" to safeBackgrounds,
+                        "appearanceConsultationBackgrounds" to safeConsultationBackgrounds,
                         "appearanceRevision" to revision
                     ),
                     com.google.firebase.firestore.SetOptions.merge()
@@ -1056,6 +1109,7 @@ object FirebaseService {
         theme: String,
         appearanceMode: String,
         themeBackgrounds: Map<String, List<Map<String, Any>>>,
+        consultationBackgrounds: List<Map<String, Any>>,
         revision: Long
     ): String {
         val backgroundsJson = org.json.JSONObject()
@@ -1066,11 +1120,16 @@ object FirebaseService {
             }
             backgroundsJson.put(themeKey, itemsJson)
         }
+        val consultationJson = org.json.JSONArray()
+        consultationBackgrounds.forEach { background ->
+            consultationJson.put(org.json.JSONObject(background))
+        }
         return org.json.JSONObject()
             .put("appearanceOverrideLocalTheme", overrideLocalTheme)
             .put("appearanceTheme", theme)
             .put("appearanceMode", appearanceMode)
             .put("appearanceThemeBackgrounds", backgroundsJson)
+            .put("appearanceConsultationBackgrounds", consultationJson)
             .put("appearanceRevision", revision)
             .toString()
     }
@@ -1148,9 +1207,35 @@ object FirebaseService {
                 .takeIf { it in setOf("system", "light", "dark") }
                 ?: "system",
             themeBackgrounds = parseThemeBackgroundsJson(root.optJSONObject("appearanceThemeBackgrounds")),
+            consultationBackgrounds = parseConsultationBackgroundsJson(root.optJSONArray("appearanceConsultationBackgrounds")),
             revision = root.optLong("appearanceRevision", 0L)
         )
     }.getOrNull()
+
+    private fun parseConsultationBackgroundsJson(raw: org.json.JSONArray?): List<ThemeBackground> {
+        if (raw == null) return emptyList()
+        return (0 until raw.length()).mapNotNull { index ->
+            val item = raw.optJSONObject(index) ?: return@mapNotNull null
+            val id = item.optString("id").trim().takeIf { it.isNotBlank() }
+                ?: return@mapNotNull null
+            val url = item.optString("url").trim().takeIf {
+                it.startsWith("https://") || it.startsWith("http://")
+            } ?: return@mapNotNull null
+            ThemeBackground(
+                id = id,
+                label = item.optString("label").trim().ifBlank { "Fundo personalizado" },
+                url = url,
+                isActive = item.optBoolean("isActive", false),
+                startDate = normalizePersistedThemeBackgroundDate(item.optString("startDate")),
+                endDate = normalizePersistedThemeBackgroundDate(item.optString("endDate")),
+                imageScale = item.optDouble("imageScale", 1.0).toFloat().coerceIn(0.5f, 3f),
+                imageOffsetX = item.optDouble("imageOffsetX", 0.0).toFloat().coerceIn(-1f, 1f),
+                imageOffsetY = item.optDouble("imageOffsetY", 0.0).toFloat().coerceIn(-1f, 1f),
+                imageStretchX = item.optDouble("imageStretchX", 1.0).toFloat().coerceIn(0.5f, 2.5f),
+                imageStretchY = item.optDouble("imageStretchY", 1.0).toFloat().coerceIn(0.5f, 2.5f)
+            )
+        }
+    }
 
     private fun parseThemeBackgroundsJson(raw: org.json.JSONObject?): Map<String, List<ThemeBackground>> {
         if (raw == null) return emptyMap()

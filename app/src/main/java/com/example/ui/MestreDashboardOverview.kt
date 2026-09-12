@@ -247,6 +247,7 @@ internal fun MestreContentHub(
 internal fun MestreSettingsHub(
     onOpenHome: () -> Unit,
     onOpenAppearance: () -> Unit,
+    onOpenConsultationAppearance: () -> Unit,
     onOpenNotifications: () -> Unit
 ) {
     Text("Escolha o que deseja configurar", style = MaterialTheme.typography.titleMedium)
@@ -268,6 +269,13 @@ internal fun MestreSettingsHub(
         description = "Tema, modo visual e fundos programados",
         icon = Icons.Default.Palette,
         onClick = onOpenAppearance
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+    PanelAreaCard(
+        title = "Aparência Consultar Produtos",
+        description = "Fundos e enquadramento exclusivos da consulta",
+        icon = Icons.Default.Palette,
+        onClick = onOpenConsultationAppearance
     )
     Spacer(modifier = Modifier.height(6.dp))
     PanelAreaCard(
