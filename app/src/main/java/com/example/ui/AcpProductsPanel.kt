@@ -145,7 +145,12 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
             try {
                 val result = api.searchProducts(searchField, searchText, searchCategory, index)
                 if (ticket != generation) return@launch
+                // Restore the fast two-phase flow used before campaign enrichment was coupled
+                // to the visible search state: Product/all releases the UI immediately.
                 page = result
+                busy = false
+
+                // Promotions are auxiliary enrichment and must never keep "Buscando…" on screen.
                 previewCampaignOffers = try {
                     api.campaignOffersFor(result.items)
                 } catch (cancelled: CancellationException) {
