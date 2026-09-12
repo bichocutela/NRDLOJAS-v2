@@ -84,10 +84,13 @@ internal data class AcpCampaign(
     }.distinctBy { Triple(it.title, it.price, it.detail) }
 }
 
+/** Product/integrationInfo is a global synchronization status, not product stock or offer validity. */
 internal data class AcpIntegrationInfo(
-    val stock: String?,
-    val dueDate: String?,
-    val rawSummary: List<Pair<String, String>>
+    val status: Int?,
+    val lastRun: String?,
+    val lastCompleteRun: String?,
+    val message: String?,
+    val id: String?
 )
 
 internal object AcpCampaignParser {
@@ -150,18 +153,24 @@ internal object AcpCampaignParser {
 
     fun integration(root: JSONObject): AcpIntegrationInfo {
         val data = root.optJSONObject("data") ?: root
-        val stock = firstText(data, "stock", "quantityStock", "stockQuantity", "inventory", "balance", "availableStock")
-        val due = firstText(data, "dueDate", "expirationDate", "expiryDate", "validityDate", "expiration", "validUntil")
-        val summary = mutableListOf<Pair<String, String>>()
-        data.keys().forEach { key ->
-            val value = data.opt(key)
-            if (value != null && value != JSONObject.NULL && value !is JSONObject && value !is JSONArray) summary += key to value.toString()
-        }
-        return AcpIntegrationInfo(stock, due, summary.take(30))
+        return AcpIntegrationInfo(
+            status = firstInt(data, "status"),
+            lastRun = firstText(data, "lastRun"),
+            lastCompleteRun = firstText(data, "lastCompleteRun"),
+            message = firstText(data, "message"),
+            id = firstText(data, "id")
+        )
     }
 
     private fun JSONObject.text(key: String): String? = if (isNull(key)) null else opt(key)?.toString()?.trim()?.takeIf { it.isNotBlank() && it != "null" }
     private fun firstText(o: JSONObject, vararg keys: String) = keys.firstNotNullOfOrNull { o.text(it) }
+    private fun firstInt(o: JSONObject, vararg keys: String): Int? = keys.firstNotNullOfOrNull { key ->
+        if (!o.has(key) || o.isNull(key)) null else when (val value = o.opt(key)) {
+            is Number -> value.toInt()
+            is String -> value.trim().toIntOrNull()
+            else -> null
+        }
+    }
     private fun firstBoolean(o: JSONObject, vararg keys: String): Boolean? = keys.firstNotNullOfOrNull { key ->
         if (!o.has(key) || o.isNull(key)) null else when (val v = o.opt(key)) { is Boolean -> v; is Number -> v.toInt() != 0; is String -> v.toBooleanStrictOrNull(); else -> null }
     }
@@ -211,16 +220,10 @@ internal suspend fun AcpApi.campaignOffersFor(products: List<AcpProduct>): Map<S
     }
 }
 
-internal suspend fun AcpApi.integrationInfo(product: AcpProduct): AcpIntegrationInfo? {
-    val candidates = buildList {
-        if (product.id.isNotBlank()) add("id" to product.id)
-        if (product.code.isNotBlank()) add("code" to product.code)
-        if (product.barcode.isNotBlank()) add("barCode" to product.barcode)
-    }
-    for (parameter in candidates) {
-        try { return AcpCampaignParser.integration(get("Product/integrationInfo", listOf(parameter))) }
-        catch (_: AcpUnauthorized) { throw AcpUnauthorized() }
-        catch (_: Exception) { /* ACP installations differ; try the next known identifier. */ }
-    }
-    return null
+internal suspend fun AcpApi.integrationInfo(): AcpIntegrationInfo? = try {
+    AcpCampaignParser.integration(get("Product/integrationInfo", emptyList()))
+} catch (_: AcpUnauthorized) {
+    throw AcpUnauthorized()
+} catch (_: Exception) {
+    null
 }
