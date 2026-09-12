@@ -81,8 +81,8 @@ class AcpCampaignsTest {
         }]}""")).single()
         val offer = c.offersFor(p).single()
         assertEquals("40% DE DESCONTO", offer.headline)
-        assertTrue(offer.detail.contains("2026-09-12"))
-        assertTrue(offer.detail.contains("2026-09-15"))
+        assertTrue(offer.detail.contains("12/09/2026"))
+        assertTrue(offer.detail.contains("15/09/2026"))
         assertTrue(offer.detail.contains("Máximo 2 por CPF"))
     }
 
