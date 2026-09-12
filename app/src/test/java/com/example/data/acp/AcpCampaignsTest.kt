@@ -61,4 +61,15 @@ class AcpCampaignsTest {
         assertEquals(1, campaigns.size)
         assertEquals("Nested", campaigns.single().name)
     }
+
+    @Test fun integrationInfoUsesObservedSynchronizationContract() {
+        val info = AcpCampaignParser.integration(JSONObject("""
+            {"status":2,"lastRun":"2026-09-12T02:25:08","lastCompleteRun":"2026-09-12T02:25:08","message":null,"id":1}
+        """))
+        assertEquals(2, info.status)
+        assertEquals("2026-09-12T02:25:08", info.lastRun)
+        assertEquals("2026-09-12T02:25:08", info.lastCompleteRun)
+        assertNull(info.message)
+        assertEquals("1", info.id)
+    }
 }
