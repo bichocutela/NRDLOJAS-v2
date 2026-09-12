@@ -95,6 +95,14 @@ class AcpProductsTest {
         assertEquals(43, page.totalCount)
     }
 
+    @Test fun acpDatesAreFormattedWithoutChangingUnknownValues() {
+        assertEquals("12/09/2026", acpDateLabel("2026-09-12"))
+        assertEquals("12/09/2026", acpDateLabel("2026-09-12T02:25:08"))
+        assertEquals("12/09/2026 02:25", acpDateLabel("2026-09-12T02:25:08", includeTime = true))
+        assertEquals("texto da ACP", acpDateLabel("texto da ACP", includeTime = true))
+        assertNull(acpDateLabel(null))
+    }
+
     @Test(expected = AcpFailure::class) fun malformedContractIsNotAnEmptySearch() {
         AcpProductParser.page(JSONObject("""{"unexpected":[]}"""), 0)
     }
