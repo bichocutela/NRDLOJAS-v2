@@ -26,6 +26,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     private val cookies = AcpCookieJar(store.read("session")) { store.write("session", it) }
     private val client = clientBuilder.cookieJar(cookies).followRedirects(false).followSslRedirects(false)
         .connectTimeout(15, TimeUnit.SECONDS).readTimeout(25, TimeUnit.SECONDS).callTimeout(35, TimeUnit.SECONDS).build()
+    private val diagnostics = LinkedHashMap<String, JSONObject>()
 
     suspend fun hasCredentials(): Boolean = withContext(Dispatchers.IO) { credentials() != null }
     suspend fun configure(login: String, password: String) = withContext(Dispatchers.IO) {
@@ -66,9 +67,43 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         val session = session()
         val base = if (session.optBoolean("proxyEnable")) "$ORIGIN/api/proxy/api/v1/" else "$API_ORIGIN/api/v1/"
         val url = (base + path).toHttpUrl().newBuilder().apply { parameters.forEach { (key, value) -> addQueryParameter(key, value) } }.build()
-        requestJson(Request.Builder().url(url).header("Authorization", "Bearer ${session.getString("accessToken")}")
+        val result = requestJson(Request.Builder().url(url).header("Authorization", "Bearer ${session.getString("accessToken")}")
             .header("Accept", "application/json").get().build())
+        recordDiagnostic(path, result)
+        result
     }
+
+    @Synchronized private fun recordDiagnostic(path: String, value: JSONObject) {
+        diagnostics[path] = sanitize(value) as JSONObject
+    }
+
+    @Synchronized internal fun diagnosticText(): String? {
+        if (diagnostics.isEmpty()) return null
+        val payload = JSONObject()
+            .put("diagnostic", "NRD ACP read-only response capture")
+            .put("endpoints", JSONObject())
+        val endpoints = payload.getJSONObject("endpoints")
+        diagnostics.forEach { (path, json) -> endpoints.put(path, json) }
+        return payload.toString(2)
+    }
+
+    private fun sanitize(value: Any?): Any? = when (value) {
+        is JSONObject -> JSONObject().also { clean ->
+            val keys = value.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                clean.put(key, if (isSensitiveKey(key)) "[REDACTED]" else sanitize(value.opt(key)))
+            }
+        }
+        is JSONArray -> JSONArray().also { clean -> for (index in 0 until value.length()) clean.put(sanitize(value.opt(index))) }
+        else -> value
+    }
+
+    private fun isSensitiveKey(key: String): Boolean {
+        val normalized = key.lowercase().replace("_", "").replace("-", "")
+        return normalized in setOf("password", "passwd", "accesstoken", "refreshtoken", "token", "authorization", "cookie", "setcookie", "csrftoken", "secret")
+    }
+
     private fun requestJson(request: Request): JSONObject {
         client.newCall(request).execute().use { response ->
             if (response.code == 401 || (response.code in 300..399 && response.header("Location").orEmpty().contains("/login"))) {

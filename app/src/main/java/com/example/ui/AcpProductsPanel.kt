@@ -11,7 +11,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -24,6 +26,7 @@ import kotlinx.coroutines.launch
 internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
+    val clipboard = LocalClipboardManager.current
     var query by remember { mutableStateOf("") }
     var field by remember { mutableStateOf(AcpSearchField.BARCODE) }
     var category by remember { mutableStateOf<AcpCategory?>(null) }
@@ -36,6 +39,7 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
     var promotionBusy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var promotionWarning by remember { mutableStateOf<String?>(null) }
+    var diagnosticMessage by remember { mutableStateOf<String?>(null) }
     var campaignOffers by remember { mutableStateOf<Map<String, List<AcpOffer>>>(emptyMap()) }
     var selected by remember { mutableStateOf<AcpProduct?>(null) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
@@ -56,6 +60,7 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         selected = null
         error = null
         promotionWarning = null
+        diagnosticMessage = null
     }
 
     fun search(index: Int = 0) {
@@ -69,6 +74,7 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         promotionBusy = false
         campaignOffers = emptyMap()
         promotionWarning = null
+        diagnosticMessage = null
         error = null
         selected = null
         keyboard?.hide()
@@ -172,6 +178,20 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         OutlinedButton(onClick = { scanning = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text("Ler código com a câmera")
         }
+        if (page != null) {
+            OutlinedButton(onClick = {
+                val text = api.diagnosticText()
+                if (text == null) diagnosticMessage = "Faça uma busca antes de copiar o diagnóstico."
+                else {
+                    clipboard.setText(AnnotatedString(text))
+                    diagnosticMessage = "Diagnóstico ACP copiado. Cole no ChatGPT para análise."
+                }
+            }, enabled = !busy && !promotionBusy, modifier = Modifier.fillMaxWidth()) {
+                Text("Copiar diagnóstico ACP")
+            }
+            Text("O diagnóstico contém apenas respostas de consultas ACP e mascara campos sensíveis conhecidos. Não inclui senha, cookies ou cabeçalhos de autorização.", style = MaterialTheme.typography.labelSmall)
+        }
+        diagnosticMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (promotionBusy) {
             LinearProgressIndicator(Modifier.fillMaxWidth())
