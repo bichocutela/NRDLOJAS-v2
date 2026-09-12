@@ -21,6 +21,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.security.MessageDigest
+import java.text.Normalizer
 import java.util.concurrent.TimeUnit
 
 internal class AcpUnauthorized : IOException("Confirme novamente seu acesso à ACP.")
@@ -32,6 +33,9 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     constructor(context: Context) : this(AcpSecureStore(context), bundledLogin = BuildConfig.ACP_LOGIN, bundledPassword = BuildConfig.ACP_PASSWORD)
     private val sessionLock = Mutex()
     private var accessConfirmed = false
+    private var cachedSessionUser: JSONObject? = null
+    private var clubCategoryId: String? = null
+    private var clubCategoryResolved = false
     private val cookies = AcpCookieJar(store.read("session")) { store.write("session", it) }
     private val client = clientBuilder
         .cookieJar(cookies)
@@ -51,6 +55,9 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
             require(login.isNotBlank() && password.isNotBlank())
             store.write("access", JSONObject().put("login", login.trim()).put("password", password).toString())
             accessConfirmed = false
+            cachedSessionUser = null
+            clubCategoryId = null
+            clubCategoryResolved = false
             cookies.clear()
         }
     }
@@ -59,9 +66,10 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     suspend fun restoreSession(): Boolean = sessionLock.withLock {
         withContext(Dispatchers.IO) {
             accessConfirmed = false
+            cachedSessionUser = null
             if (cookies.loadForRequest("$ORIGIN/api/auth/session".toHttpUrl()).isEmpty()) return@withContext false
             try {
-                session()
+                session(forceRefresh = true)
                 accessConfirmed = true
                 true
             } catch (_: AcpUnauthorized) { false }
@@ -71,13 +79,14 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     suspend fun confirmAccess() = sessionLock.withLock {
         withContext(Dispatchers.IO) {
             accessConfirmed = false
-            try { session() } catch (_: AcpUnauthorized) { signIn() }
+            try { session(forceRefresh = true) } catch (_: AcpUnauthorized) { signIn() }
             accessConfirmed = true
         }
     }
 
     private fun signIn() {
         val access = credentials() ?: throw AcpFailure("Peça ao administrador para configurar o acesso neste aparelho.")
+        cachedSessionUser = null
         cookies.clear()
         val csrf = requestJson(Request.Builder().url("$ORIGIN/api/auth/csrf").get().build())
             .nonBlankString("csrfToken")
@@ -93,10 +102,11 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
             ORIGIN.toHttpUrl().resolve(it)?.queryParameter("error")
         }
         if (!error.isNullOrBlank()) {
+            cachedSessionUser = null
             cookies.clear()
             throw AcpFailure("A ACP não aceitou o acesso. Peça ao administrador para conferir a configuração.")
         }
-        session() // A successful callback alone is not proof of authentication.
+        session(forceRefresh = true) // A successful callback alone is not proof of authentication.
     }
 
     fun hasBundledAccess(): Boolean = bundledLogin.isNotBlank() && bundledPassword.isNotBlank()
@@ -104,17 +114,20 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     private fun credentials(): JSONObject? {
         if (hasBundledAccess()) return JSONObject().put("login", bundledLogin).put("password", bundledPassword)
         return store.read("access")?.let {
-        runCatching { JSONObject(it) }.getOrNull()
-    }?.takeIf { it.nonBlankString("login") != null && it.nonBlankString("password") != null }
+            runCatching { JSONObject(it) }.getOrNull()
+        }?.takeIf { it.nonBlankString("login") != null && it.nonBlankString("password") != null }
     }
 
-    private fun session(): JSONObject {
+    private fun session(forceRefresh: Boolean = false): JSONObject {
+        if (!forceRefresh) cachedSessionUser?.let { return it }
         val data = requestJson(Request.Builder().url("$ORIGIN/api/auth/session").get().build())
         val user = data.optJSONObject("user")
         if (user == null || user.nonBlankString("accessToken") == null) {
+            cachedSessionUser = null
             cookies.clear()
             throw AcpUnauthorized()
         }
+        cachedSessionUser = user
         return user
     }
 
@@ -122,37 +135,113 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
      * Read-only endpoints. Product and promotion responses use a 24h device cache.
      * Fresh cache is returned immediately. Stale cache remains usable while a silent
      * refresh runs in the background, so the product screen never waits for the daily sync.
+     *
+     * The Clube carousel has one intentionally recognizable catalog request: Product/all
+     * without search filters and pageSize=100. Instead of walking the complete store catalog,
+     * that request is narrowed server-side to the ACP category "Clube de Vantagens". This
+     * keeps the same source of truth (Product/all / clubValue) while avoiding hundreds of
+     * irrelevant pages and the endless loading state seen on the consultation screen.
      */
     internal suspend fun get(path: String, parameters: List<Pair<String, String>>): JSONObject {
         require(path in READ_ONLY_ENDPOINTS) { "ACP endpoint not allowed: $path" }
 
+        val clubCatalogRequest = isClubCatalogRequest(path, parameters)
+        val effectiveParameters = if (clubCatalogRequest) {
+            val clubId = resolveClubCategoryId()
+                ?: throw AcpFailure("A categoria Clube de Vantagens não foi localizada na ACP. Tente sincronizar novamente.")
+            parameters
+                .filterNot { it.first == "pageSize" || it.first == "productCategoryIds" }
+                .plus("pageSize" to CLUB_PAGE_SIZE.toString())
+                .plus("productCategoryIds" to clubId)
+        } else {
+            parameters
+        }
+
+        // A listagem do Clube precisa refletir a operação atual do caixa. Para ela não servimos
+        // uma fotografia de 24h: buscamos a categoria diretamente na ACP e só então atualizamos
+        // o cache. As pesquisas comuns continuam com o comportamento de cache existente.
+        if (clubCatalogRequest) {
+            val result = authenticatedRead(path, effectiveParameters, record = true)
+            withContext(Dispatchers.IO) { writeCachedResponse(path, effectiveParameters, result) }
+            return result
+        }
+
         if (path in DAILY_CACHE_ENDPOINTS) {
-            val cached = withContext(Dispatchers.IO) { readCachedResponse(path, parameters) }
+            val cached = withContext(Dispatchers.IO) { readCachedResponse(path, effectiveParameters) }
             if (cached != null) {
-                recordDiagnostic(path, parameters, cached.payload)
+                recordDiagnostic(path, effectiveParameters, cached.payload)
                 if (!isFresh(cached.savedAtMillis)) {
-                    if (path in SILENT_PAGED_ENDPOINTS && pageIndex(parameters) == 0) {
-                        schedulePagedRefresh(path, parameters)
+                    if (path in SILENT_PAGED_ENDPOINTS && pageIndex(effectiveParameters) == 0) {
+                        schedulePagedRefresh(path, effectiveParameters)
                     } else {
-                        scheduleRefresh(path, parameters)
+                        scheduleRefresh(path, effectiveParameters)
                     }
                 }
                 return cached.payload
             }
 
             if (path in SILENT_PAGED_ENDPOINTS) {
-                if (pageIndex(parameters) == 0) schedulePagedRefresh(path, parameters)
-                else scheduleRefresh(path, parameters)
-                return emptyPagedResponse(parameters).also { recordDiagnostic(path, parameters, it) }
+                if (pageIndex(effectiveParameters) == 0) schedulePagedRefresh(path, effectiveParameters)
+                else scheduleRefresh(path, effectiveParameters)
+                return emptyPagedResponse(effectiveParameters).also { recordDiagnostic(path, effectiveParameters, it) }
             }
         }
 
-        val result = authenticatedRead(path, parameters, record = true)
+        val result = authenticatedRead(path, effectiveParameters, record = true)
         if (path in DAILY_CACHE_ENDPOINTS) {
-            withContext(Dispatchers.IO) { writeCachedResponse(path, parameters, result) }
+            withContext(Dispatchers.IO) { writeCachedResponse(path, effectiveParameters, result) }
         }
         return result
     }
+
+    /** Only the dedicated Clube loader currently performs this exact unfiltered batch request. */
+    private fun isClubCatalogRequest(path: String, parameters: List<Pair<String, String>>): Boolean {
+        if (path != "Product/all") return false
+        if (parameters.lastOrNull { it.first == "pageSize" }?.second != "100") return false
+        val filterNames = setOf("code", "barCode", "description", "productCategoryIds")
+        return parameters.none { it.first in filterNames }
+    }
+
+    /**
+     * Resolve the ACP category once per authenticated API instance. ProductCategory/all is
+     * deliberately read from the server here because the normal category helper is allowed
+     * to warm its cache silently and can legitimately return an empty first response.
+     */
+    private suspend fun resolveClubCategoryId(): String? {
+        if (clubCategoryResolved) return clubCategoryId
+
+        var page = 0
+        var totalPages = 1
+        while (page < totalPages && page < MAX_CLUB_CATEGORY_PAGES) {
+            val parameters = listOf("pageSize" to "100", "pageIndex" to page.toString())
+            val root = authenticatedRead("ProductCategory/all", parameters, record = false)
+            val items = root.optJSONArray("items") ?: JSONArray()
+            for (index in 0 until items.length()) {
+                val item = items.optJSONObject(index) ?: continue
+                val description = item.optString("description").trim()
+                val normalized = normalizeCategoryName(description)
+                if (normalized == "clubedevantagens" || normalized == "clubvantagens") {
+                    val id = item.opt("id")?.toString()?.trim().orEmpty()
+                    if (id.isNotEmpty() && id != "null") {
+                        clubCategoryId = id
+                        clubCategoryResolved = true
+                        return id
+                    }
+                }
+            }
+            totalPages = responseTotalPages(root).coerceAtLeast(1)
+            page++
+        }
+
+        clubCategoryResolved = true
+        clubCategoryId = null
+        return null
+    }
+
+    private fun normalizeCategoryName(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}+"), "")
+        .lowercase()
+        .replace(Regex("[^a-z0-9]"), "")
 
     private suspend fun authenticatedRead(path: String, parameters: List<Pair<String, String>>, record: Boolean): JSONObject =
         sessionLock.withLock {
@@ -160,6 +249,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
                 try { readOnce(path, parameters, record) } catch (expired: AcpUnauthorized) {
                     val mayRenew = accessConfirmed
                     accessConfirmed = false
+                    cachedSessionUser = null
                     if (!mayRenew) throw expired
                     // One normal sign-in and one GET retry. Forbidden/rate-limit/network errors never submit a password.
                     signIn()
@@ -332,6 +422,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         client.newCall(request).execute().use { response ->
             if (response.code == 401 || (response.code in 300..399 &&
                     response.header("Location").orEmpty().contains("/login"))) {
+                cachedSessionUser = null
                 cookies.clear()
                 if (request.url.encodedPath == "/api/auth/callback/credentials") {
                     throw AcpFailure("A ACP não aceitou o acesso. Peça ao administrador para conferir a configuração.")
@@ -356,6 +447,8 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         private const val DAILY_CACHE_TTL_MILLIS = 24L * 60L * 60L * 1000L
         private const val SILENT_REFRESH_DELAY_MILLIS = 900L
         private const val MAX_SILENT_PAGES = 30
+        private const val MAX_CLUB_CATEGORY_PAGES = 10
+        private const val CLUB_PAGE_SIZE = 250
         private val READ_ONLY_ENDPOINTS = setOf("Product/all", "ProductCategory/all", "Product/integrationInfo", "Campaign/all")
         private val DAILY_CACHE_ENDPOINTS = setOf("Product/all", "ProductCategory/all", "Campaign/all")
         private val SILENT_PAGED_ENDPOINTS = setOf("ProductCategory/all", "Campaign/all")
