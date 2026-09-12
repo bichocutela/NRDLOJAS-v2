@@ -165,6 +165,10 @@ fun ProductBarcodeDialog(
                             color = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.fillMaxWidth()
                         )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        ActiveFlyerOffersForProduct(product)
+
                         Spacer(modifier = Modifier.height(16.dp))
 
                         val barcodeCacheKey = "${product.code}|$scannerProfile"
