@@ -100,3 +100,39 @@ HTTP autenticada. Buscar os símbolos indicados evita depender de linhas minific
 
 Símbolos: secondUnitDiscount, showOffersExpirationDate, validOffer,
 campaignProducts.map, selectProduct, updateProduct, getAllCampaign.
+
+
+## Verificação autenticada na interface — 12/09/2026
+
+Após login manual, a interface identificou Nordestão 12 e permitiu selecionar o
+modelo **190 — % Na Segunda Unidade — A3 Paisagem**, tipo Varejo. A busca pelo
+código **2012568001** retornou somente o EAN **5604885098906**, descrição
+**Vinho Branco Tiroliro Gf 750ml Pad .**, categoria **Varejo**, valor **R$ 45,49**.
+
+Ao selecionar esse produto para a prévia, sem editar os dados:
+
+| Controle/resultado | Estado observado |
+| --- | --- |
+| Valor no editor do produto | 45,49 |
+| Desconto na segunda unidade do produto | Vazio |
+| Desconto na segunda unidade nas configurações gerais | Vazio |
+| Mostrar Validade da Oferta, no produto e nas configurações gerais | Desligado |
+| Preço exibido na prévia | 45,49; não 34,12 |
+| Campanhas, sem filtros preenchidos visíveis | Nenhum resultado encontrado |
+
+A inspeção visual e do DOM confirma que escolher o template 190 não atribuiu
+50% ao Tiroliro. O modelo contém espaço para o percentual, mas o campo não veio
+preenchido. Isso não demonstra ausência da promoção em outro sistema, grupo,
+acesso ou cartaz previamente editado. A lista vazia de campanhas é limitada à
+sessão e à tela observadas.
+
+Não foram acionados Salvar Tudo, Imprimir, edição de percentual, calendário ou
+switches de validade. A análise anterior do código já mostra que configurações
+gerais podem ter caminho de persistência; não é necessário alterá-las para
+constatar o estado inicial. A seleção do produto foi apenas para inspeção local.
+Não houve nova captura do JSON HTTP autenticado pelas ferramentas de navegador.
+
+Ao retomar a investigação após nova mensagem, o ambiente de navegação voltou com
+uma aba about:blank. Isso impede atribuir essa perda de continuidade a expiração
+da sessão pelo servidor ACP: não foi observado um logout nem um 401 nesse momento.
+A inspeção de grupos ainda não foi concluída.
