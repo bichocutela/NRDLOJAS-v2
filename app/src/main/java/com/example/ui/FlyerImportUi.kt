@@ -28,8 +28,6 @@ import com.example.data.flyer.*
 import com.example.ui.theme.glassSoftShadow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @Composable
 internal fun FlyerImportEntryCard() {
@@ -67,7 +65,8 @@ internal fun FlyerImportEntryCard() {
 private fun FlyerImportDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val campaigns by FlyerRepository.observeCampaigns().collectAsState(initial = emptyList())
+    val campaignsFlow = remember { FlyerRepository.observeCampaigns() }
+    val campaigns by campaignsFlow.collectAsState(initial = emptyList())
     var analysis by remember { mutableStateOf<FlyerAnalysisResult?>(null) }
     var busy by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
@@ -199,8 +198,9 @@ private fun FlyerImportDialog(onDismiss: () -> Unit) {
                                 enabled = !saving
                             )
                         }
-                        val datesValid = parseIsoDate(validFrom) != null && parseIsoDate(validTo) != null &&
-                            !parseIsoDate(validTo)!!.isBefore(parseIsoDate(validFrom))
+                        val startDate = parseIsoDate(validFrom)
+                        val endDate = parseIsoDate(validTo)
+                        val datesValid = startDate != null && endDate != null && !endDate.before(startDate)
 
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             SummaryMetric("Confirmadas", result.confirmedCount, Modifier.weight(1f))
@@ -219,10 +219,10 @@ private fun FlyerImportDialog(onDismiss: () -> Unit) {
                         }
 
                         Button(
-                            onClick = {
+                            onClick = save@{
                                 if (!datesValid) {
                                     error = "Confira as datas de início e fim antes de salvar."
-                                    return@Button
+                                    return@save
                                 }
                                 saving = true
                                 error = null
@@ -373,7 +373,8 @@ private fun CampaignManagementCard(
 /** Shows only high-confidence, confirmed flyer rules. Club is never sourced from flyers. */
 @Composable
 internal fun ActiveFlyerOffersForProduct(product: Product) {
-    val campaigns by FlyerRepository.observeCampaigns().collectAsState(initial = emptyList())
+    val campaignsFlow = remember { FlyerRepository.observeCampaigns() }
+    val campaigns by campaignsFlow.collectAsState(initial = emptyList())
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -447,4 +448,4 @@ private fun offerPriority(type: FlyerOfferType): Int = when (type) {
     FlyerOfferType.FLYER_PRICE -> 4
 }
 
-private fun dateLabel(value: String): String = parseIsoDate(value)?.format(DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale("pt", "BR"))) ?: value
+private fun dateLabel(value: String): String = formatIsoDate(value) ?: value
