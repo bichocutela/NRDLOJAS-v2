@@ -10,7 +10,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class AcpProductsTest {
-    // Synthetic fixtures exercise the inspected client contract; not captured ACP responses.
     private fun product(fields: String) = AcpProductParser.page(JSONObject("""{"items":[{"description":"Teste",$fields}],"pageIndex":0,"totalPages":1}"""), 0).items.single()
 
     @Test fun separatesPrincipalClubAndPreviousPricesAndPreservesShortCodes() {
@@ -20,6 +19,34 @@ class AcpProductsTest {
         assertEquals("R$ 14,29", item.value?.brl())
         assertEquals("R$ 9,99", item.clubValue?.brl())
         assertEquals(listOf("De/Por", "Clube de Vantagens"), item.offers().map { it.title })
+    }
+
+    @Test fun realKitKatPayloadKeepsDePorClubAndStockTogether() {
+        val item = product(""""code":"2013995003","barCode":"7891000248768","value":3.49,"previousValue":6.69,"clubValue":3.49,"stockQuantity":682,"packageQuantity":3,"packageType":{"id":7,"description":"SUB"},"unit":{"id":2,"description":"cada"},"productCategories":[{"id":1,"description":"Varejo"},{"id":3,"description":"De-Por"},{"id":5,"description":"Clube de Vantagens"}]""")
+        assertEquals("R$ 3,49", item.value?.brl())
+        assertEquals("R$ 6,69", item.previousValue?.brl())
+        assertEquals("R$ 3,49", item.clubValue?.brl())
+        assertEquals("682", item.stockQuantity?.quantity())
+        assertEquals("3", item.packageQuantity?.quantity())
+        assertEquals("SUB", item.packageType)
+        assertEquals("cada", item.unit)
+        assertEquals(listOf("De/Por", "Clube de Vantagens"), item.offers().map { it.title })
+    }
+
+    @Test fun realRavanalPayloadIsLevePagueAndUsesProductStock() {
+        val item = product(""""code":"2012718001","barCode":"7804374000405","value":47.99,"quantityTake":3,"quantityPay":2,"stockQuantity":26,"packageQuantity":12,"packageType":{"id":1,"description":"Caixa"},"productCategories":[{"id":1,"description":"Varejo"},{"id":6,"description":"Leve-Pague"}]""")
+        assertEquals("26", item.stockQuantity?.quantity())
+        assertEquals("12", item.packageQuantity?.quantity())
+        assertEquals("Caixa", item.packageType)
+        assertEquals("Leve/Pague", item.offers().single().title)
+        assertTrue(item.offers().single().detail.contains("Leve 3, pague 2"))
+    }
+
+    @Test fun realTiroliroPayloadDoesNotInventSecondUnitDiscount() {
+        val item = product(""""code":"2012568001","barCode":"5604885098906","value":45.49,"quantityTake":3,"quantityPay":null,"stockQuantity":23,"packageQuantity":6,"packageType":{"id":1,"description":"Caixa"}""")
+        assertEquals("R$ 45,49", item.value?.brl())
+        assertEquals("23", item.stockQuantity?.quantity())
+        assertTrue(item.offers().isEmpty())
     }
 
     @Test fun nullZeroNegativeAndInvalidFieldsNeverBecomePromotions() {
@@ -39,6 +66,7 @@ class AcpProductsTest {
     @Test fun cashbackDoesNotReplaceMainPriceAndDatesAreNotUsedAsValidity() {
         val item = product(""""value":"10,50","cashback":10,"cashbackValue":2,"dueDate":"2099-12-31","validOffer":"2099-12-31" """)
         assertEquals("R$ 10,50", item.value?.brl())
+        assertEquals("2099-12-31", item.dueDate)
         assertTrue(item.offers().all { it.detail.contains("Não é desconto imediato") })
         assertFalse(item.offers().any { it.detail.contains("2099") })
     }
