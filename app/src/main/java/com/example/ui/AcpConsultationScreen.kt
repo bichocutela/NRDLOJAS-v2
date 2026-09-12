@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.graphics.BitmapFactory
+import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -43,9 +44,12 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
     val activeConsultationBackground = appearanceSettings.activeConsultationBackground()
     val bannerBitmap = remember(context) {
         runCatching {
-            context.assets.open("acp_banner/banner.webp").use { input ->
-                BitmapFactory.decodeStream(input)?.asImageBitmap()
+            val encoded = (0..6).joinToString(separator = "") { part ->
+                val fileName = "acp_banner/banner_${part.toString().padStart(2, '0')}.b64"
+                context.assets.open(fileName).bufferedReader().use { it.readText() }
             }
+            val bytes = Base64.decode(encoded, Base64.DEFAULT)
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
         }.getOrNull()
     }
     var configured by remember { mutableStateOf(false) }
@@ -118,7 +122,6 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
                         }
 
                         if (bannerBitmap != null) {
-                            val bannerShape = RoundedCornerShape(24.dp)
                             Image(
                                 bitmap = bannerBitmap,
                                 contentDescription = "Consultar Produtos",
@@ -126,7 +129,7 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
                                     .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
                                     .fillMaxWidth()
                                     .aspectRatio(3f)
-                                    .clip(bannerShape),
+                                    .clip(RoundedCornerShape(24.dp)),
                                 contentScale = ContentScale.Crop
                             )
                         }
