@@ -38,8 +38,12 @@ class AcpProductsTest {
         assertEquals("26", item.stockQuantity?.quantity())
         assertEquals("12", item.packageQuantity?.quantity())
         assertEquals("Caixa", item.packageType)
-        assertEquals("Leve/Pague", item.offers().single().title)
-        assertTrue(item.offers().single().detail.contains("Leve 3, pague 2"))
+        val offer = item.offers().single()
+        assertEquals("Leve/Pague", offer.title)
+        assertEquals("LEVE 3 • PAGUE 2", offer.headline)
+        assertEquals("R$ 47,99", offer.referencePrice?.brl())
+        assertEquals("R$ 31,99", offer.price?.brl())
+        assertTrue(offer.detail.contains("Leve 3, pague 2"))
     }
 
     @Test fun realTiroliroPayloadDoesNotInventSecondUnitDiscount() {
@@ -58,17 +62,35 @@ class AcpProductsTest {
 
     @Test fun multiBuyRequiresWholeQuantitiesAndShowsConditionalEquivalent() {
         val item = product(""""value":10,"quantityTake":3,"quantityPay":2""")
-        assertTrue(item.offers().single().detail.contains("R$ 6,67"))
-        assertTrue(item.offers().single().detail.contains("completar a quantidade"))
+        val offer = item.offers().single()
+        assertEquals("R$ 6,67", offer.price?.brl())
+        assertEquals("R$ 10,00", offer.referencePrice?.brl())
+        assertEquals("LEVE 3 • PAGUE 2", offer.headline)
+        assertTrue(offer.detail.contains("Média equivalente"))
+        assertTrue(offer.detail.contains("completar a quantidade"))
         assertTrue(product(""""value":10,"quantityTake":2.5,"quantityPay":2""").offers().isEmpty())
+    }
+
+    @Test fun wholesaleKeepsRetailReferenceAndMinimumQuantity() {
+        val offer = product(""""value":12.99,"wholesaleValue":9.49,"wholesaleQuantity":10""").offers().single()
+        assertEquals("Atacado", offer.title)
+        assertEquals("R$ 12,99", offer.referencePrice?.brl())
+        assertEquals("R$ 9,49", offer.price?.brl())
+        assertEquals("A PARTIR DE 10 UN.", offer.headline)
+        assertTrue(offer.detail.contains("A partir de 10 unidades"))
     }
 
     @Test fun cashbackDoesNotReplaceMainPriceAndDatesAreNotUsedAsValidity() {
         val item = product(""""value":"10,50","cashback":10,"cashbackValue":2,"dueDate":"2099-12-31","validOffer":"2099-12-31" """)
         assertEquals("R$ 10,50", item.value?.brl())
         assertEquals("2099-12-31", item.dueDate)
-        assertTrue(item.offers().all { it.detail.contains("Não é desconto imediato") })
-        assertFalse(item.offers().any { it.detail.contains("2099") })
+        val offers = item.offers()
+        assertTrue(offers.all { it.detail.contains("Não é desconto imediato") })
+        assertTrue(offers.all { it.referencePrice?.brl() == "R$ 10,50" })
+        assertTrue(offers.all { it.price == null })
+        assertEquals("10% DE VOLTA", offers.first { it.title == "Cashback" }.headline)
+        assertEquals("R$ 2,00 DE VOLTA", offers.first { it.title == "Cashback em valor" }.headline)
+        assertFalse(offers.any { it.detail.contains("2099") })
     }
 
     @Test fun posterReferencesKeepClubAndPreviousPricesSeparate() {

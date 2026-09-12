@@ -26,6 +26,8 @@ internal fun AcpOfferPoster(offer: AcpOffer, compact: Boolean) {
                     "Clube de Vantagens" -> "PREÇO CLUBE"
                     "De/Por" -> "DE / POR"
                     "Segunda unidade" -> "NA SEGUNDA UNIDADE"
+                    "Leve/Pague" -> "LEVE / PAGUE"
+                    "Cashback", "Cashback em valor" -> "CASHBACK"
                     else -> offer.title.uppercase()
                 },
                 modifier = Modifier.fillMaxWidth().background(if (club) blue else red).padding(12.dp),
@@ -34,14 +36,29 @@ internal fun AcpOfferPoster(offer: AcpOffer, compact: Boolean) {
             )
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 offer.referencePrice?.let { reference ->
-                    Text(if (offer.title == "De/Por") "DE" else "PREÇO NORMAL CADASTRADO",
-                        style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    val referenceLabel = when (offer.title) {
+                        "De/Por" -> "DE"
+                        "Atacado" -> "PREÇO VAREJO"
+                        "Leve/Pague" -> "PREÇO UNITÁRIO NORMAL"
+                        "Cashback", "Cashback em valor" -> "PREÇO PRINCIPAL"
+                        else -> "PREÇO NORMAL CADASTRADO"
+                    }
+                    Text(referenceLabel, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     Text(reference.brl(), style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         textDecoration = if (offer.title == "De/Por") TextDecoration.LineThrough else TextDecoration.None)
                 }
+                offer.headline?.let {
+                    Text(it, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = red)
+                }
                 if (offer.price != null) {
-                    if (offer.title == "De/Por") Text("POR", fontWeight = FontWeight.Black, color = red)
+                    val priceLabel = when (offer.title) {
+                        "De/Por" -> "POR"
+                        "Atacado" -> "PREÇO ATACADO POR UNIDADE"
+                        "Leve/Pague" -> "MÉDIA POR UNIDADE"
+                        else -> null
+                    }
+                    priceLabel?.let { Text(it, fontWeight = FontWeight.Black, color = red) }
                     Surface(shape = MaterialTheme.shapes.small, color = if (club) red else yellow,
                         contentColor = if (club) Color.White else red) {
                         Text(offer.price.brl(), modifier = Modifier.fillMaxWidth().padding(if (club) 12.dp else 0.dp),
@@ -49,8 +66,6 @@ internal fun AcpOfferPoster(offer: AcpOffer, compact: Boolean) {
                             fontWeight = FontWeight.Black)
                     }
                 }
-                offer.headline?.let { Text(it, style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Black, color = red) }
                 if (club) Text("Exclusivo Clube de Vantagens", fontWeight = FontWeight.Bold)
                 // Keep quantities, reference-price context and cashback conditions visible even in search results.
                 Text(offer.detail, style = MaterialTheme.typography.bodySmall)
