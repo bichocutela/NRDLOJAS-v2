@@ -2,7 +2,11 @@ package com.example.data.acp
 
 import android.content.Context
 import com.example.BuildConfig
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -16,6 +20,7 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 internal class AcpUnauthorized : IOException("Confirme novamente seu acesso à ACP.")
@@ -36,6 +41,8 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
 
     private val diagnostics = LinkedHashMap<String, JSONObject>()
     private val diagnosticRequests = mutableListOf<JSONObject>()
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val refreshingKeys = mutableSetOf<String>()
 
     suspend fun hasCredentials(): Boolean = withContext(Dispatchers.IO) { credentials() != null }
 
@@ -111,24 +118,59 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         return user
     }
 
-    /** Read-only endpoints. Bearer is obtained from the existing ACP session, never logged. */
-    internal suspend fun get(path: String, parameters: List<Pair<String, String>>): JSONObject = sessionLock.withLock {
-        withContext(Dispatchers.IO) {
-            require(path in READ_ONLY_ENDPOINTS) { "ACP endpoint not allowed: $path" }
-            try { readOnce(path, parameters) } catch (expired: AcpUnauthorized) {
-                val mayRenew = accessConfirmed
-                accessConfirmed = false
-                if (!mayRenew) throw expired
-                // One normal sign-in and one GET retry. Forbidden/rate-limit/network errors never submit a password.
-                signIn()
-                val result = readOnce(path, parameters)
-                accessConfirmed = true
-                result
+    /**
+     * Read-only endpoints. Product and promotion responses use a 24h device cache.
+     * Fresh cache is returned immediately. Stale cache remains usable while a silent
+     * refresh runs in the background, so the product screen never waits for the daily sync.
+     */
+    internal suspend fun get(path: String, parameters: List<Pair<String, String>>): JSONObject {
+        require(path in READ_ONLY_ENDPOINTS) { "ACP endpoint not allowed: $path" }
+
+        if (path in DAILY_CACHE_ENDPOINTS) {
+            val cached = withContext(Dispatchers.IO) { readCachedResponse(path, parameters) }
+            if (cached != null) {
+                recordDiagnostic(path, parameters, cached.payload)
+                if (!isFresh(cached.savedAtMillis)) {
+                    if (path in SILENT_PAGED_ENDPOINTS && pageIndex(parameters) == 0) {
+                        schedulePagedRefresh(path, parameters)
+                    } else {
+                        scheduleRefresh(path, parameters)
+                    }
+                }
+                return cached.payload
+            }
+
+            if (path in SILENT_PAGED_ENDPOINTS) {
+                if (pageIndex(parameters) == 0) schedulePagedRefresh(path, parameters)
+                else scheduleRefresh(path, parameters)
+                return emptyPagedResponse(parameters).also { recordDiagnostic(path, parameters, it) }
             }
         }
+
+        val result = authenticatedRead(path, parameters, record = true)
+        if (path in DAILY_CACHE_ENDPOINTS) {
+            withContext(Dispatchers.IO) { writeCachedResponse(path, parameters, result) }
+        }
+        return result
     }
 
-    private fun readOnce(path: String, parameters: List<Pair<String, String>>): JSONObject {
+    private suspend fun authenticatedRead(path: String, parameters: List<Pair<String, String>>, record: Boolean): JSONObject =
+        sessionLock.withLock {
+            withContext(Dispatchers.IO) {
+                try { readOnce(path, parameters, record) } catch (expired: AcpUnauthorized) {
+                    val mayRenew = accessConfirmed
+                    accessConfirmed = false
+                    if (!mayRenew) throw expired
+                    // One normal sign-in and one GET retry. Forbidden/rate-limit/network errors never submit a password.
+                    signIn()
+                    val result = readOnce(path, parameters, record)
+                    accessConfirmed = true
+                    result
+                }
+            }
+        }
+
+    private fun readOnce(path: String, parameters: List<Pair<String, String>>, record: Boolean = true): JSONObject {
         val session = session()
         val base = if (session.optBoolean("proxyEnable")) "$ORIGIN/api/proxy/api/v1/" else "$API_ORIGIN/api/v1/"
         val url = (base + path).toHttpUrl().newBuilder().apply {
@@ -136,9 +178,105 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         }.build()
         val result = requestJson(Request.Builder().url(url).header("Authorization", "Bearer ${session.getString("accessToken")}")
             .header("Cache-Control", "no-cache").header("Accept", "application/json").get().build())
-        recordDiagnostic(path, parameters, result)
+        if (record) recordDiagnostic(path, parameters, result)
         return result
     }
+
+    private data class CachedResponse(val savedAtMillis: Long, val payload: JSONObject)
+
+    private fun readCachedResponse(path: String, parameters: List<Pair<String, String>>): CachedResponse? {
+        val raw = store.read(cacheName(path, parameters)) ?: return null
+        return try {
+            val envelope = JSONObject(raw)
+            val savedAt = envelope.optLong("savedAtMillis", 0L)
+            val payload = envelope.optJSONObject("payload") ?: return null
+            if (savedAt <= 0L) null else CachedResponse(savedAt, payload)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun writeCachedResponse(path: String, parameters: List<Pair<String, String>>, payload: JSONObject) {
+        try {
+            val envelope = JSONObject()
+                .put("savedAtMillis", System.currentTimeMillis())
+                .put("payload", payload)
+            store.write(cacheName(path, parameters), envelope.toString())
+        } catch (_: Exception) {
+            // Cache failures must never break the ACP consultation.
+        }
+    }
+
+    private fun cacheName(path: String, parameters: List<Pair<String, String>>): String {
+        val rawKey = buildString {
+            append(path)
+            parameters.sortedWith(compareBy<Pair<String, String>> { it.first }.thenBy { it.second }).forEach { (key, value) ->
+                append('|').append(key).append('=').append(value)
+            }
+        }
+        val digest = MessageDigest.getInstance("SHA-256").digest(rawKey.toByteArray(Charsets.UTF_8))
+        val hex = digest.joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        return "response_cache_$hex"
+    }
+
+    private fun isFresh(savedAtMillis: Long): Boolean {
+        val age = System.currentTimeMillis() - savedAtMillis
+        return age >= 0L && age < DAILY_CACHE_TTL_MILLIS
+    }
+
+    private fun scheduleRefresh(path: String, parameters: List<Pair<String, String>>) {
+        val key = cacheName(path, parameters)
+        synchronized(refreshingKeys) { if (!refreshingKeys.add(key)) return }
+        backgroundScope.launch {
+            try {
+                delay(SILENT_REFRESH_DELAY_MILLIS)
+                val fresh = authenticatedRead(path, parameters, record = false)
+                writeCachedResponse(path, parameters, fresh)
+            } catch (_: Exception) {
+                // Keep serving the last known value and try again on a later consultation.
+            } finally {
+                synchronized(refreshingKeys) { refreshingKeys.remove(key) }
+            }
+        }
+    }
+
+    private fun schedulePagedRefresh(path: String, initialParameters: List<Pair<String, String>>) {
+        val baseParameters = initialParameters.filterNot { it.first == "pageIndex" }
+        val key = "paged:${cacheName(path, baseParameters)}"
+        synchronized(refreshingKeys) { if (!refreshingKeys.add(key)) return }
+        backgroundScope.launch {
+            try {
+                delay(SILENT_REFRESH_DELAY_MILLIS)
+                var page = 0
+                var totalPages = 1
+                while (page < totalPages && page < MAX_SILENT_PAGES) {
+                    val parameters = baseParameters + ("pageIndex" to page.toString())
+                    val fresh = authenticatedRead(path, parameters, record = false)
+                    writeCachedResponse(path, parameters, fresh)
+                    totalPages = totalPages(fresh).coerceAtLeast(1)
+                    page++
+                }
+            } catch (_: Exception) {
+                // Categories and campaigns are optional helpers. General product search stays available.
+            } finally {
+                synchronized(refreshingKeys) { refreshingKeys.remove(key) }
+            }
+        }
+    }
+
+    private fun pageIndex(parameters: List<Pair<String, String>>): Int =
+        parameters.lastOrNull { it.first == "pageIndex" }?.second?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+
+    private fun totalPages(root: JSONObject): Int {
+        val data = root.optJSONObject("data")
+        return root.optInt("totalPages", data?.optInt("totalPages", 1) ?: 1)
+    }
+
+    private fun emptyPagedResponse(parameters: List<Pair<String, String>>): JSONObject = JSONObject()
+        .put("items", JSONArray())
+        .put("pageIndex", pageIndex(parameters))
+        .put("totalPages", 1)
+        .put("totalCount", 0)
 
     @Synchronized internal fun beginDiagnosticSession() {
         diagnostics.clear()
@@ -215,7 +353,12 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
 
     companion object {
         private const val MAX_DIAGNOSTIC_REQUESTS = 12
+        private const val DAILY_CACHE_TTL_MILLIS = 24L * 60L * 60L * 1000L
+        private const val SILENT_REFRESH_DELAY_MILLIS = 900L
+        private const val MAX_SILENT_PAGES = 30
         private val READ_ONLY_ENDPOINTS = setOf("Product/all", "ProductCategory/all", "Product/integrationInfo", "Campaign/all")
+        private val DAILY_CACHE_ENDPOINTS = setOf("Product/all", "ProductCategory/all", "Campaign/all")
+        private val SILENT_PAGED_ENDPOINTS = setOf("ProductCategory/all", "Campaign/all")
         const val ORIGIN = "https://nordestao12.acp.app.br"
         const val API_ORIGIN = "https://api.acp.app.br"
     }
