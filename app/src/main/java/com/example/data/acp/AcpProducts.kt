@@ -20,7 +20,6 @@ internal data class AcpProduct(
     val quantityTake: BigDecimal?, val quantityPay: BigDecimal?,
     val cashback: BigDecimal?, val cashbackValue: BigDecimal?, val secondUnitDiscount: BigDecimal?,
     val unitLimitPerCPF: BigDecimal?, val unit: String?, val categories: List<String>,
-    // Campos abaixo foram confirmados em respostas reais de Product/all em 11/09/2026.
     val stockQuantity: BigDecimal? = null,
     val dueDate: String? = null,
     val packageQuantity: BigDecimal? = null,
@@ -31,13 +30,12 @@ internal data class AcpProduct(
     val productFamily: String? = null,
     val auxDescriptions: List<String> = emptyList()
 ) {
-    /** These are recorded conditions, not a claim that a campaign is currently valid. */
     fun offers(): List<AcpOffer> = buildList {
         if (previousValue != null && value != null && previousValue > value && value > BigDecimal.ZERO) {
-            add(AcpOffer("De/Por", "De ${previousValue.brl()} por ${value.brl()}. Condição de Clube não informada neste campo.", value, previousValue))
+            add(AcpOffer("De/Por", "De ${previousValue.brl()} por ${value.brl()}.", value, previousValue))
         }
         if (clubValue != null && clubValue > BigDecimal.ZERO) {
-            add(AcpOffer("Clube de Vantagens", "Preço Clube: ${clubValue.brl()}. Condicionado ao Clube; elegibilidade e exigência de CPF no caixa não verificadas.", clubValue, value?.takeIf { it > BigDecimal.ZERO }))
+            add(AcpOffer("Clube de Vantagens", "Preço Clube: ${clubValue.brl()}. Condicionado ao Clube.", clubValue, value?.takeIf { it > BigDecimal.ZERO }))
         }
         if (wholesaleValue != null && wholesaleValue > BigDecimal.ZERO) {
             val condition = wholesaleQuantity?.takeIf { it > BigDecimal.ZERO }
@@ -95,14 +93,10 @@ internal object AcpProductParser {
             categories = if (categories == null) emptyList() else (0 until categories.length()).mapNotNull {
                 categories.optJSONObject(it)?.text("description")
             },
-            stockQuantity = item.decimal("stockQuantity"),
-            dueDate = item.text("dueDate"),
-            packageQuantity = item.decimal("packageQuantity"),
-            packageType = item.optJSONObject("packageType")?.text("description"),
-            characteristic = item.text("characteristic"),
-            contentQuantity = item.decimal("contentQuantity"),
-            contentUnit = item.text("contentUnit"),
-            productFamily = item.optJSONObject("productFamily")?.text("description"),
+            stockQuantity = item.decimal("stockQuantity"), dueDate = item.text("dueDate"),
+            packageQuantity = item.decimal("packageQuantity"), packageType = item.optJSONObject("packageType")?.text("description"),
+            characteristic = item.text("characteristic"), contentQuantity = item.decimal("contentQuantity"),
+            contentUnit = item.text("contentUnit"), productFamily = item.optJSONObject("productFamily")?.text("description"),
             auxDescriptions = if (auxDescriptions == null) emptyList() else (0 until auxDescriptions.length()).mapNotNull {
                 auxDescriptions.optString(it).trim().takeIf { text -> text.isNotEmpty() && text != "null" }
             }
@@ -114,16 +108,33 @@ internal object AcpProductParser {
 
     private fun JSONObject.decimal(key: String): BigDecimal? {
         val raw = text(key) ?: return null
-        if (!Regex("[0-9]+([.,][0-9]+)?").matches(raw)) return null
+        if (!Regex("-?[0-9]+([.,][0-9]+)?").matches(raw)) return null
         return raw.replace(',', '.').toBigDecimalOrNull()
     }
 }
 
-internal suspend fun AcpApi.searchProducts(field: AcpSearchField, query: String, category: AcpCategory?, page: Int): AcpProductPage {
-    require(query.isNotBlank() && query.length <= 200 && page >= 0)
-    val parameters = mutableListOf("pageSize" to "20", "pageIndex" to page.toString(), field.parameter to query.trim())
+private suspend fun AcpApi.searchProductsOnce(field: AcpSearchField, query: String, category: AcpCategory?, page: Int): AcpProductPage {
+    val parameters = mutableListOf("pageSize" to "20", "pageIndex" to page.toString(), field.parameter to query)
     category?.let { parameters.add("productCategoryIds" to it.id) }
     return AcpProductParser.page(get("Product/all", parameters), page)
+}
+
+internal suspend fun AcpApi.searchProducts(field: AcpSearchField, query: String, category: AcpCategory?, page: Int): AcpProductPage {
+    require(query.isNotBlank() && query.length <= 200 && page >= 0)
+    val clean = query.trim()
+    val first = searchProductsOnce(field, clean, category, page)
+    if (first.items.isNotEmpty() || page != 0 || field == AcpSearchField.DESCRIPTION) return first
+
+    // A ACP já foi observada retornando vazio para identificadores existentes. Repetimos uma vez
+    // e, para identificadores numéricos, tentamos o outro campo exato (EAN <-> código interno).
+    val retry = searchProductsOnce(field, clean, category, 0)
+    if (retry.items.isNotEmpty()) return retry
+    val alternate = when (field) {
+        AcpSearchField.BARCODE -> AcpSearchField.CODE
+        AcpSearchField.CODE -> AcpSearchField.BARCODE
+        AcpSearchField.DESCRIPTION -> return retry
+    }
+    return searchProductsOnce(alternate, clean, category, 0)
 }
 
 internal suspend fun AcpApi.categories(): List<AcpCategory> {
