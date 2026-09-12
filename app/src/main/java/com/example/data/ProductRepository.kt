@@ -67,16 +67,18 @@ class ProductRepository(
 
     suspend fun insertProducts(products: List<Product>) {
         val existingProducts = dao.getAllProductsSync().associateBy { it.code }
-        val updatedProducts = products.map { remote ->
+        val updatedProducts = mutableListOf<Product>()
+        for (remote in products) {
             val local = existingProducts[remote.code]
+            val cachedCategories = NrdProductImportService.cachedCategories(remote.code)
+                ?: if (local == null) NrdProductImportService.categoriesForCode(remote.code) else null
             val memberships = when {
                 remote.categoryMemberships.isNotBlank() -> remote.categoryMemberships
-                NrdProductImportService.cachedCategories(remote.code) != null ->
-                    encodeProductCategories(NrdProductImportService.cachedCategories(remote.code).orEmpty())
+                !cachedCategories.isNullOrEmpty() -> encodeProductCategories(cachedCategories)
                 local?.categoryMemberships?.isNotBlank() == true -> local.categoryMemberships
                 else -> encodeProductCategories(listOfNotNull(remote.category.takeIf { it.isNotBlank() }))
             }
-            if (local != null) {
+            updatedProducts += if (local != null) {
                 remote.copy(
                     id = local.id,
                     isFavorite = local.isFavorite,
