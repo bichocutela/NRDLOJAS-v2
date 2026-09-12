@@ -10,6 +10,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -17,6 +18,9 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.data.CategoryDefinition
+import com.example.data.FirebaseService
+import com.example.data.NrdProductImportService
 import com.example.data.acp.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -25,11 +29,21 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private enum class NrdIdentifier { BARCODE, PRODUCT_CODE }
+
 @Composable
-internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
+internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpired: () -> Unit) {
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
     val clipboard = LocalClipboardManager.current
+    val nrdCategoriesFlow = remember { FirebaseService.observeCategories() }
+    val nrdDefinitions by nrdCategoriesFlow.collectAsState(initial = CategoryDefinition.defaults)
+    val activeNrdCategories = remember(nrdDefinitions) {
+        nrdDefinitions.filter { it.isActive }
+            .sortedWith(compareBy<CategoryDefinition> { it.displayOrder }.thenBy { it.name })
+            .map { it.name }
+    }
+
     var query by remember { mutableStateOf("") }
     var field by remember { mutableStateOf(AcpSearchField.BARCODE) }
     var category by remember { mutableStateOf<AcpCategory?>(null) }
@@ -49,11 +63,37 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
     var integration by remember { mutableStateOf<AcpIntegrationInfo?>(null) }
     var detailBusy by remember { mutableStateOf(false) }
     var detailWarning by remember { mutableStateOf<String?>(null) }
+    var syncExpanded by remember { mutableStateOf(false) }
 
     var detail by remember { mutableStateOf<AcpProduct?>(null) }
     var detailError by remember { mutableStateOf<String?>(null) }
     var detailTime by remember { mutableStateOf<Long?>(null) }
     var detailAttempt by remember { mutableIntStateOf(0) }
+
+    var addToNrdProduct by remember { mutableStateOf<AcpProduct?>(null) }
+    var nrdIdentifier by remember { mutableStateOf(NrdIdentifier.BARCODE) }
+    var selectedNrdCategories by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var nrdCategoriesExpanded by remember { mutableStateOf(false) }
+    var nrdSaving by remember { mutableStateOf(false) }
+    var nrdError by remember { mutableStateOf<String?>(null) }
+    var nrdActionMessage by remember { mutableStateOf<String?>(null) }
+
+    fun closeAddToNrd() {
+        if (nrdSaving) return
+        addToNrdProduct = null
+        selectedNrdCategories = emptySet()
+        nrdCategoriesExpanded = false
+        nrdError = null
+    }
+
+    fun prepareAddToNrd(product: AcpProduct) {
+        addToNrdProduct = product
+        nrdIdentifier = if (product.barcode.isNotBlank()) NrdIdentifier.BARCODE else NrdIdentifier.PRODUCT_CODE
+        selectedNrdCategories = emptySet()
+        nrdCategoriesExpanded = false
+        nrdError = null
+        nrdActionMessage = null
+    }
 
     fun closeDetail() {
         selected = null
@@ -63,6 +103,9 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         detailTime = null
         detailError = null
         detailWarning = null
+        syncExpanded = false
+        addToNrdProduct = null
+        nrdActionMessage = null
     }
 
     fun openProduct(product: AcpProduct) {
@@ -171,7 +214,7 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
             detailBusy = false
             return@LaunchedEffect
         } catch (_: Exception) {
-            warnings += "O status de sincronização da ACP não pôde ser consultado agora."
+            warnings += "O status de sincronização não pôde ser consultado agora."
         } finally {
             detailWarning = warnings.takeIf { it.isNotEmpty() }?.joinToString(" ")
             detailBusy = false
@@ -229,9 +272,6 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
                         Text("Código: ${product.code.ifBlank { "não informado" }}", style = MaterialTheme.typography.bodySmall)
                         if (product.barcode.isNotBlank()) Text("EAN: ${product.barcode}", style = MaterialTheme.typography.bodySmall)
                         Text("Preço ACP: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}", style = MaterialTheme.typography.titleMedium)
-                        product.stockQuantity?.let {
-                            Text("Estoque ACP: ${it.quantity()}", color = if (it.signum() == 0) MaterialTheme.colorScheme.error else LocalContentColor.current, style = MaterialTheme.typography.bodySmall)
-                        }
                         product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite: ${it.quantity()} un. por CPF", style = MaterialTheme.typography.bodySmall) }
                         if (product.categories.isNotEmpty()) Text("Categorias: ${product.categories.joinToString()}", style = MaterialTheme.typography.labelSmall)
                         directOffers.forEach { AcpOfferPoster(it, compact = true) }
@@ -270,24 +310,30 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
                     }
                     detail?.let { product ->
                         detailTime?.let { Text("Consultado em ${acpQueryTime(it)}", style = MaterialTheme.typography.bodySmall) }
-                        TextButton(onClick = { openProduct(product) }, enabled = !detailBusy) { Text("Atualizar preços") }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { openProduct(product) }, enabled = !detailBusy, modifier = Modifier.weight(1f)) {
+                                Text("Atualizar preços")
+                            }
+                            if (canAddToNrd) {
+                                OutlinedButton(onClick = { prepareAddToNrd(product) }, enabled = !detailBusy, modifier = Modifier.weight(1f)) {
+                                    Text("Adicionar ao NRD")
+                                }
+                            }
+                        }
+                        nrdActionMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
                         Text("Código: ${product.code.ifBlank { "não informado" }}\nCód. barras: ${product.barcode.ifBlank { "não informado" }}")
                         Text("Preço principal: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}", style = MaterialTheme.typography.titleMedium)
 
-                        HorizontalDivider()
-                        Text("Cadastro do produto", style = MaterialTheme.typography.titleMedium)
-                        Text("Estoque: ${product.stockQuantity?.quantity() ?: "não informado"}")
-                        Text("Vencimento do produto: ${acpDateLabel(product.dueDate) ?: "não informado"}")
-                        product.unit?.let { Text("Unidade: $it") }
-                        product.packageQuantity?.let { quantity -> Text("Embalagem: ${quantity.quantity()}${product.packageType?.let { " • $it" } ?: ""}") }
-                        if (product.packageQuantity == null) product.packageType?.let { Text("Tipo de embalagem: $it") }
-                        product.contentQuantity?.let { quantity -> Text("Conteúdo: ${quantity.quantity()}${product.contentUnit?.let { " $it" } ?: ""}") }
-                        if (product.contentQuantity == null) product.contentUnit?.let { Text("Unidade de conteúdo: $it") }
-                        product.characteristic?.let { Text("Característica: $it") }
-                        product.productFamily?.let { Text("Família: $it") }
-                        if (product.auxDescriptions.isNotEmpty()) Text("Descrições auxiliares: ${product.auxDescriptions.joinToString()}")
-                        if (product.categories.isNotEmpty()) Text("Categorias: ${product.categories.joinToString()}")
-                        product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite cadastrado: ${it.quantity()} unidades por CPF.") }
+                        val hasUsefulProductInfo = product.characteristic != null || product.productFamily != null ||
+                            product.categories.isNotEmpty() || product.unitLimitPerCPF?.signum() == 1
+                        if (hasUsefulProductInfo) {
+                            HorizontalDivider()
+                            Text("Informações do produto", style = MaterialTheme.typography.titleMedium)
+                            product.characteristic?.let { Text("Característica: $it") }
+                            product.productFamily?.let { Text("Família: $it") }
+                            if (product.categories.isNotEmpty()) Text("Categorias ACP: ${product.categories.joinToString()}")
+                            product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite cadastrado: ${it.quantity()} unidades por CPF.") }
+                        }
 
                         val directOffers = product.offers()
                         val campaignDetailOffers = campaigns.flatMap { it.offersFor(product) }
@@ -298,17 +344,25 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
                         else allOffers.forEach { HorizontalDivider(); AcpOfferPoster(it, compact = false) }
 
                         HorizontalDivider()
-                        Text("Sincronização ACP", style = MaterialTheme.typography.titleMedium)
-                        if (detailBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                        integration?.let { info ->
-                            Text("Código de status: ${info.status?.toString() ?: "não informado"}")
-                            Text("Última execução: ${acpDateLabel(info.lastRun, includeTime = true) ?: "não informada"}")
-                            Text("Última execução completa: ${acpDateLabel(info.lastCompleteRun, includeTime = true) ?: "não informada"}")
-                            info.message?.let { Text("Mensagem: $it") }
-                            info.id?.let { Text("ID da integração: $it", style = MaterialTheme.typography.bodySmall) }
+                        OutlinedCard(onClick = { syncExpanded = !syncExpanded }, modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Sincronização", style = MaterialTheme.typography.titleMedium)
+                                    Text(if (syncExpanded) "▲" else "▼")
+                                }
+                                if (syncExpanded) {
+                                    if (detailBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                                    integration?.let { info ->
+                                        Text("Código de status: ${info.status?.toString() ?: "não informado"}")
+                                        Text("Última execução: ${acpDateLabel(info.lastRun, includeTime = true) ?: "não informada"}")
+                                        Text("Última execução completa: ${acpDateLabel(info.lastCompleteRun, includeTime = true) ?: "não informada"}")
+                                        info.message?.let { Text("Mensagem: $it") }
+                                        info.id?.let { Text("ID da integração: $it", style = MaterialTheme.typography.bodySmall) }
+                                    }
+                                    if (!detailBusy && integration == null) Text("Status de sincronização indisponível.")
+                                }
+                            }
                         }
-                        if (!detailBusy && integration == null) Text("A ACP não retornou o status de sincronização.")
-                        Text("Estoque e vencimento do produto vêm do Product/all. O status de sincronização não é usado como validade da oferta.", style = MaterialTheme.typography.labelSmall)
 
                         if (campaigns.isNotEmpty()) {
                             HorizontalDivider()
@@ -332,6 +386,107 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
                 }
             },
             confirmButton = { TextButton(onClick = { closeDetail() }) { Text("Fechar") } }
+        )
+    }
+
+    addToNrdProduct?.let { product ->
+        val selectedCode = when (nrdIdentifier) {
+            NrdIdentifier.BARCODE -> product.barcode
+            NrdIdentifier.PRODUCT_CODE -> product.code
+        }.trim()
+        val orderedCategories = activeNrdCategories.filter { it in selectedNrdCategories }
+        AlertDialog(
+            onDismissRequest = { closeAddToNrd() },
+            title = { Text("Adicionar ao NRD") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(product.description, style = MaterialTheme.typography.titleMedium)
+                    Text("Código do produto: ${product.code.ifBlank { "não informado" }}")
+                    Text("Código de barras: ${product.barcode.ifBlank { "não informado" }}")
+                    HorizontalDivider()
+                    Text("Código que será usado no NRD", style = MaterialTheme.typography.titleSmall)
+                    if (product.barcode.isNotBlank()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = nrdIdentifier == NrdIdentifier.BARCODE, onClick = { if (!nrdSaving) nrdIdentifier = NrdIdentifier.BARCODE }, enabled = !nrdSaving)
+                            Text("Código de barras • ${product.barcode}")
+                        }
+                    }
+                    if (product.code.isNotBlank()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = nrdIdentifier == NrdIdentifier.PRODUCT_CODE, onClick = { if (!nrdSaving) nrdIdentifier = NrdIdentifier.PRODUCT_CODE }, enabled = !nrdSaving)
+                            Text("Código do produto • ${product.code}")
+                        }
+                    }
+
+                    OutlinedCard(onClick = { if (!nrdSaving) nrdCategoriesExpanded = !nrdCategoriesExpanded }, modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Categorias (${selectedNrdCategories.size})", style = MaterialTheme.typography.titleSmall)
+                                Text(if (nrdCategoriesExpanded) "▲" else "▼")
+                            }
+                            if (selectedNrdCategories.isNotEmpty() && !nrdCategoriesExpanded) {
+                                Text(orderedCategories.joinToString(), style = MaterialTheme.typography.bodySmall)
+                            }
+                            if (nrdCategoriesExpanded) {
+                                if (activeNrdCategories.isEmpty()) {
+                                    Text("Nenhuma categoria ativa disponível no NRD.", color = MaterialTheme.colorScheme.error)
+                                } else {
+                                    activeNrdCategories.forEach { categoryName ->
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Checkbox(
+                                                checked = categoryName in selectedNrdCategories,
+                                                onCheckedChange = { checked ->
+                                                    if (!nrdSaving) selectedNrdCategories = if (checked) selectedNrdCategories + categoryName else selectedNrdCategories - categoryName
+                                                },
+                                                enabled = !nrdSaving
+                                            )
+                                            Text(categoryName)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (orderedCategories.isNotEmpty()) {
+                        Text("O produto aparecerá em: ${orderedCategories.joinToString()}.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    nrdError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    if (nrdSaving) LinearProgressIndicator(Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !nrdSaving && selectedCode.isNotBlank() && orderedCategories.isNotEmpty(),
+                    onClick = {
+                        nrdSaving = true
+                        nrdError = null
+                        scope.launch {
+                            try {
+                                val result = NrdProductImportService.addProduct(
+                                    name = product.description,
+                                    code = selectedCode,
+                                    categories = orderedCategories
+                                )
+                                if (result.success) {
+                                    nrdActionMessage = "Produto adicionado ao NRD em ${orderedCategories.size} categoria(s)."
+                                    addToNrdProduct = null
+                                    selectedNrdCategories = emptySet()
+                                    nrdCategoriesExpanded = false
+                                } else {
+                                    nrdError = result.message ?: "Não foi possível adicionar o produto ao NRD."
+                                }
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) {
+                                nrdError = "Não foi possível adicionar o produto ao NRD."
+                            } finally {
+                                nrdSaving = false
+                            }
+                        }
+                    }
+                ) { Text(if (nrdSaving) "Salvando…" else "Salvar") }
+            },
+            dismissButton = { TextButton(onClick = { closeAddToNrd() }, enabled = !nrdSaving) { Text("Cancelar") } }
         )
     }
 }
