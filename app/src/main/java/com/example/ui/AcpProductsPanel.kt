@@ -69,6 +69,7 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
         error = null
         selected = null
         keyboard?.hide()
+        if (index == 0) api.beginDiagnosticSession()
         searchJob = scope.launch {
             try {
                 val result = api.searchProducts(searchField, searchText, searchCategory, index)
@@ -153,7 +154,7 @@ internal fun AcpProductsPanel(api: AcpApi, onSessionExpired: () -> Unit) {
                 if (text == null) diagnosticMessage = "Faça uma busca antes de copiar o diagnóstico."
                 else { clipboard.setText(AnnotatedString(text)); diagnosticMessage = "Diagnóstico ACP copiado. Cole no ChatGPT para análise." }
             }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Copiar diagnóstico ACP") }
-            Text("O diagnóstico contém apenas respostas de consultas ACP e mascara campos sensíveis conhecidos. Não inclui senha, cookies ou cabeçalhos de autorização.", style = MaterialTheme.typography.labelSmall)
+            Text("O diagnóstico registra respostas, endpoints e parâmetros das consultas desta busca. Campos sensíveis são mascarados e senha, cookies e cabeçalhos de autorização não são incluídos.", style = MaterialTheme.typography.labelSmall)
         }
         diagnosticMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())

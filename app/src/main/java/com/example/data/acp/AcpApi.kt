@@ -27,6 +27,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     private val client = clientBuilder.cookieJar(cookies).followRedirects(false).followSslRedirects(false)
         .connectTimeout(15, TimeUnit.SECONDS).readTimeout(25, TimeUnit.SECONDS).callTimeout(35, TimeUnit.SECONDS).build()
     private val diagnostics = LinkedHashMap<String, JSONObject>()
+    private val diagnosticRequests = mutableListOf<JSONObject>()
 
     suspend fun hasCredentials(): Boolean = withContext(Dispatchers.IO) { credentials() != null }
     suspend fun configure(login: String, password: String) = withContext(Dispatchers.IO) {
@@ -69,21 +70,40 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         val url = (base + path).toHttpUrl().newBuilder().apply { parameters.forEach { (key, value) -> addQueryParameter(key, value) } }.build()
         val result = requestJson(Request.Builder().url(url).header("Authorization", "Bearer ${session.getString("accessToken")}")
             .header("Accept", "application/json").get().build())
-        recordDiagnostic(path, result)
+        recordDiagnostic(path, parameters, result)
         result
     }
 
-    @Synchronized private fun recordDiagnostic(path: String, value: JSONObject) {
-        diagnostics[path] = sanitize(value) as JSONObject
+    @Synchronized internal fun beginDiagnosticSession() {
+        diagnostics.clear()
+        diagnosticRequests.clear()
+    }
+
+    @Synchronized private fun recordDiagnostic(path: String, parameters: List<Pair<String, String>>, value: JSONObject) {
+        val sanitizedResponse = sanitize(value) as JSONObject
+        diagnostics[path] = sanitizedResponse
+        val sanitizedParameters = JSONArray().also { array ->
+            parameters.forEach { (key, parameterValue) ->
+                array.put(JSONObject().put("name", key).put("value", if (isSensitiveKey(key)) "[REDACTED]" else parameterValue))
+            }
+        }
+        diagnosticRequests += JSONObject()
+            .put("endpoint", path)
+            .put("parameters", sanitizedParameters)
+            .put("response", sanitizedResponse)
+        while (diagnosticRequests.size > MAX_DIAGNOSTIC_REQUESTS) diagnosticRequests.removeAt(0)
     }
 
     @Synchronized internal fun diagnosticText(): String? {
-        if (diagnostics.isEmpty()) return null
+        if (diagnostics.isEmpty() && diagnosticRequests.isEmpty()) return null
         val payload = JSONObject()
             .put("diagnostic", "NRD ACP read-only response capture")
             .put("endpoints", JSONObject())
+            .put("requests", JSONArray())
         val endpoints = payload.getJSONObject("endpoints")
         diagnostics.forEach { (path, json) -> endpoints.put(path, json) }
+        val requests = payload.getJSONArray("requests")
+        diagnosticRequests.forEach { requests.put(it) }
         return payload.toString(2)
     }
 
@@ -122,6 +142,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     companion object {
         const val ORIGIN = "https://nordestao12.acp.app.br"
         const val API_ORIGIN = "https://api.acp.app.br"
+        private const val MAX_DIAGNOSTIC_REQUESTS = 12
         private val READ_ONLY_ENDPOINTS = setOf("Product/all", "ProductCategory/all", "Product/integrationInfo", "Campaign/all")
     }
 }
