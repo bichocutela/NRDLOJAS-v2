@@ -32,8 +32,8 @@ Supabase. Remover os dados do aplicativo remove a configuração local.
   selecionado e opcional `productCategoryIds`.
 - Categorias: GET `ProductCategory/all`, com paginação.
 - Não há chamadas de atualização, impressão, sincronização ou exclusão.
-- Os exemplos dos testes são sintéticos e verificam o contrato inspecionado
-  nos scripts públicos; não devem ser apresentados como respostas reais.
+- Os testes de contrato misturam fixtures sintéticas e recortes de respostas reais
+  já observadas no tenant. Nenhum teste usa credenciais reais nem acessa a rede.
 
 ## Preços e limites desta etapa
 
@@ -92,6 +92,25 @@ A página inicial também informou que este acesso será descontinuado e oriento
 obter novo acesso com o responsável indicado pela ACP. Prazo, novo endereço e
 compatibilidade da API ainda não foram confirmados.
 
+## Validação JSON autenticada — 12/09/2026
+
+Diagnósticos reais do `Product/all` confirmaram que `previousValue` não pode ser
+usado sozinho para classificar uma oferta como **De/Por**. Existem itens de KitKat
+com `value=3.49`, `previousValue=6.69` e `clubValue=3.49` cuja categoria é apenas
+`Varejo` + `Clube de Vantagens`; nesses casos o app deve mostrar Clube, usando
+`previousValue` como referência somente quando o `value` atual já coincide com o
+preço Clube, sem inventar uma oferta De/Por.
+
+Outros KitKat 4 Fingers retornaram os mesmos valores, mas com as categorias
+`Varejo`, `De-Por` e `Clube de Vantagens`. Nesses itens é correto exibir as duas
+condições separadamente. Assim, a classificação De/Por exige agora a categoria
+explícita `De-Por` além de `previousValue > value`.
+
+O mesmo diagnóstico mostrou atualização real de estoque entre consultas. Por
+exemplo, o KitKat 4 Fingers ao Leite observado anteriormente com 682 unidades
+apareceu depois com 624. `stockQuantity` deve continuar sendo tratado como dado
+vivo da consulta e nunca como valor fixo de fixture.
+
 ## Roteiro de teste no Android
 
 1. Instalar a build que contenha `feat/acp-product-consultation`. Entrar no NRD
@@ -137,8 +156,10 @@ O responsável precisa preencher esses dois valores nas configurações do GitHu
 
 Consulta e balão usam cartões amarelos, cabeçalho azul para Clube e vermelho
 para outras condições, preço destacado e faixa de cores. Sem fotos, QR,
-parcelamento ou datas copiadas das referências. De/Por usa previousValue como
-referência riscada; Clube e Atacado usam value positivo como preço normal
-cadastrado, sem confundi-lo com previousValue. Referência ausente não é inventada.
+parcelamento ou datas copiadas das referências. De/Por usa `previousValue` como
+referência riscada somente quando a categoria `De-Por` está presente. Clube usa
+`value` como referência normal quando ele é maior que `clubValue`; quando os dois
+valores coincidem e `previousValue` é maior, usa `previousValue` como referência.
+Atacado usa `value` positivo como preço varejo. Referência ausente não é inventada.
 Segunda unidade exibe percentual, sem calcular um preço médio cuja base não foi
 confirmada. Várias condições permanecem separadas; a estética não confirma vigência.
