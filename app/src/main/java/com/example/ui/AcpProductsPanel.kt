@@ -476,6 +476,12 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                         Text("Preços e condições", style = MaterialTheme.typography.titleMedium)
                         if (allOffers.isEmpty()) AcpOfferPoster(AcpOffer("Preço cadastrado", "Nenhuma condição promocional explícita foi identificada nos dados consultados.", product.value), compact = false)
                         else allOffers.forEach { HorizontalDivider(); AcpOfferPoster(it, compact = false) }
+                        if (!detailBusy && allOffers.none { it.title == "Cashback" || it.title == "Cashback em valor" }) {
+                            Text(if (detailWarning == null) "Cashback não informado nos dados consultados da ACP."
+                                else "Cashback não confirmado: a consulta complementar ficou incompleta.",
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+
 
                         HorizontalDivider()
                         OutlinedCard(onClick = { syncExpanded = !syncExpanded }, modifier = Modifier.fillMaxWidth()) {

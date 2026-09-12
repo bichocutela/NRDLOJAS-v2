@@ -72,4 +72,20 @@ class AcpCampaignsTest {
         assertNull(info.message)
         assertEquals("1", info.id)
     }
+    @Test fun campaignCashbackHasHeadlineAndNeverBecomesImmediatePrice() {
+        // Synthetic presentation fixture, not evidence of Aurora eligibility or campaign values.
+        val p = product("""{"id":"p-cash","code":"test-code","description":"Teste","value":36.99}""")
+        val c = AcpCampaignParser.page(JSONObject("""{"items":[{
+            "id":"cash","name":"Teste de apresentação",
+            "campaignProducts":[{"productId":"p-cash","cashback":30,"cashbackValue":11.10}]
+        }]}""")).single()
+        val offers = c.offersFor(p)
+        assertEquals("30% DE VOLTA", offers.first { it.title == "Cashback" }.headline)
+        assertEquals("R$ 11,10 DE VOLTA", offers.first { it.title == "Cashback em valor" }.headline)
+        assertTrue(offers.all { it.price == null })
+        assertTrue(offers.all { it.detail.contains("Não é desconto imediato") })
+        assertTrue(offers.all { it.detail.contains("Teste de apresentação") })
+        assertEquals("R$ 36,99", p.value?.brl())
+    }
+
 }
