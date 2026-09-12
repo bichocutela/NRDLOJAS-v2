@@ -2,7 +2,6 @@ package com.example.data.flyer
 
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.channels.awaitClose
@@ -10,8 +9,16 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
+/**
+ * Persiste encartes em /config/flyers, uma área que já faz parte do contrato
+ * público do NRD: todos os aparelhos leem config e somente Mestre/Admin escreve.
+ * Assim a função não depende da criação/deploy de uma nova regra de coleção.
+ */
 object FlyerRepository {
-    private const val COLLECTION = "flyers"
+    private const val COLLECTION = "config"
+    private const val DOCUMENT = "flyers"
+    private const val FIELD = "campaigns"
+
     @Volatile var lastError: String? = null
         private set
 
@@ -23,7 +30,7 @@ object FlyerRepository {
             return@callbackFlow
         }
         var registration: ListenerRegistration? = null
-        registration = firestore.collection(COLLECTION)
+        registration = firestore.collection(COLLECTION).document(DOCUMENT)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     lastError = error.message
@@ -31,8 +38,8 @@ object FlyerRepository {
                     trySend(emptyList())
                     return@addSnapshotListener
                 }
-                val campaigns = snapshot?.documents.orEmpty()
-                    .mapNotNull(::campaignFromDocument)
+                val campaigns = campaignMaps(snapshot?.get(FIELD))
+                    .mapNotNull(::campaignFromMap)
                     .sortedWith(compareByDescending<FlyerCampaign> { it.validTo }.thenByDescending { it.createdAt })
                 trySend(campaigns)
             }
@@ -44,71 +51,70 @@ object FlyerRepository {
             lastError = "A importação de encartes exige acesso Mestre ou Admin."
             return false
         }
-        return try {
-            FirebaseFirestore.getInstance().collection(COLLECTION).document(campaign.id)
-                .set(campaignToMap(campaign))
-                .await()
-            true
-        } catch (error: Exception) {
-            lastError = error.message
-            Log.e("FlyerRepository", "Erro ao salvar encarte ${campaign.id}", error)
-            false
+        return mutateCampaigns("Erro ao salvar encarte ${campaign.id}") { campaigns ->
+            val mutable = campaigns.toMutableList()
+            val index = mutable.indexOfFirst { it.id == campaign.id }
+            if (index >= 0) mutable[index] = campaign else mutable += campaign
+            mutable
         }
     }
 
     suspend fun setEnabled(id: String, enabled: Boolean): Boolean {
         if (!hasManagementAccess() || id.isBlank()) return false
-        return try {
-            FirebaseFirestore.getInstance().collection(COLLECTION).document(id)
-                .update(mapOf("enabled" to enabled, "updatedAt" to System.currentTimeMillis()))
-                .await()
-            true
-        } catch (error: Exception) {
-            lastError = error.message
-            Log.e("FlyerRepository", "Erro ao alterar encarte $id", error)
-            false
+        return mutateCampaigns("Erro ao alterar encarte $id") { campaigns ->
+            campaigns.map { if (it.id == id) it.copy(enabled = enabled) else it }
         }
     }
 
     suspend fun deleteCampaign(id: String): Boolean {
         if (!hasManagementAccess() || id.isBlank()) return false
-        return try {
-            FirebaseFirestore.getInstance().collection(COLLECTION).document(id).delete().await()
-            true
-        } catch (error: Exception) {
-            lastError = error.message
-            Log.e("FlyerRepository", "Erro ao excluir encarte $id", error)
-            false
+        return mutateCampaigns("Erro ao excluir encarte $id") { campaigns ->
+            campaigns.filterNot { it.id == id }
         }
     }
 
     /**
-     * Mestre/Admin can materialize expiry in Firestore. Search clients do not depend on this:
-     * they always apply FlyerCampaign.isActiveAt(), so an expired flyer stops appearing even
-     * before this maintenance pass runs.
+     * Materializa a expiração quando um Mestre/Admin abre a tela. A consulta não
+     * depende disso: isActiveAt() corta a oferta no aparelho assim que a data acaba.
      */
     suspend fun disableExpiredCampaigns(nowMillis: Long = System.currentTimeMillis()): Int {
         if (!hasManagementAccess()) return 0
+        var disabled = 0
+        val success = mutateCampaigns("Não foi possível materializar vencimentos") { campaigns ->
+            campaigns.map { campaign ->
+                if (campaign.enabled && campaign.statusAt(nowMillis) == FlyerCampaignStatus.EXPIRED) {
+                    disabled++
+                    campaign.copy(enabled = false)
+                } else campaign
+            }
+        }
+        return if (success) disabled else 0
+    }
+
+    private suspend fun mutateCampaigns(
+        logMessage: String,
+        transform: (List<FlyerCampaign>) -> List<FlyerCampaign>
+    ): Boolean {
         return try {
             val firestore = FirebaseFirestore.getInstance()
-            val expired = firestore.collection(COLLECTION).get().await().documents
-                .mapNotNull(::campaignFromDocument)
-                .filter { it.enabled && it.statusAt(nowMillis) == FlyerCampaignStatus.EXPIRED }
-            expired.chunked(400).forEach { chunk ->
-                val batch = firestore.batch()
-                chunk.forEach { campaign ->
-                    batch.update(
-                        firestore.collection(COLLECTION).document(campaign.id),
-                        mapOf("enabled" to false, "autoDisabledAt" to nowMillis)
-                    )
-                }
-                batch.commit().await()
-            }
-            expired.size
+            val ref = firestore.collection(COLLECTION).document(DOCUMENT)
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(ref)
+                val current = campaignMaps(snapshot.get(FIELD)).mapNotNull(::campaignFromMap)
+                val updated = transform(current)
+                    .sortedWith(compareByDescending<FlyerCampaign> { it.validTo }.thenByDescending { it.createdAt })
+                transaction.set(ref, mapOf(
+                    FIELD to updated.map(::campaignToMap),
+                    "updatedAt" to System.currentTimeMillis(),
+                    "schemaVersion" to 1
+                ))
+            }.await()
+            lastError = null
+            true
         } catch (error: Exception) {
             lastError = error.message
-            Log.w("FlyerRepository", "Não foi possível materializar vencimentos", error)
-            0
+            Log.e("FlyerRepository", logMessage, error)
+            false
         }
     }
 
@@ -129,8 +135,7 @@ object FlyerRepository {
         "validTo" to campaign.validTo,
         "createdAt" to campaign.createdAt,
         "enabled" to campaign.enabled,
-        "offers" to campaign.offers.map(::offerToMap),
-        "updatedAt" to System.currentTimeMillis()
+        "offers" to campaign.offers.map(::offerToMap)
     )
 
     private fun offerToMap(offer: FlyerOffer): Map<String, Any?> = mapOf(
@@ -159,8 +164,10 @@ object FlyerRepository {
         "cashbackValue" to offer.cashbackValue
     )
 
-    private fun campaignFromDocument(document: DocumentSnapshot): FlyerCampaign? {
-        val data = document.data ?: return null
+    private fun campaignMaps(value: Any?): List<Map<*, *>> =
+        (value as? List<*>).orEmpty().mapNotNull { it as? Map<*, *> }
+
+    private fun campaignFromMap(data: Map<*, *>): FlyerCampaign? {
         val name = data["name"]?.toString()?.trim().orEmpty()
         val validFrom = data["validFrom"]?.toString()?.trim().orEmpty()
         val validTo = data["validTo"]?.toString()?.trim().orEmpty()
@@ -170,7 +177,7 @@ object FlyerRepository {
             .mapNotNull { it as? Map<*, *> }
             .mapNotNull(::offerFromMap)
         return FlyerCampaign(
-            id = data["id"]?.toString()?.takeIf { it.isNotBlank() } ?: document.id,
+            id = data["id"]?.toString()?.takeIf { it.isNotBlank() } ?: java.util.UUID.randomUUID().toString(),
             name = name,
             sourceType = data["sourceType"]?.toString().orEmpty(),
             sourceLabel = data["sourceLabel"]?.toString().orEmpty(),
