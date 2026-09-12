@@ -5,6 +5,7 @@ on:
     branches: [ "main" ]
     paths:
       - 'scripts/apply_consultation_appearance.py'
+      - 'scripts/fix_consultation_patch.py'
       - '.github/workflows/apply_consultation_appearance.yml'
   workflow_dispatch:
 
@@ -20,7 +21,9 @@ jobs:
           fetch-depth: 0
 
       - name: Apply focused source patch
-        run: python scripts/apply_consultation_appearance.py
+        run: |
+          python scripts/apply_consultation_appearance.py
+          python scripts/fix_consultation_patch.py
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -73,6 +76,7 @@ jobs:
       - name: Commit validated source changes and remove one-shot helpers
         run: |
           rm -f scripts/apply_consultation_appearance.py
+          rm -f scripts/fix_consultation_patch.py
           rm -f .github/workflows/apply_consultation_appearance.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
