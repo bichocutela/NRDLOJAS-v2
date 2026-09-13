@@ -359,6 +359,20 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         .put("totalPages", 1)
         .put("totalCount", 0)
 
+    /** Explicit diagnostic only: bypass catalog cache and preserve the history response. */
+    internal suspend fun captureHistory(pageIndex: Int): String {
+        require(pageIndex >= 0)
+        val parameters = listOf("pageSize" to "10", "pageIndex" to pageIndex.toString(),
+            "orderByDescending" to "false", "profileIdToBeDesconsidered" to "1")
+        val response = authenticatedRead("TemplatePrintLog/all", parameters, record = false)
+        return JSONObject()
+            .put("diagnostic", "NRD ACP read-only history capture")
+            .put("endpoint", "TemplatePrintLog/all")
+            .put("parameters", JSONObject(parameters.toMap()))
+            .put("response", sanitize(response))
+            .toString(2)
+    }
+
     @Synchronized internal fun beginDiagnosticSession() {
         diagnostics.clear()
         diagnosticRequests.clear()
@@ -401,6 +415,13 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
             }
         }
         is JSONArray -> JSONArray().also { clean -> for (index in 0 until value.length()) clean.put(sanitize(value.opt(index))) }
+        // dataLog is JSON encoded inside a string. Redact nested secrets too while
+        // retaining the API's string type and all commercial fields.
+        is String -> when {
+            value.trimStart().startsWith("{") -> runCatching { (sanitize(JSONObject(value)) as JSONObject).toString() }.getOrDefault(value)
+            value.trimStart().startsWith("[") -> runCatching { (sanitize(JSONArray(value)) as JSONArray).toString() }.getOrDefault(value)
+            else -> value
+        }
         else -> value
     }
 

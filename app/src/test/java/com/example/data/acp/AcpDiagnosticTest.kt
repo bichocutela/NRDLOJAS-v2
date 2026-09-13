@@ -70,6 +70,38 @@ class AcpDiagnosticTest {
         assertEquals(1, root.getJSONObject("endpoints").getJSONObject("Product/all").getInt("totalCount"))
     }
 
+    @Test fun historyCapturePreservesNestedPayloadAndRedactsSecretsWithoutCatalogCache() = runBlocking {
+        // Synthetic transport fixture; this does not assert a real promotion exists.
+        val log = JSONObject().put("composedTemplates", org.json.JSONArray().put(
+            JSONObject().put("items", org.json.JSONArray().put(JSONObject()
+                .put("code", "example").put("secondUnitDiscount", 50)
+                .put("cashback", JSONObject.NULL).put("token", "nested-secret")))))
+        val response = JSONObject().put("items", org.json.JSONArray().put(
+            JSONObject().put("dataLog", log.toString())))
+            .put("totalPages", 2).put("pageIndex", 1)
+        val server = Server(session(), response.toString(), session(), response.toString())
+        val api = AcpApi(MemoryStore(), OkHttpClient.Builder().addInterceptor(server))
+        repeat(2) {
+            val text = api.captureHistory(1)
+            assertFalse(text.contains("nested-secret"))
+            assertFalse(text.contains("test-only-token"))
+            val root = JSONObject(text)
+            assertEquals("TemplatePrintLog/all", root.getString("endpoint"))
+            val raw = root.getJSONObject("response").getJSONArray("items").getJSONObject(0).getString("dataLog")
+            val product = JSONObject(raw).getJSONArray("composedTemplates").getJSONObject(0)
+                .getJSONArray("items").getJSONObject(0)
+            assertEquals(50, product.getInt("secondUnitDiscount"))
+            assertTrue(product.isNull("cashback"))
+        }
+        assertEquals(4, server.requests.size)
+        val request = server.requests[1]
+        assertEquals("GET", request.method)
+        assertEquals("/api/v1/TemplatePrintLog/all", request.url.encodedPath)
+        assertEquals("10", request.url.queryParameter("pageSize"))
+        assertEquals("1", request.url.queryParameter("pageIndex"))
+        assertNull(api.diagnosticText()) // Large history does not pollute clipboard diagnostics.
+    }
+
     @Test fun startingNewDiagnosticSessionClearsPreviousCapture() = runBlocking {
         val server = Server(session(), """{"items":[],"pageIndex":0,"totalPages":0,"totalCount":0}""")
         val api = AcpApi(MemoryStore(), OkHttpClient.Builder().addInterceptor(server))

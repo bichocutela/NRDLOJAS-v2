@@ -1,5 +1,9 @@
 package com.example.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -66,6 +70,25 @@ internal fun AcpProductsPanel(
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var diagnosticMessage by remember { mutableStateOf<String?>(null) }
+    var historyPage by remember { mutableStateOf("0") }
+    var historyBusy by remember { mutableStateOf(false) }
+    var historyPayload by remember { mutableStateOf<String?>(null) }
+    val saveHistory = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        val payload = historyPayload
+        if (uri != null && payload != null) scope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val output = context.contentResolver.openOutputStream(uri)
+                        ?: error("Arquivo indisponível")
+                    output.bufferedWriter(Charsets.UTF_8).use { it.write(payload) }
+                }
+                diagnosticMessage = "Histórico salvo. Envie o arquivo JSON para análise."
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { diagnosticMessage = "Não foi possível salvar. Tente novamente." }
+            finally { historyPayload = null; historyBusy = false }
+        } else { historyPayload = null; historyBusy = false }
+    }
+
     var selected by remember { mutableStateOf<AcpProduct?>(null) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
     var generation by remember { mutableIntStateOf(0) }
@@ -330,6 +353,41 @@ internal fun AcpProductsPanel(
                     Text("Copiar diagnóstico")
                 }
             }
+        }
+
+        if (canCopyDiagnostic) item {
+            OutlinedTextField(
+                value = historyPage,
+                onValueChange = { historyPage = it.filter(Char::isDigit).take(6) },
+                label = { Text("Página do histórico (começa em 0)") },
+                enabled = !historyBusy,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedButton(
+                enabled = !busy && !historyBusy && historyPage.toIntOrNull() != null,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    val index = historyPage.toIntOrNull() ?: 0
+                    historyBusy = true
+                    diagnosticMessage = "Consultando histórico da ACP…"
+                    scope.launch {
+                        try {
+                            historyPayload = api.captureHistory(index)
+                            saveHistory.launch("acp-historico-pagina-$index.json")
+                        } catch (cancelled: CancellationException) {
+                            historyBusy = false
+                            throw cancelled
+                        } catch (_: AcpUnauthorized) {
+                            historyBusy = false
+                            onSessionExpired()
+                        } catch (_: Exception) {
+                            historyBusy = false
+                            diagnosticMessage = "Não foi possível capturar o histórico. Tente novamente."
+                        }
+                    }
+                }
+            ) { Text(if (historyBusy) "Capturando histórico…" else "Salvar diagnóstico do histórico") }
         }
 
         if (canCopyDiagnostic) diagnosticMessage?.let { message -> item { Text(message, style = MaterialTheme.typography.bodySmall) } }
