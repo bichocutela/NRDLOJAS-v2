@@ -272,6 +272,27 @@ internal fun AcpProductsPanel(
             }
         }
 
+        if (page != null) {
+            item {
+                OutlinedButton(
+                    onClick = {
+                        val text = api.diagnosticText()
+                        if (text == null) {
+                            diagnosticMessage = "Faça uma busca antes de copiar o diagnóstico."
+                        } else {
+                            clipboard.setText(AnnotatedString(text))
+                            diagnosticMessage = "Diagnóstico ACP copiado. Cole no ChatGPT para análise."
+                        }
+                    },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Copiar diagnóstico ACP")
+                }
+            }
+        }
+
+        diagnosticMessage?.let { message -> item { Text(message, style = MaterialTheme.typography.bodySmall) } }
         if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
 
