@@ -61,6 +61,8 @@ internal fun AcpProductsPanel(
             .sortedWith(compareBy<CategoryDefinition> { it.displayOrder }.thenBy { it.name })
             .map { it.name }
     }
+    val canCopyDiagnostic =
+        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email?.trim()?.lowercase() == "mestre@nrdlojas.com"
 
     var query by remember { mutableStateOf("") }
     var page by remember { mutableStateOf<AcpProductPage?>(null) }
@@ -141,7 +143,7 @@ internal fun AcpProductsPanel(
         error = null
         closeDetail()
         keyboard?.hide()
-        if (index == 0) api.beginDiagnosticSession()
+        if (index == 0 && canCopyDiagnostic) api.beginDiagnosticSession()
         searchJob = scope.launch {
             try {
                 val result = api.searchProductsUnified(searchText, index)
@@ -272,7 +274,7 @@ internal fun AcpProductsPanel(
             }
         }
 
-        if (page != null) {
+        if (page != null && canCopyDiagnostic) {
             item {
                 OutlinedButton(
                     onClick = {
@@ -281,18 +283,18 @@ internal fun AcpProductsPanel(
                             diagnosticMessage = "Faça uma busca antes de copiar o diagnóstico."
                         } else {
                             clipboard.setText(AnnotatedString(text))
-                            diagnosticMessage = "Diagnóstico ACP copiado. Cole no ChatGPT para análise."
+                            diagnosticMessage = "Diagnóstico copiado. Cole no ChatGPT para análise."
                         }
                     },
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Copiar diagnóstico ACP")
+                    Text("Copiar diagnóstico")
                 }
             }
         }
 
-        diagnosticMessage?.let { message -> item { Text(message, style = MaterialTheme.typography.bodySmall) } }
+        if (canCopyDiagnostic) diagnosticMessage?.let { message -> item { Text(message, style = MaterialTheme.typography.bodySmall) } }
         if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
 
