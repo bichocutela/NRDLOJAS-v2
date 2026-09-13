@@ -1,21 +1,36 @@
 package com.example.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.example.data.acp.AcpOffer
 import com.example.data.acp.brl
 import com.example.data.acp.family
+import com.example.data.ThemeBackground
+import coil.compose.AsyncImage
 
 /** Poster styling only; prices and eligibility are never inferred from the artwork. */
 @Composable
-internal fun AcpOfferPoster(offer: AcpOffer, compact: Boolean) {
+internal fun AcpOfferPoster(
+    offer: AcpOffer,
+    compact: Boolean,
+    productName: String? = null,
+    banner: ThemeBackground? = null
+) {
+    if (banner != null) {
+        PersonalizedOfferBanner(productName, offer, banner, compact)
+        return
+    }
     val yellow = Color(0xFFFFEB27)
     val red = Color(0xFFB90012)
     val blue = Color(0xFF005A9C)
@@ -134,7 +149,15 @@ internal fun AcpOfferPoster(offer: AcpOffer, compact: Boolean) {
 }
 
 @Composable
-internal fun AcpOfferLandscapePoster(productName: String, offer: AcpOffer) {
+internal fun AcpOfferLandscapePoster(
+    productName: String,
+    offer: AcpOffer,
+    banner: ThemeBackground? = null
+) {
+    if (banner != null) {
+        PersonalizedOfferBanner(productName, offer, banner, compact = false)
+        return
+    }
     val yellow = Color(0xFFFFEB27)
     val red = Color(0xFFB90012)
     val blue = Color(0xFF005A9C)
@@ -178,6 +201,72 @@ internal fun AcpOfferLandscapePoster(productName: String, offer: AcpOffer) {
                 offer.price?.let {
                     Text(it.brl(), color = if (club) Color.White else red, fontWeight = FontWeight.Black, style = MaterialTheme.typography.displaySmall,
                         modifier = Modifier.background(if (club) red else yellow).padding(horizontal = 8.dp, vertical = 2.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PersonalizedOfferBanner(
+    productName: String?,
+    offer: AcpOffer,
+    banner: ThemeBackground,
+    compact: Boolean
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().aspectRatio(3f),
+        shape = MaterialTheme.shapes.medium,
+        tonalElevation = 1.dp
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            AsyncImage(
+                model = banner.url,
+                contentDescription = banner.label,
+                modifier = Modifier.fillMaxSize().graphicsLayer {
+                    scaleX = banner.imageScale.coerceIn(0.5f, 3f) * banner.imageStretchX.coerceIn(0.5f, 2.5f)
+                    scaleY = banner.imageScale.coerceIn(0.5f, 3f) * banner.imageStretchY.coerceIn(0.5f, 2.5f)
+                    translationX = size.width * banner.imageOffsetX.coerceIn(-1f, 1f)
+                    translationY = size.height * banner.imageOffsetY.coerceIn(-1f, 1f)
+                },
+                contentScale = ContentScale.Fit
+            )
+            Surface(
+                color = Color.White.copy(alpha = 0.90f),
+                contentColor = Color.Black,
+                shape = MaterialTheme.shapes.small,
+                modifier = Modifier.fillMaxWidth(if (compact) 0.64f else 0.58f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = if (compact) 8.dp else 14.dp, vertical = if (compact) 5.dp else 9.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(if (compact) 1.dp else 3.dp)
+                ) {
+                    productName?.takeIf { it.isNotBlank() }?.let {
+                        Text(
+                            it,
+                            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2
+                        )
+                    }
+                    offer.headline?.let {
+                        Text(it, color = Color(0xFFB90012), fontWeight = FontWeight.Black,
+                            style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleLarge)
+                    }
+                    offer.price?.let {
+                        Text(it.brl(), color = Color(0xFFB90012), fontWeight = FontWeight.Black,
+                            style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium)
+                    }
+                    if (offer.price == null && offer.headline == null) {
+                        Text(offer.title.uppercase(), fontWeight = FontWeight.Black,
+                            style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium)
+                    }
+                    Text(
+                        offer.detail,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = if (compact) 1 else 2
+                    )
                 }
             }
         }
