@@ -3,7 +3,7 @@ name: Android CI
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "feat/acp-history-capture-test" ]
     paths-ignore:
       - ".github/workflows/add-padaria-products.yml"
       - ".github/data-jobs/**"
