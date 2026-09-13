@@ -30,14 +30,11 @@ import com.example.data.NrdProductImportService
 import com.example.data.acp.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.LinkedHashMap
 import java.util.Locale
 
 private enum class NrdIdentifier { BARCODE, PRODUCT_CODE }
@@ -79,6 +76,7 @@ internal fun AcpProductsPanel(
     var detailBusy by remember { mutableStateOf(false) }
     var detailWarning by remember { mutableStateOf<String?>(null) }
     var syncExpanded by remember { mutableStateOf(false) }
+    var lastExplicitQuery by remember { mutableStateOf<String?>(null) }
 
     var detail by remember { mutableStateOf<AcpProduct?>(null) }
     var detailError by remember { mutableStateOf<String?>(null) }
@@ -130,26 +128,41 @@ internal fun AcpProductsPanel(
         detailAttempt++
     }
 
-    fun search(index: Int = 0) {
-        if (query.isBlank()) {
-            error = "Digite um código, código de barras ou descrição."
+    fun search(index: Int = 0, interactive: Boolean = true, enrichCampaigns: Boolean = interactive) {
+        val searchText = query.trim()
+        if (searchText.isBlank()) {
+            if (interactive) error = "Digite um código, código de barras ou descrição."
             return
         }
         searchJob?.cancel()
         val ticket = ++generation
-        val searchText = query.trim()
-        busy = true
-        diagnosticMessage = null
+        if (interactive) {
+            busy = true
+            diagnosticMessage = null
+            lastExplicitQuery = searchText
+            keyboard?.hide()
+        } else {
+            // Sugestões nunca prendem a interface nem escondem o teclado.
+            busy = false
+        }
         error = null
         closeDetail()
-        keyboard?.hide()
-        if (index == 0 && canCopyDiagnostic) api.beginDiagnosticSession()
+        if (index == 0 && canCopyDiagnostic && interactive) api.beginDiagnosticSession()
         searchJob = scope.launch {
             try {
                 val result = api.searchProductsUnified(searchText, index)
                 if (ticket != generation) return@launch
-                // O resultado anterior continua visível enquanto a nova busca está em andamento.
+
+                // Product/all é o caminho crítico. Assim que ele responde, o produto já fica
+                // disponível e clicável. Dados complementares não seguram mais a pesquisa.
                 page = result
+                busy = false
+
+                if (!enrichCampaigns) {
+                    previewCampaignOffers = emptyMap()
+                    return@launch
+                }
+
                 previewCampaignOffers = try {
                     api.campaignOffersFor(result.items)
                 } catch (cancelled: CancellationException) {
@@ -165,10 +178,31 @@ internal fun AcpProductsPanel(
             } catch (_: AcpUnauthorized) {
                 if (ticket == generation) onSessionExpired()
             } catch (failure: Exception) {
-                if (ticket == generation) error = acpErrorMessage(failure)
+                if (ticket == generation && interactive) error = acpErrorMessage(failure)
             } finally {
                 if (ticket == generation) busy = false
             }
+        }
+    }
+
+    // Comportamento do editor web: enquanto o nome é digitado, os candidatos aparecem abaixo.
+    // Um debounce curto evita uma chamada por tecla, e cada nova digitação cancela a anterior.
+    LaunchedEffect(query) {
+        val clean = query.trim()
+        if (clean.isEmpty()) {
+            searchJob?.cancel()
+            generation++
+            busy = false
+            page = null
+            previewCampaignOffers = emptyMap()
+            error = null
+            lastExplicitQuery = null
+            return@LaunchedEffect
+        }
+        if (clean.length < 2 || clean == lastExplicitQuery) return@LaunchedEffect
+        delay(180)
+        if (query.trim() == clean && clean != lastExplicitQuery) {
+            search(index = 0, interactive = false, enrichCampaigns = false)
         }
     }
 
@@ -212,7 +246,7 @@ internal fun AcpProductsPanel(
             detailBusy = false
             return@LaunchedEffect
         } catch (_: Exception) {
-            warnings += "As campanhas da ACP não puderam ser consultadas agora."
+            warnings += "As campanhas não puderam ser consultadas agora."
         }
         try {
             integration = api.integrationInfo()
@@ -240,7 +274,11 @@ internal fun AcpProductsPanel(
         item {
             OutlinedTextField(
                 value = query,
-                onValueChange = { query = it.take(200); error = null },
+                onValueChange = {
+                    query = it.take(200)
+                    lastExplicitQuery = null
+                    error = null
+                },
                 placeholder = { Text("Faça sua busca") },
                 supportingText = { Text("Código, código de barras ou descrição do produto") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
@@ -318,7 +356,7 @@ internal fun AcpProductsPanel(
         }
 
         if (result == null && !busy && error == null) {
-            item { Text("Busque por código, código de barras ou descrição. O NRD consulta os três campos automaticamente.") }
+            item { Text("Digite ao menos 2 caracteres para ver sugestões, ou pesquise por código/código de barras.") }
         }
         if (result != null && result.items.isEmpty() && !busy) {
             item { Text("Nenhum produto encontrado. Confira o termo e tente novamente.") }
@@ -343,7 +381,7 @@ internal fun AcpProductsPanel(
                     }
                     Text(identifiers, style = MaterialTheme.typography.bodySmall)
                     Text(
-                        "Preço ACP: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}",
+                        "Preço: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}",
                         style = MaterialTheme.typography.titleMedium
                     )
                     product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let {
@@ -421,7 +459,7 @@ internal fun AcpProductsPanel(
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (detail == null && detailBusy) {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Text("Consultando preços na ACP…")
+                        Text("Consultando preços…")
                     }
                     detailError?.let {
                         Text(it, color = MaterialTheme.colorScheme.error)
@@ -454,7 +492,7 @@ internal fun AcpProductsPanel(
                             Text("Informações do produto", style = MaterialTheme.typography.titleMedium)
                             product.characteristic?.let { Text("Característica: $it") }
                             product.productFamily?.let { Text("Família: $it") }
-                            if (product.categories.isNotEmpty()) Text("Categorias ACP: ${product.categories.joinToString()}")
+                            if (product.categories.isNotEmpty()) Text("Categorias: ${product.categories.joinToString()}")
                             product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let {
                                 Text("Limite cadastrado: ${it.quantity()} unidades por CPF.")
                             }
@@ -489,7 +527,7 @@ internal fun AcpProductsPanel(
                         }
                         if (!detailBusy && allOffers.none { it.title == "Cashback" || it.title == "Cashback em valor" }) {
                             Text(
-                                if (detailWarning == null) "Cashback não informado nos dados consultados da ACP."
+                                if (detailWarning == null) "Cashback não informado nos dados consultados."
                                 else "Cashback não confirmado: a consulta complementar ficou incompleta.",
                                 style = MaterialTheme.typography.bodySmall
                             )
@@ -534,7 +572,7 @@ internal fun AcpProductsPanel(
                                         campaign.code?.let { Text("Código: $it") }
                                         campaign.description?.takeIf { it != campaign.name }?.let { Text(it) }
                                         Text("Início: ${acpDateLabel(campaign.startDate) ?: "não informado"} • Fim: ${acpDateLabel(campaign.endDate) ?: "não informado"}")
-                                        Text("Ativa: ${campaign.active?.let { if (it) "sim" else "não" } ?: "não informado"} • Autoexclusão: ${campaign.autoExclusion?.let { if (it) "sim" else "não" } ?: "não informado"}")
+                                        Text("Ativa: ${campaign.active?.let { if (it) "sim" else "não" } ?: "não informado"} • Autoexclusão: ${campaign.autoExclusion?.let { if (it) "sim" else "não informado"} }")
                                         val rules = campaign.productRules.count { it.matches(product) }
                                         if (rules > 0) {
                                             Text("Regras promocionais vinculadas ao produto: $rules", style = MaterialTheme.typography.labelSmall)
@@ -676,47 +714,16 @@ internal fun AcpProductsPanel(
     }
 }
 
-private suspend fun AcpApi.searchProductsUnified(query: String, pageIndex: Int): AcpProductPage = coroutineScope {
+private suspend fun AcpApi.searchProductsUnified(query: String, pageIndex: Int): AcpProductPage {
     val clean = query.trim()
     require(clean.isNotBlank() && clean.length <= 200 && pageIndex >= 0)
-    val orderedFields = if (clean.all(Char::isDigit)) {
-        listOf(AcpSearchField.BARCODE, AcpSearchField.CODE, AcpSearchField.DESCRIPTION)
-    } else {
-        listOf(AcpSearchField.DESCRIPTION, AcpSearchField.CODE, AcpSearchField.BARCODE)
+    val numeric = clean.all(Char::isDigit)
+    val field = when {
+        !numeric -> AcpSearchField.DESCRIPTION
+        clean.length in setOf(8, 12, 13, 14) -> AcpSearchField.BARCODE
+        else -> AcpSearchField.CODE
     }
-    val attempts = orderedFields.map { field ->
-        async { field to runCatching { searchProducts(field, clean, null, pageIndex) } }
-    }.awaitAll()
-
-    attempts.firstOrNull { it.second.exceptionOrNull() is AcpUnauthorized }
-        ?.second?.exceptionOrNull()?.let { throw it }
-
-    val pages = attempts.mapNotNull { it.second.getOrNull() }
-    if (pages.isEmpty()) {
-        val failure = attempts.firstNotNullOfOrNull { it.second.exceptionOrNull() }
-        throw (failure as? Exception ?: AcpFailure("Não foi possível pesquisar na ACP agora."))
-    }
-
-    val unique = LinkedHashMap<String, AcpProduct>()
-    pages.flatMap { it.items }.forEach { product ->
-        val key = product.id.ifBlank { "${product.code}|${product.barcode}|${product.description}" }
-        unique.putIfAbsent(key, product)
-    }
-    fun rank(product: AcpProduct): Int = when {
-        product.barcode.equals(clean, ignoreCase = true) -> 0
-        product.code.equals(clean, ignoreCase = true) -> 1
-        product.description.equals(clean, ignoreCase = true) -> 2
-        product.description.contains(clean, ignoreCase = true) -> 3
-        else -> 4
-    }
-    val merged = unique.values.sortedWith(compareBy<AcpProduct> { rank(it) }.thenBy { it.description })
-    AcpProductPage(
-        items = merged,
-        pageIndex = pageIndex,
-        totalPages = pages.maxOfOrNull { it.totalPages } ?: 0,
-        totalCount = merged.size,
-        queriedAtMillis = System.currentTimeMillis()
-    )
+    return searchProducts(field, clean, null, pageIndex)
 }
 
 private suspend fun AcpApi.refreshProductFreshForUi(selected: AcpProduct, store: AcpSecureStore): AcpProduct {
@@ -736,14 +743,14 @@ private suspend fun AcpApi.refreshProductFreshForUi(selected: AcpProduct, store:
                 (selected.barcode.isBlank() || candidate.barcode == selected.barcode)
         })
         if (matches.size > 1) {
-            throw AcpFailure("A ACP retornou mais de um cadastro com esses códigos. Confira o produto na ACP.")
+            throw AcpFailure("A consulta retornou mais de um cadastro com esses códigos. Confira o produto no sistema.")
         }
         if (page.items.isEmpty() || index + 1 >= page.totalPages) {
             return matches.singleOrNull()
                 ?: throw AcpFailure("Produto não encontrado na atualização. Faça uma nova busca.")
         }
     }
-    throw AcpFailure("Não foi possível confirmar o produto entre os resultados da ACP. Refine a busca.")
+    throw AcpFailure("Não foi possível confirmar o produto entre os resultados. Refine a busca.")
 }
 
 private suspend fun AcpApi.getFreshForUi(
