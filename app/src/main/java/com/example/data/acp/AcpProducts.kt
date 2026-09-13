@@ -3,6 +3,13 @@ package com.example.data.acp
 import org.json.JSONObject
 import java.math.BigDecimal
 import java.math.RoundingMode
+import com.example.data.OFFER_BANNER_CASHBACK
+import com.example.data.OFFER_BANNER_CLUB
+import com.example.data.OFFER_BANNER_DE_POR
+import com.example.data.OFFER_BANNER_SECOND_UNIT
+import com.example.data.OFFER_BANNER_STANDARD
+import com.example.data.OFFER_BANNER_TAKE_PAY
+import com.example.data.OFFER_BANNER_WHOLESALE
 
 internal enum class AcpSearchField(val parameter: String, val label: String) { BARCODE("barCode", "Cód. barras"), CODE("code", "Código"), DESCRIPTION("description", "Descrição") }
 internal data class AcpCategory(val id: String, val description: String)
@@ -23,6 +30,17 @@ internal val AcpOffer.family: AcpOfferFamily
         "Cashback" -> AcpOfferFamily.CASHBACK
         "Cashback em valor" -> AcpOfferFamily.CASHBACK_VALUE
         else -> AcpOfferFamily.PRICE
+    }
+
+internal val AcpOffer.bannerKey: String
+    get() = when (family) {
+        AcpOfferFamily.CLUB -> OFFER_BANNER_CLUB
+        AcpOfferFamily.DE_POR -> OFFER_BANNER_DE_POR
+        AcpOfferFamily.TAKE_PAY -> OFFER_BANNER_TAKE_PAY
+        AcpOfferFamily.SECOND_UNIT -> OFFER_BANNER_SECOND_UNIT
+        AcpOfferFamily.CASHBACK, AcpOfferFamily.CASHBACK_VALUE -> OFFER_BANNER_CASHBACK
+        AcpOfferFamily.WHOLESALE -> OFFER_BANNER_WHOLESALE
+        AcpOfferFamily.PRICE -> OFFER_BANNER_STANDARD
     }
 
 /** Keeps every detected condition, while selecting one deterministic family for the automatic poster. */
