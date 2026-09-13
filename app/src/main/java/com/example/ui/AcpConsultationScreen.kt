@@ -135,7 +135,7 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(if (authenticated) 8.dp else 16.dp)
             ) {
                 if (authenticated) {
-                    AcpProductsPanel(api, canAddToNrd = canConfigure, onSessionExpired = {
+                    AcpProductsPanel(api, canAddToNrd = canConfigure, appearance = appearanceSettings, onSessionExpired = {
                         authenticated = false
                         error = "Não foi possível renovar a sessão automaticamente. Tente novamente."
                     })
