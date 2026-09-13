@@ -342,7 +342,7 @@ fun LoginDrawerContent(
         }
 
         Spacer(modifier = Modifier.height(12.dp)); HorizontalDivider(); Spacer(modifier = Modifier.height(10.dp))
-        Button(onClick = onGoToAcp, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Consultar Produtos") }
+        Button(onClick = onGoToAcp, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Consultar Preços") }
         Spacer(modifier = Modifier.height(8.dp))
         Button(onClick = onGoToPromotions, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Promoções") }
         Spacer(modifier = Modifier.height(8.dp))
