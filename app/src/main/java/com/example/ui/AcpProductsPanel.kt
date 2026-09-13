@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.data.CategoryDefinition
+import com.example.data.AppearanceSettings
 import com.example.data.FirebaseService
 import com.example.data.NrdProductImportService
 import com.example.data.acp.*
@@ -42,7 +43,12 @@ import java.util.Locale
 private enum class NrdIdentifier { BARCODE, PRODUCT_CODE }
 
 @Composable
-internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpired: () -> Unit) {
+internal fun AcpProductsPanel(
+    api: AcpApi,
+    canAddToNrd: Boolean,
+    appearance: AppearanceSettings,
+    onSessionExpired: () -> Unit
+) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val freshStore = remember(context) { AcpSecureStore(context.applicationContext) }
@@ -343,9 +349,30 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                     }
                     if (previewOffers.isNotEmpty()) {
                         Spacer(Modifier.height(2.dp))
-                        previewOffers.forEach { AcpOfferPoster(it, compact = true) }
+                        previewOffers.forEach { offer ->
+                            AcpOfferPoster(
+                                offer = offer,
+                                compact = true,
+                                productName = product.description,
+                                banner = appearance.activeOfferBanner(offer.bannerKey)
+                            )
+                        }
                     } else {
-                        Text("Sem promoção explícita identificada no cadastro do produto.", style = MaterialTheme.typography.labelSmall)
+                        val standardBanner = appearance.activeOfferBanner(com.example.data.OFFER_BANNER_STANDARD)
+                        if (standardBanner != null) {
+                            AcpOfferPoster(
+                                offer = AcpOffer(
+                                    "Preço cadastrado",
+                                    "Produto sem promoção especial.",
+                                    product.value
+                                ),
+                                compact = true,
+                                productName = product.description,
+                                banner = standardBanner
+                            )
+                        } else {
+                            Text("Sem promoção explícita identificada no cadastro do produto.", style = MaterialTheme.typography.labelSmall)
+                        }
                     }
                     Text("Ver ficha completa", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
@@ -443,13 +470,19 @@ internal fun AcpProductsPanel(api: AcpApi, canAddToNrd: Boolean, onSessionExpire
                                     "Nenhuma condição promocional explícita foi identificada nos dados consultados.",
                                     product.value
                                 ),
-                                compact = false
+                                compact = false,
+                                productName = product.description,
+                                banner = appearance.activeOfferBanner(com.example.data.OFFER_BANNER_STANDARD)
                             )
                         } else {
                             Text("Cartazes automáticos em paisagem", style = MaterialTheme.typography.titleSmall)
                             allOffers.forEachIndexed { index, offer ->
                                 if (index > 0) HorizontalDivider()
-                                AcpOfferLandscapePoster(product.description, offer)
+                                AcpOfferLandscapePoster(
+                                    product.description,
+                                    offer,
+                                    appearance.activeOfferBanner(offer.bannerKey)
+                                )
                             }
                         }
                         if (!detailBusy && allOffers.none { it.title == "Cashback" || it.title == "Cashback em valor" }) {
