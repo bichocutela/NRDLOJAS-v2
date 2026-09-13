@@ -913,6 +913,14 @@ object FirebaseService {
             .orEmpty()
     }
 
+    private fun parseOfferBanners(raw: Any?): Map<String, List<ThemeBackground>> {
+        val rawMap = raw as? Map<*, *> ?: return emptyMap()
+        return SupportedOfferBannerKeys.mapNotNull { offerKey ->
+            val items = parseConsultationBackgrounds(rawMap[offerKey])
+            if (items.isEmpty()) null else offerKey to items
+        }.toMap()
+    }
+
     private fun normalizePersistedThemeBackgroundDate(value: String?): String? {
         val trimmed = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
         return ThemeBackground.normalizeDate(trimmed) ?: trimmed
@@ -966,6 +974,7 @@ object FirebaseService {
                             ?: "system",
                         themeBackgrounds = parseThemeBackgrounds(snapshot?.get("appearanceThemeBackgrounds")),
                         consultationBackgrounds = parseConsultationBackgrounds(snapshot?.get("appearanceConsultationBackgrounds")),
+                        offerBanners = parseOfferBanners(snapshot?.get("appearanceOfferBanners")),
                         revision = snapshot?.getLong("appearanceRevision") ?: 0L
                     )
                 }
@@ -992,7 +1001,8 @@ object FirebaseService {
             it in setOf("system", "light", "dark")
         } ?: "system"
         val revision = System.currentTimeMillis()
-        val hasInvalidDateWindow = (settings.themeBackgrounds.values.flatten() + settings.consultationBackgrounds).any { background ->
+        val hasInvalidDateWindow = (settings.themeBackgrounds.values.flatten() +
+            settings.consultationBackgrounds + settings.offerBanners.values.flatten()).any { background ->
             val startInput = background.startDate?.trim()?.takeIf { it.isNotBlank() }
             val endInput = background.endDate?.trim()?.takeIf { it.isNotBlank() }
             val startDate = ThemeBackground.normalizeDate(startInput)
@@ -1056,12 +1066,39 @@ object FirebaseService {
                 }
             }
 
+        val safeOfferBanners = SupportedOfferBannerKeys.associateWith { offerKey ->
+            settings.offerBanners[offerKey].orEmpty()
+                .filter { background ->
+                    val url = background.url.trim()
+                    url.startsWith("https://") || url.startsWith("http://")
+                }
+                .map { background ->
+                    val startDate = ThemeBackground.normalizeDate(background.startDate)
+                    val endDate = ThemeBackground.normalizeDate(background.endDate)
+                    linkedMapOf<String, Any>(
+                        "id" to background.id.ifBlank { UUID.randomUUID().toString() },
+                        "label" to background.label.trim().take(80).ifBlank { "Banner de oferta" },
+                        "url" to background.url.trim(),
+                        "isActive" to (background.isActive && startDate != null),
+                        "imageScale" to background.imageScale.coerceIn(0.5f, 3f),
+                        "imageOffsetX" to background.imageOffsetX.coerceIn(-1f, 1f),
+                        "imageOffsetY" to background.imageOffsetY.coerceIn(-1f, 1f),
+                        "imageStretchX" to background.imageStretchX.coerceIn(0.5f, 2.5f),
+                        "imageStretchY" to background.imageStretchY.coerceIn(0.5f, 2.5f)
+                    ).apply {
+                        if (startDate != null) put("startDate", startDate)
+                        if (endDate != null) put("endDate", endDate)
+                    }
+                }
+        }
+
         val manifest = buildAppearanceManifest(
             overrideLocalTheme = settings.overrideLocalTheme,
             theme = safeTheme,
             appearanceMode = safeMode,
             themeBackgrounds = safeBackgrounds,
             consultationBackgrounds = safeConsultationBackgrounds,
+            offerBanners = safeOfferBanners,
             revision = revision
         )
         val publicManifestSaved = runCatching {
@@ -1089,6 +1126,7 @@ object FirebaseService {
                         "appearanceMode" to safeMode,
                         "appearanceThemeBackgrounds" to safeBackgrounds,
                         "appearanceConsultationBackgrounds" to safeConsultationBackgrounds,
+                        "appearanceOfferBanners" to safeOfferBanners,
                         "appearanceRevision" to revision
                     ),
                     com.google.firebase.firestore.SetOptions.merge()
@@ -1110,6 +1148,7 @@ object FirebaseService {
         appearanceMode: String,
         themeBackgrounds: Map<String, List<Map<String, Any>>>,
         consultationBackgrounds: List<Map<String, Any>>,
+        offerBanners: Map<String, List<Map<String, Any>>>,
         revision: Long
     ): String {
         val backgroundsJson = org.json.JSONObject()
@@ -1124,12 +1163,19 @@ object FirebaseService {
         consultationBackgrounds.forEach { background ->
             consultationJson.put(org.json.JSONObject(background))
         }
+        val offerBannersJson = org.json.JSONObject()
+        offerBanners.forEach { (offerKey, banners) ->
+            val itemsJson = org.json.JSONArray()
+            banners.forEach { banner -> itemsJson.put(org.json.JSONObject(banner)) }
+            offerBannersJson.put(offerKey, itemsJson)
+        }
         return org.json.JSONObject()
             .put("appearanceOverrideLocalTheme", overrideLocalTheme)
             .put("appearanceTheme", theme)
             .put("appearanceMode", appearanceMode)
             .put("appearanceThemeBackgrounds", backgroundsJson)
             .put("appearanceConsultationBackgrounds", consultationJson)
+            .put("appearanceOfferBanners", offerBannersJson)
             .put("appearanceRevision", revision)
             .toString()
     }
@@ -1208,6 +1254,7 @@ object FirebaseService {
                 ?: "system",
             themeBackgrounds = parseThemeBackgroundsJson(root.optJSONObject("appearanceThemeBackgrounds")),
             consultationBackgrounds = parseConsultationBackgroundsJson(root.optJSONArray("appearanceConsultationBackgrounds")),
+            offerBanners = parseOfferBannersJson(root.optJSONObject("appearanceOfferBanners")),
             revision = root.optLong("appearanceRevision", 0L)
         )
     }.getOrNull()
@@ -1263,6 +1310,14 @@ object FirebaseService {
                 )
             }
             if (items.isEmpty()) null else themeKey to items
+        }.toMap()
+    }
+
+    private fun parseOfferBannersJson(raw: org.json.JSONObject?): Map<String, List<ThemeBackground>> {
+        if (raw == null) return emptyMap()
+        return SupportedOfferBannerKeys.mapNotNull { offerKey ->
+            val items = parseConsultationBackgroundsJson(raw.optJSONArray(offerKey))
+            if (items.isEmpty()) null else offerKey to items
         }.toMap()
     }
 

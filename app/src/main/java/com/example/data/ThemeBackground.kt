@@ -59,3 +59,21 @@ data class ThemeBackground(
 }
 
 val SupportedThemeKeys = listOf("multicolor", "red", "gold", "green", "blue", "orange", "glass")
+
+const val OFFER_BANNER_STANDARD = "standard"
+const val OFFER_BANNER_CLUB = "club"
+const val OFFER_BANNER_DE_POR = "de_por"
+const val OFFER_BANNER_TAKE_PAY = "take_pay"
+const val OFFER_BANNER_SECOND_UNIT = "second_unit"
+const val OFFER_BANNER_CASHBACK = "cashback"
+const val OFFER_BANNER_WHOLESALE = "wholesale"
+
+val SupportedOfferBannerKeys = listOf(
+    OFFER_BANNER_STANDARD,
+    OFFER_BANNER_CLUB,
+    OFFER_BANNER_DE_POR,
+    OFFER_BANNER_TAKE_PAY,
+    OFFER_BANNER_SECOND_UNIT,
+    OFFER_BANNER_CASHBACK,
+    OFFER_BANNER_WHOLESALE
+)

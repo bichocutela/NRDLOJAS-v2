@@ -45,6 +45,7 @@ import com.example.data.CategoryDefinition
 import com.example.data.CatalogSnapshot
 import com.example.data.CatalogHistoryBackend
 import com.example.data.ThemeBackground
+import com.example.data.SupportedOfferBannerKeys
 import com.example.data.FirebaseService
 import com.example.data.MaintenanceSummary
 import com.example.data.ProductImportParser
@@ -56,6 +57,22 @@ private const val NEW_CATEGORY_ACTION_KEY = "__new_category__"
 private const val CATEGORY_PAGE_SIZE = 15
 private const val BACKGROUND_PAGE_SIZE = 6
 private const val CONSULTATION_BACKGROUND_KEY = "__consultar_produtos__"
+private const val OFFER_BANNER_KEY_PREFIX = "__oferta__"
+private val offerBannerLabels = linkedMapOf(
+    "standard" to "Banner padrão",
+    "club" to "Banner Preço Clube",
+    "de_por" to "Banner De/Por",
+    "take_pay" to "Banner Leve/Pague",
+    "second_unit" to "Banner 2ª unidade / 50%",
+    "cashback" to "Banner Cashback",
+    "wholesale" to "Banner Atacado"
+)
+
+private fun offerEditorKey(offerKey: String) = "$OFFER_BANNER_KEY_PREFIX$offerKey"
+private fun offerKeyFromEditorKey(editorKey: String): String? = editorKey
+    .takeIf { it.startsWith(OFFER_BANNER_KEY_PREFIX) }
+    ?.removePrefix(OFFER_BANNER_KEY_PREFIX)
+    ?.takeIf { it in SupportedOfferBannerKeys }
 
 private enum class MestrePanelPage(val title: String) {
     DASHBOARD("Painel Mestre"),
@@ -131,6 +148,9 @@ fun MestreScreen(
     var draftConsultationBackgrounds by remember(appearanceSettings.consultationBackgrounds) {
         mutableStateOf(appearanceSettings.consultationBackgrounds)
     }
+    var draftOfferBanners by remember(appearanceSettings.offerBanners) {
+        mutableStateOf(appearanceSettings.offerBanners)
+    }
     var consultationBackgroundPage by rememberSaveable { mutableIntStateOf(0) }
     var showDiscardChangesDialog by remember { mutableStateOf(false) }
     var isSavingAppearanceSettings by remember { mutableStateOf(false) }
@@ -169,10 +189,10 @@ fun MestreScreen(
             isUploadingThemeBackground = true
             backgroundInputError = null
             try {
-                val uploadFolder = if (themeKey == CONSULTATION_BACKGROUND_KEY) {
-                    "consultation_backgrounds"
-                } else {
-                    "theme_backgrounds/$themeKey"
+                val uploadFolder = when {
+                    themeKey == CONSULTATION_BACKGROUND_KEY -> "consultation_backgrounds"
+                    offerKeyFromEditorKey(themeKey) != null -> "offer_banners/${offerKeyFromEditorKey(themeKey)}"
+                    else -> "theme_backgrounds/$themeKey"
                 }
                 val uploadedUrl = FirebaseService.uploadImageToStorage(
                     uri,
@@ -242,24 +262,28 @@ fun MestreScreen(
     fun dateToPickerMillis(value: String): Long? = ThemeBackground.parseDate(value)?.time
 
     fun backgroundsForKey(themeKey: String): List<ThemeBackground> =
-        if (themeKey == CONSULTATION_BACKGROUND_KEY) {
-            draftConsultationBackgrounds
-        } else {
-            draftThemeBackgrounds[themeKey].orEmpty()
+        when {
+            themeKey == CONSULTATION_BACKGROUND_KEY -> draftConsultationBackgrounds
+            offerKeyFromEditorKey(themeKey) != null -> draftOfferBanners[offerKeyFromEditorKey(themeKey)].orEmpty()
+            else -> draftThemeBackgrounds[themeKey].orEmpty()
         }
 
     fun updateBackgrounds(themeKey: String, backgrounds: List<ThemeBackground>) {
-        if (themeKey == CONSULTATION_BACKGROUND_KEY) {
-            draftConsultationBackgrounds = backgrounds
-        } else {
-            draftThemeBackgrounds = draftThemeBackgrounds + (themeKey to backgrounds)
+        when {
+            themeKey == CONSULTATION_BACKGROUND_KEY -> draftConsultationBackgrounds = backgrounds
+            offerKeyFromEditorKey(themeKey) != null -> {
+                val offerKey = requireNotNull(offerKeyFromEditorKey(themeKey))
+                draftOfferBanners = draftOfferBanners + (offerKey to backgrounds)
+            }
+            else -> draftThemeBackgrounds = draftThemeBackgrounds + (themeKey to backgrounds)
         }
     }
     val homeHasChanges = draftHomeSettings != homeSettings
     val notificationsHaveChanges = draftNotificationSettings != notificationSettings
     val appearanceDraft = draftAppearanceSettings.copy(
         themeBackgrounds = draftThemeBackgrounds,
-        consultationBackgrounds = draftConsultationBackgrounds
+        consultationBackgrounds = draftConsultationBackgrounds,
+        offerBanners = draftOfferBanners
     )
     val appearanceHasChanges = appearanceDraft != appearanceSettings
     val currentPageHasChanges = when (currentPage) {
@@ -1077,6 +1101,63 @@ fun MestreScreen(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Adicionar fundo para Consultar Produtos")
                         }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "Banner de Ofertas",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        )
+                        Text(
+                            "Cadastre imagens 3:1. O app seleciona automaticamente o banner conforme a oferta confirmada na ACP; sem cadastro, mantém o cartaz atual.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        offerBannerLabels.forEach { (offerKey, title) ->
+                            val editorKey = offerEditorKey(offerKey)
+                            val banners = draftOfferBanners[offerKey].orEmpty()
+                            val active = appearanceDraft.activeOfferBanner(offerKey)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(title, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                    Text(
+                                        active?.let { "Ativo agora: ${it.label}" } ?: "Banner personalizado não definido",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    banners.forEach { banner ->
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        ThemeBackgroundItem(
+                                            background = banner,
+                                            enabled = true,
+                                            onActiveChange = { isActive ->
+                                                updateBackgrounds(
+                                                    editorKey,
+                                                    banners.map {
+                                                        if (it.id == banner.id) it.copy(isActive = isActive) else it
+                                                    }
+                                                )
+                                            },
+                                            onPreview = { backgroundToPreview = editorKey to banner },
+                                            onEdit = { openBackgroundEditor(editorKey, banner) },
+                                            onDelete = { backgroundToDelete = editorKey to banner }
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    OutlinedButton(
+                                        onClick = { openBackgroundEditor(editorKey, null) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Adicionar $title")
+                                    }
+                                }
+                            }
+                        }
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
                             onClick = {
@@ -1103,7 +1184,7 @@ fun MestreScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("Publicando...")
                             } else if (appearanceHasChanges) {
-                                Text("Salvar fundo da consulta")
+                                Text("Salvar configuração")
                             } else {
                                 Text("Tudo atualizado")
                             }
@@ -1129,6 +1210,7 @@ fun MestreScreen(
                                         draftAppearanceSettings = appearanceSettings
                                         draftThemeBackgrounds = appearanceSettings.themeBackgrounds
                                         draftConsultationBackgrounds = appearanceSettings.consultationBackgrounds
+                                        draftOfferBanners = appearanceSettings.offerBanners
                                     }
                                     else -> Unit
                                 }
@@ -1320,11 +1402,20 @@ fun MestreScreen(
                     onDismissRequest = { showThemeBackgroundDialog = false },
                     title = {
                         val consultation = editingBackgroundTheme == CONSULTATION_BACKGROUND_KEY
+                        val offerBanner = editingBackgroundTheme?.let(::offerKeyFromEditorKey) != null
                         Text(
                             if (editingBackground == null) {
-                                if (consultation) "Adicionar fundo da consulta" else "Adicionar fundo ao tema"
+                                when {
+                                    consultation -> "Adicionar fundo da consulta"
+                                    offerBanner -> "Adicionar banner de oferta"
+                                    else -> "Adicionar fundo ao tema"
+                                }
                             } else {
-                                if (consultation) "Editar fundo da consulta" else "Editar fundo do tema"
+                                when {
+                                    consultation -> "Editar fundo da consulta"
+                                    offerBanner -> "Editar banner de oferta"
+                                    else -> "Editar fundo do tema"
+                                }
                             }
                         )
                     },
@@ -1333,7 +1424,7 @@ fun MestreScreen(
                             OutlinedTextField(
                                 value = backgroundLabelInput,
                                 onValueChange = { backgroundLabelInput = it },
-                                label = { Text("Nome do fundo") },
+                                label = { Text(if (editingBackgroundTheme?.let(::offerKeyFromEditorKey) != null) "Nome do banner" else "Nome do fundo") },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -1350,7 +1441,11 @@ fun MestreScreen(
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Text(
-                                "Use uma imagem acessível por link HTTP/HTTPS. O fundo padrão continuará disponível.",
+                                if (editingBackgroundTheme?.let(::offerKeyFromEditorKey) != null) {
+                                    "Use uma imagem 3:1 acessível por link HTTP/HTTPS. O cartaz atual continuará disponível como padrão."
+                                } else {
+                                    "Use uma imagem acessível por link HTTP/HTTPS. O fundo padrão continuará disponível."
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1477,12 +1572,13 @@ fun MestreScreen(
             }
 
   backgroundToPreview?.let { (themeKey, background) ->
+      val previewOfferKey = offerKeyFromEditorKey(themeKey)
       BannerPreviewEditor(
-          themeKey = if (themeKey == CONSULTATION_BACKGROUND_KEY) "multicolor" else themeKey,
-          themeLabel = if (themeKey == CONSULTATION_BACKGROUND_KEY) {
-              "Consultar Produtos"
-          } else {
-              themeOptions.firstOrNull { it.first == themeKey }?.second ?: themeKey
+          themeKey = if (themeKey == CONSULTATION_BACKGROUND_KEY || previewOfferKey != null) "multicolor" else themeKey,
+          themeLabel = when {
+              themeKey == CONSULTATION_BACKGROUND_KEY -> "Consultar Produtos"
+              previewOfferKey != null -> offerBannerLabels[previewOfferKey] ?: "Banner de oferta"
+              else -> themeOptions.firstOrNull { it.first == themeKey }?.second ?: themeKey
           },
           background = background,
           isSaving = isSavingAppearanceSettings,
@@ -1493,21 +1589,23 @@ fun MestreScreen(
               val updatedList = backgroundsForKey(themeKey).map { item ->
                   if (item.id == updatedBackground.id) updatedBackground else item
               }
-              val updatedThemeBackgrounds = if (themeKey == CONSULTATION_BACKGROUND_KEY) {
-                  draftThemeBackgrounds
-              } else {
-                  draftThemeBackgrounds + (themeKey to updatedList)
-              }
+              val updatedThemeBackgrounds = if (themeKey == CONSULTATION_BACKGROUND_KEY || previewOfferKey != null) draftThemeBackgrounds
+              else draftThemeBackgrounds + (themeKey to updatedList)
               val updatedConsultationBackgrounds = if (themeKey == CONSULTATION_BACKGROUND_KEY) {
                   updatedList
               } else {
                   draftConsultationBackgrounds
               }
+              val updatedOfferBanners = if (previewOfferKey != null) {
+                  draftOfferBanners + (previewOfferKey to updatedList)
+              } else draftOfferBanners
               draftThemeBackgrounds = updatedThemeBackgrounds
               draftConsultationBackgrounds = updatedConsultationBackgrounds
+              draftOfferBanners = updatedOfferBanners
               val settingsToSave = draftAppearanceSettings.copy(
                   themeBackgrounds = updatedThemeBackgrounds,
-                  consultationBackgrounds = updatedConsultationBackgrounds
+                  consultationBackgrounds = updatedConsultationBackgrounds,
+                  offerBanners = updatedOfferBanners
               )
 
               coroutineScope.launch {
@@ -1522,7 +1620,7 @@ fun MestreScreen(
                       return@launch
                   }
 
-                  val maskSaved = if (themeKey == CONSULTATION_BACKGROUND_KEY) {
+                  val maskSaved = if (themeKey == CONSULTATION_BACKGROUND_KEY || previewOfferKey != null) {
                       true
                   } else {
                       com.example.data.BannerMaskStore.save(
@@ -1536,8 +1634,8 @@ fun MestreScreen(
                   if (maskSaved) {
                       backgroundToPreview = null
                       snackbarHostState.showSnackbar(
-                          if (themeKey == CONSULTATION_BACKGROUND_KEY) {
-                              "Enquadramento salvo para Consultar Produtos."
+                          if (themeKey == CONSULTATION_BACKGROUND_KEY || previewOfferKey != null) {
+                              "Enquadramento salvo para ${if (previewOfferKey != null) offerBannerLabels[previewOfferKey] else "Consultar Produtos"}."
                           } else {
                               "Prévia salva. Enquadramento e máscara já serão usados na Home."
                           }

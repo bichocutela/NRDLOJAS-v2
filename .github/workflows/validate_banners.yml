@@ -10,6 +10,10 @@ on:
       - 'app/src/main/assets/themes/theme_blue.jpg'
       - 'app/src/main/assets/themes/theme_orange.jpg'
       - 'app/src/main/res/drawable-nodpi/hero_banner.png'
+      - 'app/src/main/java/com/example/data/AppearanceSettings.kt'
+      - 'app/src/main/java/com/example/data/ThemeBackground.kt'
+      - 'app/src/main/java/com/example/ui/AcpOfferPoster.kt'
+      - 'app/src/main/java/com/example/ui/MestreScreen.kt'
       - '.github/workflows/validate_banners.yml'
   pull_request:
     branches: [ main ]
@@ -20,6 +24,10 @@ on:
       - 'app/src/main/assets/themes/theme_blue.jpg'
       - 'app/src/main/assets/themes/theme_orange.jpg'
       - 'app/src/main/res/drawable-nodpi/hero_banner.png'
+      - 'app/src/main/java/com/example/data/AppearanceSettings.kt'
+      - 'app/src/main/java/com/example/data/ThemeBackground.kt'
+      - 'app/src/main/java/com/example/ui/AcpOfferPoster.kt'
+      - 'app/src/main/java/com/example/ui/MestreScreen.kt'
       - '.github/workflows/validate_banners.yml'
   workflow_dispatch:
 
