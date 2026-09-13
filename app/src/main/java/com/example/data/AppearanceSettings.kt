@@ -11,6 +11,7 @@ class AppearanceSettings(
     val appearanceMode: String = "system",
     val themeBackgrounds: Map<String, List<ThemeBackground>> = emptyMap(),
     val consultationBackgrounds: List<ThemeBackground> = emptyList(),
+    val offerBanners: Map<String, List<ThemeBackground>> = emptyMap(),
     val revision: Long = 0L
 ) {
     /**
@@ -45,12 +46,22 @@ class AppearanceSettings(
         .filter { it.isAvailableOn(date) }
         .maxByOrNull { ThemeBackground.normalizeDate(it.startDate).orEmpty() }
 
+    /** Banner 3:1 escolhido automaticamente pelo tipo de oferta confirmado na ACP. */
+    fun activeOfferBanner(
+        offerKey: String,
+        date: String = ThemeBackground.todayIsoDate()
+    ): ThemeBackground? = offerBanners[offerKey]
+        .orEmpty()
+        .filter { it.isAvailableOn(date) }
+        .maxByOrNull { ThemeBackground.normalizeDate(it.startDate).orEmpty() }
+
     fun copy(
         overrideLocalTheme: Boolean = this.overrideLocalTheme,
         theme: String = this.theme,
         appearanceMode: String = this.appearanceMode,
         themeBackgrounds: Map<String, List<ThemeBackground>> = this.themeBackgrounds,
         consultationBackgrounds: List<ThemeBackground> = this.consultationBackgrounds,
+        offerBanners: Map<String, List<ThemeBackground>> = this.offerBanners,
         revision: Long = this.revision
     ): AppearanceSettings = AppearanceSettings(
         overrideLocalTheme = overrideLocalTheme,
@@ -58,6 +69,7 @@ class AppearanceSettings(
         appearanceMode = appearanceMode,
         themeBackgrounds = themeBackgrounds,
         consultationBackgrounds = consultationBackgrounds,
+        offerBanners = offerBanners,
         revision = revision
     )
 
@@ -69,6 +81,7 @@ class AppearanceSettings(
             appearanceMode == other.appearanceMode &&
             themeBackgrounds == other.themeBackgrounds &&
             consultationBackgrounds == other.consultationBackgrounds &&
+            offerBanners == other.offerBanners &&
             revision == other.revision
     }
 
@@ -78,12 +91,13 @@ class AppearanceSettings(
         result = 31 * result + appearanceMode.hashCode()
         result = 31 * result + themeBackgrounds.hashCode()
         result = 31 * result + consultationBackgrounds.hashCode()
+        result = 31 * result + offerBanners.hashCode()
         result = 31 * result + revision.hashCode()
         return result
     }
 
     override fun toString(): String =
-        "AppearanceSettings(overrideLocalTheme=$overrideLocalTheme, theme=$theme, appearanceMode=$appearanceMode, themeBackgrounds=$themeBackgrounds, consultationBackgrounds=$consultationBackgrounds, revision=$revision)"
+        "AppearanceSettings(overrideLocalTheme=$overrideLocalTheme, theme=$theme, appearanceMode=$appearanceMode, themeBackgrounds=$themeBackgrounds, consultationBackgrounds=$consultationBackgrounds, offerBanners=$offerBanners, revision=$revision)"
 
     private fun normalizeThemeKey(value: String): String = when (value.trim().lowercase()) {
         "multicolor" -> "multicolor"
