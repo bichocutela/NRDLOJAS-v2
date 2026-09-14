@@ -360,6 +360,11 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         .put("totalCount", 0)
 
     /** Explicit diagnostic only: bypass catalog cache and preserve the history response. */
+    internal suspend fun readEvidencePage(path: String, parameters: List<Pair<String, String>>): JSONObject {
+        require(path in setOf("TemplatePrintLog/all", "ProductGroup/all"))
+        return sanitize(authenticatedRead(path, parameters, record = false)) as JSONObject
+    }
+
     internal suspend fun captureHistory(pageIndex: Int): String {
         require(pageIndex >= 0)
         val parameters = listOf("pageSize" to "10", "pageIndex" to pageIndex.toString(),
