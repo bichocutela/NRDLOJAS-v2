@@ -1,5 +1,12 @@
 package com.example.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.example.data.acp.AcpHistoryExport
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.Image
@@ -36,6 +43,40 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
     val context = LocalContext.current
     val api = remember { AcpApi(context.applicationContext) }
     val scope = rememberCoroutineScope()
+    val historyExport = remember(context) { AcpHistoryExport(context.applicationContext) }
+    var historyExportBusy by rememberSaveable { mutableStateOf(false) }
+    var historyExportMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    // Always registered, including while the ACP session is being restored.
+    val saveHistory = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri == null) {
+            historyExportBusy = false
+            historyExportMessage = "Salvamento cancelado."
+        } else scope.launch {
+            try {
+                val bytes = withContext(Dispatchers.IO + NonCancellable) { historyExport.save(uri) }
+                historyExportMessage = "Histórico salvo e verificado ($bytes bytes). Anexe o arquivo JSON aqui no ChatGPT."
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { historyExportMessage = "Falha ao gravar ou verificar o JSON. Salve novamente em Downloads." }
+            finally { historyExportBusy = false }
+        }
+    }
+    val exportHistory: (String, Int) -> Unit = { payload, index ->
+        historyExportBusy = true
+        historyExportMessage = "Preparando arquivo…"
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) { historyExport.stage(payload) }
+                saveHistory.launch("acp-historico-pagina-$index.json")
+            } catch (cancelled: CancellationException) {
+                historyExportBusy = false
+                throw cancelled
+            } catch (_: Exception) {
+                historyExportBusy = false
+                historyExportMessage = "Não foi possível preparar o JSON. Tente novamente."
+            }
+        }
+    }
+
     val appearanceSettings by FirebaseService.observeAppearanceSettings()
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
     val activeConsultationBackground = appearanceSettings.activeConsultationBackground()
@@ -135,7 +176,9 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(if (authenticated) 8.dp else 16.dp)
             ) {
                 if (authenticated) {
-                    AcpProductsPanel(api, canAddToNrd = canConfigure, appearance = appearanceSettings, onSessionExpired = {
+                    AcpProductsPanel(api, canAddToNrd = canConfigure, appearance = appearanceSettings,
+                        historyExportBusy = historyExportBusy, historyExportMessage = historyExportMessage,
+                        onExportHistory = exportHistory, onSessionExpired = {
                         authenticated = false
                         error = "Não foi possível renovar a sessão automaticamente. Tente novamente."
                     })

@@ -1,7 +1,5 @@
 package com.example.ui
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.*
@@ -48,6 +46,9 @@ internal fun AcpProductsPanel(
     api: AcpApi,
     canAddToNrd: Boolean,
     appearance: AppearanceSettings,
+    historyExportBusy: Boolean,
+    historyExportMessage: String?,
+    onExportHistory: (String, Int) -> Unit,
     onSessionExpired: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -72,22 +73,6 @@ internal fun AcpProductsPanel(
     var diagnosticMessage by remember { mutableStateOf<String?>(null) }
     var historyPage by remember { mutableStateOf("0") }
     var historyBusy by remember { mutableStateOf(false) }
-    var historyPayload by remember { mutableStateOf<String?>(null) }
-    val saveHistory = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        val payload = historyPayload
-        if (uri != null && payload != null) scope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    val output = context.contentResolver.openOutputStream(uri)
-                        ?: error("Arquivo indisponível")
-                    output.bufferedWriter(Charsets.UTF_8).use { it.write(payload) }
-                }
-                diagnosticMessage = "Histórico salvo. Envie o arquivo JSON para análise."
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { diagnosticMessage = "Não foi possível salvar. Tente novamente." }
-            finally { historyPayload = null; historyBusy = false }
-        } else { historyPayload = null; historyBusy = false }
-    }
 
     var selected by remember { mutableStateOf<AcpProduct?>(null) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
@@ -360,12 +345,12 @@ internal fun AcpProductsPanel(
                 value = historyPage,
                 onValueChange = { historyPage = it.filter(Char::isDigit).take(6) },
                 label = { Text("Página do histórico (começa em 0)") },
-                enabled = !historyBusy,
+                enabled = !historyBusy && !historyExportBusy,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedButton(
-                enabled = !busy && !historyBusy && historyPage.toIntOrNull() != null,
+                enabled = !busy && !historyBusy && !historyExportBusy && historyPage.toIntOrNull() != null,
                 modifier = Modifier.fillMaxWidth(),
                 onClick = {
                     val index = historyPage.toIntOrNull() ?: 0
@@ -373,8 +358,10 @@ internal fun AcpProductsPanel(
                     diagnosticMessage = "Consultando histórico da ACP…"
                     scope.launch {
                         try {
-                            historyPayload = api.captureHistory(index)
-                            saveHistory.launch("acp-historico-pagina-$index.json")
+                            val payload = api.captureHistory(index)
+                            onExportHistory(payload, index)
+                            historyBusy = false
+                            diagnosticMessage = null
                         } catch (cancelled: CancellationException) {
                             historyBusy = false
                             throw cancelled
@@ -390,6 +377,7 @@ internal fun AcpProductsPanel(
             ) { Text(if (historyBusy) "Capturando histórico…" else "Salvar diagnóstico do histórico") }
         }
 
+        if (canCopyDiagnostic) historyExportMessage?.let { message -> item { Text(message, style = MaterialTheme.typography.bodySmall) } }
         if (canCopyDiagnostic) diagnosticMessage?.let { message -> item { Text(message, style = MaterialTheme.typography.bodySmall) } }
         if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
