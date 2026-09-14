@@ -1,0 +1,123 @@
+{
+  "diagnostic": "NRD ACP read-only targeted evidence",
+  "endpoint": "TemplatePrintLog\/all",
+  "additionalEndpoint": "ProductGroup\/all",
+  "format": "Matched product excerpts; not complete HTTP responses or current offers",
+  "response": {
+    "target": "2012568001",
+    "phase": "history",
+    "groupPage": 2,
+    "pages": 3,
+    "records": 12,
+    "unparsed": 0,
+    "groupsAvailable": true,
+    "historyChanged": false,
+    "matches": [],
+    "groups": [
+      {
+        "pageIndex": 0,
+        "metadata": {
+          "id": 3,
+          "description": "Higiene Oral 50% NA SEGUNDA UNIDADE"
+        },
+        "productCount": 168
+      },
+      {
+        "pageIndex": 0,
+        "metadata": {
+          "id": 4,
+          "description": "Desodorante 50% NA SEGUNDA UNIDADE"
+        },
+        "productCount": 186
+      },
+      {
+        "pageIndex": 0,
+        "metadata": {
+          "id": 5,
+          "description": "Capilar "
+        },
+        "productCount": 504
+      },
+      {
+        "pageIndex": 0,
+        "metadata": {
+          "id": 9,
+          "description": "Café Caps 3 Corações"
+        },
+        "productCount": 51
+      },
+      {
+        "pageIndex": 0,
+        "metadata": {
+          "id": 11,
+          "description": "Elma Chips LEVE3 PAGUE2"
+        },
+        "productCount": 96
+      },
+      {
+        "pageIndex": 0,
+        "metadata": {
+          "id": 14,
+          "description": "TODA CATEGORIA SABONETES"
+        },
+        "productCount": 305
+      },
+      {
+        "pageIndex": 0,
+        "metadata": {
+          "id": 39,
+          "description": "CAPILAR"
+        },
+        "productCount": 87
+      },
+      {
+        "pageIndex": 0,
+        "metadata": {
+          "id": 40,
+          "description": "CAPILAR.2"
+        },
+        "productCount": 178
+      },
+      {
+        "pageIndex": 0,
+        "metadata": {
+          "id": 41,
+          "description": "CAPILAR.3"
+        },
+        "productCount": 285
+      },
+      {
+        "pageIndex": 0,
+        "metadata": {
+          "id": 48,
+          "description": "ENCARTE 30.07 A 02.08"
+        },
+        "productCount": 35
+      },
+      {
+        "pageIndex": 1,
+        "metadata": {
+          "id": 49,
+          "description": "encarte 50% 30.07 a 02.08"
+        },
+        "productCount": 109
+      },
+      {
+        "pageIndex": 1,
+        "metadata": {
+          "id": 50,
+          "description": "capilar 60% segunda unidade"
+        },
+        "productCount": 64
+      }
+    ],
+    "startedAtMillis": 1789391098680,
+    "groupSignature": "49,50",
+    "savedAtMillis": 1789391110999,
+    "historyProbeSignature": "6304,6305,6306,6307,6308,6309,6310,6311,6312,6313,6314,6315,6316,6317,6318,6319,6320,6321,6322,6323,6324,6325,6326,6327,6328",
+    "historyTotalAtStart": 15849,
+    "historyPagesAtStart": 634,
+    "historyPage": 632,
+    "historySignature": ""
+  }
+}
