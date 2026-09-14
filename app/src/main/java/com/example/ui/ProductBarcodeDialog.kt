@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -133,39 +134,49 @@ fun ProductBarcodeDialog(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                         }
-                        StylizedText(
-                            text = product.name,
-                            baseStyle = MaterialTheme.typography.headlineMedium.copy(
-                                fontWeight = FontWeight.Black,
-                                fontSize = (if (screenProfile.compact) 23.sp else 28.sp) * barcodeTitleScale
-                            ),
-                            boldOutline = boldOutline,
-                            uppercaseBold = uppercaseBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.fillMaxWidth(),
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = product.code,
-                            style = MaterialTheme.typography.displayMedium.copy(
-                                fontWeight = FontWeight.Black,
-                                fontSize = (if (screenProfile.compact) 34.sp else 42.sp) * barcodeNumberScale,
-                                color = MaterialTheme.colorScheme.primary
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        StylizedText(
-                            text = product.category,
-                            baseStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            boldOutline = boldOutline,
-                            uppercaseBold = true,
-                            color = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+
+                        // Toque e segure para usar a seleção nativa do Android e copiar
+                        // nome, categoria ou código de barras sem alterar o leitor.
+                        SelectionContainer {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                StylizedText(
+                                    text = product.name,
+                                    baseStyle = MaterialTheme.typography.headlineMedium.copy(
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = (if (screenProfile.compact) 23.sp else 28.sp) * barcodeTitleScale
+                                    ),
+                                    boldOutline = boldOutline,
+                                    uppercaseBold = uppercaseBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = product.code,
+                                    style = MaterialTheme.typography.displayMedium.copy(
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = (if (screenProfile.compact) 34.sp else 42.sp) * barcodeNumberScale,
+                                        color = MaterialTheme.colorScheme.primary
+                                    ),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                StylizedText(
+                                    text = product.category,
+                                    baseStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    boldOutline = boldOutline,
+                                    uppercaseBold = true,
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(12.dp))
 
                         ActiveFlyerOffersForProduct(product)
@@ -212,10 +223,12 @@ fun ProductBarcodeDialog(
                             Spacer(modifier = Modifier.height(16.dp))
                         }
 
-                        Text(
-                            text = "Código de barras / Referência",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        SelectionContainer {
+                            Text(
+                                text = "Código de barras / Referência",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                         
                         Spacer(modifier = Modifier.height(24.dp))
                         Divider(color = MaterialTheme.colorScheme.outlineVariant)
