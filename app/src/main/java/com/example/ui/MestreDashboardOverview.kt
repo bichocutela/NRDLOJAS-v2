@@ -54,6 +54,7 @@ internal fun MestreDashboardOverview(
     onManageTabs: () -> Unit,
     onImportProducts: () -> Unit
 ) {
+    val screenProfile = rememberNrdScreenProfile()
     Text("Visão geral", style = MaterialTheme.typography.titleLarge)
     Text(
         "Acompanhe o aplicativo e acesse as tarefas mais usadas.",
@@ -62,85 +63,32 @@ internal fun MestreDashboardOverview(
     )
     Spacer(modifier = Modifier.height(8.dp))
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        DashboardMetricCard(
-            title = "Pendências",
-            value = pendingSuggestions.toString(),
-            icon = Icons.Default.PendingActions,
-            modifier = Modifier.weight(1f)
-        )
-        DashboardMetricCard(
-            title = "Produtos",
-            value = productCount.toString(),
-            icon = Icons.Default.Inventory,
-            modifier = Modifier.weight(1f)
-        )
-    }
+    NrdTwoActionLayout(
+        stackOnCompact = true,
+        first = { m -> DashboardMetricCard("Pendências", pendingSuggestions.toString(), Icons.Default.PendingActions, m) },
+        second = { m -> DashboardMetricCard("Produtos", productCount.toString(), Icons.Default.Inventory, m) }
+    )
     Spacer(modifier = Modifier.height(6.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        DashboardMetricCard(
-            title = "Categorias ativas",
-            value = "$activeCategoryCount de $categoryCount",
-            icon = Icons.Default.Category,
-            modifier = Modifier.weight(1f)
-        )
-        DashboardMetricCard(
-            title = "Último backup",
-            value = latestBackupAt?.let(::formatDashboardDate) ?: "Nenhum",
-            icon = Icons.Default.Backup,
-            modifier = Modifier.weight(1f)
-        )
-    }
+    NrdTwoActionLayout(
+        stackOnCompact = true,
+        first = { m -> DashboardMetricCard("Categorias ativas", "$activeCategoryCount de $categoryCount", Icons.Default.Category, m) },
+        second = { m -> DashboardMetricCard("Último backup", latestBackupAt?.let(::formatDashboardDate) ?: "Nenhum", Icons.Default.Backup, m) }
+    )
 
     Spacer(modifier = Modifier.height(14.dp))
     Text("Ações rápidas", style = MaterialTheme.typography.titleMedium)
     Spacer(modifier = Modifier.height(6.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        DashboardQuickAction(
-            title = "Produtos",
-            description = "Gerenciar catálogo",
-            icon = Icons.Default.Inventory,
-            onClick = onOpenCatalog,
-            modifier = Modifier.weight(1f)
-        )
-        DashboardQuickAction(
-            title = "Categorias",
-            description = "Organizar grupos",
-            icon = Icons.Default.Category,
-            onClick = onOpenCategories,
-            modifier = Modifier.weight(1f)
-        )
-    }
+    NrdTwoActionLayout(
+        stackOnCompact = true,
+        first = { m -> DashboardQuickAction("Produtos", "Gerenciar catálogo", Icons.Default.Inventory, onOpenCatalog, modifier = m) },
+        second = { m -> DashboardQuickAction("Categorias", "Organizar grupos", Icons.Default.Category, onOpenCategories, modifier = m) }
+    )
     Spacer(modifier = Modifier.height(6.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        DashboardQuickAction(
-            title = "Abas",
-            description = "Organizar conteúdo",
-            icon = Icons.Default.ViewCarousel,
-            onClick = onManageTabs,
-            modifier = Modifier.weight(1f)
-        )
-        DashboardQuickAction(
-            title = "Importar",
-            description = if (importEnabled) "CSV ou TSV" else "Aguarde...",
-            icon = Icons.Default.UploadFile,
-            onClick = onImportProducts,
-            enabled = importEnabled,
-            modifier = Modifier.weight(1f)
-        )
-    }
+    NrdTwoActionLayout(
+        stackOnCompact = true,
+        first = { m -> DashboardQuickAction("Abas", "Organizar conteúdo", Icons.Default.ViewCarousel, onManageTabs, modifier = m) },
+        second = { m -> DashboardQuickAction("Importar", if (importEnabled) "CSV ou TSV" else "Aguarde...", Icons.Default.UploadFile, onImportProducts, enabled = importEnabled, modifier = m) }
+    )
 }
 
 @Composable

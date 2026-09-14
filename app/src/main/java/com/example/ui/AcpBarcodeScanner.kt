@@ -1,6 +1,8 @@
 package com.example.ui
 
 import android.Manifest
+import android.app.ActivityManager
+import android.os.SystemClock
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -36,6 +38,7 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,6 +94,16 @@ private fun AcpCameraPreview(modifier: Modifier, onResult: (String) -> Unit) {
         val executor = Executors.newSingleThreadExecutor()
         val disposed = AtomicBoolean(false)
         val processing = AtomicBoolean(false)
+        val activityManager = context.getSystemService(ActivityManager::class.java)
+        val memoryClassMb = activityManager?.memoryClass ?: 128
+        val cpuCount = Runtime.getRuntime().availableProcessors()
+        val initialAverageMs = when {
+            cpuCount >= 8 && memoryClassMb >= 256 -> 28L
+            cpuCount >= 6 && memoryClassMb >= 192 -> 45L
+            else -> 75L
+        }
+        val adaptiveAverageMs = AtomicLong(initialAverageMs)
+        val lastAnalysisStartMs = AtomicLong(0L)
         val scannerClosed = AtomicBoolean(false)
         val gate = AcpBarcodeGate()
         val scanner = BarcodeScanning.getClient(BarcodeScannerOptions.Builder().setBarcodeFormats(
@@ -103,9 +116,21 @@ private fun AcpCameraPreview(modifier: Modifier, onResult: (String) -> Unit) {
         var provider: ProcessCameraProvider? = null
         error = null
         analysis.setAnalyzer(executor) { proxy ->
-            if (disposed.get() || !processing.compareAndSet(false, true)) {
+            val now = SystemClock.elapsedRealtime()
+            val averageMs = adaptiveAverageMs.get()
+            val minimumGapMs = when {
+                averageMs <= 35L -> 0L
+                averageMs <= 55L -> 12L
+                averageMs <= 85L -> 24L
+                averageMs <= 120L -> 38L
+                else -> 55L
+            }
+            val tooSoon = now - lastAnalysisStartMs.get() < minimumGapMs
+            if (disposed.get() || tooSoon || !processing.compareAndSet(false, true)) {
                 proxy.close()
             } else {
+                lastAnalysisStartMs.set(now)
+                val analysisStartedAt = now
                 val media = proxy.image
                 if (media == null) {
                     proxy.close()
@@ -119,6 +144,9 @@ private fun AcpCameraPreview(modifier: Modifier, onResult: (String) -> Unit) {
                         }
                         .addOnFailureListener(main) { if (!disposed.get()) error = "Não foi possível ler a imagem. Tente novamente." }
                         .addOnCompleteListener(main) {
+                            val elapsed = (SystemClock.elapsedRealtime() - analysisStartedAt).coerceAtLeast(1L)
+                            val previous = adaptiveAverageMs.get()
+                            adaptiveAverageMs.set(((previous * 3L) + elapsed) / 4L)
                             proxy.close()
                             processing.set(false)
                             if (disposed.get()) closeScanner()

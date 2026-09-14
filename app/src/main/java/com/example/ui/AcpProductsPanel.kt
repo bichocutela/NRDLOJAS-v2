@@ -519,29 +519,34 @@ internal fun AcpProductsPanel(
                     }
                     detail?.let { product ->
                         detailTime?.let { Text("Consultado em ${acpQueryTime(it)}", style = MaterialTheme.typography.bodySmall) }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick = { openProduct(product) }, enabled = !detailBusy, modifier = Modifier.weight(1f)) {
-                                Text("Atualizar preços")
+                        NrdTwoActionLayout(
+                            stackOnCompact = true,
+                            first = { actionModifier ->
+                                TextButton(
+                                    onClick = { openProduct(product) },
+                                    enabled = !detailBusy,
+                                    modifier = actionModifier
+                                ) { Text("Atualizar preços", maxLines = 2) }
+                            },
+                            second = { actionModifier ->
+                                OutlinedButton(
+                                    onClick = {
+                                        val barcodeValue = product.barcode.ifBlank { product.code }.trim()
+                                        if (barcodeValue.isNotBlank()) {
+                                            barcodeDialogProduct = com.example.data.Product(
+                                                code = barcodeValue,
+                                                name = product.description,
+                                                searchName = product.description.lowercase(Locale.getDefault()),
+                                                category = product.categories.firstOrNull().orEmpty().ifBlank { "Varejo" },
+                                                unit = product.unit ?: "un"
+                                            )
+                                        }
+                                    },
+                                    enabled = !detailBusy && (product.barcode.isNotBlank() || product.code.isNotBlank()),
+                                    modifier = actionModifier
+                                ) { Text("Ver Cód Barra", maxLines = 2) }
                             }
-                            OutlinedButton(
-                                onClick = {
-                                    val barcodeValue = product.barcode.ifBlank { product.code }.trim()
-                                    if (barcodeValue.isNotBlank()) {
-                                        barcodeDialogProduct = com.example.data.Product(
-                                            code = barcodeValue,
-                                            name = product.description,
-                                            searchName = product.description.lowercase(Locale.getDefault()),
-                                            category = product.categories.firstOrNull().orEmpty().ifBlank { "Varejo" },
-                                            unit = product.unit ?: "un"
-                                        )
-                                    }
-                                },
-                                enabled = !detailBusy && (product.barcode.isNotBlank() || product.code.isNotBlank()),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Ver Cód Barra")
-                            }
-                        }
+                        )
                         if (canAddToNrd) {
                             OutlinedButton(
                                 onClick = { prepareAddToNrd(product) },

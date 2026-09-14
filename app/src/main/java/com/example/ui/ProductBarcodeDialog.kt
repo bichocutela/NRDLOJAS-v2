@@ -58,6 +58,7 @@ fun ProductBarcodeDialog(
     }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val screenProfile = rememberNrdScreenProfile()
     val userPreferences = remember { UserPreferences(context) }
     val barcodeNumberScale by userPreferences.barcodeNumberScale.collectAsState(initial = 1.0f)
     val barcodeTitleScale by userPreferences.barcodeTitleScale.collectAsState(initial = 1.0f)
@@ -111,8 +112,8 @@ fun ProductBarcodeDialog(
                         null
                     },
                     modifier = Modifier
-                        .fillMaxWidth(0.9f)
-                        .padding(vertical = 24.dp)
+                        .fillMaxWidth(if (screenProfile.compact) 0.96f else 0.9f)
+                        .padding(vertical = if (screenProfile.compact) 10.dp else 24.dp)
                         .glassSoftShadow(dialogShape)
                 ) {
                     Column(
@@ -120,7 +121,7 @@ fun ProductBarcodeDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
-                            .padding(24.dp)
+                            .padding(if (screenProfile.compact) 14.dp else 24.dp)
                     ) {
                         if (highlightedFromNotification) {
                             Text(
@@ -136,7 +137,7 @@ fun ProductBarcodeDialog(
                             text = product.name,
                             baseStyle = MaterialTheme.typography.headlineMedium.copy(
                                 fontWeight = FontWeight.Black,
-                                fontSize = 28.sp * barcodeTitleScale
+                                fontSize = (if (screenProfile.compact) 23.sp else 28.sp) * barcodeTitleScale
                             ),
                             boldOutline = boldOutline,
                             uppercaseBold = uppercaseBold,
@@ -150,7 +151,7 @@ fun ProductBarcodeDialog(
                             text = product.code,
                             style = MaterialTheme.typography.displayMedium.copy(
                                 fontWeight = FontWeight.Black,
-                                fontSize = 42.sp * barcodeNumberScale,
+                                fontSize = (if (screenProfile.compact) 34.sp else 42.sp) * barcodeNumberScale,
                                 color = MaterialTheme.colorScheme.primary
                             ),
                             modifier = Modifier.fillMaxWidth(),
@@ -249,7 +250,7 @@ fun ProductBarcodeDialog(
                         
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(if (screenProfile.veryCompact) 4.dp else 8.dp)
                         ) {
                             listOf("Padrão", "Symbol", "Datalogic").forEach { profile ->
                                 if (scannerProfile == profile) {
@@ -258,7 +259,7 @@ fun ProductBarcodeDialog(
                                         modifier = Modifier.weight(1f),
                                         contentPadding = PaddingValues(0.dp)
                                     ) {
-                                        Text(profile, fontSize = 12.sp, maxLines = 1)
+                                        Text(profile, fontSize = if (screenProfile.veryCompact) 10.sp else 12.sp, maxLines = 1)
                                     }
                                 } else {
                                     OutlinedButton(
@@ -266,7 +267,7 @@ fun ProductBarcodeDialog(
                                         modifier = Modifier.weight(1f),
                                         contentPadding = PaddingValues(0.dp)
                                     ) {
-                                        Text(profile, fontSize = 12.sp, maxLines = 1)
+                                        Text(profile, fontSize = if (screenProfile.veryCompact) 10.sp else 12.sp, maxLines = 1)
                                     }
                                 }
                             }
