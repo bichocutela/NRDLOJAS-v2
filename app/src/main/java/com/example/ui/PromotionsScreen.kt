@@ -81,6 +81,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.data.NossaGenteApi
+import com.example.data.NossaGenteCredentialStore
 import com.example.data.NossaGenteLoginResult
 import com.example.data.NossaGentePromotionsResult
 import com.example.data.Promotion
@@ -129,9 +130,21 @@ fun PromotionsLoginScreen(
 ) {
     var cpf by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var saveCredentials by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val credentialStore = remember(context) { NossaGenteCredentialStore(context.applicationContext) }
+
+    LaunchedEffect(credentialStore) {
+        val saved = withContext(Dispatchers.IO) { credentialStore.load() }
+        if (saved != null) {
+            cpf = saved.cpf
+            password = saved.password
+            saveCredentials = true
+        }
+    }
 
     LaunchedEffect(api) {
         if (api.hasSession()) {
@@ -168,7 +181,7 @@ fun PromotionsLoginScreen(
             Text("Entre com o mesmo acesso do Nossa Gente", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
             Text(
-                "Use seu CPF e sua senha do Nossa Gente. A senha é usada somente nesta autenticação e não é salva no aparelho.",
+                "Use seu CPF e sua senha do Nossa Gente. Se quiser, você pode salvar o acesso neste aparelho para não precisar digitar toda vez.",
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(Modifier.height(16.dp))
@@ -189,6 +202,31 @@ fun PromotionsLoginScreen(
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth()
             )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                androidx.compose.material3.Checkbox(
+                    checked = saveCredentials,
+                    onCheckedChange = { checked ->
+                        saveCredentials = checked
+                        if (!checked) {
+                            scope.launch(Dispatchers.IO) { credentialStore.clear() }
+                        }
+                    }
+                )
+                Text(
+                    text = "Salvar CPF e senha neste aparelho",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            Text(
+                text = "O acesso salvo fica criptografado localmente neste aparelho.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            )
             Spacer(Modifier.height(12.dp))
             Button(
                 onClick = {
@@ -198,8 +236,15 @@ fun PromotionsLoginScreen(
                     scope.launch {
                         when (val result = api.login(cpf, password)) {
                             NossaGenteLoginResult.Success -> {
-                                password = ""
                                 if (api.hasSession()) {
+                                    if (saveCredentials) {
+                                        withContext(Dispatchers.IO) {
+                                            credentialStore.save(cpf = cpf, password = password)
+                                        }
+                                    } else {
+                                        withContext(Dispatchers.IO) { credentialStore.clear() }
+                                        password = ""
+                                    }
                                     onLoginSuccess()
                                 } else {
                                     error = "A sessão não ficou disponível. Tente novamente."
