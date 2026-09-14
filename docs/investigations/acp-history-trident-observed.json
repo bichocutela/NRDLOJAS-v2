@@ -1,0 +1,25 @@
+{
+  "evidence": "Observed subset, not a complete HTTP response or a current offer",
+  "sourceArchive": "teste.zip",
+  "sourceEntry": "acp-historico-pagina-0.json",
+  "endpoint": "TemplatePrintLog/all",
+  "recordId": 6306,
+  "created_At": "2026-01-28T17:28:31",
+  "templateCode": "57",
+  "product": {
+    "id": 72743,
+    "code": "2010473004",
+    "barCode": "7622210564337",
+    "description": "Goma De Mascar Trident 5 Unids. 8g",
+    "value": "2.99",
+    "previousValue": 0,
+    "clubValue": "1.99",
+    "cashback": null,
+    "cashbackValue": 0,
+    "quantityTake": null,
+    "quantityPay": null,
+    "dueDate": null,
+    "validOffer": "03/02/2026",
+    "showOffersExpirationDate": true
+  }
+}
