@@ -39,7 +39,7 @@ internal fun AcpEvidencePanel(api: AcpApi, store: AcpStorage, exportBusy: Boolea
         Text("Procura o produto nos grupos e cartazes impressos. Não confirma oferta vigente. Mantenha esta tela aberta durante a coleta.",
             style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(
-            value = target, onValueChange = { target = it.filter(Char::isDigit).take(20) },
+            value = target, onValueChange = { target = it.filter { character -> character in '0'..'9' }.take(20) },
             label = { Text("Código interno ou EAN exato") }, enabled = !running && !exportBusy,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             singleLine = true, modifier = Modifier.fillMaxWidth()
