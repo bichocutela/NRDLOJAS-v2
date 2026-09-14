@@ -1,0 +1,70 @@
+from pathlib import Path
+
+p = Path('app/src/main/java/com/example/ui/AcpProductsPanel.kt')
+s = p.read_text(encoding='utf-8')
+
+anchor = '    var addToNrdProduct by remember { mutableStateOf<AcpProduct?>(null) }\n'
+if 'var barcodeDialogProduct by remember' not in s:
+    s = s.replace(anchor, '    var barcodeDialogProduct by remember { mutableStateOf<com.example.data.Product?>(null) }\n' + anchor)
+
+old = '''                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { openProduct(product) }, enabled = !detailBusy, modifier = Modifier.weight(1f)) {
+                                Text("Atualizar preços")
+                            }
+                            if (canAddToNrd) {
+                                OutlinedButton(onClick = { prepareAddToNrd(product) }, enabled = !detailBusy, modifier = Modifier.weight(1f)) {
+                                    Text("Adicionar ao NRD")
+                                }
+                            }
+                        }
+'''
+new = '''                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { openProduct(product) }, enabled = !detailBusy, modifier = Modifier.weight(1f)) {
+                                Text("Atualizar preços")
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    val barcodeValue = product.barcode.ifBlank { product.code }.trim()
+                                    if (barcodeValue.isNotBlank()) {
+                                        barcodeDialogProduct = com.example.data.Product(
+                                            code = barcodeValue,
+                                            name = product.description,
+                                            searchName = product.description.lowercase(Locale.getDefault()),
+                                            category = product.categories.firstOrNull().orEmpty().ifBlank { "Varejo" },
+                                            unit = product.unit ?: "un"
+                                        )
+                                    }
+                                },
+                                enabled = !detailBusy && (product.barcode.isNotBlank() || product.code.isNotBlank()),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Ver Cód Barra")
+                            }
+                        }
+                        if (canAddToNrd) {
+                            OutlinedButton(
+                                onClick = { prepareAddToNrd(product) },
+                                enabled = !detailBusy,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Adicionar ao NRD")
+                            }
+                        }
+'''
+if old not in s:
+    raise SystemExit('bloco de ações não encontrado')
+s = s.replace(old, new)
+
+insert_before = '    addToNrdProduct?.let { product ->\n'
+dialog = '''    barcodeDialogProduct?.let { barcodeProduct ->
+        ProductBarcodeDialog(
+            product = barcodeProduct,
+            onDismiss = { barcodeDialogProduct = null }
+        )
+    }
+
+'''
+if dialog.strip() not in s:
+    s = s.replace(insert_before, dialog + insert_before)
+
+p.write_text(s, encoding='utf-8')
