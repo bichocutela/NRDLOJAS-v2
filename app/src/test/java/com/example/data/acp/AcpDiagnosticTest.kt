@@ -102,6 +102,21 @@ class AcpDiagnosticTest {
         assertNull(api.diagnosticText()) // Large history does not pollute clipboard diagnostics.
     }
 
+    @Test fun evidenceGroupReadUsesGetAndRemovesSecretsWithoutChangingClipboardDiagnostic() = runBlocking {
+        val server = Server(session(), """{"items":[{"id":1,"products":[],"token":"private-test-value"}],"pageIndex":0,"totalPages":1,"totalCount":1}""")
+        val api = AcpApi(MemoryStore(), OkHttpClient.Builder().addInterceptor(server))
+        val response = api.readEvidencePage("ProductGroup/all", listOf("pageSize" to "10", "pageIndex" to "0"))
+        assertFalse(response.toString().contains("private-test-value"))
+        assertEquals("GET", server.requests.last().method)
+        assertEquals("/api/v1/ProductGroup/all", server.requests.last().url.encodedPath)
+        assertNull(api.diagnosticText())
+        try {
+            api.readEvidencePage("Product/bulk", emptyList())
+            fail("Write endpoints must not be allowed")
+        } catch (_: IllegalArgumentException) { /* expected before any request */ }
+        assertEquals(2, server.requests.size)
+    }
+
     @Test fun startingNewDiagnosticSessionClearsPreviousCapture() = runBlocking {
         val server = Server(session(), """{"items":[],"pageIndex":0,"totalPages":0,"totalCount":0}""")
         val api = AcpApi(MemoryStore(), OkHttpClient.Builder().addInterceptor(server))
