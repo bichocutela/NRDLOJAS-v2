@@ -341,6 +341,10 @@ internal fun AcpProductsPanel(
         }
 
         if (canCopyDiagnostic) item {
+            AcpEvidencePanel(api, freshStore, historyExportBusy, onExportHistory)
+        }
+
+        if (canCopyDiagnostic) item {
             OutlinedTextField(
                 value = historyPage,
                 onValueChange = { historyPage = it.filter(Char::isDigit).take(6) },

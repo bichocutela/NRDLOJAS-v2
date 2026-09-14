@@ -66,7 +66,7 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
         scope.launch {
             try {
                 withContext(Dispatchers.IO) { historyExport.stage(payload) }
-                saveHistory.launch("acp-historico-pagina-$index.json")
+                saveHistory.launch(if (index < 0) "acp-investigacao-produto.json" else "acp-historico-pagina-$index.json")
             } catch (cancelled: CancellationException) {
                 historyExportBusy = false
                 throw cancelled
