@@ -91,6 +91,7 @@ internal fun AcpProductsPanel(
     var detailTime by remember { mutableStateOf<Long?>(null) }
     var detailAttempt by remember { mutableIntStateOf(0) }
 
+    var barcodeDialogProduct by remember { mutableStateOf<com.example.data.Product?>(null) }
     var addToNrdProduct by remember { mutableStateOf<AcpProduct?>(null) }
     var nrdIdentifier by remember { mutableStateOf(NrdIdentifier.BARCODE) }
     var selectedNrdCategories by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -522,10 +523,32 @@ internal fun AcpProductsPanel(
                             TextButton(onClick = { openProduct(product) }, enabled = !detailBusy, modifier = Modifier.weight(1f)) {
                                 Text("Atualizar preços")
                             }
-                            if (canAddToNrd) {
-                                OutlinedButton(onClick = { prepareAddToNrd(product) }, enabled = !detailBusy, modifier = Modifier.weight(1f)) {
-                                    Text("Adicionar ao NRD")
-                                }
+                            OutlinedButton(
+                                onClick = {
+                                    val barcodeValue = product.barcode.ifBlank { product.code }.trim()
+                                    if (barcodeValue.isNotBlank()) {
+                                        barcodeDialogProduct = com.example.data.Product(
+                                            code = barcodeValue,
+                                            name = product.description,
+                                            searchName = product.description.lowercase(Locale.getDefault()),
+                                            category = product.categories.firstOrNull().orEmpty().ifBlank { "Varejo" },
+                                            unit = product.unit ?: "un"
+                                        )
+                                    }
+                                },
+                                enabled = !detailBusy && (product.barcode.isNotBlank() || product.code.isNotBlank()),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Ver Cód Barra")
+                            }
+                        }
+                        if (canAddToNrd) {
+                            OutlinedButton(
+                                onClick = { prepareAddToNrd(product) },
+                                enabled = !detailBusy,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Adicionar ao NRD")
                             }
                         }
                         nrdActionMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
@@ -636,6 +659,13 @@ internal fun AcpProductsPanel(
                 }
             },
             confirmButton = { TextButton(onClick = { closeDetail() }) { Text("Fechar") } }
+        )
+    }
+
+    barcodeDialogProduct?.let { barcodeProduct ->
+        ProductBarcodeDialog(
+            product = barcodeProduct,
+            onDismiss = { barcodeDialogProduct = null }
         )
     }
 
