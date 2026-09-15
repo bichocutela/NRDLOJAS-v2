@@ -1,0 +1,60 @@
+name: Diagnosticar regra comercial ACP 255131
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-255131-commercial.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Buscar 255131 em campanhas e grupos
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          ORIGIN='https://nordestao12.acp.app.br'
+          API_ORIGIN='https://api.acp.app.br'
+          COOKIE_JAR="$RUNNER_TEMP/acp.cookies"
+
+          csrf_json=$(curl -fsS -c "$COOKIE_JAR" -b "$COOKIE_JAR" "$ORIGIN/api/auth/csrf")
+          csrf=$(jq -er '.csrfToken' <<<"$csrf_json")
+          curl -fsS -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
+            -H "Origin: $ORIGIN" -H "Referer: $ORIGIN/login" \
+            -X POST "$ORIGIN/api/auth/callback/credentials" \
+            --data-urlencode "login=$ACP_LOGIN" \
+            --data-urlencode "password=$ACP_PASSWORD" \
+            --data-urlencode "csrfToken=$csrf" \
+            --data-urlencode "callbackUrl=$ORIGIN/print-template" \
+            --data-urlencode "json=true" >/dev/null
+
+          session=$(curl -fsS -c "$COOKIE_JAR" -b "$COOKIE_JAR" "$ORIGIN/api/auth/session")
+          token=$(jq -er '.user.accessToken' <<<"$session")
+          proxy=$(jq -r '.user.proxyEnable // false' <<<"$session")
+          if [ "$proxy" = "true" ]; then base="$ORIGIN/api/proxy/api/v1"; else base="$API_ORIGIN/api/v1"; fi
+
+          auth=(-H "Authorization: Bearer $token" -H 'Accept: application/json' -H 'Cache-Control: no-cache, no-store, max-age=0')
+
+          echo '=== Campaign/all: ocorrências de 255131 ou 7.99 ==='
+          for page in 0 1 2 3 4 5 6 7 8 9; do
+            body=$(curl -fsS "${auth[@]}" "$base/Campaign/all?pageSize=100&pageIndex=$page" || true)
+            [ -z "$body" ] && continue
+            echo "$body" | jq -c '.. | objects | select((tostring|contains("255131")) or (tostring|contains("7.99")))' 2>/dev/null | head -n 30 || true
+            total=$(echo "$body" | jq -r '.totalPages // .data.totalPages // 1' 2>/dev/null || echo 1)
+            [ "$page" -ge $((total-1)) ] && break
+          done
+
+          echo '=== ProductGroup/all: ocorrências de 255131 ou 7.99 ==='
+          for page in 0 1 2 3 4 5 6 7 8 9; do
+            body=$(curl -fsS "${auth[@]}" "$base/ProductGroup/all?pageSize=100&pageIndex=$page" || true)
+            [ -z "$body" ] && continue
+            echo "$body" | jq -c '.. | objects | select((tostring|contains("255131")) or (tostring|contains("7.99")))' 2>/dev/null | head -n 30 || true
+            total=$(echo "$body" | jq -r '.totalPages // .data.totalPages // 1' 2>/dev/null || echo 1)
+            [ "$page" -ge $((total-1)) ] && break
+          done
