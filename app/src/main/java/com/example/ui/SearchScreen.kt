@@ -791,14 +791,22 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
             ProductBarcodeDialog(
                 product = product,
                 onDismiss = { selectedNotificationProduct = null },
-                highlightedFromNotification = true
+                highlightedFromNotification = true,
+                onProductUpdated = { updated ->
+                    selectedNotificationProduct = updated
+                    viewModel.updateProductLocally(updated)
+                }
             )
         }
 
         selectedMostUsedProduct?.let { product ->
             ProductBarcodeDialog(
                 product = product,
-                onDismiss = { selectedMostUsedProduct = null }
+                onDismiss = { selectedMostUsedProduct = null },
+                onProductUpdated = { updated ->
+                    selectedMostUsedProduct = updated
+                    viewModel.updateProductLocally(updated)
+                }
             )
         }
 

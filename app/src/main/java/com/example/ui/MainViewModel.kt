@@ -572,6 +572,10 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         viewModelScope.launch { updateProductSuspend(oldProduct, newProduct) }
     }
 
+    fun updateProductLocally(product: Product) {
+        viewModelScope.launch { repository.updateProduct(product) }
+    }
+
     suspend fun addProductSuspend(
         name: String,
         code: String,

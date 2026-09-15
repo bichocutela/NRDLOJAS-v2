@@ -52,7 +52,8 @@ private val barcodeBitmapCache = android.util.LruCache<String, androidx.compose.
 fun ProductBarcodeDialog(
     product: Product,
     onDismiss: () -> Unit,
-    highlightedFromNotification: Boolean = false
+    highlightedFromNotification: Boolean = false,
+    onProductUpdated: (Product) -> Unit = {}
 ) {
     val showDialog = remember { mutableStateOf(true) }
     val visibilityState = remember {
@@ -82,6 +83,7 @@ fun ProductBarcodeDialog(
     ) == "mestre"
     var isPhotoSaving by remember { mutableStateOf(false) }
     var photoEditMessage by remember { mutableStateOf<String?>(null) }
+    var pendingPhotoUrl by remember(product.code) { mutableStateOf<String?>(null) }
 
     fun clipboardHttpUrl(): String? {
         val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
@@ -149,7 +151,10 @@ fun ProductBarcodeDialog(
                             product.copy(imageUrl = uploadedUrl)
                         )
                         if (saved) {
+                            val updatedProduct = product.copy(imageUrl = uploadedUrl)
                             photoUrl = uploadedUrl
+                            pendingPhotoUrl = null
+                            onProductUpdated(updatedProduct)
                             photoEditMessage = "Foto atualizada com sucesso."
                         } else {
                             photoEditMessage = "A foto foi enviada, mas não foi possível atualizar o produto."
@@ -420,10 +425,14 @@ fun ProductBarcodeDialog(
         }
 
         if (showPhotoDialog && photoUrl != null) {
-            var isPhotoLoading by remember(photoUrl) { mutableStateOf(true) }
-            var photoLoadFailed by remember(photoUrl) { mutableStateOf(false) }
+            var isPhotoLoading by remember(photoUrl, pendingPhotoUrl) { mutableStateOf(true) }
+            var photoLoadFailed by remember(photoUrl, pendingPhotoUrl) { mutableStateOf(false) }
             AlertDialog(
-                onDismissRequest = { showPhotoDialog = false },
+                onDismissRequest = {
+                    pendingPhotoUrl = null
+                    photoEditMessage = null
+                    showPhotoDialog = false
+                },
                 title = { Text("Foto do Produto") },
                 text = {
                     Column(
@@ -437,7 +446,7 @@ fun ProductBarcodeDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             AsyncImage(
-                                model = photoUrl,
+                                model = pendingPhotoUrl ?: photoUrl,
                                 contentDescription = product.name,
                                 contentScale = ContentScale.Fit,
                                 modifier = Modifier.fillMaxSize(),
@@ -469,7 +478,9 @@ fun ProductBarcodeDialog(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = when {
                                     message.startsWith("Foto atualizada") -> MaterialTheme.colorScheme.primary
+                                    message.startsWith("Prévia") -> MaterialTheme.colorScheme.onSurfaceVariant
                                     message.startsWith("Validando") -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    message.startsWith("Salvando") -> MaterialTheme.colorScheme.onSurfaceVariant
                                     else -> MaterialTheme.colorScheme.error
                                 }
                             )
@@ -491,6 +502,36 @@ fun ProductBarcodeDialog(
                                 enabled = !isPhotoSaving
                             ) {
                                 Text(if (isPhotoSaving) "Salvando…" else "Editar Foto")
+                            }
+                            if (pendingPhotoUrl != null) {
+                                Button(
+                                    onClick = {
+                                        val urlToSave = pendingPhotoUrl ?: return@Button
+                                        isPhotoSaving = true
+                                        photoEditMessage = "Salvando foto neste produto…"
+                                        coroutineScope.launch {
+                                            try {
+                                                val updatedProduct = product.copy(imageUrl = urlToSave)
+                                                val saved = com.example.data.FirebaseService.saveProduct(updatedProduct)
+                                                if (saved) {
+                                                    photoUrl = urlToSave
+                                                    pendingPhotoUrl = null
+                                                    onProductUpdated(updatedProduct)
+                                                    photoEditMessage = "Foto atualizada e salva neste produto."
+                                                } else {
+                                                    photoEditMessage = "Não foi possível salvar a foto neste produto. Tente novamente."
+                                                }
+                                            } catch (_: Exception) {
+                                                photoEditMessage = "Não foi possível salvar a foto. Verifique a conexão e tente novamente."
+                                            } finally {
+                                                isPhotoSaving = false
+                                            }
+                                        }
+                                    },
+                                    enabled = !isPhotoSaving
+                                ) {
+                                    Text("Salvar")
+                                }
                             }
                             OutlinedButton(
                                 onClick = {
@@ -515,15 +556,8 @@ fun ProductBarcodeDialog(
                                                     if (imageResult !is coil.request.SuccessResult) {
                                                         photoEditMessage = "O link não carregou como imagem. Abra a imagem em nova guia e copie o endereço direto dela."
                                                     } else {
-                                                        val saved = com.example.data.FirebaseService.saveProduct(
-                                                            product.copy(imageUrl = copiedUrl)
-                                                        )
-                                                        if (saved) {
-                                                            photoUrl = copiedUrl
-                                                            photoEditMessage = "Foto atualizada por link. Nenhum upload foi feito."
-                                                        } else {
-                                                            photoEditMessage = "A imagem é válida, mas não foi possível atualizar o produto."
-                                                        }
+                                                        pendingPhotoUrl = copiedUrl
+                                                        photoEditMessage = "Prévia carregada. Toque em Salvar para confirmar esta foto no produto."
                                                     }
                                                 } catch (_: Exception) {
                                                     photoEditMessage = "Não foi possível validar esse link. Verifique a conexão ou tente outro endereço de imagem."
@@ -540,7 +574,11 @@ fun ProductBarcodeDialog(
                             }
                         }
                         TextButton(
-                            onClick = { showPhotoDialog = false },
+                            onClick = {
+                                pendingPhotoUrl = null
+                                photoEditMessage = null
+                                showPhotoDialog = false
+                            },
                             enabled = !isPhotoSaving
                         ) {
                             Text("Fechar")
