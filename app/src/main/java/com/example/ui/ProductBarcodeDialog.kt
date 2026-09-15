@@ -56,7 +56,8 @@ fun ProductBarcodeDialog(
     onDismiss: () -> Unit,
     highlightedFromNotification: Boolean = false,
     onProductUpdated: (Product) -> Unit = {},
-    onProductCodeChanged: (suspend (Product, String) -> Boolean)? = null
+    onProductCodeChanged: (suspend (Product, String) -> Boolean)? = null,
+    onProductDeleted: (suspend (Product) -> Boolean)? = null
 ) {
     val showDialog = remember { mutableStateOf(true) }
     val visibilityState = remember {
@@ -91,6 +92,9 @@ fun ProductBarcodeDialog(
     var codeEditValue by remember(product.code) { mutableStateOf(product.code) }
     var isCodeSaving by remember { mutableStateOf(false) }
     var codeEditMessage by remember(product.code) { mutableStateOf<String?>(null) }
+    var showDeleteProductDialog by remember { mutableStateOf(false) }
+    var isDeletingProduct by remember { mutableStateOf(false) }
+    var deleteProductMessage by remember(product.code) { mutableStateOf<String?>(null) }
 
     fun clipboardHttpUrl(): String? {
         val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
@@ -368,6 +372,24 @@ fun ProductBarcodeDialog(
                                     )
                                 }
                             }
+                            if (isMaster && onProductDeleted != null) {
+                                TextButton(
+                                    onClick = {
+                                        deleteProductMessage = null
+                                        showDeleteProductDialog = true
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 4.dp),
+                                    colors = ButtonDefaults.textButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.error
+                                    )
+                                ) {
+                                    Text(
+                                        "Excluir",
+                                        maxLines = 1,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
                             if (photoUrl != null || isMaster) {
                                 TextButton(
                                     onClick = { showPhotoDialog = true },
@@ -528,9 +550,98 @@ fun ProductBarcodeDialog(
                     }
                 },
                 dismissButton = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(
+                            onClick = {
+                                codeEditValue = product.code
+                                codeEditMessage = null
+                            },
+                            enabled = !isCodeSaving && codeEditValue != product.code
+                        ) {
+                            Text("Reverter")
+                        }
+                        TextButton(
+                            onClick = { showCodeEditDialog = false },
+                            enabled = !isCodeSaving
+                        ) {
+                            Text("Cancelar")
+                        }
+                    }
+                }
+            )
+        }
+
+        if (showDeleteProductDialog && isMaster && onProductDeleted != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    if (!isDeletingProduct) {
+                        deleteProductMessage = null
+                        showDeleteProductDialog = false
+                    }
+                },
+                title = { Text("Excluir produto") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Deseja realmente excluir este produto do catálogo?")
+                        Text(
+                            product.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Código: ${product.code}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "A exclusão será aplicada para todos os usuários.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        deleteProductMessage?.let { message ->
+                            Text(
+                                message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
                     TextButton(
-                        onClick = { showCodeEditDialog = false },
-                        enabled = !isCodeSaving
+                        onClick = {
+                            coroutineScope.launch {
+                                isDeletingProduct = true
+                                deleteProductMessage = null
+                                try {
+                                    val deleted = onProductDeleted(product)
+                                    if (deleted) {
+                                        showDeleteProductDialog = false
+                                        closeDialog()
+                                    } else {
+                                        deleteProductMessage = "Não foi possível excluir o produto."
+                                    }
+                                } catch (_: Exception) {
+                                    deleteProductMessage = "Não foi possível excluir o produto. Tente novamente."
+                                } finally {
+                                    isDeletingProduct = false
+                                }
+                            }
+                        },
+                        enabled = !isDeletingProduct,
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        if (isDeletingProduct) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+                        Text(if (isDeletingProduct) "Excluindo..." else "Excluir produto")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showDeleteProductDialog = false },
+                        enabled = !isDeletingProduct
                     ) {
                         Text("Cancelar")
                     }

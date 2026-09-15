@@ -828,6 +828,9 @@ fun SearchScreen(
                 },
                 onProductCodeChanged = { old, newCode ->
                     viewModel.updateProductSuspend(old, old.copy(code = newCode))
+                },
+                onProductDeleted = { target ->
+                    viewModel.deleteProductSuspend(target)
                 }
             )
         }
@@ -842,6 +845,9 @@ fun SearchScreen(
                 },
                 onProductCodeChanged = { old, newCode ->
                     viewModel.updateProductSuspend(old, old.copy(code = newCode))
+                },
+                onProductDeleted = { target ->
+                    viewModel.deleteProductSuspend(target)
                 }
             )
         }
