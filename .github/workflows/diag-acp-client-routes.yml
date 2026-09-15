@@ -1,0 +1,87 @@
+name: Inspecionar rotas ACP autenticado
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-client-routes.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Autenticar e mapear bundles
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          ORIGIN='https://nordestao12.acp.app.br'
+          COOKIE="$RUNNER_TEMP/acp.cookies"
+          WORK="$RUNNER_TEMP/acp-client"
+          mkdir -p "$WORK"
+
+          csrf=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$ORIGIN/api/auth/csrf" | jq -er '.csrfToken')
+          curl -fsS -c "$COOKIE" -b "$COOKIE" \
+            -H "Origin: $ORIGIN" -H "Referer: $ORIGIN/login" \
+            -X POST "$ORIGIN/api/auth/callback/credentials" \
+            --data-urlencode "login=$ACP_LOGIN" \
+            --data-urlencode "password=$ACP_PASSWORD" \
+            --data-urlencode "csrfToken=$csrf" \
+            --data-urlencode "callbackUrl=$ORIGIN/print-template" \
+            --data-urlencode "json=true" >/dev/null
+
+          curl -fsS -L -c "$COOKIE" -b "$COOKIE" "$ORIGIN/print-template" -o "$WORK/page.html"
+          echo "html_bytes=$(wc -c < "$WORK/page.html")"
+
+          python3 - "$WORK/page.html" "$WORK/scripts.txt" <<'PY'
+          import re,sys,urllib.parse
+          html=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
+          srcs=sorted(set(re.findall(r'<script[^>]+src=["\x27]([^"\x27]+)',html,re.I)))
+          urls=[urllib.parse.urljoin('https://nordestao12.acp.app.br/print-template',s) for s in srcs]
+          open(sys.argv[2],'w').write('\n'.join(urls))
+          print('scripts='+str(len(urls)))
+          for u in urls[:80]: print('SCRIPT '+u)
+          PY
+
+          i=0
+          while IFS= read -r url; do
+            [ -z "$url" ] && continue
+            i=$((i+1))
+            curl -fsS "$url" -o "$WORK/$i.js" || true
+          done < "$WORK/scripts.txt"
+          echo "downloaded=$i"
+
+          python3 - "$WORK" <<'PY'
+          import pathlib,re,sys
+          root=pathlib.Path(sys.argv[1])
+          strings=set()
+          patterns=[
+            r'[A-Z][A-Za-z0-9]+/(?:all|[A-Za-z0-9_-]+)',
+            r'/api/v1/[A-Za-z0-9_/?=&.-]+',
+          ]
+          for p in root.glob('*.js'):
+            t=p.read_text(errors='ignore')
+            for pat in patterns:
+              strings.update(re.findall(pat,t))
+          wanted=('product','campaign','price','offer','promotion','discount','template','print','history','integration','unit','store')
+          for s in sorted(strings):
+            if any(w in s.lower() for w in wanted): print('ROUTE '+s)
+          print('--- commercial property contexts ---')
+          keys=re.compile(r'(?:value|price|offer|promotion|discount|clubValue|previousValue|quantityTake|cashback)',re.I)
+          shown=0
+          seen=set()
+          for p in root.glob('*.js'):
+            t=p.read_text(errors='ignore')
+            for m in keys.finditer(t):
+              frag=t[max(0,m.start()-140):min(len(t),m.end()+220)].replace('\n',' ')
+              if frag in seen: continue
+              seen.add(frag)
+              if any(x in frag.lower() for x in ('product','price','offer','campaign','value')):
+                print('CTX '+frag[:500])
+                shown+=1
+                if shown>=100: raise SystemExit
+          PY
