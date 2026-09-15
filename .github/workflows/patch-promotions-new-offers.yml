@@ -1,0 +1,402 @@
+name: Patch Ofertas Novas por Loja
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/patch-promotions-new-offers.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Aplicar patch protegido
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("app/src/main/java/com/example/ui/PromotionsScreen.kt")
+          text = path.read_text(encoding="utf-8")
+          original = text
+
+          # 1) O diálogo passa a seguir a loja selecionada na tela e só mostra ofertas ADICIONADAS ainda ativas.
+          start_marker = "    val changeStoreOptions = remember(dailyChanges) {"
+          end_marker = "\n\n    selectedOffer?.let { offer ->"
+          start = text.find(start_marker)
+          end = text.find(end_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit("Bloco de mudanças/ofertas novas não encontrado; patch abortado.")
+
+          new_state_block = '''    val newestOfferGroups = pendingUpdate?.offerGroups ?: offerGroups
+    val newOfferChangesForSelectedStore = remember(dailyChanges, newestOfferGroups, selectedStore) {
+        dailyChanges
+            .asReversed()
+            .asSequence()
+            .filter { it.type == PromotionChangeType.ADDED }
+            .filter { selectedStore == ALL_STORES_LABEL || it.storeCode == selectedStore }
+            .filter { newestOfferGroups.findOfferForChange(it) != null }
+            .distinctBy { it.stableKey }
+            .toList()
+    }
+
+    if (showNewOffers) {
+        NewOffersDialog(
+            changes = newOfferChangesForSelectedStore,
+            selectedStore = selectedStore,
+            limitedBySafetyCap = dailyChangesLimited,
+            onDismiss = { showNewOffers = false },
+            onOfferClick = { change ->
+                val sourceGroups = pendingUpdate?.offerGroups ?: offerGroups
+                val offer = sourceGroups.findOfferForChange(change)
+
+                pendingUpdate?.let { applyPromotionUpdate(it) }
+
+                if (change.storeCode.isNotBlank() && change.storeCode != UNKNOWN_STORE_LABEL) {
+                    selectedStore = change.storeCode
+                }
+                selectedCategory = (offer?.category ?: change.category).takeIf { it.isNotBlank() }
+                searchQuery = (
+                    offer?.code?.takeIf { it.isNotBlank() }
+                        ?: change.productCode.takeIf { it.isNotBlank() }
+                        ?: change.productName
+                ).take(MAX_SEARCH_LENGTH)
+                visibleOfferCount = INITIAL_OFFER_PAGE
+                showNewOffers = false
+                if (offer != null) selectedOffer = offer
+            }
+        )
+    }'''
+          text = text[:start] + new_state_block + text[end:]
+
+          # 2) Contador/destaque passam a refletir somente as ofertas novas da loja atual.
+          old_button = '''                        NewOffersButton(
+                            changeCount = dailyChanges.size,
+                            highlighted = dailyChanges.isNotEmpty(),
+                            enabled = !dailyChangesLimited,
+                            onClick = { showNewOffers = true }
+                        )'''
+          new_button = '''                        NewOffersButton(
+                            changeCount = newOfferChangesForSelectedStore.size,
+                            highlighted = newOfferChangesForSelectedStore.isNotEmpty(),
+                            enabled = !isLoading,
+                            onClick = {
+                                pendingUpdate?.let { applyPromotionUpdate(it) }
+                                showNewOffers = true
+                            }
+                        )'''
+          if text.count(old_button) != 1:
+              raise SystemExit("Botão Ofertas Novas não bate com a versão esperada; patch abortado.")
+          text = text.replace(old_button, new_button, 1)
+
+          # 3) Helper para localizar a oferta atual correspondente a uma novidade.
+          store_offer_marker = '''private data class StoreOffer(
+    val storeCode: String,
+    val offerPrice: String?,
+    val regularPrice: String?,
+    val discount: String?,
+    val imageUrl: String?,
+    val linkUrl: String?,
+    val offerNumeric: Double?
+)
+'''
+          helper = store_offer_marker + '''
+private fun List<OfferGroup>.findOfferForChange(change: PromotionChange): OfferGroup? {
+    val storeCode = change.storeCode.trim()
+
+    fun OfferGroup.matchesStore(): Boolean =
+        storeCode.isBlank() ||
+            storeCode == UNKNOWN_STORE_LABEL ||
+            stores.any { it.storeCode == storeCode }
+
+    val code = change.productCode.trim()
+    if (code.isNotBlank()) {
+        firstOrNull { offer ->
+            offer.code == code &&
+                offer.category == change.category &&
+                offer.validFrom == change.newValidFrom &&
+                offer.validTo == change.newValidTo &&
+                offer.matchesStore()
+        }?.let { return it }
+
+        firstOrNull { offer ->
+            offer.code == code && offer.matchesStore()
+        }?.let { return it }
+    }
+
+    return firstOrNull { offer ->
+        offer.name.equals(change.productName, ignoreCase = true) &&
+            (change.category.isBlank() || offer.category == change.category) &&
+            offer.matchesStore()
+    }
+}
+'''
+          if text.count(store_offer_marker) != 1:
+              raise SystemExit("Modelo StoreOffer não encontrado de forma única; patch abortado.")
+          text = text.replace(store_offer_marker, helper, 1)
+
+          # 4) Diálogo reorganizado por loja e cards clicáveis que abrem a oferta real.
+          dialog_start_marker = "@Composable\nprivate fun NewOffersDialog("
+          dialog_end_marker = "\n\nprivate fun PromotionChangeType.displayOrder(): Int = when (this) {"
+          dialog_start = text.find(dialog_start_marker)
+          dialog_end = text.find(dialog_end_marker, dialog_start)
+          if dialog_start < 0 or dialog_end < 0:
+              raise SystemExit("Funções de Ofertas Novas não encontradas; patch abortado.")
+
+          new_dialog_block = '''@Composable
+private fun NewOffersDialog(
+    changes: List<PromotionChange>,
+    selectedStore: String,
+    limitedBySafetyCap: Boolean,
+    onDismiss: () -> Unit,
+    onOfferClick: (PromotionChange) -> Unit
+) {
+    val addedChanges = remember(changes) {
+        changes.filter { it.type == PromotionChangeType.ADDED }
+    }
+    val groupedChanges = remember(addedChanges, selectedStore) {
+        if (selectedStore != ALL_STORES_LABEL) {
+            listOf(selectedStore to addedChanges)
+        } else {
+            addedChanges
+                .groupBy { it.storeCode.ifBlank { UNKNOWN_STORE_LABEL } }
+                .toList()
+                .sortedBy { (storeCode, _) ->
+                    if (storeCode == UNKNOWN_STORE_LABEL) storeCode.lowercase()
+                    else StoreCatalog.nameFor(storeCode).lowercase()
+                }
+        }
+    }
+    val currentStoreLabel = if (selectedStore == ALL_STORES_LABEL) {
+        "Todas as lojas"
+    } else {
+        StoreCatalog.nameFor(selectedStore)
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        val dialogShape = RoundedCornerShape(20.dp)
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .fillMaxHeight(0.9f)
+                .glassSoftShadow(dialogShape),
+            shape = dialogShape,
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 10.dp, end = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Ofertas novas", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (selectedStore == ALL_STORES_LABEL) {
+                                "Novidades de hoje organizadas por loja"
+                            } else {
+                                "Loja atual: $currentStoreLabel"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Fechar ofertas novas")
+                    }
+                }
+
+                if (limitedBySafetyCap) {
+                    Text(
+                        "O histórico de alterações foi limitado para manter o app estável. As ofertas novas disponíveis continuam acessíveis abaixo.",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                Text(
+                    "${addedChanges.size} oferta(s) adicionada(s) hoje • $currentStoreLabel",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (addedChanges.isEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Default.LocalOffer, contentDescription = null, modifier = Modifier.size(48.dp))
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            if (selectedStore == ALL_STORES_LABEL) {
+                                "Nenhuma oferta nova adicionada hoje."
+                            } else {
+                                "Nenhuma oferta nova para $currentStoreLabel hoje."
+                            }
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Quando a consulta encontrar uma nova oferta, ela aparecerá aqui automaticamente.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        groupedChanges.forEach { (storeCode, storeChanges) ->
+                            item(key = "new-store-$storeCode") {
+                                Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp)) {
+                                    Text(
+                                        if (storeCode == UNKNOWN_STORE_LABEL) UNKNOWN_STORE_LABEL else StoreCatalog.nameFor(storeCode),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    if (storeCode != UNKNOWN_STORE_LABEL) {
+                                        Text(
+                                            "Loja ${storeCode.padStart(4, '0')} • ${storeChanges.size} nova(s)",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                            items(storeChanges, key = { it.stableKey }) { change ->
+                                PromotionChangeCard(
+                                    change = change,
+                                    onOfferClick = onOfferClick
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PromotionChangeCard(
+    change: PromotionChange,
+    onOfferClick: (PromotionChange) -> Unit
+) {
+    val cardShape = RoundedCornerShape(14.dp)
+    val validity = listOfNotNull(
+        change.newValidFrom.toDisplayDate(),
+        change.newValidTo.toDisplayDate()
+    ).joinToString(" até ")
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(cardShape)
+            .clickable { onOfferClick(change) },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = cardShape
+    ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.Top) {
+            if (!change.imageUrl.isNullOrBlank()) {
+                ProductImage(
+                    imageUrl = change.imageUrl,
+                    contentDescription = "Abrir ${change.productName}",
+                    modifier = Modifier.size(76.dp),
+                    onClick = { onOfferClick(change) },
+                    validTo = change.newValidTo
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        "NOVA OFERTA",
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(Modifier.height(5.dp))
+                Text(
+                    change.productName,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "${StoreCatalog.labelFor(change.storeCode)} • código ${change.productCode}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "Preço: ${change.newOfferPrice ?: "não informado"}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                if (validity.isNotBlank()) {
+                    Spacer(Modifier.height(3.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            "Validade: $validity",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+                Spacer(Modifier.height(5.dp))
+                Text(
+                    "Toque para abrir esta oferta",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
+}'''
+
+          text = text[:dialog_start] + new_dialog_block + text[dialog_end:]
+
+          if text == original:
+              raise SystemExit("Nenhuma alteração aplicada.")
+
+          path.write_text(text, encoding="utf-8")
+          print("Patch aplicado com sucesso em PromotionsScreen.kt")
+          PY
+
+      - name: Conferir escopo da alteração
+        run: |
+          git diff --check
+          git diff -- app/src/main/java/com/example/ui/PromotionsScreen.kt
+
+      - name: Publicar correção no código
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/ui/PromotionsScreen.kt
+          git commit -m "Organiza Ofertas Novas por loja e abre oferta correta"
+          git push origin HEAD:main
