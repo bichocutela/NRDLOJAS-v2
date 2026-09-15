@@ -1,0 +1,57 @@
+name: Inspecionar fluxo Product sync ACP
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-sync-context.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Localizar contexto de Product sync e integrationInfo
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          ORIGIN='https://nordestao12.acp.app.br'
+          COOKIE="$RUNNER_TEMP/acp.cookies"
+          WORK="$RUNNER_TEMP/acp-client"
+          mkdir -p "$WORK"
+          csrf=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$ORIGIN/api/auth/csrf" | jq -er '.csrfToken')
+          curl -fsS -c "$COOKIE" -b "$COOKIE" -H "Origin: $ORIGIN" -H "Referer: $ORIGIN/login" \
+            -X POST "$ORIGIN/api/auth/callback/credentials" \
+            --data-urlencode "login=$ACP_LOGIN" --data-urlencode "password=$ACP_PASSWORD" \
+            --data-urlencode "csrfToken=$csrf" --data-urlencode "callbackUrl=$ORIGIN/print-template" \
+            --data-urlencode "json=true" >/dev/null
+          curl -fsS -L -c "$COOKIE" -b "$COOKIE" "$ORIGIN/print-template" -o "$WORK/page.html"
+          python3 - "$WORK/page.html" "$WORK" <<'PY'
+          import re,sys,urllib.parse,urllib.request,pathlib
+          html=pathlib.Path(sys.argv[1]).read_text(errors='ignore'); root=pathlib.Path(sys.argv[2])
+          srcs=sorted(set(re.findall(r'<script[^>]+src=["\x27]([^"\x27]+)',html,re.I)))
+          for i,s in enumerate(srcs):
+            try:
+              url=urllib.parse.urljoin('https://nordestao12.acp.app.br/print-template',s)
+              root.joinpath(f'{i}.js').write_bytes(urllib.request.urlopen(url,timeout=20).read())
+            except Exception: pass
+          for key in ['Product/sync','Product/integrationInfo','Product/all']:
+            print('\n===== '+key+' =====')
+            matches=0
+            for p in root.glob('*.js'):
+              t=p.read_text(errors='ignore'); start=0
+              while True:
+                pos=t.find(key,start)
+                if pos<0: break
+                print('FILE',p.name)
+                print(t[max(0,pos-2600):min(len(t),pos+3600)].replace('\n',' ')[:6200])
+                print('---')
+                matches+=1; start=pos+len(key)
+                if matches>=8: break
+              if matches>=8: break
+            print('matches',matches)
+          PY
