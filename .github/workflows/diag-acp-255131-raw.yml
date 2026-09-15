@@ -1,0 +1,41 @@
+name: Inspecionar JSON bruto ACP 255131
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-255131-raw.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  raw:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consultar item bruto sem cache
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          ORIGIN='https://nordestao12.acp.app.br'
+          API_ORIGIN='https://api.acp.app.br'
+          COOKIE="$RUNNER_TEMP/acp.cookies"
+          csrf=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$ORIGIN/api/auth/csrf" | jq -er '.csrfToken')
+          curl -fsS -c "$COOKIE" -b "$COOKIE" -H "Origin: $ORIGIN" -H "Referer: $ORIGIN/login" \
+            -X POST "$ORIGIN/api/auth/callback/credentials" \
+            --data-urlencode "login=$ACP_LOGIN" --data-urlencode "password=$ACP_PASSWORD" \
+            --data-urlencode "csrfToken=$csrf" --data-urlencode "callbackUrl=$ORIGIN/print-template" \
+            --data-urlencode "json=true" >/dev/null
+          session=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$ORIGIN/api/auth/session")
+          token=$(jq -er '.user.accessToken' <<<"$session")
+          proxy=$(jq -r '.user.proxyEnable // false' <<<"$session")
+          if [ "$proxy" = "true" ]; then base="$ORIGIN/api/proxy/api/v1"; else base="$API_ORIGIN/api/v1"; fi
+          body=$(curl -fsS -H "Authorization: Bearer $token" -H 'Accept: application/json' \
+            -H 'Cache-Control: no-cache, no-store, max-age=0' -H 'Pragma: no-cache' \
+            "$base/Product/all?pageSize=20&pageIndex=0&code=255131")
+          echo '=== item bruto 255131 ==='
+          echo "$body" | jq '.items[] | select((.code|tostring)=="255131")'
+          echo '=== campos contendo preço/oferta/desconto/valor ==='
+          echo "$body" | jq -c '.items[] | select((.code|tostring)=="255131") | paths(scalars) as $p | {path:($p|map(tostring)|join(".")), value:getpath($p)} | select((.path|ascii_downcase|test("value|price|promo|offer|discount|club|cash|take|pay|valid|date")))'
