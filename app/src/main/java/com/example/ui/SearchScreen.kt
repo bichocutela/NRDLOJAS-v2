@@ -3,6 +3,7 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.composed
 import androidx.compose.ui.layout.ContentScale
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -209,7 +210,7 @@ fun rememberGlassVisualStyle(): GlassVisualStyle {
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SearchScreen(
     viewModel: MainViewModel,
