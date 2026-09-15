@@ -1,0 +1,139 @@
+name: Capturar editor ACP 255131
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-editor-255131.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  editor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Preparar Playwright
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install chromium >/dev/null
+      - name: Entrar no template e pesquisar produto
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          cat > editor-probe.mjs <<'JS'
+          import { chromium } from 'playwright';
+          const origin='https://nordestao12.acp.app.br';
+          const browser=await chromium.launch({headless:true});
+          const context=await browser.newContext();
+          const api=context.request;
+          const csrf=(await (await api.get(origin+'/api/auth/csrf')).json()).csrfToken;
+          await api.post(origin+'/api/auth/callback/credentials',{
+            headers:{Origin:origin,Referer:origin+'/login'},
+            form:{login:process.env.ACP_LOGIN,password:process.env.ACP_PASSWORD,csrfToken:csrf,callbackUrl:origin+'/print-template',json:'true'}
+          });
+          const session=await (await api.get(origin+'/api/auth/session')).json();
+          if(!session?.user?.accessToken) throw new Error('Sessão ACP não autenticada.');
+
+          const page=await context.newPage();
+          const reqs=[];
+          const hits=[];
+          page.on('request',req=>{
+            if(req.method()==='GET' && /acp\.app\.br/i.test(req.url())) {
+              const u=req.url();
+              if(/Product|Campaign|Offer|Price|Promotion|Template|Print|Unit/i.test(u)) reqs.push(u.replace(/([?&](?:token|accessToken|authorization)=[^&]+)/gi,'$1REDACTED'));
+            }
+          });
+          page.on('response',async res=>{
+            const req=res.request();
+            if(req.method()!=='GET') return;
+            const url=res.url();
+            if(!/acp\.app\.br/i.test(url)) return;
+            const ct=(res.headers()['content-type']||'').toLowerCase();
+            if(!ct.includes('json')) return;
+            try{
+              const text=await res.text();
+              if(text.includes('255131')||text.includes('2551310')||text.includes('7.99')){
+                let parsed=null; try{parsed=JSON.parse(text)}catch{}
+                const out={url:url.replace(/([?&](?:token|accessToken|authorization)=[^&]+)/gi,'$1REDACTED'),status:res.status(),matches:[]};
+                if(parsed){
+                  const walk=(v,path='')=>{
+                    if(out.matches.length>=60) return;
+                    if(v&&typeof v==='object'){
+                      if(!Array.isArray(v)){
+                        const s=JSON.stringify(v);
+                        if(s.includes('255131')||s.includes('2551310')||s.includes('7.99')){
+                          const safe={};
+                          for(const [k,val] of Object.entries(v)){
+                            if(!/token|password|cookie|authorization/i.test(k)&&(val===null||['string','number','boolean'].includes(typeof val))) safe[k]=val;
+                          }
+                          if(Object.keys(safe).length) out.matches.push({path,fields:safe});
+                        }
+                      }
+                      if(Array.isArray(v)) v.forEach((x,i)=>walk(x,`${path}[${i}]`));
+                      else Object.entries(v).forEach(([k,x])=>{if(!/token|password|cookie|authorization/i.test(k)) walk(x,path?`${path}.${k}`:k)});
+                    }
+                  };
+                  walk(parsed);
+                }
+                hits.push(out);
+              }
+            }catch{}
+          });
+
+          await page.goto(origin+'/print-template',{waitUntil:'domcontentloaded',timeout:60000});
+          await page.waitForTimeout(5000);
+          const selects=page.getByRole('button',{name:'Selecionar'});
+          console.log('SELECT_COUNT',await selects.count());
+          await selects.first().click();
+          await page.waitForTimeout(5000);
+          console.log('EDITOR_URL',page.url());
+          console.log('EDITOR_BODY_BEGIN');
+          console.log((await page.locator('body').innerText()).slice(0,10000));
+          console.log('EDITOR_BODY_END');
+          const inputs=await page.locator('input').evaluateAll(els=>els.map((e,i)=>({i,type:e.type,placeholder:e.placeholder,name:e.name,aria:e.getAttribute('aria-label'),value:e.value})));
+          console.log('EDITOR_INPUTS',JSON.stringify(inputs));
+
+          const candidates=page.locator('input[type="text"],input[type="search"],input:not([type])');
+          const count=await candidates.count();
+          let chosen=-1;
+          for(let i=0;i<count;i++){
+            const el=candidates.nth(i);
+            const meta=((await el.getAttribute('placeholder'))||'')+' '+((await el.getAttribute('aria-label'))||'')+' '+((await el.getAttribute('name'))||'');
+            if(/prod|cód|cod|ean|barra|busc|pesq/i.test(meta)){
+              chosen=i; break;
+            }
+          }
+          if(chosen<0 && count>0) chosen=0;
+          console.log('PRODUCT_INPUT_INDEX',chosen);
+          if(chosen>=0){
+            const el=candidates.nth(chosen);
+            await el.fill('255131');
+            await page.waitForTimeout(4500);
+          }
+
+          console.log('AFTER_SEARCH_BODY_BEGIN');
+          console.log((await page.locator('body').innerText()).slice(0,12000));
+          console.log('AFTER_SEARCH_BODY_END');
+          const t=page.getByText(/TANGERINA IMPORTADA/i).first();
+          console.log('PRODUCT_MATCH_COUNT',await page.getByText(/TANGERINA IMPORTADA/i).count());
+          if(await t.count()){
+            await t.click().catch(()=>{});
+            await page.waitForTimeout(5000);
+            console.log('AFTER_PRODUCT_CLICK_BEGIN');
+            console.log((await page.locator('body').innerText()).slice(0,12000));
+            console.log('AFTER_PRODUCT_CLICK_END');
+          }
+
+          console.log('REQUESTS_BEGIN');
+          console.log(JSON.stringify([...new Set(reqs)],null,2));
+          console.log('REQUESTS_END');
+          console.log('HITS_BEGIN');
+          console.log(JSON.stringify(hits,null,2));
+          console.log('HITS_END');
+          await browser.close();
+          JS
+          node editor-probe.mjs
