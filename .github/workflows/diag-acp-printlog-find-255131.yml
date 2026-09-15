@@ -1,0 +1,72 @@
+name: Localizar 255131 no histórico ACP
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-printlog-find-255131.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Varrer histórico do mais recente para trás
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          O='https://nordestao12.acp.app.br'; A='https://api.acp.app.br'; C="$RUNNER_TEMP/c"
+          csrf=$(curl -fsS -c "$C" -b "$C" "$O/api/auth/csrf" | jq -er .csrfToken)
+          curl -fsS -c "$C" -b "$C" -H "Origin: $O" -H "Referer: $O/login" -X POST "$O/api/auth/callback/credentials" \
+            --data-urlencode "login=$ACP_LOGIN" --data-urlencode "password=$ACP_PASSWORD" --data-urlencode "csrfToken=$csrf" \
+            --data-urlencode "callbackUrl=$O/dashboard/history" --data-urlencode 'json=true' >/dev/null
+          s=$(curl -fsS -c "$C" -b "$C" "$O/api/auth/session"); t=$(jq -er '.user.accessToken' <<<"$s"); p=$(jq -r '.user.proxyEnable//false' <<<"$s")
+          [ "$p" = true ] && base="$O/api/proxy/api/v1" || base="$A/api/v1"
+
+          size=500
+          probe="$RUNNER_TEMP/probe.json"
+          code=$(curl -sS --connect-timeout 15 --max-time 90 -o "$probe" -w '%{http_code}' -H "Authorization: Bearer $t" -H 'Accept: application/json' \
+            "$base/TemplatePrintLog/all?pageSize=$size&pageIndex=0&orderByDescending=false" || true)
+          if [ "$code" != 200 ]; then
+            size=100
+            curl -fsS --connect-timeout 15 --max-time 90 -o "$probe" -H "Authorization: Bearer $t" -H 'Accept: application/json' \
+              "$base/TemplatePrintLog/all?pageSize=$size&pageIndex=0&orderByDescending=false"
+          fi
+          pages=$(jq -er '.totalPages' "$probe"); total=$(jq -er '.totalCount' "$probe")
+          echo "HISTORY_META size=$size pages=$pages total=$total"
+          found=0
+          for ((pidx=pages-1; pidx>=0; pidx--)); do
+            out="$RUNNER_TEMP/page.json"
+            curl -fsS --connect-timeout 15 --max-time 90 -o "$out" -H "Authorization: Bearer $t" -H 'Accept: application/json' \
+              "$base/TemplatePrintLog/all?pageSize=$size&pageIndex=$pidx&orderByDescending=false"
+            count=$(jq '[.items[] | select((.dataLog // "") | contains("255131") or contains("2551310") or contains("TANGERINA IMPORTADA"))] | length' "$out")
+            if [ "$count" -gt 0 ]; then
+              echo "=== FOUND_PAGE $pidx COUNT $count ==="
+              jq -c '.items[] | select((.dataLog // "") | contains("255131") or contains("2551310") or contains("TANGERINA IMPORTADA")) | {logId:.id,createdAt:.created_At,printTime,user:(.user.name//null),data:(try (.dataLog|fromjson) catch {raw:.dataLog})}' "$out" > "$RUNNER_TEMP/matches.ndjson"
+              while IFS= read -r line; do
+                echo '--- PRINT LOG ---'
+                echo "$line" | jq '{logId,createdAt,printTime,user,template:(.data.template // null)}'
+                echo '--- MATCHING PRODUCT OBJECTS ---'
+                echo "$line" | jq -c '.. | objects | select((.code? == "255131") or (.barCode? == "2551310") or ((.description? // "") | ascii_upcase | contains("TANGERINA IMPORTADA"))) | {id,code,barCode,description,value,previousValue,clubValue,wholesaleValue,wholesaleQuantity,quantityTake,quantityPay,unitValuePay,cashback,cashbackValue,dueDate,unitLimitPerCPF,stockQuantity,showOffersExpirationDate,selectedQuantity,packageValue,contentQuantity,contentUnit,unit,packageType,productCategories}' | head -n 40
+                echo '--- 7.99 NEARBY OBJECTS ---'
+                echo "$line" | jq -c '.. | objects | select((tostring|contains("7.99")) or (tostring|contains("7,99")))' | head -n 20 || true
+              done < "$RUNNER_TEMP/matches.ndjson"
+              found=1
+              # também olha duas páginas imediatamente anteriores por versões antigas do mesmo cartaz
+              for back in 1 2; do
+                q=$((pidx-back)); [ "$q" -lt 0 ] && continue
+                prev="$RUNNER_TEMP/prev$back.json"
+                curl -fsS --connect-timeout 15 --max-time 90 -o "$prev" -H "Authorization: Bearer $t" -H 'Accept: application/json' \
+                  "$base/TemplatePrintLog/all?pageSize=$size&pageIndex=$q&orderByDescending=false"
+                jq -c '.items[] | select((.dataLog // "") | contains("255131") or contains("2551310") or contains("TANGERINA IMPORTADA")) | {logId:.id,createdAt:.created_At,data:(try (.dataLog|fromjson) catch null)}' "$prev" | head -n 20 || true
+              done
+              break
+            fi
+            if (( (pages-pidx) % 10 == 0 )); then echo "SCANNED_RECENT_PAGES=$((pages-pidx))"; fi
+          done
+          echo "FOUND_PRODUCT=$found"
