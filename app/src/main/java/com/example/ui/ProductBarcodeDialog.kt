@@ -343,13 +343,17 @@ fun ProductBarcodeDialog(
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            if (photoUrl != null) {
+                            if (photoUrl != null || isMaster) {
                                 Spacer(modifier = Modifier.weight(1f))
                                 TextButton(
                                     onClick = { showPhotoDialog = true },
                                     contentPadding = PaddingValues(horizontal = 4.dp)
                                 ) {
-                                    Text("Ver Foto do Produto", maxLines = 2, textAlign = TextAlign.End)
+                                    Text(
+                                        if (photoUrl != null) "Ver Foto do Produto" else "Adicionar Foto",
+                                        maxLines = 2,
+                                        textAlign = TextAlign.End
+                                    )
                                 }
                             }
                         }
@@ -424,8 +428,10 @@ fun ProductBarcodeDialog(
             }
         }
 
-        if (showPhotoDialog && photoUrl != null) {
-            var isPhotoLoading by remember(photoUrl, pendingPhotoUrl) { mutableStateOf(true) }
+        if (showPhotoDialog && (photoUrl != null || isMaster)) {
+            var isPhotoLoading by remember(photoUrl, pendingPhotoUrl) {
+                mutableStateOf((pendingPhotoUrl ?: photoUrl) != null)
+            }
             var photoLoadFailed by remember(photoUrl, pendingPhotoUrl) { mutableStateOf(false) }
             AlertDialog(
                 onDismissRequest = {
@@ -445,25 +451,35 @@ fun ProductBarcodeDialog(
                                 .heightIn(min = 180.dp, max = 360.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            AsyncImage(
-                                model = pendingPhotoUrl ?: photoUrl,
-                                contentDescription = product.name,
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.fillMaxSize(),
-                                onLoading = {
-                                    isPhotoLoading = true
-                                    photoLoadFailed = false
-                                },
-                                onSuccess = { isPhotoLoading = false },
-                                onError = {
-                                    isPhotoLoading = false
-                                    photoLoadFailed = true
-                                }
-                            )
-                            if (isPhotoLoading || isPhotoSaving) {
+                            val displayedPhotoUrl = pendingPhotoUrl ?: photoUrl
+                            if (displayedPhotoUrl != null) {
+                                AsyncImage(
+                                    model = displayedPhotoUrl,
+                                    contentDescription = product.name,
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier.fillMaxSize(),
+                                    onLoading = {
+                                        isPhotoLoading = true
+                                        photoLoadFailed = false
+                                    },
+                                    onSuccess = { isPhotoLoading = false },
+                                    onError = {
+                                        isPhotoLoading = false
+                                        photoLoadFailed = true
+                                    }
+                                )
+                            } else if (!isPhotoSaving) {
+                                Text(
+                                    "Este produto ainda não tem foto. Escolha uma imagem ou cole um link.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (isPhotoSaving || (displayedPhotoUrl != null && isPhotoLoading)) {
                                 CircularProgressIndicator()
                             }
-                            if (photoLoadFailed && !isPhotoSaving) {
+                            if (displayedPhotoUrl != null && photoLoadFailed && !isPhotoSaving) {
                                 Text(
                                     "Não foi possível carregar a foto do produto.",
                                     style = MaterialTheme.typography.bodyMedium,
@@ -501,7 +517,13 @@ fun ProductBarcodeDialog(
                                 },
                                 enabled = !isPhotoSaving
                             ) {
-                                Text(if (isPhotoSaving) "Salvando…" else "Editar Foto")
+                                Text(
+                                    when {
+                                        isPhotoSaving -> "Salvando…"
+                                        photoUrl == null -> "Adicionar Foto"
+                                        else -> "Editar Foto"
+                                    }
+                                )
                             }
                             if (pendingPhotoUrl != null) {
                                 Button(
