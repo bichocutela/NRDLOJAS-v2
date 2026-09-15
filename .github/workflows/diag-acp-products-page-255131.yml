@@ -1,0 +1,62 @@
+name: Conferir Produtos ACP 255131
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-products-page-255131.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  products:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Preparar navegador
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install chromium >/dev/null
+      - name: Pesquisar 255131 na tela Produtos
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          cat > products-probe.mjs <<'JS'
+          import { chromium } from 'playwright';
+          const origin='https://nordestao12.acp.app.br';
+          const browser=await chromium.launch({headless:true});
+          const context=await browser.newContext();
+          const api=context.request;
+          const csrf=(await (await api.get(origin+'/api/auth/csrf')).json()).csrfToken;
+          await api.post(origin+'/api/auth/callback/credentials',{headers:{Origin:origin,Referer:origin+'/login'},form:{login:process.env.ACP_LOGIN,password:process.env.ACP_PASSWORD,csrfToken:csrf,callbackUrl:origin+'/products',json:'true'}});
+          const session=await (await api.get(origin+'/api/auth/session')).json();
+          if(!session?.user?.accessToken) throw new Error('Sem sessão ACP');
+          const page=await context.newPage();
+          const hits=[]; const reqs=[];
+          page.on('request',req=>{ if(req.method()==='GET'&&/acp\.app\.br/i.test(req.url())) reqs.push(req.url()); });
+          page.on('response',async res=>{
+            if(res.request().method()!=='GET'||!/acp\.app\.br/i.test(res.url())) return;
+            const ct=(res.headers()['content-type']||'').toLowerCase(); if(!ct.includes('json')) return;
+            try{ const text=await res.text(); if(text.includes('255131')||text.includes('2551310')||text.includes('7.99')) hits.push({url:res.url(),status:res.status(),excerpt:text.slice(0,12000)}); }catch{}
+          });
+          await page.goto(origin+'/products',{waitUntil:'domcontentloaded',timeout:60000});
+          await page.waitForTimeout(5000);
+          console.log('BODY_INITIAL', (await page.locator('body').innerText()).slice(0,8000));
+          const inputs=page.locator('input[type="text"],input[type="search"],input:not([type])');
+          console.log('INPUTS',JSON.stringify(await inputs.evaluateAll(els=>els.map((e,i)=>({i,placeholder:e.placeholder,name:e.name,aria:e.getAttribute('aria-label')})))));
+          const n=await inputs.count(); let used=-1;
+          for(let i=0;i<n;i++){
+            const el=inputs.nth(i); const meta=((await el.getAttribute('placeholder'))||'')+' '+((await el.getAttribute('name'))||'')+' '+((await el.getAttribute('aria-label'))||'');
+            if(/cód|cod|prod|busc|pesq|descr/i.test(meta)){used=i;break;}
+          }
+          if(used<0&&n>0) used=0;
+          if(used>=0){await inputs.nth(used).fill('255131'); await page.waitForTimeout(5000);}
+          console.log('BODY_AFTER_SEARCH', (await page.locator('body').innerText()).slice(0,10000));
+          console.log('REQUESTS',JSON.stringify([...new Set(reqs.filter(u=>/Product|Campaign|Price|Offer|Promotion/i.test(u)))],null,2));
+          console.log('HITS',JSON.stringify(hits.map(h=>({url:h.url,status:h.status,excerpt:h.excerpt})),null,2));
+          await browser.close();
+          JS
+          node products-probe.mjs
