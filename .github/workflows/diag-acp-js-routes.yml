@@ -1,0 +1,38 @@
+name: Mapear rotas cliente ACP
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-js-routes.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extrair rotas dos bundles públicos
+        run: |
+          set -euo pipefail
+          ORIGIN='https://nordestao12.acp.app.br'
+          WORK="$RUNNER_TEMP/acp-js"
+          mkdir -p "$WORK"
+          curl -fsSL "$ORIGIN/print-template" -o "$WORK/page.html"
+          grep -oE 'src="[^"]+\.js[^"]*"' "$WORK/page.html" | sed -E 's/^src="//;s/"$//' | sort -u > "$WORK/scripts.txt" || true
+          n=0
+          while IFS= read -r src; do
+            [ -z "$src" ] && continue
+            n=$((n+1))
+            case "$src" in
+              http*) url="$src" ;;
+              *) url="$ORIGIN$src" ;;
+            esac
+            curl -fsSL "$url" -o "$WORK/chunk-$n.js" || true
+          done < "$WORK/scripts.txt"
+          echo "bundles=$n"
+          echo '=== possíveis rotas comerciais ==='
+          grep -rhoE '[A-Za-z][A-Za-z0-9_-]{2,}/[A-Za-z][A-Za-z0-9_/?=&.-]{1,}' "$WORK"/*.js 2>/dev/null | grep -Ei 'product|price|offer|promotion|campaign|discount|template|print|history|integration' | sort -u | head -n 400 || true
+          echo '=== termos comerciais ==='
+          grep -rhoE '.{0,100}(price|offer|promotion|discount|campaign|secondUnit|clubValue|previousValue).{0,180}' "$WORK"/*.js 2>/dev/null | head -n 200 || true
