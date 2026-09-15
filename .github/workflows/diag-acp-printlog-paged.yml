@@ -1,0 +1,67 @@
+name: Paginar histórico ACP 255131
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-printlog-paged.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Buscar histórico em páginas pequenas
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          O='https://nordestao12.acp.app.br'
+          A='https://api.acp.app.br'
+          C="$RUNNER_TEMP/acp-cookies"
+          csrf=$(curl -fsS --retry 3 -c "$C" -b "$C" "$O/api/auth/csrf" | jq -er .csrfToken)
+          curl -fsS --retry 3 -c "$C" -b "$C" -H "Origin: $O" -H "Referer: $O/login" -X POST "$O/api/auth/callback/credentials" \
+            --data-urlencode "login=$ACP_LOGIN" \
+            --data-urlencode "password=$ACP_PASSWORD" \
+            --data-urlencode "csrfToken=$csrf" \
+            --data-urlencode "callbackUrl=$O/dashboard/history" \
+            --data-urlencode 'json=true' >/dev/null
+          session=$(curl -fsS --retry 3 -c "$C" -b "$C" "$O/api/auth/session")
+          token=$(jq -er '.user.accessToken' <<<"$session")
+          proxy=$(jq -r '.user.proxyEnable // false' <<<"$session")
+          if [ "$proxy" = true ]; then base="$O/api/proxy/api/v1"; else base="$A/api/v1"; fi
+
+          first=$(curl -fsS --retry 3 --connect-timeout 15 --max-time 60 -H "Authorization: Bearer $token" -H 'Accept: application/json' \
+            "$base/TemplatePrintLog/all?pageSize=50&pageIndex=0&orderByDescending=true&profileIdToBeDesconsidered=1")
+          echo '=== FIRST_PAGE_META ==='
+          jq '{pageIndex,totalPages,pageSize,totalCount,hasPrevious,hasNext,itemCount:(.items|length),firstItemKeys:(.items[0]//{}|keys)}' <<<"$first"
+          echo '=== FIRST_ITEM_SAFE ==='
+          jq '(.items[0] // {}) | with_entries(select(.key|test("token|password|cookie|authorization";"i")|not))' <<<"$first" | head -c 12000 || true
+          echo
+
+          pages=$(jq -r '.totalPages // 0' <<<"$first")
+          if ! [[ "$pages" =~ ^[0-9]+$ ]]; then pages=0; fi
+          max=$pages
+          if [ "$max" -gt 120 ]; then max=120; fi
+          found=0
+          for ((p=0; p<max; p++)); do
+            if [ "$p" -eq 0 ]; then body="$first"; else
+              body=$(curl -fsS --retry 2 --connect-timeout 15 --max-time 60 -H "Authorization: Bearer $token" -H 'Accept: application/json' \
+                "$base/TemplatePrintLog/all?pageSize=50&pageIndex=$p&orderByDescending=true&profileIdToBeDesconsidered=1")
+            fi
+            hits=$(jq -c '.. | objects | select((tostring|contains("255131")) or (tostring|contains("2551310")) or (tostring|contains("TANGERINA IMPORTADA")) or (tostring|contains("7.99")) or (tostring|contains("7,99")))' <<<"$body" | head -n 30 || true)
+            if [ -n "$hits" ]; then
+              echo "=== MATCH_PAGE_$p ==="
+              printf '%s\n' "$hits" | jq -c 'with_entries(select(.key|test("token|password|cookie|authorization";"i")|not))' | head -n 30
+              found=1
+              # Continua mais duas páginas depois da primeira ocorrência para pegar registros vizinhos.
+              stop=$((p+2))
+              if [ "$stop" -ge "$max" ]; then break; fi
+            fi
+            if [ "${stop:-999999}" -lt 999999 ] && [ "$p" -ge "$stop" ]; then break; fi
+          done
+          echo "SCAN_FOUND=$found"
