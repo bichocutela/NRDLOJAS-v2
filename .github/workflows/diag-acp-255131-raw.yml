@@ -22,17 +22,15 @@ jobs:
           ORIGIN='https://nordestao12.acp.app.br'
           API_ORIGIN='https://api.acp.app.br'
           COOKIE="$RUNNER_TEMP/acp.cookies"
-          csrf=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$ORIGIN/api/auth/csrf" | jq -er '.csrfToken')
-          curl -fsS -c "$COOKIE" -b "$COOKIE" -H "Origin: $ORIGIN" -H "Referer: $ORIGIN/login" \
-            -X POST "$ORIGIN/api/auth/callback/credentials" \
-            --data-urlencode "login=$ACP_LOGIN" --data-urlencode "password=$ACP_PASSWORD" \
-            --data-urlencode "csrfToken=$csrf" --data-urlencode "callbackUrl=$ORIGIN/print-template" \
-            --data-urlencode "json=true" >/dev/null
-          session=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$ORIGIN/api/auth/session")
+          C='curl -fsS --retry 4 --retry-all-errors --retry-delay 2 --connect-timeout 20 --max-time 60'
+          csrf=$(eval "$C -c '$COOKIE' -b '$COOKIE' '$ORIGIN/api/auth/csrf'" | jq -er '.csrfToken')
+          eval "$C -c '$COOKIE' -b '$COOKIE' -H 'Origin: $ORIGIN' -H 'Referer: $ORIGIN/login' -X POST '$ORIGIN/api/auth/callback/credentials' --data-urlencode 'login=$ACP_LOGIN' --data-urlencode 'password=$ACP_PASSWORD' --data-urlencode 'csrfToken=$csrf' --data-urlencode 'callbackUrl=$ORIGIN/print-template' --data-urlencode 'json=true'" >/dev/null
+          session=$(eval "$C -c '$COOKIE' -b '$COOKIE' '$ORIGIN/api/auth/session'")
           token=$(jq -er '.user.accessToken' <<<"$session")
           proxy=$(jq -r '.user.proxyEnable // false' <<<"$session")
           if [ "$proxy" = "true" ]; then base="$ORIGIN/api/proxy/api/v1"; else base="$API_ORIGIN/api/v1"; fi
-          body=$(curl -fsS -H "Authorization: Bearer $token" -H 'Accept: application/json' \
+          body=$(curl -fsS --retry 4 --retry-all-errors --retry-delay 2 --connect-timeout 20 --max-time 60 \
+            -H "Authorization: Bearer $token" -H 'Accept: application/json' \
             -H 'Cache-Control: no-cache, no-store, max-age=0' -H 'Pragma: no-cache' \
             "$base/Product/all?pageSize=20&pageIndex=0&code=255131")
           echo '=== item bruto 255131 ==='
