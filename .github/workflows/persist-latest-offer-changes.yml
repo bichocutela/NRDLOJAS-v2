@@ -34,4 +34,4 @@ jobs:
           git commit -m "Mantém últimas mudanças até nova atualização"
           git push
 
-# reexecução após ajuste do patch
+# reexecução 2 após simplificar o patch
