@@ -1,0 +1,161 @@
+name: Mapear fontes ACP 255131
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-deep-255131.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Preparar navegador
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install chromium >/dev/null
+
+      - name: Mapear telas e endpoints
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          cat > deep.mjs <<'JS'
+          import { chromium } from 'playwright';
+          const origin='https://nordestao12.acp.app.br';
+          const browser=await chromium.launch({headless:true});
+          const context=await browser.newContext();
+          const api=context.request;
+          const csrf=(await (await api.get(origin+'/api/auth/csrf')).json()).csrfToken;
+          await api.post(origin+'/api/auth/callback/credentials',{
+            headers:{Origin:origin,Referer:origin+'/login'},
+            form:{login:process.env.ACP_LOGIN,password:process.env.ACP_PASSWORD,csrfToken:csrf,callbackUrl:origin+'/products',json:'true'}
+          });
+          const session=await (await api.get(origin+'/api/auth/session')).json();
+          if(!session?.user?.accessToken) throw new Error('Sem sessão ACP');
+          console.log('SESSION',JSON.stringify({tenantName:session.user.tenantName,proxyEnable:session.user.proxyEnable}));
+
+          const page=await context.newPage();
+          const calls=[];
+          const matches=[];
+          page.on('request',req=>{
+            const u=req.url();
+            if(/acp\.app\.br/i.test(u) && /api\/v1|products|campaign|history|dashboard|price|offer|promo|integration/i.test(u)) {
+              calls.push({method:req.method(),url:u.replace(/([?&](?:token|accessToken|authorization)=[^&]+)/gi,'$1REDACTED')});
+            }
+          });
+          page.on('response',async res=>{
+            const req=res.request();
+            const u=res.url();
+            if(!/acp\.app\.br/i.test(u)) return;
+            const ct=(res.headers()['content-type']||'').toLowerCase();
+            if(!ct.includes('json')) return;
+            try{
+              const text=await res.text();
+              if(text.includes('255131')||text.includes('2551310')||text.includes('TANGERINA IMPORTADA')||text.includes('7.99')||text.includes('7,99')) {
+                let parsed=null; try{parsed=JSON.parse(text)}catch{}
+                const hit={method:req.method(),url:u.replace(/([?&](?:token|accessToken|authorization)=[^&]+)/gi,'$1REDACTED'),status:res.status(),objects:[]};
+                if(parsed){
+                  const seen=new Set();
+                  const walk=(v,path='')=>{
+                    if(hit.objects.length>=80||!v) return;
+                    if(typeof v==='object'){
+                      if(!Array.isArray(v)){
+                        const s=JSON.stringify(v);
+                        if(s.includes('255131')||s.includes('2551310')||s.includes('TANGERINA IMPORTADA')||s.includes('7.99')||s.includes('7,99')){
+                          const safe={};
+                          for(const [k,val] of Object.entries(v)){
+                            if(!/token|password|cookie|authorization/i.test(k)&&(val===null||['string','number','boolean'].includes(typeof val))) safe[k]=val;
+                          }
+                          const key=JSON.stringify(safe);
+                          if(Object.keys(safe).length&& !seen.has(key)){seen.add(key);hit.objects.push({path,fields:safe});}
+                        }
+                      }
+                      if(Array.isArray(v)) v.forEach((x,i)=>walk(x,`${path}[${i}]`));
+                      else Object.entries(v).forEach(([k,x])=>{if(!/token|password|cookie|authorization/i.test(k)) walk(x,path?`${path}.${k}`:k)});
+                    }
+                  };
+                  walk(parsed);
+                }
+                matches.push(hit);
+              }
+            }catch{}
+          });
+
+          async function dump(route,label){
+            await page.goto(origin+route,{waitUntil:'domcontentloaded',timeout:60000});
+            await page.waitForTimeout(4500);
+            const body=(await page.locator('body').innerText()).slice(0,14000);
+            console.log(`=== ${label} BODY ===`); console.log(body);
+            console.log(`=== ${label} INPUTS ===`);
+            console.log(JSON.stringify(await page.locator('input').evaluateAll(els=>els.map((e,i)=>({i,type:e.type,placeholder:e.placeholder,name:e.name,aria:e.getAttribute('aria-label')}))),null,2));
+            console.log(`=== ${label} BUTTONS ===`);
+            console.log(JSON.stringify(await page.locator('button').evaluateAll(els=>els.slice(0,120).map((e,i)=>({i,text:(e.innerText||'').trim().slice(0,120),title:e.title,aria:e.getAttribute('aria-label')}))),null,2));
+          }
+
+          await dump('/products','PRODUCTS');
+          const pinputs=page.locator('input[type="text"],input[type="search"],input:not([type])');
+          if(await pinputs.count()){
+            await pinputs.first().fill('255131');
+            await page.waitForTimeout(4000);
+            console.log('=== PRODUCTS SEARCH ===');
+            console.log((await page.locator('body').innerText()).slice(0,12000));
+            const rowText=page.getByText(/TANGERINA IMPORTADA/i).first();
+            if(await rowText.count()){
+              const row=rowText.locator('xpath=ancestor::tr[1]');
+              if(await row.count()){
+                console.log('ROW_HTML', (await row.innerHTML()).slice(0,10000));
+                console.log('ROW_BUTTONS',JSON.stringify(await row.locator('button').evaluateAll(els=>els.map((e,i)=>({i,text:(e.innerText||'').trim(),title:e.title,aria:e.getAttribute('aria-label')}))),null,2));
+                const bs=row.locator('button');
+                if(await bs.count()){
+                  await bs.last().click().catch(()=>{});
+                  await page.waitForTimeout(3500);
+                  console.log('=== AFTER PRODUCT ACTION ===');
+                  console.log((await page.locator('body').innerText()).slice(0,14000));
+                }
+              }
+            }
+          }
+
+          await dump('/dashboard/history','HISTORY');
+          const hinputs=page.locator('input[type="text"],input[type="search"],input:not([type])');
+          for(let i=0;i<await hinputs.count();i++){
+            const el=hinputs.nth(i);
+            const meta=((await el.getAttribute('placeholder'))||'')+' '+((await el.getAttribute('name'))||'')+' '+((await el.getAttribute('aria-label'))||'');
+            if(/cód|cod|prod|busc|pesq|descr/i.test(meta)){
+              await el.fill('255131').catch(()=>{}); await page.waitForTimeout(3500); break;
+            }
+          }
+          console.log('=== HISTORY SEARCH ===');
+          console.log((await page.locator('body').innerText()).slice(0,14000));
+
+          await dump('/campaigns','CAMPAIGNS');
+
+          const scripts=await page.locator('script[src]').evaluateAll(els=>els.map(e=>e.src));
+          console.log('=== SCRIPT_COUNT ===',scripts.length);
+          const endpointSet=new Set();
+          for(const src of scripts.slice(0,80)){
+            try{
+              const r=await context.request.get(src,{timeout:30000});
+              if(!r.ok()) continue;
+              const txt=await r.text();
+              const re=/(?:https:\/\/api\.acp\.app\.br)?\/api\/v1\/[A-Za-z0-9_\-\/${}.[\]]+/g;
+              for(const m of txt.matchAll(re)) endpointSet.add(m[0]);
+              const re2=/(?:Product|Campaign|Promotion|Offer|Price|TemplatePrintLog|Integration)[A-Za-z0-9_\-/{}]*/g;
+              for(const m of txt.matchAll(re2)) if(m[0].length<140) endpointSet.add(m[0]);
+            }catch{}
+          }
+          console.log('=== ENDPOINT_LITERALS ===');
+          console.log(JSON.stringify([...endpointSet].sort(),null,2));
+          console.log('=== CALLS ===');
+          console.log(JSON.stringify([...new Map(calls.map(x=>[x.method+' '+x.url,x])).values()],null,2));
+          console.log('=== MATCHES ===');
+          console.log(JSON.stringify(matches,null,2));
+          await browser.close();
+          JS
+          node deep.mjs
