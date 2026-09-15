@@ -1,0 +1,78 @@
+name: Mapear cliente web ACP comercial
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-js-commercial-map.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Preparar navegador
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install chromium >/dev/null
+      - name: Extrair literais comerciais sem alterar dados
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          cat > map.mjs <<'JS'
+          import { chromium } from 'playwright';
+          const origin='https://nordestao12.acp.app.br';
+          const browser=await chromium.launch({headless:true});
+          const context=await browser.newContext();
+          const api=context.request;
+          const csrf=(await (await api.get(origin+'/api/auth/csrf')).json()).csrfToken;
+          await api.post(origin+'/api/auth/callback/credentials',{headers:{Origin:origin,Referer:origin+'/login'},form:{login:process.env.ACP_LOGIN,password:process.env.ACP_PASSWORD,csrfToken:csrf,callbackUrl:origin+'/products',json:'true'}});
+          const sess=await (await api.get(origin+'/api/auth/session')).json();
+          if(!sess?.user?.accessToken) throw new Error('sem sessão');
+          const pages=['/products','/print-template','/campaigns','/company','/units'];
+          const scripts=new Set();
+          for(const route of pages){
+            const page=await context.newPage();
+            await page.goto(origin+route,{waitUntil:'domcontentloaded',timeout:60000}).catch(()=>{});
+            await page.waitForTimeout(2500);
+            for(const s of await page.locator('script[src]').evaluateAll(els=>els.map(e=>e.src))) scripts.add(s);
+            await page.close();
+          }
+          console.log('SCRIPT_TOTAL',scripts.size);
+          const terms=['Product/','Campaign/','Price','price','Promotion','promotion','Offer','offer','previousValue','clubValue','quantityTake','quantityPay','unitValuePay','cashbackValue','dueDate','unitLimitPerCPF','integrationInfo','/sync','sync','validFrom','validTo','startDate','endDate','initialDate','finalDate'];
+          const routeSet=new Set();
+          const fieldContexts=[];
+          let idx=0;
+          for(const src of scripts){
+            idx++;
+            try{
+              const r=await api.get(src,{timeout:30000}); if(!r.ok()) continue;
+              const txt=await r.text();
+              const regexes=[
+                /["'`](\/?(?:api\/v1\/)?(?:Product|Campaign|Price|Promotion|Offer|Integration|TemplatePrintLog)[A-Za-z0-9_?&=\-/${}.:[\]]*)["'`]/g,
+                /["'`](Product|Campaign|Price|Promotion|Offer|Integration|TemplatePrintLog)\/[A-Za-z0-9_?&=\-/${}.:[\]]+["'`]/g
+              ];
+              for(const re of regexes){for(const m of txt.matchAll(re)){const raw=m[0].slice(1,-1); if(raw.length<220) routeSet.add(raw);}}
+              for(const term of terms){
+                let pos=0, count=0;
+                while(count<8 && (pos=txt.indexOf(term,pos))>=0){
+                  const a=Math.max(0,pos-240), b=Math.min(txt.length,pos+term.length+360);
+                  let c=txt.slice(a,b).replace(/\s+/g,' ');
+                  c=c.replace(/Bearer\s+[A-Za-z0-9._-]+/gi,'Bearer REDACTED');
+                  fieldContexts.push({script:src.split('/').pop(),term,context:c});
+                  pos+=term.length; count++;
+                }
+              }
+            }catch{}
+          }
+          console.log('=== ROUTES ==='); console.log(JSON.stringify([...routeSet].sort(),null,2));
+          console.log('=== CONTEXTS ===');
+          for(const x of fieldContexts.filter(x=>/Product\/|Promotion|Offer|Price|previousValue|clubValue|unitValuePay|integrationInfo|\/sync|validFrom|startDate|endDate/i.test(x.term)).slice(0,450)) console.log(JSON.stringify(x));
+          await browser.close();
+          JS
+          node map.mjs
