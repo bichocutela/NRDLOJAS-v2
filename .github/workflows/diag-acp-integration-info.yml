@@ -1,0 +1,30 @@
+name: Consultar integrationInfo ACP
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-integration-info.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  info:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ler integrationInfo
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          ORIGIN='https://nordestao12.acp.app.br'; API_ORIGIN='https://api.acp.app.br'; COOKIE="$RUNNER_TEMP/acp.cookies"
+          csrf=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$ORIGIN/api/auth/csrf" | jq -er '.csrfToken')
+          curl -fsS -c "$COOKIE" -b "$COOKIE" -H "Origin: $ORIGIN" -H "Referer: $ORIGIN/login" -X POST "$ORIGIN/api/auth/callback/credentials" \
+            --data-urlencode "login=$ACP_LOGIN" --data-urlencode "password=$ACP_PASSWORD" --data-urlencode "csrfToken=$csrf" \
+            --data-urlencode "callbackUrl=$ORIGIN/print-template" --data-urlencode "json=true" >/dev/null
+          session=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$ORIGIN/api/auth/session")
+          token=$(jq -er '.user.accessToken' <<<"$session"); proxy=$(jq -r '.user.proxyEnable // false' <<<"$session")
+          if [ "$proxy" = "true" ]; then base="$ORIGIN/api/proxy/api/v1"; else base="$API_ORIGIN/api/v1"; fi
+          curl -fsS -H "Authorization: Bearer $token" -H 'Accept: application/json' -H 'Cache-Control: no-cache' "$base/Product/integrationInfo" | jq .
