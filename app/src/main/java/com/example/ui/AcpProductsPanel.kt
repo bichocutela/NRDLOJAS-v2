@@ -40,6 +40,7 @@ import java.util.Locale
 
 private enum class NrdIdentifier { BARCODE, PRODUCT_CODE }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AcpProductsPanel(
     api: AcpApi,
