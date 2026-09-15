@@ -1,0 +1,56 @@
+name: Diagnosticar ACP 255131
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-255131.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consultar Product/all sem cache local
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          ORIGIN='https://nordestao12.acp.app.br'
+          API_ORIGIN='https://api.acp.app.br'
+          COOKIE_JAR="$RUNNER_TEMP/acp.cookies"
+
+          csrf_json=$(curl -fsS -c "$COOKIE_JAR" -b "$COOKIE_JAR" "$ORIGIN/api/auth/csrf")
+          csrf=$(jq -er '.csrfToken' <<<"$csrf_json")
+
+          curl -fsS -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
+            -H "Origin: $ORIGIN" -H "Referer: $ORIGIN/login" \
+            -X POST "$ORIGIN/api/auth/callback/credentials" \
+            --data-urlencode "login=$ACP_LOGIN" \
+            --data-urlencode "password=$ACP_PASSWORD" \
+            --data-urlencode "csrfToken=$csrf" \
+            --data-urlencode "callbackUrl=$ORIGIN/print-template" \
+            --data-urlencode "json=true" >/dev/null
+
+          session=$(curl -fsS -c "$COOKIE_JAR" -b "$COOKIE_JAR" "$ORIGIN/api/auth/session")
+          token=$(jq -er '.user.accessToken' <<<"$session")
+          proxy=$(jq -r '.user.proxyEnable // false' <<<"$session")
+
+          if [ "$proxy" = "true" ]; then
+            base="$ORIGIN/api/proxy/api/v1"
+          else
+            base="$API_ORIGIN/api/v1"
+          fi
+
+          response=$(curl -fsS \
+            -H "Authorization: Bearer $token" \
+            -H 'Accept: application/json' \
+            -H 'Cache-Control: no-cache, no-store, max-age=0' \
+            -H 'Pragma: no-cache' \
+            "$base/Product/all?pageSize=20&pageIndex=0&code=255131")
+
+          echo '=== ACP Product/all code=255131 ==='
+          jq '{pageIndex,totalPages,totalCount,items:[.items[] | select((.code|tostring)=="255131") | {id,code,barCode,description,value,previousValue,clubValue,wholesaleValue,wholesaleQuantity,quantityTake,quantityPay,cashback,cashbackValue,stockQuantity,dueDate,productCategories}]}' <<<"$response"
