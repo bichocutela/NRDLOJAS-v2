@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +67,8 @@ internal fun AcpProductsPanel(
     var query by remember { mutableStateOf("") }
     var page by remember { mutableStateOf<AcpProductPage?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var refreshing by remember { mutableStateOf(false) }
+    var refreshMessage by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     var selected by remember { mutableStateOf<AcpProduct?>(null) }
@@ -187,6 +190,53 @@ internal fun AcpProductsPanel(
         }
     }
 
+    fun refreshFromAcp() {
+        if (refreshing) return
+        searchJob?.cancel()
+        val ticket = ++generation
+        refreshing = true
+        error = null
+        refreshMessage = null
+        closeDetail()
+        searchJob = scope.launch {
+            try {
+                // Confirma/reutiliza a sessão existente. Se ela expirou, AcpApi renova sem
+                // afetar o login do NRD e sem transformar o gesto em logout.
+                api.confirmAccess()
+                val clean = query.trim()
+                if (clean.isBlank()) {
+                    // Sem uma pesquisa aberta não há uma lista de preços para substituir.
+                    // Ainda assim validamos a sessão e a integração com o ACP.
+                    integration = try { api.integrationInfo() } catch (_: Exception) { null }
+                    refreshMessage = "Conexão com o ACP atualizada. Pesquise um produto para carregar o preço mais recente."
+                } else {
+                    val targetPage = page?.pageIndex ?: 0
+                    val fresh = api.searchProductsUnifiedFresh(clean, targetPage, freshStore)
+                    if (ticket != generation) return@launch
+                    page = fresh
+                    lastExplicitQuery = clean
+                    previewCampaignOffers = try {
+                        api.campaignOffersFor(fresh.items)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        emptyMap()
+                    }
+                    refreshMessage = "Preços atualizados agora pelo ACP."
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                if (ticket == generation) {
+                    // Mantém a tela autenticada. O gesto nunca expulsa o usuário da conta.
+                    error = acpErrorMessage(failure)
+                }
+            } finally {
+                if (ticket == generation) refreshing = false
+            }
+        }
+    }
+
     // Comportamento do editor web: enquanto o nome é digitado, os candidatos aparecem abaixo.
     // Um debounce curto evita uma chamada por tecla, e cada nova digitação cancela a anterior.
     LaunchedEffect(query) {
@@ -268,6 +318,11 @@ internal fun AcpProductsPanel(
     }
 
     val result = page
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = { refreshFromAcp() },
+        modifier = Modifier.fillMaxSize()
+    ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 12.dp),
@@ -279,6 +334,7 @@ internal fun AcpProductsPanel(
                 onValueChange = {
                     query = it.take(200)
                     lastExplicitQuery = null
+                    refreshMessage = null
                     error = null
                 },
                 placeholder = { Text("Faça sua busca") },
@@ -315,6 +371,9 @@ internal fun AcpProductsPanel(
         }
 
         if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        refreshMessage?.let { message ->
+            item { Text(message, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
+        }
         error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
 
         if (result != null) {
@@ -331,7 +390,7 @@ internal fun AcpProductsPanel(
                             Text("${result.items.size} $label", style = MaterialTheme.typography.labelMedium)
                         }
                     }
-                    TextButton(onClick = { search(result.pageIndex) }, enabled = !busy) { Text("Atualizar") }
+                    TextButton(onClick = { refreshFromAcp() }, enabled = !busy && !refreshing) { Text("Atualizar") }
                 }
             }
         }
@@ -419,6 +478,7 @@ internal fun AcpProductsPanel(
                 }
             }
         }
+    }
     }
 
     if (scanning) {
@@ -739,6 +799,39 @@ private suspend fun AcpApi.searchProductsUnified(query: String, pageIndex: Int):
         else -> AcpSearchField.CODE
     }
     return searchProducts(field, clean, null, pageIndex)
+}
+
+private suspend fun AcpApi.searchProductsUnifiedFresh(
+    query: String,
+    pageIndex: Int,
+    store: AcpSecureStore
+): AcpProductPage {
+    val clean = query.trim()
+    require(clean.isNotBlank() && clean.length <= 200 && pageIndex >= 0)
+    val numeric = clean.all(Char::isDigit)
+    val preferred = when {
+        !numeric -> AcpSearchField.DESCRIPTION
+        clean.length in setOf(8, 12, 13, 14) -> AcpSearchField.BARCODE
+        else -> AcpSearchField.CODE
+    }
+
+    fun clear(field: AcpSearchField, page: Int) {
+        val parameters = listOf(
+            "pageSize" to "20",
+            "pageIndex" to page.toString(),
+            field.parameter to clean
+        )
+        store.clear(acpResponseCacheName("Product/all", parameters))
+    }
+
+    // Product/all normalmente usa cache diário. O gesto explícito de atualizar é a exceção:
+    // limpamos somente as chaves da pesquisa visível, sem varrer nem apagar o restante do cache.
+    clear(preferred, pageIndex)
+    if (numeric && pageIndex == 0) {
+        val alternate = if (preferred == AcpSearchField.BARCODE) AcpSearchField.CODE else AcpSearchField.BARCODE
+        clear(alternate, 0)
+    }
+    return searchProductsUnified(clean, pageIndex)
 }
 
 private suspend fun AcpApi.refreshProductFreshForUi(selected: AcpProduct, store: AcpSecureStore): AcpProduct {
