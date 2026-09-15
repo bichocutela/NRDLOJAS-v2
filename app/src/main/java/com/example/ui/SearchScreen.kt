@@ -251,6 +251,7 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
     val newProductsCount by viewModel.newProductsCount.collectAsStateWithLifecycle()
     val homeSettings by viewModel.homeSettings.collectAsStateWithLifecycle()
     val activeCategoryNames by viewModel.activeCategoryNames.collectAsStateWithLifecycle()
+    val allProducts by viewModel.allProducts.collectAsStateWithLifecycle()
 
     var showProductSearchSheet by remember { mutableStateOf(false) }
     var showMostUsedSheet by remember { mutableStateOf(false) }
@@ -258,6 +259,15 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     var showNotificationsSheet by remember { mutableStateOf(false) }
     var selectedNotificationProduct by remember { mutableStateOf<Product?>(null) }
+
+    LaunchedEffect(allProducts) {
+        selectedMostUsedProduct = selectedMostUsedProduct?.let { selected ->
+            allProducts.firstOrNull { it.code == selected.code } ?: selected
+        }
+        selectedNotificationProduct = selectedNotificationProduct?.let { selected ->
+            allProducts.firstOrNull { it.code == selected.code } ?: selected
+        }
+    }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var sheetQuery by remember { mutableStateOf("") }
     val notificationHistory by viewModel.notificationHistory.collectAsStateWithLifecycle()

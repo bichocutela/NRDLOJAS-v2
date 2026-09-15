@@ -546,48 +546,71 @@ object FirebaseService {
             close()
             return@callbackFlow
         }
+
         val firestore = FirebaseFirestore.getInstance()
-        val registration = firestore.collection("products")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.e("FirebaseService", "Error in observeProducts", error)
-                    return@addSnapshotListener
-                }
-                if (snapshot != null) {
-                    val products = snapshot.documents.mapNotNull { doc ->
-                        val code = doc.getString("code") ?: return@mapNotNull null
-                        val name = doc.getString("name") ?: ""
-                        val searchName = doc.getString("searchName") ?: ""
-                        val category = doc.getString("category") ?: ""
-                        val unit = doc.getString("unit") ?: "un"
-                        val imageUrl = doc.getString("imageUrl")
-                        val searchCount = doc.getLong("searchCount")?.toInt() ?: 0
-                        GlobalProductUsage(
-                            product = com.example.data.Product(
-                                code = code,
-                                name = name,
-                                searchName = searchName,
-                                category = category,
-                                unit = unit,
-                                imageUrl = imageUrl,
-                                searchCount = searchCount
-                            ),
-                            lastViewedAt = when (val viewedAt = doc.get("lastViewedAt")) {
-                                is com.google.firebase.Timestamp -> viewedAt.toDate().time
-                                is Number -> viewedAt.toLong()
-                                else -> null
-                            },
-                            createdAt = when (val addedAt = doc.get("createdAt") ?: doc.get("timestamp")) {
-                                is com.google.firebase.Timestamp -> addedAt.toDate().time
-                                is Number -> addedAt.toLong()
-                                else -> null
-                            }
-                        )
+        var registration: com.google.firebase.firestore.ListenerRegistration? = null
+
+        fun startProductsListener() {
+            registration?.remove()
+            registration = firestore.collection("products")
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e("FirebaseService", "Error in observeProducts", error)
+                        return@addSnapshotListener
                     }
-                    trySend(products)
+                    if (snapshot != null) {
+                        val products = snapshot.documents.mapNotNull { doc ->
+                            val code = doc.getString("code") ?: return@mapNotNull null
+                            val name = doc.getString("name") ?: ""
+                            val searchName = doc.getString("searchName") ?: ""
+                            val category = doc.getString("category") ?: ""
+                            val unit = doc.getString("unit") ?: "un"
+                            val imageUrl = doc.getString("imageUrl")
+                            val searchCount = doc.getLong("searchCount")?.toInt() ?: 0
+                            GlobalProductUsage(
+                                product = com.example.data.Product(
+                                    code = code,
+                                    name = name,
+                                    searchName = searchName,
+                                    category = category,
+                                    unit = unit,
+                                    imageUrl = imageUrl,
+                                    searchCount = searchCount
+                                ),
+                                lastViewedAt = when (val viewedAt = doc.get("lastViewedAt")) {
+                                    is com.google.firebase.Timestamp -> viewedAt.toDate().time
+                                    is Number -> viewedAt.toLong()
+                                    else -> null
+                                },
+                                createdAt = when (val addedAt = doc.get("createdAt") ?: doc.get("timestamp")) {
+                                    is com.google.firebase.Timestamp -> addedAt.toDate().time
+                                    is Number -> addedAt.toLong()
+                                    else -> null
+                                }
+                            )
+                        }
+                        trySend(products)
+                    }
                 }
+        }
+
+        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+        var observedUid = auth.currentUser?.uid
+        startProductsListener()
+        val authListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { state ->
+            val newUid = state.currentUser?.uid
+            if (newUid != observedUid) {
+                observedUid = newUid
+                Log.d("FirebaseService", "Sessão Firebase mudou; reiniciando listener do catálogo")
+                startProductsListener()
             }
-        awaitClose { registration.remove() }
+        }
+        auth.addAuthStateListener(authListener)
+
+        awaitClose {
+            registration?.remove()
+            auth.removeAuthStateListener(authListener)
+        }
     }
 
     fun observeProducts(): Flow<List<com.example.data.Product>> =
