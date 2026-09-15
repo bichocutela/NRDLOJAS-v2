@@ -21,48 +21,28 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
           api_path = Path("app/src/main/java/com/example/data/NossaGenteApi.kt")
           api = api_path.read_text(encoding="utf-8")
-          old_api = '''                if (response.code == 401 || response.code == 403) {
-                    clearSession()
-                    return@withContext NossaGentePromotionsResult.Unauthorized
-                }
-'''
-          new_api = '''                if (response.code == 401 || response.code == 403) {
-                    // Uma consulta de atualização não deve apagar a sessão salva.
-                    // A tela decide quando realmente precisa pedir novo login.
-                    return@withContext NossaGentePromotionsResult.Unauthorized
-                }
-'''
+          old_api = "                if (response.code == 401 || response.code == 403) {\n                    clearSession()\n                    return@withContext NossaGentePromotionsResult.Unauthorized\n                }\n"
+          new_api = "                if (response.code == 401 || response.code == 403) {\n                    // Uma consulta de atualização não deve apagar a sessão salva.\n                    // A tela decide quando realmente precisa pedir novo login.\n                    return@withContext NossaGentePromotionsResult.Unauthorized\n                }\n"
           if old_api not in api:
               raise SystemExit("Bloco 401/403 esperado não encontrado em NossaGenteApi.kt; abortando.")
-          api = api.replace(old_api, new_api, 1)
-          api_path.write_text(api, encoding="utf-8")
-
+          api_path.write_text(api.replace(old_api, new_api, 1), encoding="utf-8")
           screen_path = Path("app/src/main/java/com/example/ui/PromotionsScreen.kt")
           screen = screen_path.read_text(encoding="utf-8")
-          old_screen = '''                NossaGentePromotionsResult.Unauthorized -> requestLoginOnce()
-'''
-          new_screen = '''                NossaGentePromotionsResult.Unauthorized -> {
-                    // Atualizar promoções nunca deve expulsar o usuário da tela.
-                    // Só pedimos login na entrada, quando não existe catálogo carregado.
-                    if (initialLoad && promotions.isEmpty()) {
-                        requestLoginOnce()
-                    }
-                }
-'''
+          old_screen = "                NossaGentePromotionsResult.Unauthorized -> requestLoginOnce()\n"
+          new_screen = "                NossaGentePromotionsResult.Unauthorized -> {\n                    // Atualizar promoções nunca deve expulsar o usuário da tela.\n                    // Só pedimos login na entrada, quando não existe catálogo carregado.\n                    if (initialLoad && promotions.isEmpty()) {\n                        requestLoginOnce()\n                    }\n                }\n"
           if old_screen not in screen:
               raise SystemExit("Tratamento Unauthorized esperado não encontrado em PromotionsScreen.kt; abortando.")
-          screen = screen.replace(old_screen, new_screen, 1)
-          screen_path.write_text(screen, encoding="utf-8")
+          screen_path.write_text(screen.replace(old_screen, new_screen, 1), encoding="utf-8")
           PY
 
       - name: Conferir escopo
         run: |
           git diff --check
-          git diff --name-only
-          test "$(git diff --name-only | sort | tr '\n' ' ')" = "app/src/main/java/com/example/data/NossaGenteApi.kt app/src/main/java/com/example/ui/PromotionsScreen.kt "
+          FILES="$(git diff --name-only | sort | tr '\n' ' ')"
+          echo "$FILES"
+          test "$FILES" = "app/src/main/java/com/example/data/NossaGenteApi.kt app/src/main/java/com/example/ui/PromotionsScreen.kt "
           grep -q "Uma consulta de atualização não deve apagar a sessão salva" app/src/main/java/com/example/data/NossaGenteApi.kt
           grep -q "Atualizar promoções nunca deve expulsar o usuário da tela" app/src/main/java/com/example/ui/PromotionsScreen.kt
 
