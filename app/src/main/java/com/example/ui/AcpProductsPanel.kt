@@ -17,10 +17,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -55,7 +53,6 @@ internal fun AcpProductsPanel(
     val context = LocalContext.current
     val freshStore = remember(context) { AcpSecureStore(context.applicationContext) }
     val keyboard = LocalSoftwareKeyboardController.current
-    val clipboard = LocalClipboardManager.current
     val nrdCategoriesFlow = remember { FirebaseService.observeCategories() }
     val nrdDefinitions by nrdCategoriesFlow.collectAsState(initial = CategoryDefinition.defaults)
     val activeNrdCategories = remember(nrdDefinitions) {
@@ -70,7 +67,6 @@ internal fun AcpProductsPanel(
     var page by remember { mutableStateOf<AcpProductPage?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var diagnosticMessage by remember { mutableStateOf<String?>(null) }
 
     var selected by remember { mutableStateOf<AcpProduct?>(null) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
@@ -145,7 +141,6 @@ internal fun AcpProductsPanel(
         val ticket = ++generation
         if (interactive) {
             busy = true
-            diagnosticMessage = null
             lastExplicitQuery = searchText
             keyboard?.hide()
         } else {
@@ -319,27 +314,6 @@ internal fun AcpProductsPanel(
             }
         }
 
-        if (page != null && canCopyDiagnostic) {
-            item {
-                OutlinedButton(
-                    onClick = {
-                        val text = api.diagnosticText()
-                        if (text == null) {
-                            diagnosticMessage = "Faça uma busca antes de copiar o diagnóstico."
-                        } else {
-                            clipboard.setText(AnnotatedString(text))
-                            diagnosticMessage = "Diagnóstico copiado. Cole no ChatGPT para análise."
-                        }
-                    },
-                    enabled = !busy,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Copiar diagnóstico")
-                }
-            }
-        }
-
-        if (canCopyDiagnostic) diagnosticMessage?.let { message -> item { Text(message, style = MaterialTheme.typography.bodySmall) } }
         if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
 
