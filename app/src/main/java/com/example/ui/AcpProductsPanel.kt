@@ -71,8 +71,6 @@ internal fun AcpProductsPanel(
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var diagnosticMessage by remember { mutableStateOf<String?>(null) }
-    var historyPage by remember { mutableStateOf("0") }
-    var historyBusy by remember { mutableStateOf(false) }
 
     var selected by remember { mutableStateOf<AcpProduct?>(null) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
@@ -341,48 +339,6 @@ internal fun AcpProductsPanel(
             }
         }
 
-        if (canCopyDiagnostic) item {
-            AcpEvidencePanel(api, freshStore, historyExportBusy, onExportHistory)
-        }
-
-        if (canCopyDiagnostic) item {
-            OutlinedTextField(
-                value = historyPage,
-                onValueChange = { historyPage = it.filter(Char::isDigit).take(6) },
-                label = { Text("Página do histórico (começa em 0)") },
-                enabled = !historyBusy && !historyExportBusy,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedButton(
-                enabled = !busy && !historyBusy && !historyExportBusy && historyPage.toIntOrNull() != null,
-                modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    val index = historyPage.toIntOrNull() ?: 0
-                    historyBusy = true
-                    diagnosticMessage = "Consultando histórico da ACP…"
-                    scope.launch {
-                        try {
-                            val payload = api.captureHistory(index)
-                            onExportHistory(payload, index)
-                            historyBusy = false
-                            diagnosticMessage = null
-                        } catch (cancelled: CancellationException) {
-                            historyBusy = false
-                            throw cancelled
-                        } catch (_: AcpUnauthorized) {
-                            historyBusy = false
-                            onSessionExpired()
-                        } catch (_: Exception) {
-                            historyBusy = false
-                            diagnosticMessage = "Não foi possível capturar o histórico. Tente novamente."
-                        }
-                    }
-                }
-            ) { Text(if (historyBusy) "Capturando histórico…" else "Salvar diagnóstico do histórico") }
-        }
-
-        if (canCopyDiagnostic) historyExportMessage?.let { message -> item { Text(message, style = MaterialTheme.typography.bodySmall) } }
         if (canCopyDiagnostic) diagnosticMessage?.let { message -> item { Text(message, style = MaterialTheme.typography.bodySmall) } }
         if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
