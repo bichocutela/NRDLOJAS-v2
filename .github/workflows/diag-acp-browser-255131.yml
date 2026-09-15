@@ -24,7 +24,7 @@ jobs:
           ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
           ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
         run: |
-          cat > "$RUNNER_TEMP/probe.mjs" <<'JS'
+          cat > probe.mjs <<'JS'
           import { chromium } from 'playwright';
           const origin = 'https://nordestao12.acp.app.br';
           const browser = await chromium.launch({headless:true});
@@ -108,4 +108,4 @@ jobs:
           console.log('HITS_END');
           await browser.close();
           JS
-          node "$RUNNER_TEMP/probe.mjs"
+          node probe.mjs
