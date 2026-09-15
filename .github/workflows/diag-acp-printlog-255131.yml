@@ -1,0 +1,45 @@
+name: Buscar 255131 no histórico de impressão ACP
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-printlog-255131.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  history:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Procurar produto no TemplatePrintLog
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          ORIGIN='https://nordestao12.acp.app.br'; API_ORIGIN='https://api.acp.app.br'; COOKIE="$RUNNER_TEMP/acp.cookies"
+          CURL=(curl -fsS --retry 4 --retry-all-errors --retry-delay 2 --connect-timeout 20 --max-time 60)
+          csrf=$("${CURL[@]}" -c "$COOKIE" -b "$COOKIE" "$ORIGIN/api/auth/csrf" | jq -er '.csrfToken')
+          "${CURL[@]}" -c "$COOKIE" -b "$COOKIE" -H "Origin: $ORIGIN" -H "Referer: $ORIGIN/login" -X POST "$ORIGIN/api/auth/callback/credentials" \
+            --data-urlencode "login=$ACP_LOGIN" --data-urlencode "password=$ACP_PASSWORD" --data-urlencode "csrfToken=$csrf" \
+            --data-urlencode "callbackUrl=$ORIGIN/print-template" --data-urlencode "json=true" >/dev/null
+          session=$("${CURL[@]}" -c "$COOKIE" -b "$COOKIE" "$ORIGIN/api/auth/session")
+          token=$(jq -er '.user.accessToken' <<<"$session"); proxy=$(jq -r '.user.proxyEnable // false' <<<"$session")
+          if [ "$proxy" = "true" ]; then base="$ORIGIN/api/proxy/api/v1"; else base="$API_ORIGIN/api/v1"; fi
+
+          found=0
+          for page in $(seq 0 29); do
+            body=$("${CURL[@]}" -H "Authorization: Bearer $token" -H 'Accept: application/json' -H 'Cache-Control: no-cache' \
+              "$base/TemplatePrintLog/all?pageSize=100&pageIndex=$page" || true)
+            [ -z "$body" ] && continue
+            if echo "$body" | grep -qE '255131|2551310|TANGERINA IMPORTADA'; then
+              echo "=== página $page com ocorrência ==="
+              echo "$body" | jq -c '.. | objects | select((tostring|contains("255131")) or (tostring|contains("TANGERINA IMPORTADA")))' | head -n 50 || true
+              found=1
+            fi
+            total=$(echo "$body" | jq -r '.totalPages // .data.totalPages // 1' 2>/dev/null || echo 1)
+            [ "$page" -ge $((total-1)) ] && break
+          done
+          echo "found=$found"
