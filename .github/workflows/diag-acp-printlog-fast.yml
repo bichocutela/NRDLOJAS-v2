@@ -1,0 +1,32 @@
+name: Busca rápida print log ACP
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-printlog-fast.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  quick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Buscar em lote
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          O='https://nordestao12.acp.app.br'; A='https://api.acp.app.br'; C="$RUNNER_TEMP/c"
+          csrf=$(curl -fsS --retry 3 -c "$C" -b "$C" "$O/api/auth/csrf" | jq -er .csrfToken)
+          curl -fsS --retry 3 -c "$C" -b "$C" -H "Origin: $O" -H "Referer: $O/login" -X POST "$O/api/auth/callback/credentials" \
+            --data-urlencode "login=$ACP_LOGIN" --data-urlencode "password=$ACP_PASSWORD" --data-urlencode "csrfToken=$csrf" --data-urlencode "callbackUrl=$O/print-template" --data-urlencode 'json=true' >/dev/null
+          s=$(curl -fsS --retry 3 -c "$C" -b "$C" "$O/api/auth/session"); t=$(jq -er '.user.accessToken' <<<"$s"); p=$(jq -r '.user.proxyEnable//false' <<<"$s")
+          [ "$p" = true ] && base="$O/api/proxy/api/v1" || base="$A/api/v1"
+          body=$(curl -fsS --retry 3 --connect-timeout 15 --max-time 90 -H "Authorization: Bearer $t" -H 'Accept: application/json' "$base/TemplatePrintLog/all?pageSize=5000&pageIndex=0")
+          echo "$body" | jq '{pageIndex,totalPages,totalCount,itemCount:(.items|length)}'
+          echo '=== matching objects ==='
+          echo "$body" | jq -c '..|objects|select((tostring|contains("255131")) or (tostring|contains("TANGERINA IMPORTADA")) or (tostring|contains("7.99")))' | head -n 100 || true
