@@ -114,15 +114,15 @@ class PromotionChangeStore(context: Context) {
         }
 
         val delta = calculatePromotionChanges(previous.snapshot, currentSnapshot)
-        val mergedChanges = if (previous.dayKey == dayKey) {
-            mergeDailyChanges(previous.changes, delta)
-        } else {
+        val recentChanges = if (delta.isNotEmpty()) {
             delta.take(MAX_DAILY_CHANGES)
+        } else {
+            previous.changes.takeLast(MAX_DAILY_CHANGES)
         }
-        writeState(PromotionHistoryState(dayKey, currentSnapshot, mergedChanges))
+        writeState(PromotionHistoryState(dayKey, currentSnapshot, recentChanges))
         PromotionChangeState(
             dayKey = dayKey,
-            changes = mergedChanges,
+            changes = recentChanges,
             baselineReady = true,
             limitedBySafetyCap = false
         )

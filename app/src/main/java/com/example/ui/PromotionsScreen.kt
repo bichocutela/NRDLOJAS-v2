@@ -559,7 +559,6 @@ fun PromotionsScreen(
                     TextButton(
                         onClick = {
                             scope.launch {
-                                promotionChangeStore.clear()
                                 onLogout()
                             }
                         }
@@ -1950,10 +1949,10 @@ private fun NewOffersDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Ofertas novas", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text("Últimas mudanças", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         Text(
                             if (selectedStore == ALL_STORES_LABEL) {
-                                "Entraram, foram alteradas ou saíram hoje, organizadas por loja"
+                                "Última movimentação de ofertas, organizada por loja"
                             } else {
                                 "Loja atual: $currentStoreLabel"
                             },
@@ -1976,7 +1975,7 @@ private fun NewOffersDialog(
                 }
 
                 Text(
-                    "${changes.size} mudança(s) hoje • $currentStoreLabel",
+                    "${changes.size} mudança(s) na última atualização • $currentStoreLabel",
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1998,14 +1997,14 @@ private fun NewOffersDialog(
                         Spacer(Modifier.height(12.dp))
                         Text(
                             if (selectedStore == ALL_STORES_LABEL) {
-                                "Nenhuma mudança de oferta registrada hoje."
+                                "Nenhuma mudança de oferta registrada ainda."
                             } else {
-                                "Nenhuma mudança de oferta registrada para $currentStoreLabel hoje."
+                                "Nenhuma mudança de oferta registrada para $currentStoreLabel ainda."
                             }
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "Quando uma oferta entrar, mudar ou sair, ela aparecerá aqui automaticamente.",
+                            "As últimas mudanças ficam salvas aqui até o NRD detectar uma nova atualização de ofertas.",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
