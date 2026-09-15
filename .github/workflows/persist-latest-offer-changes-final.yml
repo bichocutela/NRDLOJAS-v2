@@ -1,0 +1,35 @@
+name: Persistir últimas mudanças de ofertas final
+
+on:
+  push:
+    branches: ["persist-latest-offer-changes-final"]
+    paths:
+      - ".github/workflows/persist-latest-offer-changes-final.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Aplicar alteração
+        run: python3 .github/data-jobs/persist-latest-offer-changes-final.py
+
+      - name: Conferir diff
+        run: |
+          git diff --check
+          git status --short
+          git diff --stat
+
+      - name: Publicar alteração
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/data/PromotionChangeStore.kt app/src/main/java/com/example/ui/PromotionsScreen.kt
+          git commit -m "Mantém últimas mudanças até nova atualização"
+          git push
