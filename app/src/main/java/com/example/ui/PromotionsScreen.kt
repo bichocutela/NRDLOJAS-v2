@@ -352,7 +352,13 @@ fun PromotionsScreen(
                         pendingUpdate = update
                     }
                 }
-                NossaGentePromotionsResult.Unauthorized -> requestLoginOnce()
+                NossaGentePromotionsResult.Unauthorized -> {
+                    // Atualizar promoções nunca deve expulsar o usuário da tela.
+                    // Só pedimos login na entrada, quando não existe catálogo carregado.
+                    if (initialLoad && promotions.isEmpty()) {
+                        requestLoginOnce()
+                    }
+                }
                 is NossaGentePromotionsResult.Error -> {
                     if (initialLoad || promotions.isEmpty()) error = result.message
                 }

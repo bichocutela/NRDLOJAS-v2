@@ -88,7 +88,8 @@ class NossaGenteApi(context: Context) {
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (response.code == 401 || response.code == 403) {
-                    clearSession()
+                    // Uma consulta de atualização não deve apagar a sessão salva.
+                    // A tela decide quando realmente precisa pedir novo login.
                     return@withContext NossaGentePromotionsResult.Unauthorized
                 }
                 if (!response.isSuccessful) {
