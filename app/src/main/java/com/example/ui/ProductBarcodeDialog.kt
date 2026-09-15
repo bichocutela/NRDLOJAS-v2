@@ -66,15 +66,63 @@ fun ProductBarcodeDialog(
     val boldOutline by userPreferences.boldOutline.collectAsState(initial = false)
     val uppercaseBold by userPreferences.uppercaseBold.collectAsState(initial = false)
     val glassSoftStyle = LocalGlassSoftStyle.current
-    val photoUrl = remember(product.imageUrl) {
-        product.imageUrl
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?.let(ImageUrlHelper::normalizeUrl)
-            ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+    var photoUrl by remember(product.code, product.imageUrl) {
+        mutableStateOf(
+            product.imageUrl
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let(ImageUrlHelper::normalizeUrl)
+                ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+        )
     }
     var showPhotoDialog by remember { mutableStateOf(false) }
-    
+    val isMaster = managementRoleForEmail(
+        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
+    ) == "mestre"
+    var isPhotoSaving by remember { mutableStateOf(false) }
+    var photoEditMessage by remember { mutableStateOf<String?>(null) }
+    val photoPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null && isMaster && !isPhotoSaving) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) {
+                // O seletor já concede acesso temporário; persistência é apenas garantia extra.
+            }
+            isPhotoSaving = true
+            photoEditMessage = null
+            coroutineScope.launch {
+                try {
+                    val uploadedUrl = com.example.data.FirebaseService.uploadImageToStorage(
+                        uri,
+                        "products/${product.code}_${System.currentTimeMillis()}.jpg"
+                    )
+                    if (uploadedUrl == null) {
+                        photoEditMessage = "Não foi possível enviar a nova foto. Tente novamente."
+                    } else {
+                        val saved = com.example.data.FirebaseService.saveProduct(
+                            product.copy(imageUrl = uploadedUrl)
+                        )
+                        if (saved) {
+                            photoUrl = uploadedUrl
+                            photoEditMessage = "Foto atualizada com sucesso."
+                        } else {
+                            photoEditMessage = "A foto foi enviada, mas não foi possível atualizar o produto."
+                        }
+                    }
+                } catch (_: Exception) {
+                    photoEditMessage = "Não foi possível atualizar a foto. Verifique a conexão e tente novamente."
+                } finally {
+                    isPhotoSaving = false
+                }
+            }
+        }
+    }
+
     var scannerProfile by remember { mutableStateOf("Padrão") }
     var zoomPercent by remember { mutableIntStateOf(100) }
 
@@ -337,43 +385,79 @@ fun ProductBarcodeDialog(
                 onDismissRequest = { showPhotoDialog = false },
                 title = { Text("Foto do Produto") },
                 text = {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 180.dp, max = 360.dp),
-                        contentAlignment = Alignment.Center
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        AsyncImage(
-                            model = photoUrl,
-                            contentDescription = product.name,
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize(),
-                            onLoading = {
-                                isPhotoLoading = true
-                                photoLoadFailed = false
-                            },
-                            onSuccess = { isPhotoLoading = false },
-                            onError = {
-                                isPhotoLoading = false
-                                photoLoadFailed = true
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 180.dp, max = 360.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = photoUrl,
+                                contentDescription = product.name,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize(),
+                                onLoading = {
+                                    isPhotoLoading = true
+                                    photoLoadFailed = false
+                                },
+                                onSuccess = { isPhotoLoading = false },
+                                onError = {
+                                    isPhotoLoading = false
+                                    photoLoadFailed = true
+                                }
+                            )
+                            if (isPhotoLoading || isPhotoSaving) {
+                                CircularProgressIndicator()
                             }
-                        )
-                        if (isPhotoLoading) {
-                            CircularProgressIndicator()
+                            if (photoLoadFailed && !isPhotoSaving) {
+                                Text(
+                                    "Não foi possível carregar a foto do produto.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
-                        if (photoLoadFailed) {
+                        photoEditMessage?.let { message ->
                             Text(
-                                "Não foi possível carregar a foto do produto.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (message.startsWith("Foto atualizada")) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.error
+                                }
                             )
                         }
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showPhotoDialog = false }) {
-                        Text("Fechar")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (isMaster) {
+                            OutlinedButton(
+                                onClick = {
+                                    photoEditMessage = null
+                                    photoPicker.launch(
+                                        androidx.activity.result.PickVisualMediaRequest(
+                                            androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                                        )
+                                    )
+                                },
+                                enabled = !isPhotoSaving
+                            ) {
+                                Text(if (isPhotoSaving) "Salvando…" else "Editar Foto")
+                            }
+                        }
+                        TextButton(
+                            onClick = { showPhotoDialog = false },
+                            enabled = !isPhotoSaving
+                        ) {
+                            Text("Fechar")
+                        }
                     }
                 }
             )
