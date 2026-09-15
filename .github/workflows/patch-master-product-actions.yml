@@ -1,0 +1,80 @@
+name: Patch ações mestre no produto
+
+on:
+  push:
+    branches:
+      - feature/master-change-code-delete-actions
+    paths:
+      - '.github/workflows/patch-master-product-actions.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/master-change-code-delete-actions
+          fetch-depth: 0
+      - name: Aplicar alteração funcional
+        shell: python
+        run: |
+          from pathlib import Path
+
+          dialog = Path('app/src/main/java/com/example/ui/ProductBarcodeDialog.kt')
+          s = dialog.read_text()
+
+          old = '''    onProductUpdated: (Product) -> Unit = {},\n    onProductCodeChanged: (suspend (Product, String) -> Boolean)? = null\n) {'''
+          new = '''    onProductUpdated: (Product) -> Unit = {},\n    onProductCodeChanged: (suspend (Product, String) -> Boolean)? = null,\n    onProductDeleted: (suspend (Product) -> Boolean)? = null\n) {'''
+          if old not in s:
+              raise SystemExit('assinatura do dialog não encontrada')
+          s = s.replace(old, new, 1)
+
+          old = '''    var isCodeSaving by remember { mutableStateOf(false) }\n    var codeEditMessage by remember(product.code) { mutableStateOf<String?>(null) }'''
+          new = '''    var isCodeSaving by remember { mutableStateOf(false) }\n    var codeEditMessage by remember(product.code) { mutableStateOf<String?>(null) }\n    var showDeleteProductDialog by remember { mutableStateOf(false) }\n    var isDeletingProduct by remember { mutableStateOf(false) }\n    var deleteProductMessage by remember(product.code) { mutableStateOf<String?>(null) }'''
+          if old not in s:
+              raise SystemExit('estado de código não encontrado')
+          s = s.replace(old, new, 1)
+
+          old = '''                            if (isMaster && onProductCodeChanged != null) {\n                                TextButton(\n                                    onClick = {\n                                        codeEditValue = product.code\n                                        codeEditMessage = null\n                                        showCodeEditDialog = true\n                                    },\n                                    contentPadding = PaddingValues(horizontal = 4.dp)\n                                ) {\n                                    Text(\n                                        "Alterar Código",\n                                        maxLines = 2,\n                                        fontSize = 12.sp,\n                                        textAlign = TextAlign.End\n                                    )\n                                }\n                            }\n                            if (photoUrl != null || isMaster) {'''
+          new = '''                            if (isMaster && onProductCodeChanged != null) {\n                                TextButton(\n                                    onClick = {\n                                        codeEditValue = product.code\n                                        codeEditMessage = null\n                                        showCodeEditDialog = true\n                                    },\n                                    contentPadding = PaddingValues(horizontal = 4.dp)\n                                ) {\n                                    Text(\n                                        "Alterar Código",\n                                        maxLines = 2,\n                                        fontSize = 12.sp,\n                                        textAlign = TextAlign.End\n                                    )\n                                }\n                            }\n                            if (isMaster && onProductDeleted != null) {\n                                TextButton(\n                                    onClick = {\n                                        deleteProductMessage = null\n                                        showDeleteProductDialog = true\n                                    },\n                                    contentPadding = PaddingValues(horizontal = 4.dp),\n                                    colors = ButtonDefaults.textButtonColors(\n                                        contentColor = MaterialTheme.colorScheme.error\n                                    )\n                                ) {\n                                    Text(\n                                        "Excluir",\n                                        maxLines = 1,\n                                        fontSize = 12.sp\n                                    )\n                                }\n                            }\n                            if (photoUrl != null || isMaster) {'''
+          if old not in s:
+              raise SystemExit('bloco de ações mestre não encontrado')
+          s = s.replace(old, new, 1)
+
+          old = '''                dismissButton = {\n                    TextButton(\n                        onClick = { showCodeEditDialog = false },\n                        enabled = !isCodeSaving\n                    ) {\n                        Text("Cancelar")\n                    }\n                }\n            )\n        }\n\n        if (showPhotoDialog && (photoUrl != null || isMaster)) {'''
+          new = '''                dismissButton = {\n                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {\n                        TextButton(\n                            onClick = {\n                                codeEditValue = product.code\n                                codeEditMessage = null\n                            },\n                            enabled = !isCodeSaving && codeEditValue != product.code\n                        ) {\n                            Text("Reverter")\n                        }\n                        TextButton(\n                            onClick = { showCodeEditDialog = false },\n                            enabled = !isCodeSaving\n                        ) {\n                            Text("Cancelar")\n                        }\n                    }\n                }\n            )\n        }\n\n        if (showDeleteProductDialog && isMaster && onProductDeleted != null) {\n            AlertDialog(\n                onDismissRequest = {\n                    if (!isDeletingProduct) {\n                        deleteProductMessage = null\n                        showDeleteProductDialog = false\n                    }\n                },\n                title = { Text("Excluir produto") },\n                text = {\n                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {\n                        Text("Deseja realmente excluir este produto do catálogo?")\n                        Text(\n                            product.name,\n                            style = MaterialTheme.typography.titleMedium,\n                            fontWeight = FontWeight.Bold\n                        )\n                        Text(\n                            "Código: ${product.code}",\n                            style = MaterialTheme.typography.bodySmall,\n                            color = MaterialTheme.colorScheme.onSurfaceVariant\n                        )\n                        Text(\n                            "A exclusão será aplicada para todos os usuários.",\n                            style = MaterialTheme.typography.bodySmall,\n                            color = MaterialTheme.colorScheme.error\n                        )\n                        deleteProductMessage?.let { message ->\n                            Text(\n                                message,\n                                style = MaterialTheme.typography.bodySmall,\n                                color = MaterialTheme.colorScheme.error\n                            )\n                        }\n                    }\n                },\n                confirmButton = {\n                    TextButton(\n                        onClick = {\n                            coroutineScope.launch {\n                                isDeletingProduct = true\n                                deleteProductMessage = null\n                                try {\n                                    val deleted = onProductDeleted(product)\n                                    if (deleted) {\n                                        showDeleteProductDialog = false\n                                        closeDialog()\n                                    } else {\n                                        deleteProductMessage = "Não foi possível excluir o produto."\n                                    }\n                                } catch (_: Exception) {\n                                    deleteProductMessage = "Não foi possível excluir o produto. Tente novamente."\n                                } finally {\n                                    isDeletingProduct = false\n                                }\n                            }\n                        },\n                        enabled = !isDeletingProduct,\n                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)\n                    ) {\n                        if (isDeletingProduct) {\n                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)\n                            Spacer(modifier = Modifier.width(6.dp))\n                        }\n                        Text(if (isDeletingProduct) "Excluindo..." else "Excluir produto")\n                    }\n                },\n                dismissButton = {\n                    TextButton(\n                        onClick = { showDeleteProductDialog = false },\n                        enabled = !isDeletingProduct\n                    ) {\n                        Text("Cancelar")\n                    }\n                }\n            )\n        }\n\n        if (showPhotoDialog && (photoUrl != null || isMaster)) {'''
+          if old not in s:
+              raise SystemExit('fim do diálogo alterar código não encontrado')
+          s = s.replace(old, new, 1)
+          dialog.write_text(s)
+
+          search = Path('app/src/main/java/com/example/ui/SearchScreen.kt')
+          t = search.read_text()
+          marker = '''                onProductCodeChanged = { old, newCode ->\n                    viewModel.updateProductSuspend(old, old.copy(code = newCode))\n                }'''
+          replacement = '''                onProductCodeChanged = { old, newCode ->\n                    viewModel.updateProductSuspend(old, old.copy(code = newCode))\n                },\n                onProductDeleted = { target ->\n                    viewModel.deleteProductSuspend(target)\n                }'''
+          count = t.count(marker)
+          if count == 0:
+              raise SystemExit('callbacks de alteração de código não encontrados')
+          t = t.replace(marker, replacement)
+          search.write_text(t)
+          print(f'callbacks de produto atualizados: {count}')
+
+      - name: Validar diff
+        run: |
+          git diff --check
+          git diff -- app/src/main/java/com/example/ui/ProductBarcodeDialog.kt app/src/main/java/com/example/ui/SearchScreen.kt
+      - name: Compilar Kotlin
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:compileDebugKotlin --no-daemon
+      - name: Remover workflow temporário e commitar
+        run: |
+          rm -f .github/workflows/patch-master-product-actions.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/com/example/ui/ProductBarcodeDialog.kt app/src/main/java/com/example/ui/SearchScreen.kt .github/workflows/patch-master-product-actions.yml
+          git commit -m 'Reutiliza ações do mestre para reverter e excluir produto'
+          git push origin HEAD:feature/master-change-code-delete-actions
