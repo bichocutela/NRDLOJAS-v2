@@ -1062,6 +1062,9 @@ fun ProductCard(
             onProductUpdated = { updated -> viewModel.updateProductLocally(updated) },
             onProductCodeChanged = { old, newCode ->
                 viewModel.updateProductSuspend(old, old.copy(code = newCode))
+            },
+            onProductDeleted = { target ->
+                viewModel.deleteProductSuspend(target)
             }
         )
     }
@@ -1188,6 +1191,9 @@ fun MiniProductCard(
             onProductUpdated = { updated -> viewModel.updateProductLocally(updated) },
             onProductCodeChanged = { old, newCode ->
                 viewModel.updateProductSuspend(old, old.copy(code = newCode))
+            },
+            onProductDeleted = { target ->
+                viewModel.deleteProductSuspend(target)
             }
         )
     }
@@ -1322,6 +1328,9 @@ fun HistoryItem(
             onProductUpdated = { updated -> viewModel.updateProductLocally(updated) },
             onProductCodeChanged = { old, newCode ->
                 viewModel.updateProductSuspend(old, old.copy(code = newCode))
+            },
+            onProductDeleted = { target ->
+                viewModel.deleteProductSuspend(target)
             }
         )
     }
