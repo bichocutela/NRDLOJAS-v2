@@ -29,8 +29,32 @@ jobs:
           const origin = 'https://nordestao12.acp.app.br';
           const browser = await chromium.launch({headless:true});
           const context = await browser.newContext();
+          const api = context.request;
+          const csrfResp = await api.get(origin + '/api/auth/csrf');
+          const csrf = (await csrfResp.json()).csrfToken;
+          await api.post(origin + '/api/auth/callback/credentials', {
+            headers: {Origin: origin, Referer: origin + '/login'},
+            form: {
+              login: process.env.ACP_LOGIN,
+              password: process.env.ACP_PASSWORD,
+              csrfToken: csrf,
+              callbackUrl: origin + '/print-template',
+              json: 'true'
+            }
+          });
+          const sessionResp = await api.get(origin + '/api/auth/session');
+          const session = await sessionResp.json();
+          if (!session?.user?.accessToken) throw new Error('Sessão ACP não autenticada no navegador.');
+          console.log('SESSION_OK', JSON.stringify({tenantName:session.user.tenantName, proxyEnable:session.user.proxyEnable}));
+
           const page = await context.newPage();
           const hits = [];
+          const requests = [];
+          page.on('request', req => {
+            if (req.method() === 'GET' && /acp\.app\.br/i.test(req.url()) && /Product|Campaign|Offer|Price|Promotion|Template|Print/i.test(req.url())) {
+              requests.push(req.url().replace(/([?&](?:token|accessToken|authorization)=[^&]+)/gi,'$1REDACTED'));
+            }
+          });
           page.on('response', async (res) => {
             const req = res.request();
             if (req.method() !== 'GET') return;
@@ -47,7 +71,7 @@ jobs:
                 if (parsed) {
                   const matches=[];
                   const walk=(v,path='')=>{
-                    if (matches.length>=25) return;
+                    if (matches.length>=40) return;
                     if (v && typeof v==='object') {
                       if (!Array.isArray(v)) {
                         const s=JSON.stringify(v);
@@ -71,19 +95,12 @@ jobs:
             } catch {}
           });
 
-          await page.goto(origin + '/login', {waitUntil:'domcontentloaded', timeout:60000});
-          const login = page.locator('input[name="login"], input[type="text"], input:not([type])').first();
-          const pass = page.locator('input[name="password"], input[type="password"]').first();
-          await login.fill(process.env.ACP_LOGIN);
-          await pass.fill(process.env.ACP_PASSWORD);
-          const submit = page.locator('button[type="submit"], button:has-text("Entrar")').first();
-          await submit.click();
-          await page.waitForTimeout(3000);
           await page.goto(origin + '/print-template', {waitUntil:'domcontentloaded', timeout:60000});
-          await page.waitForTimeout(4000);
-
+          await page.waitForTimeout(5000);
+          console.log('URL_AFTER_AUTH', page.url());
           const inputs = await page.locator('input').evaluateAll(els => els.map((e,i)=>({i,type:e.type,placeholder:e.placeholder,name:e.name,aria:e.getAttribute('aria-label')})));
           console.log('INPUTS', JSON.stringify(inputs));
+
           const candidates = page.locator('input[type="text"], input:not([type]), input[type="search"]');
           const count = await candidates.count();
           let used = false;
@@ -92,17 +109,24 @@ jobs:
             const meta=((await el.getAttribute('placeholder'))||'')+' '+((await el.getAttribute('aria-label'))||'')+' '+((await el.getAttribute('name'))||'');
             if (/prod|pesq|busc|cód|cod|ean|barra/i.test(meta)) {
               await el.fill('255131');
-              await page.waitForTimeout(3500);
+              await page.waitForTimeout(4000);
               used=true;
+              console.log('USED_INPUT', i, meta);
               break;
             }
           }
-          if (!used && count>0) { await candidates.first().fill('255131'); await page.waitForTimeout(3500); }
+          if (!used && count>0) {
+            console.log('NO_PRODUCT_INPUT_AUTODETECTED');
+          }
           const productText = page.getByText(/TANGERINA IMPORTADA/i).first();
           if (await productText.count()) {
+            console.log('PRODUCT_VISIBLE');
             await productText.click().catch(()=>{});
             await page.waitForTimeout(4000);
           }
+          console.log('REQUESTS_BEGIN');
+          console.log(JSON.stringify([...new Set(requests)],null,2));
+          console.log('REQUESTS_END');
           console.log('HITS_BEGIN');
           console.log(JSON.stringify(hits,null,2));
           console.log('HITS_END');
