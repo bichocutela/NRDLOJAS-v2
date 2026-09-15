@@ -1,5 +1,6 @@
 name: Validar atalho Mestre no banner
 
+# Revalidação após opt-in do gesto de duplo toque.
 on:
   push:
     branches: ["feat/master-banner-double-tap"]
