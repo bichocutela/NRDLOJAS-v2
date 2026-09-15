@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -31,6 +32,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,7 +55,8 @@ fun ProductBarcodeDialog(
     product: Product,
     onDismiss: () -> Unit,
     highlightedFromNotification: Boolean = false,
-    onProductUpdated: (Product) -> Unit = {}
+    onProductUpdated: (Product) -> Unit = {},
+    onProductCodeChanged: (suspend (Product, String) -> Boolean)? = null
 ) {
     val showDialog = remember { mutableStateOf(true) }
     val visibilityState = remember {
@@ -84,6 +87,10 @@ fun ProductBarcodeDialog(
     var isPhotoSaving by remember { mutableStateOf(false) }
     var photoEditMessage by remember { mutableStateOf<String?>(null) }
     var pendingPhotoUrl by remember(product.code) { mutableStateOf<String?>(null) }
+    var showCodeEditDialog by remember { mutableStateOf(false) }
+    var codeEditValue by remember(product.code) { mutableStateOf(product.code) }
+    var isCodeSaving by remember { mutableStateOf(false) }
+    var codeEditMessage by remember(product.code) { mutableStateOf<String?>(null) }
 
     fun clipboardHttpUrl(): String? {
         val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
@@ -343,8 +350,25 @@ fun ProductBarcodeDialog(
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
+                            Spacer(modifier = Modifier.weight(1f))
+                            if (isMaster && onProductCodeChanged != null) {
+                                TextButton(
+                                    onClick = {
+                                        codeEditValue = product.code
+                                        codeEditMessage = null
+                                        showCodeEditDialog = true
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 4.dp)
+                                ) {
+                                    Text(
+                                        "Alterar Código",
+                                        maxLines = 2,
+                                        fontSize = 12.sp,
+                                        textAlign = TextAlign.End
+                                    )
+                                }
+                            }
                             if (photoUrl != null || isMaster) {
-                                Spacer(modifier = Modifier.weight(1f))
                                 TextButton(
                                     onClick = { showPhotoDialog = true },
                                     contentPadding = PaddingValues(horizontal = 4.dp)
@@ -352,6 +376,7 @@ fun ProductBarcodeDialog(
                                     Text(
                                         if (photoUrl != null) "Ver Foto do Produto" else "Adicionar Foto",
                                         maxLines = 2,
+                                        fontSize = 12.sp,
                                         textAlign = TextAlign.End
                                     )
                                 }
@@ -426,6 +451,91 @@ fun ProductBarcodeDialog(
                     }
                 }
             }
+        }
+
+        if (showCodeEditDialog && isMaster && onProductCodeChanged != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    if (!isCodeSaving) {
+                        codeEditMessage = null
+                        showCodeEditDialog = false
+                    }
+                },
+                title = { Text("Alterar Código") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            product.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Código atual: ${product.code}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = codeEditValue,
+                            onValueChange = { codeEditValue = it },
+                            label = { Text("Novo Código") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            enabled = !isCodeSaving,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        codeEditMessage?.let { message ->
+                            Text(
+                                message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val newCode = codeEditValue.trim()
+                            when {
+                                newCode.isBlank() -> codeEditMessage = "Informe o novo código."
+                                newCode == product.code -> codeEditMessage = "Digite um código diferente do atual."
+                                else -> coroutineScope.launch {
+                                    isCodeSaving = true
+                                    codeEditMessage = null
+                                    try {
+                                        val changed = onProductCodeChanged(product, newCode)
+                                        if (changed) {
+                                            onProductUpdated(product.copy(code = newCode))
+                                            showCodeEditDialog = false
+                                        } else {
+                                            codeEditMessage = "Não foi possível alterar o código."
+                                        }
+                                    } catch (_: Exception) {
+                                        codeEditMessage = "Não foi possível alterar o código. Tente novamente."
+                                    } finally {
+                                        isCodeSaving = false
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !isCodeSaving
+                    ) {
+                        if (isCodeSaving) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+                        Text(if (isCodeSaving) "Salvando..." else "Salvar")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showCodeEditDialog = false },
+                        enabled = !isCodeSaving
+                    ) {
+                        Text("Cancelar")
+                    }
+                }
+            )
         }
 
         if (showPhotoDialog && (photoUrl != null || isMaster)) {

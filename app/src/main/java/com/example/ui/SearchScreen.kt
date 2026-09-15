@@ -825,6 +825,9 @@ fun SearchScreen(
                 onProductUpdated = { updated ->
                     selectedNotificationProduct = updated
                     viewModel.updateProductLocally(updated)
+                },
+                onProductCodeChanged = { old, newCode ->
+                    viewModel.updateProductSuspend(old, old.copy(code = newCode))
                 }
             )
         }
@@ -836,6 +839,9 @@ fun SearchScreen(
                 onProductUpdated = { updated ->
                     selectedMostUsedProduct = updated
                     viewModel.updateProductLocally(updated)
+                },
+                onProductCodeChanged = { old, newCode ->
+                    viewModel.updateProductSuspend(old, old.copy(code = newCode))
                 }
             )
         }
@@ -1044,7 +1050,14 @@ fun ProductCard(
     val cardShape = RoundedCornerShape(24.dp)
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
-        ProductBarcodeDialog(product = product, onDismiss = { showDialog = false })
+        ProductBarcodeDialog(
+            product = product,
+            onDismiss = { showDialog = false },
+            onProductUpdated = { updated -> viewModel.updateProductLocally(updated) },
+            onProductCodeChanged = { old, newCode ->
+                viewModel.updateProductSuspend(old, old.copy(code = newCode))
+            }
+        )
     }
 
     Row(
@@ -1163,7 +1176,14 @@ fun MiniProductCard(
     val cardShape = RoundedCornerShape(24.dp)
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
-        ProductBarcodeDialog(product = product, onDismiss = { showDialog = false })
+        ProductBarcodeDialog(
+            product = product,
+            onDismiss = { showDialog = false },
+            onProductUpdated = { updated -> viewModel.updateProductLocally(updated) },
+            onProductCodeChanged = { old, newCode ->
+                viewModel.updateProductSuspend(old, old.copy(code = newCode))
+            }
+        )
     }
     Column(
         modifier = Modifier
@@ -1290,7 +1310,14 @@ fun HistoryItem(
     val itemShape = RoundedCornerShape(16.dp)
     var showDialog by remember { mutableStateOf(false) }
     if (showDialog) {
-        ProductBarcodeDialog(product = product, onDismiss = { showDialog = false })
+        ProductBarcodeDialog(
+            product = product,
+            onDismiss = { showDialog = false },
+            onProductUpdated = { updated -> viewModel.updateProductLocally(updated) },
+            onProductCodeChanged = { old, newCode ->
+                viewModel.updateProductSuspend(old, old.copy(code = newCode))
+            }
+        )
     }
     val dynColors = getDynamicThemeColor(index, appTheme, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
     Row(
