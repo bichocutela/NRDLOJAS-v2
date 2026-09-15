@@ -456,22 +456,21 @@ fun PromotionsScreen(
     }
 
     val newestOfferGroups = pendingUpdate?.offerGroups ?: offerGroups
-    val newOfferChangesForSelectedStore = remember(dailyChanges, newestOfferGroups, selectedStore) {
+    val offerChangesForSelectedStore = remember(dailyChanges, selectedStore) {
         dailyChanges
             .asReversed()
             .asSequence()
-            .filter { it.type == PromotionChangeType.ADDED }
             .filter { selectedStore == ALL_STORES_LABEL || it.storeCode == selectedStore }
-            .filter { newestOfferGroups.findOfferForChange(it) != null }
             .distinctBy { it.stableKey }
             .toList()
     }
 
     if (showNewOffers) {
         NewOffersDialog(
-            changes = newOfferChangesForSelectedStore,
+            changes = offerChangesForSelectedStore,
             selectedStore = selectedStore,
             limitedBySafetyCap = dailyChangesLimited,
+            canOpenOffer = { change -> newestOfferGroups.findOfferForChange(change) != null },
             onDismiss = { showNewOffers = false },
             onOfferClick = { change ->
                 val sourceGroups = pendingUpdate?.offerGroups ?: offerGroups
@@ -528,8 +527,8 @@ fun PromotionsScreen(
                         )
                         Spacer(Modifier.width(6.dp))
                         NewOffersButton(
-                            changeCount = newOfferChangesForSelectedStore.size,
-                            highlighted = newOfferChangesForSelectedStore.isNotEmpty(),
+                            changeCount = offerChangesForSelectedStore.size,
+                            highlighted = offerChangesForSelectedStore.isNotEmpty(),
                             enabled = !isLoading,
                             onClick = {
                                 pendingUpdate?.let { applyPromotionUpdate(it) }
@@ -1906,17 +1905,15 @@ private fun NewOffersDialog(
     changes: List<PromotionChange>,
     selectedStore: String,
     limitedBySafetyCap: Boolean,
+    canOpenOffer: (PromotionChange) -> Boolean,
     onDismiss: () -> Unit,
     onOfferClick: (PromotionChange) -> Unit
 ) {
-    val addedChanges = remember(changes) {
-        changes.filter { it.type == PromotionChangeType.ADDED }
-    }
-    val groupedChanges = remember(addedChanges, selectedStore) {
+    val groupedChanges = remember(changes, selectedStore) {
         if (selectedStore != ALL_STORES_LABEL) {
-            listOf(selectedStore to addedChanges)
+            listOf(selectedStore to changes)
         } else {
-            addedChanges
+            changes
                 .groupBy { it.storeCode.ifBlank { UNKNOWN_STORE_LABEL } }
                 .toList()
                 .sortedBy { (storeCode, _) ->
@@ -1930,6 +1927,9 @@ private fun NewOffersDialog(
     } else {
         StoreCatalog.nameFor(selectedStore)
     }
+    val addedCount = changes.count { it.type == PromotionChangeType.ADDED }
+    val changedCount = changes.count { it.type == PromotionChangeType.CHANGED }
+    val removedCount = changes.count { it.type == PromotionChangeType.REMOVED }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1953,7 +1953,7 @@ private fun NewOffersDialog(
                         Text("Ofertas novas", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         Text(
                             if (selectedStore == ALL_STORES_LABEL) {
-                                "Novidades de hoje organizadas por loja"
+                                "Entraram, foram alteradas ou saíram hoje, organizadas por loja"
                             } else {
                                 "Loja atual: $currentStoreLabel"
                             },
@@ -1962,13 +1962,13 @@ private fun NewOffersDialog(
                         )
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Fechar ofertas novas")
+                        Icon(Icons.Default.Close, contentDescription = "Fechar alterações de ofertas")
                     }
                 }
 
                 if (limitedBySafetyCap) {
                     Text(
-                        "O histórico de alterações foi limitado para manter o app estável. As ofertas novas disponíveis continuam acessíveis abaixo.",
+                        "O catálogo ultrapassou o limite de segurança do histórico. As alterações que conseguiram ser registradas continuam listadas abaixo.",
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
@@ -1976,13 +1976,19 @@ private fun NewOffersDialog(
                 }
 
                 Text(
-                    "${addedChanges.size} oferta(s) adicionada(s) hoje • $currentStoreLabel",
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                    "${changes.size} mudança(s) hoje • $currentStoreLabel",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Text(
+                    "Entraram: $addedCount  •  Alteradas: $changedCount  •  Saíram: $removedCount",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
 
-                if (addedChanges.isEmpty()) {
+                if (changes.isEmpty()) {
                     Column(
                         modifier = Modifier.fillMaxSize().padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1992,14 +1998,14 @@ private fun NewOffersDialog(
                         Spacer(Modifier.height(12.dp))
                         Text(
                             if (selectedStore == ALL_STORES_LABEL) {
-                                "Nenhuma oferta nova adicionada hoje."
+                                "Nenhuma mudança de oferta registrada hoje."
                             } else {
-                                "Nenhuma oferta nova para $currentStoreLabel hoje."
+                                "Nenhuma mudança de oferta registrada para $currentStoreLabel hoje."
                             }
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "Quando a consulta encontrar uma nova oferta, ela aparecerá aqui automaticamente.",
+                            "Quando uma oferta entrar, mudar ou sair, ela aparecerá aqui automaticamente.",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -2010,7 +2016,7 @@ private fun NewOffersDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         groupedChanges.forEach { (storeCode, storeChanges) ->
-                            item(key = "new-store-$storeCode") {
+                            item(key = "change-store-$storeCode") {
                                 Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp)) {
                                     Text(
                                         if (storeCode == UNKNOWN_STORE_LABEL) UNKNOWN_STORE_LABEL else StoreCatalog.nameFor(storeCode),
@@ -2019,7 +2025,7 @@ private fun NewOffersDialog(
                                     )
                                     if (storeCode != UNKNOWN_STORE_LABEL) {
                                         Text(
-                                            "Loja ${storeCode.padStart(4, '0')} • ${storeChanges.size} nova(s)",
+                                            "Loja ${storeCode.padStart(4, '0')} • ${storeChanges.size} mudança(s)",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -2029,6 +2035,7 @@ private fun NewOffersDialog(
                             items(storeChanges, key = { it.stableKey }) { change ->
                                 PromotionChangeCard(
                                     change = change,
+                                    canOpen = canOpenOffer(change),
                                     onOfferClick = onOfferClick
                                 )
                             }
@@ -2043,19 +2050,59 @@ private fun NewOffersDialog(
 @Composable
 private fun PromotionChangeCard(
     change: PromotionChange,
+    canOpen: Boolean,
     onOfferClick: (PromotionChange) -> Unit
 ) {
     val cardShape = RoundedCornerShape(14.dp)
-    val validity = listOfNotNull(
+    val oldValidity = listOfNotNull(
+        change.oldValidFrom.toDisplayDate(),
+        change.oldValidTo.toDisplayDate()
+    ).joinToString(" até ")
+    val newValidity = listOfNotNull(
         change.newValidFrom.toDisplayDate(),
         change.newValidTo.toDisplayDate()
     ).joinToString(" até ")
+    val validity = when (change.type) {
+        PromotionChangeType.ADDED -> newValidity
+        PromotionChangeType.CHANGED -> {
+            if (change.validityChanged && oldValidity.isNotBlank() && newValidity.isNotBlank() && oldValidity != newValidity) {
+                "$oldValidity → $newValidity"
+            } else {
+                newValidity.ifBlank { oldValidity }
+            }
+        }
+        PromotionChangeType.REMOVED -> oldValidity
+    }
+    val priceText = when (change.type) {
+        PromotionChangeType.ADDED -> "Preço: ${change.newOfferPrice ?: "não informado"}"
+        PromotionChangeType.CHANGED -> {
+            val oldPrice = change.oldOfferPrice
+            val newPrice = change.newOfferPrice
+            if (!oldPrice.isNullOrBlank() && !newPrice.isNullOrBlank() && oldPrice != newPrice) {
+                "Preço: $oldPrice → $newPrice"
+            } else {
+                "Preço: ${newPrice ?: oldPrice ?: "não informado"}"
+            }
+        }
+        PromotionChangeType.REMOVED -> "Último preço: ${change.oldOfferPrice ?: "não informado"}"
+    }
+    val validToForImage = if (change.type == PromotionChangeType.REMOVED) change.oldValidTo else change.newValidTo
+    val badgeContainerColor = when (change.type) {
+        PromotionChangeType.ADDED -> MaterialTheme.colorScheme.primaryContainer
+        PromotionChangeType.CHANGED -> MaterialTheme.colorScheme.tertiaryContainer
+        PromotionChangeType.REMOVED -> MaterialTheme.colorScheme.errorContainer
+    }
+    val badgeContentColor = when (change.type) {
+        PromotionChangeType.ADDED -> MaterialTheme.colorScheme.onPrimaryContainer
+        PromotionChangeType.CHANGED -> MaterialTheme.colorScheme.onTertiaryContainer
+        PromotionChangeType.REMOVED -> MaterialTheme.colorScheme.onErrorContainer
+    }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .glassSoftShadow(cardShape)
-            .clickable { onOfferClick(change) },
+            .then(if (canOpen) Modifier.clickable { onOfferClick(change) } else Modifier),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         shape = cardShape
     ) {
@@ -2063,21 +2110,21 @@ private fun PromotionChangeCard(
             if (!change.imageUrl.isNullOrBlank()) {
                 ProductImage(
                     imageUrl = change.imageUrl,
-                    contentDescription = "Abrir ${change.productName}",
+                    contentDescription = change.productName,
                     modifier = Modifier.size(76.dp),
-                    onClick = { onOfferClick(change) },
-                    validTo = change.newValidTo
+                    onClick = { if (canOpen) onOfferClick(change) },
+                    validTo = validToForImage
                 )
                 Spacer(Modifier.width(8.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
                 Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = badgeContainerColor,
+                    contentColor = badgeContentColor,
                     shape = RoundedCornerShape(6.dp)
                 ) {
                     Text(
-                        "NOVA OFERTA",
+                        change.type.displayLabel(),
                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
@@ -2098,11 +2145,28 @@ private fun PromotionChangeCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    "Preço: ${change.newOfferPrice ?: "não informado"}",
+                    priceText,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = if (change.type == PromotionChangeType.REMOVED) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    }
                 )
+                if (change.type == PromotionChangeType.CHANGED) {
+                    val reason = when {
+                        change.priceChanged && change.validityChanged -> "Alteração: preço/condição e validade"
+                        change.priceChanged -> "Alteração: preço/condição"
+                        change.validityChanged -> "Alteração: validade"
+                        else -> "Alteração: dados da oferta"
+                    }
+                    Text(
+                        reason,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (validity.isNotBlank()) {
                     Spacer(Modifier.height(3.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2114,17 +2178,21 @@ private fun PromotionChangeCard(
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            "Validade: $validity",
+                            if (change.type == PromotionChangeType.REMOVED) "Validade anterior: $validity" else "Validade: $validity",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
                 }
                 Spacer(Modifier.height(5.dp))
                 Text(
-                    "Toque para abrir esta oferta",
+                    when {
+                        canOpen -> "Toque para abrir esta oferta"
+                        change.type == PromotionChangeType.REMOVED -> "Esta oferta saiu do catálogo"
+                        else -> "Esta oferta não está disponível no catálogo atual"
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = if (canOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -2138,7 +2206,7 @@ private fun PromotionChangeType.displayOrder(): Int = when (this) {
 }
 
 private fun PromotionChangeType.displayLabel(): String = when (this) {
-    PromotionChangeType.ADDED -> "ADICIONADO"
-    PromotionChangeType.CHANGED -> "ALTERADO"
-    PromotionChangeType.REMOVED -> "EXCLUÍDO"
+    PromotionChangeType.ADDED -> "ENTROU EM OFERTA"
+    PromotionChangeType.CHANGED -> "OFERTA ALTERADA"
+    PromotionChangeType.REMOVED -> "SAIU DA OFERTA"
 }

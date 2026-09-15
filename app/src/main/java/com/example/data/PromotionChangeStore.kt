@@ -16,7 +16,7 @@ import java.util.Locale
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
-private const val MAX_SNAPSHOT_ENTRIES = 15_000
+private const val MAX_SNAPSHOT_ENTRIES = 60_000
 private const val MAX_DAILY_CHANGES = 5_000
 private const val HISTORY_FILE_NAME = "nossa_gente_offer_history.json.gz"
 
