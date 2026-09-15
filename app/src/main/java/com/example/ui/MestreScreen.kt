@@ -93,9 +93,15 @@ fun MestreScreen(
     onNavigateToAdmin: () -> Unit,
     onNavigateToManageTabs: () -> Unit,
     onNavigateToManageProducts: () -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    quickEditThemeKey: String? = null
 ) {
-    var pageStack by rememberSaveable { mutableStateOf(arrayListOf(MestrePanelPage.DASHBOARD.name)) }
+    var pageStack by rememberSaveable(quickEditThemeKey) {
+        mutableStateOf(
+            if (quickEditThemeKey.isNullOrBlank()) arrayListOf(MestrePanelPage.DASHBOARD.name)
+            else arrayListOf(MestrePanelPage.APPEARANCE_SETTINGS.name)
+        )
+    }
     val currentPage = MestrePanelPage.entries.firstOrNull { it.name == pageStack.lastOrNull() }
         ?: MestrePanelPage.DASHBOARD
     val openPage: (MestrePanelPage) -> Unit = { page ->
@@ -169,6 +175,7 @@ fun MestreScreen(
     var isUploadingThemeBackground by remember { mutableStateOf(false) }
     var backgroundToDelete by remember { mutableStateOf<Pair<String, ThemeBackground>?>(null) }
     var backgroundToPreview by remember { mutableStateOf<Pair<String, ThemeBackground>?>(null) }
+    var quickPreviewOpened by remember(quickEditThemeKey) { mutableStateOf(false) }
     var maintenanceSummary by remember { mutableStateOf<MaintenanceSummary?>(null) }
     var isLoadingMaintenance by remember { mutableStateOf(false) }
     var snapshotToRestore by remember { mutableStateOf<CatalogSnapshot?>(null) }
@@ -251,6 +258,16 @@ fun MestreScreen(
         showEndDatePicker = false
         backgroundInputError = null
         showThemeBackgroundDialog = true
+    }
+
+    LaunchedEffect(quickEditThemeKey, appearanceSettings.themeBackgrounds) {
+        val themeKey = quickEditThemeKey?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        if (!quickPreviewOpened) {
+            appearanceSettings.activeBackgroundFor(themeKey)?.let { activeBackground ->
+                backgroundToPreview = themeKey to activeBackground
+                quickPreviewOpened = true
+            }
+        }
     }
 
     fun pickerDateToIsoDate(millis: Long?): String? = millis?.let {
@@ -1585,6 +1602,12 @@ fun MestreScreen(
           onDismiss = {
               if (!isSavingAppearanceSettings) backgroundToPreview = null
           },
+          onEditBackground = if (themeKey != CONSULTATION_BACKGROUND_KEY && previewOfferKey == null) {
+              {
+                  backgroundToPreview = null
+                  openBackgroundEditor(themeKey, background)
+              }
+          } else null,
           onSave = { updatedBackground, maskSettings ->
               val updatedList = backgroundsForKey(themeKey).map { item ->
                   if (item.id == updatedBackground.id) updatedBackground else item

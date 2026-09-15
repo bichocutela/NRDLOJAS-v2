@@ -6,6 +6,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
@@ -210,7 +211,12 @@ fun rememberGlassVisualStyle(): GlassVisualStyle {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
+fun SearchScreen(
+    viewModel: MainViewModel,
+    onOpenDrawer: () -> Unit = {},
+    canQuickEditBanner: Boolean = false,
+    onQuickEditBanner: (String) -> Unit = {}
+) {
     val bannerImageUri by viewModel.userPreferences.bannerImageUri.collectAsState(initial = null)
     val localAppTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
     val remoteAppearance by FirebaseService.observeAppearanceSettings()
@@ -341,7 +347,20 @@ fun SearchScreen(viewModel: MainViewModel, onOpenDrawer: () -> Unit = {}) {
                     imageOffsetY = activeThemeBackground?.imageOffsetY ?: 0f,
                     imageStretchX = activeThemeBackground?.imageStretchX ?: 1f,
                     imageStretchY = activeThemeBackground?.imageStretchY ?: 1f,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (canQuickEditBanner && activeThemeBackground != null) {
+                                Modifier.combinedClickable(
+                                    onClick = {},
+                                    onDoubleClick = {
+                                        onQuickEditBanner(if (isGlassTheme) "glass" else normalizedTheme)
+                                    }
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
                 )
 
                 IconButton(

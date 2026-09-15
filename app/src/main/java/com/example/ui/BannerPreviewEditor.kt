@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Search
@@ -36,6 +37,7 @@ fun BannerPreviewEditor(
     background: ThemeBackground,
     isSaving: Boolean,
     onDismiss: () -> Unit,
+    onEditBackground: (() -> Unit)? = null,
     onSave: (ThemeBackground, BannerMaskSettings) -> Unit
 ) {
     val storedMask = rememberBannerMaskSettings(themeKey, background.url)
@@ -362,6 +364,18 @@ fun BannerPreviewEditor(
                             ) {
                                 Text("Névoa embaixo", maxLines = 1)
                             }
+                        }
+                    }
+
+                    if (onEditBackground != null) {
+                        OutlinedButton(
+                            onClick = onEditBackground,
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isSaving
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Editar fundo")
                         }
                     }
                 }

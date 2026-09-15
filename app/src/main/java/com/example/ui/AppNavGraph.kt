@@ -158,7 +158,16 @@ fun AppNavGraph(
                         }
                     }
                 }
-                composable("search") { SearchScreen(viewModel, onOpenDrawer = { scope.launch { drawerState.open() } }) }
+                composable("search") {
+                    SearchScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { scope.launch { drawerState.open() } },
+                        canQuickEditBanner = isLoggedIn && userRole == "mestre",
+                        onQuickEditBanner = { themeKey ->
+                            navController.navigate("mestre/banner/$themeKey") { launchSingleTop = true }
+                        }
+                    )
+                }
                 composable("admin") {
                     ProtectedManagementRoute(isLoggedIn, userRole, setOf("admin", "mestre"), { navController.navigateToSearch() }) {
                         AdminScreen(viewModel, onNavigateBack = { navController.popBackStack() })
@@ -167,6 +176,19 @@ fun AppNavGraph(
                 composable("mestre") {
                     ProtectedManagementRoute(isLoggedIn, userRole, setOf("mestre"), { navController.navigateToSearch() }) {
                         MestreScreen(viewModel, { navController.navigate("admin") }, { navController.navigate("manage_tabs") }, { navController.navigate("manage_products") }, { navController.popBackStack() })
+                    }
+                }
+                composable("mestre/banner/{themeKey}") { backStackEntry ->
+                    val themeKey = backStackEntry.arguments?.getString("themeKey")
+                    ProtectedManagementRoute(isLoggedIn, userRole, setOf("mestre"), { navController.navigateToSearch() }) {
+                        MestreScreen(
+                            viewModel = viewModel,
+                            onNavigateToAdmin = { navController.navigate("admin") },
+                            onNavigateToManageTabs = { navController.navigate("manage_tabs") },
+                            onNavigateToManageProducts = { navController.navigate("manage_products") },
+                            onNavigateBack = { navController.popBackStack() },
+                            quickEditThemeKey = themeKey
+                        )
                     }
                 }
                 composable("manage_tabs") {
