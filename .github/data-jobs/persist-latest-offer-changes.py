@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 store_path = Path('app/src/main/java/com/example/data/PromotionChangeStore.kt')
 store = store_path.read_text(encoding='utf-8')
@@ -12,11 +13,15 @@ store_path.write_text(store, encoding='utf-8')
 screen_path = Path('app/src/main/java/com/example/ui/PromotionsScreen.kt')
 s = screen_path.read_text(encoding='utf-8')
 
+logout_pattern = re.compile(
+    r'onClick\s*=\s*\{\s*scope\.launch\s*\{\s*promotionChangeStore\.clear\(\)\s*onLogout\(\)\s*\}\s*\},',
+    re.MULTILINE,
+)
+s, count = logout_pattern.subn('onClick = { onLogout() },', s, count=1)
+if count != 1:
+    raise SystemExit(f'bloco de logout não encontrado: {count}')
+
 replacements = [
-    (
-        '''                        onClick = {\n                            scope.launch {\n                                promotionChangeStore.clear()\n                                onLogout()\n                            }\n                        },\n''',
-        '''                        onClick = { onLogout() },\n'''
-    ),
     ('Text("Ofertas novas", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)',
      'Text("Últimas mudanças", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)'),
     ('"Entraram, foram alteradas ou saíram hoje, organizadas por loja"',
