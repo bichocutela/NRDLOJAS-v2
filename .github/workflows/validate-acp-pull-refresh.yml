@@ -1,5 +1,6 @@
 name: Validar pull refresh ACP
 
+# Revalidação após opt-in do componente Material pull-to-refresh.
 on:
   push:
     branches: ["feat/acp-pull-refresh"]
