@@ -1,0 +1,52 @@
+name: Testar histórico ACP sem ordenação
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-printlog-variants.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  variants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Testar variantes GET
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          O='https://nordestao12.acp.app.br'; A='https://api.acp.app.br'; C="$RUNNER_TEMP/c"
+          csrf=$(curl -fsS -c "$C" -b "$C" "$O/api/auth/csrf" | jq -er .csrfToken)
+          curl -fsS -c "$C" -b "$C" -H "Origin: $O" -H "Referer: $O/login" -X POST "$O/api/auth/callback/credentials" \
+            --data-urlencode "login=$ACP_LOGIN" --data-urlencode "password=$ACP_PASSWORD" --data-urlencode "csrfToken=$csrf" \
+            --data-urlencode "callbackUrl=$O/dashboard/history" --data-urlencode 'json=true' >/dev/null
+          s=$(curl -fsS -c "$C" -b "$C" "$O/api/auth/session"); t=$(jq -er '.user.accessToken' <<<"$s"); p=$(jq -r '.user.proxyEnable//false' <<<"$s")
+          [ "$p" = true ] && base="$O/api/proxy/api/v1" || base="$A/api/v1"
+
+          variants=(
+            'TemplatePrintLog/all?pageSize=1&pageIndex=0'
+            'TemplatePrintLog/all?pageSize=10&pageIndex=0'
+            'TemplatePrintLog/all?pageSize=10&pageIndex=0&orderByDescending=false'
+            'TemplatePrintLog/all?pageSize=10&pageIndex=0&profileIdToBeDesconsidered=1'
+            'TemplatePrintLog/all?pageSize=1&pageIndex=0&orderByDescending=true'
+            'TemplatePrintLog/all?pageSize=1&pageIndex=0&orderByDescending=false&profileIdToBeDesconsidered=1'
+            'TemplatePrintLog/all?pageIndex=0'
+          )
+          i=0
+          for path in "${variants[@]}"; do
+            i=$((i+1)); out="$RUNNER_TEMP/out$i"; hdr="$RUNNER_TEMP/h$i"
+            code=$(curl -sS --connect-timeout 15 --max-time 45 -D "$hdr" -o "$out" -w '%{http_code}' -H "Authorization: Bearer $t" -H 'Accept: application/json' "$base/$path" || true)
+            echo "=== VARIANT $i HTTP $code ==="
+            echo "$path"
+            if jq -e . "$out" >/dev/null 2>&1; then
+              jq '{pageIndex,totalPages,pageSize,totalCount,hasPrevious,hasNext,itemCount:(.items|length),item0:(.items[0]//null)}' "$out" | head -c 12000 || true
+              echo
+            else
+              head -c 3000 "$out" || true; echo
+            fi
+          done
