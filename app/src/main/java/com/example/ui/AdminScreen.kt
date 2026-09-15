@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import coil.compose.AsyncImage
+import coil.imageLoader
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Color
@@ -51,6 +52,45 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 
+private fun adminClipboardHttpUrl(context: android.content.Context): String? {
+    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+        as? android.content.ClipboardManager ?: return null
+    val clip = clipboard.primaryClip ?: return null
+    val urlRegex = Regex("https?://[^\\s<>\"']+")
+    for (index in 0 until clip.itemCount) {
+        val item = clip.getItemAt(index)
+        val candidates = listOfNotNull(
+            item.text?.toString(),
+            item.uri?.toString(),
+            item.intent?.dataString,
+            item.coerceToText(context)?.toString()
+        )
+        for (raw in candidates) {
+            val candidate = urlRegex.find(raw.trim())?.value
+                ?.trimEnd('.', ',', ';', ')', ']', '}')
+            if (!candidate.isNullOrBlank()) return candidate
+        }
+    }
+    return null
+}
+
+private fun adminIsGoogleSearchPage(url: String): Boolean {
+    return try {
+        val parsed = android.net.Uri.parse(url)
+        val host = parsed.host?.lowercase().orEmpty()
+        val path = parsed.path?.lowercase().orEmpty()
+        val isGoogleHost = host == "google.com" || host == "google.com.br" ||
+            host.startsWith("www.google.") || host.startsWith("images.google.")
+        isGoogleHost && (
+            path.startsWith("/search") ||
+                path.startsWith("/imgres") ||
+                path.startsWith("/lens")
+            )
+    } catch (_: Exception) {
+        false
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
@@ -59,6 +99,8 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     var productCode by remember { mutableStateOf("") }
     var productCategory by remember { mutableStateOf("") }
     var productImageUrl by remember { mutableStateOf("") }
+    var productImageMessage by remember { mutableStateOf<String?>(null) }
+    var isValidatingProductImageLink by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -173,6 +215,7 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             productCode = ""
                             productCategory = ""
                             productImageUrl = ""
+                            productImageMessage = null
                             showManualForm = true
                         }
                     },
@@ -241,22 +284,91 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                     e.printStackTrace()
                                 }
                                 productImageUrl = it.toString()
+                                productImageMessage = "Foto selecionada. Toque em Salvar Produto para confirmar."
                             }
                         }
-                        Button(
-                            onClick = {
-                                manualLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
-                            },
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Default.AddAPhoto, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("ADICIONAR FOTO (OPCIONAL)", color = MaterialTheme.colorScheme.primary)
+                            OutlinedButton(
+                                onClick = {
+                                    manualLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                },
+                                modifier = Modifier.weight(1f),
+                                enabled = !isValidatingProductImageLink
+                            ) {
+                                Icon(Icons.Default.AddAPhoto, contentDescription = null)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Escolher Foto", maxLines = 1)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    val copiedUrl = adminClipboardHttpUrl(context)
+                                    when {
+                                        copiedUrl == null -> {
+                                            productImageMessage = "Nenhum link de imagem foi encontrado. Copie o endereço da imagem e tente novamente."
+                                        }
+                                        adminIsGoogleSearchPage(copiedUrl) -> {
+                                            productImageMessage = "Esse é um link da pesquisa do Google. Abra a imagem em nova guia e copie o endereço direto da foto."
+                                        }
+                                        else -> {
+                                            isValidatingProductImageLink = true
+                                            productImageMessage = "Validando o link da imagem…"
+                                            scope.launch {
+                                                try {
+                                                    val request = coil.request.ImageRequest.Builder(context)
+                                                        .data(copiedUrl)
+                                                        .allowHardware(false)
+                                                        .build()
+                                                    val result = context.imageLoader.execute(request)
+                                                    if (result is coil.request.SuccessResult) {
+                                                        productImageUrl = copiedUrl
+                                                        productImageMessage = "Prévia carregada. Toque em Salvar Produto para confirmar."
+                                                    } else {
+                                                        productImageMessage = "O link não carregou como imagem. Copie o endereço direto da foto."
+                                                    }
+                                                } catch (_: Exception) {
+                                                    productImageMessage = "Não foi possível validar esse link. Verifique a conexão ou tente outro endereço."
+                                                } finally {
+                                                    isValidatingProductImageLink = false
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                enabled = !isValidatingProductImageLink
+                            ) {
+                                if (isValidatingProductImageLink) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                }
+                                Text("Colar Link", maxLines = 1)
+                            }
                         }
                         if (productImageUrl.isNotBlank()) {
-                            Text(text = "Foto selecionada", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 4.dp))
+                            AsyncImage(
+                                model = productImageUrl,
+                                contentDescription = "Prévia da foto do produto",
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 120.dp, max = 220.dp)
+                                    .padding(top = 8.dp)
+                            )
+                        }
+                        productImageMessage?.let { message ->
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (message.startsWith("Prévia") || message.startsWith("Foto selecionada")) {
+                                    MaterialTheme.colorScheme.secondary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
                         }
                         
                         Spacer(modifier = Modifier.height(12.dp))
@@ -694,6 +806,8 @@ fun AdminProductItem(
         mutableStateOf(product.category.takeIf { it in categories }.orEmpty())
     }
     var editImageUrl by remember(product.imageUrl) { mutableStateOf(product.imageUrl ?: "") }
+    var editImageMessage by remember(product.code) { mutableStateOf<String?>(null) }
+    var isValidatingImageLink by remember(product.code) { mutableStateOf(false) }
     val context = LocalContext.current
     
     val launcher = rememberLauncherForActivityResult(
@@ -707,6 +821,7 @@ fun AdminProductItem(
                 e.printStackTrace()
             }
             editImageUrl = it.toString()
+            editImageMessage = "Nova foto selecionada. Toque em Salvar para confirmar."
         }
     }
 
@@ -802,21 +917,88 @@ fun AdminProductItem(
                     categories = categories
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = {
-                        launcher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                    enabled = !isSaving && !isDeleting
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(Icons.Default.AddAPhoto, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("ADICIONAR/TROCAR FOTO", color = MaterialTheme.colorScheme.primary)
+                    OutlinedButton(
+                        onClick = {
+                            launcher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = !isSaving && !isDeleting && !isValidatingImageLink
+                    ) {
+                        Icon(Icons.Default.AddAPhoto, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Escolher Foto", maxLines = 1)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            val copiedUrl = adminClipboardHttpUrl(context)
+                            when {
+                                copiedUrl == null -> {
+                                    editImageMessage = "Nenhum link de imagem foi encontrado. Copie o endereço da imagem e tente novamente."
+                                }
+                                adminIsGoogleSearchPage(copiedUrl) -> {
+                                    editImageMessage = "Esse é um link da pesquisa do Google. Abra a imagem em nova guia e copie o endereço direto da foto."
+                                }
+                                else -> {
+                                    isValidatingImageLink = true
+                                    editImageMessage = "Validando o link da imagem…"
+                                    coroutineScope.launch {
+                                        try {
+                                            val request = coil.request.ImageRequest.Builder(context)
+                                                .data(copiedUrl)
+                                                .allowHardware(false)
+                                                .build()
+                                            val result = context.imageLoader.execute(request)
+                                            if (result is coil.request.SuccessResult) {
+                                                editImageUrl = copiedUrl
+                                                editImageMessage = "Prévia carregada. Toque em Salvar para confirmar esta foto."
+                                            } else {
+                                                editImageMessage = "O link não carregou como imagem. Copie o endereço direto da foto."
+                                            }
+                                        } catch (_: Exception) {
+                                            editImageMessage = "Não foi possível validar esse link. Verifique a conexão ou tente outro endereço."
+                                        } finally {
+                                            isValidatingImageLink = false
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = !isSaving && !isDeleting && !isValidatingImageLink
+                    ) {
+                        if (isValidatingImageLink) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+                        Text("Colar Link", maxLines = 1)
+                    }
                 }
                 if (editImageUrl.isNotBlank()) {
-                    Text(text = "Foto selecionada", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 4.dp))
+                    AsyncImage(
+                        model = editImageUrl,
+                        contentDescription = "Prévia da foto de ${product.name}",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 120.dp, max = 220.dp)
+                            .padding(top = 8.dp)
+                    )
+                }
+                editImageMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (message.startsWith("Prévia") || message.startsWith("Nova foto")) {
+                            MaterialTheme.colorScheme.secondary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
 
