@@ -1,0 +1,48 @@
+name: Mapear UI print-template ACP
+
+on:
+  push:
+    branches: ["diag/acp-255131-live"]
+    paths:
+      - ".github/workflows/diag-acp-print-template-ui.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Preparar navegador
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install chromium >/dev/null
+      - name: Listar controles autenticados
+        env:
+          ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
+          ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        run: |
+          cat > map-ui.mjs <<'JS'
+          import { chromium } from 'playwright';
+          const origin='https://nordestao12.acp.app.br';
+          const browser=await chromium.launch({headless:true});
+          const context=await browser.newContext();
+          const api=context.request;
+          const csrf=(await (await api.get(origin+'/api/auth/csrf')).json()).csrfToken;
+          await api.post(origin+'/api/auth/callback/credentials',{headers:{Origin:origin,Referer:origin+'/login'},form:{login:process.env.ACP_LOGIN,password:process.env.ACP_PASSWORD,csrfToken:csrf,callbackUrl:origin+'/print-template',json:'true'}});
+          const session=await (await api.get(origin+'/api/auth/session')).json();
+          if(!session?.user?.accessToken) throw new Error('sem sessão');
+          const page=await context.newPage();
+          await page.goto(origin+'/print-template',{waitUntil:'domcontentloaded',timeout:60000});
+          await page.waitForTimeout(5000);
+          console.log('BODY_TEXT_BEGIN');
+          console.log((await page.locator('body').innerText()).slice(0,12000));
+          console.log('BODY_TEXT_END');
+          console.log('BUTTONS',JSON.stringify(await page.locator('button').evaluateAll((els)=>els.slice(0,100).map((e,i)=>({i,text:(e.innerText||'').trim(),title:e.title,aria:e.getAttribute('aria-label')}))),null,2));
+          console.log('LINKS',JSON.stringify(await page.locator('a').evaluateAll((els)=>els.slice(0,100).map((e,i)=>({i,text:(e.innerText||'').trim(),href:e.getAttribute('href'),title:e.title}))),null,2));
+          console.log('CLICKABLES',JSON.stringify(await page.locator('[role="button"]').evaluateAll((els)=>els.slice(0,100).map((e,i)=>({i,text:(e.innerText||'').trim().slice(0,200),aria:e.getAttribute('aria-label'),title:e.title}))),null,2));
+          await browser.close();
+          JS
+          node map-ui.mjs
