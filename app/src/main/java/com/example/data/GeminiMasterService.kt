@@ -15,15 +15,23 @@ import java.util.concurrent.TimeUnit
 /**
  * Cliente mínimo da Inteligência NRD.
  *
- * A chave do Gemini nunca é enviada ao aplicativo. O APK fala apenas com a
- * Edge Function gemini-master, que valida o Firebase ID token do perfil Mestre
- * e acessa GEMINI_API_KEY no ambiente protegido do Supabase.
+ * A chave do Gemini nunca é enviada ao aplicativo. O APK fala apenas com as
+ * Edge Functions protegidas, que validam o Firebase ID token do perfil Mestre
+ * e acessam GEMINI_API_KEY no ambiente protegido do Supabase.
  */
 object GeminiMasterService {
     data class Reply(
         val text: String,
         val model: String? = null,
         val timestamp: String? = null
+    )
+
+    data class EanCandidate(
+        val ean: String?,
+        val productName: String,
+        val reason: String,
+        val sources: List<String>,
+        val model: String? = null
     )
 
     private val client = OkHttpClient.Builder()
@@ -65,6 +73,41 @@ object GeminiMasterService {
         }
     }
 
+    /**
+     * Pesquisa um EAN/GTIN candidato usando Gemini + Google Search.
+     * O código só é útil como pista: a tela de revisão ainda precisa confirmá-lo
+     * consultando o mesmo EAN na ACP antes de permitir o vínculo.
+     */
+    suspend fun findEan(description: String): Result<EanCandidate> {
+        val clean = description.trim()
+        if (clean.length < 3) {
+            return Result.failure(IllegalArgumentException("Descrição insuficiente para pesquisar o EAN."))
+        }
+        return requestJson(
+            payload = JSONObject().put("description", clean.take(300)),
+            functionSlug = "gemini-ean"
+        ).mapCatching { json ->
+            val sourceArray = json.optJSONArray("sources")
+            val urls = buildList {
+                if (sourceArray != null) {
+                    for (i in 0 until sourceArray.length()) {
+                        sourceArray.optJSONObject(i)?.optString("url")
+                            ?.trim()
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let(::add)
+                    }
+                }
+            }
+            EanCandidate(
+                ean = json.optString("ean").trim().takeIf { it.isNotBlank() && it != "null" },
+                productName = json.optString("productName").trim(),
+                reason = json.optString("reason").trim(),
+                sources = urls,
+                model = json.optString("model").trim().takeIf { it.isNotBlank() }
+            )
+        }
+    }
+
     private suspend fun requestReply(payload: JSONObject): Result<Reply> = requestJson(payload).mapCatching { json ->
         val text = json.optString("text").trim()
         if (text.isBlank()) error("O Gemini respondeu sem conteúdo.")
@@ -77,7 +120,10 @@ object GeminiMasterService {
         )
     }
 
-    private suspend fun requestJson(payload: JSONObject): Result<JSONObject> = withContext(Dispatchers.IO) {
+    private suspend fun requestJson(
+        payload: JSONObject,
+        functionSlug: String = "gemini-master"
+    ): Result<JSONObject> = withContext(Dispatchers.IO) {
         runCatching {
             val token = FirebaseAuth.getInstance().currentUser
                 ?.getIdToken(false)
@@ -93,7 +139,7 @@ object GeminiMasterService {
             }
 
             val request = Request.Builder()
-                .url("$supabaseUrl/functions/v1/gemini-master")
+                .url("$supabaseUrl/functions/v1/$functionSlug")
                 .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
                 .addHeader("Authorization", "Bearer $supabaseKey")
                 .addHeader("apikey", supabaseKey)
