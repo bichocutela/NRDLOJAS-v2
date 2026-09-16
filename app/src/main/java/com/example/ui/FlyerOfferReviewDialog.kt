@@ -9,7 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import com.example.data.GeminiMasterService
 import com.example.data.acp.*
 import com.example.data.flyer.*
 import kotlinx.coroutines.CancellationException
@@ -26,8 +25,6 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
     var conditions by remember { mutableStateOf(initial.detail) }
     var club by remember { mutableStateOf(initial.clubCondition) }
     var linked by remember { mutableStateOf(initial) }
-    var query by remember { mutableStateOf(initial.sourceDescription) }
-    var field by remember { mutableStateOf(AcpSearchField.DESCRIPTION) }
     var results by remember { mutableStateOf<AcpProductPage?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -50,61 +47,87 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
         )
     }
 
-    fun search(page: Int) {
-        if (busy || query.isBlank()) return
+    fun descriptionCandidates(cleanQuery: String): List<AcpProduct> {
+        return emptyList()
+    }
+
+    suspend fun loadDescriptionCandidates(cleanQuery: String): List<AcpProduct> {
+        val candidates = linkedMapOf<String, AcpProduct>()
+        val direct = api.searchProducts(AcpSearchField.DESCRIPTION, cleanQuery, null, 0)
+        direct.items.forEach { product ->
+            candidates["${product.code}|${product.barcode}|${product.id}"] = product
+        }
+        if (candidates.isEmpty()) {
+            for (fallback in smartDescriptionQueries(cleanQuery)) {
+                if (fallback.equals(cleanQuery, ignoreCase = true)) continue
+                val pageResult = api.searchProducts(AcpSearchField.DESCRIPTION, fallback, null, 0)
+                pageResult.items.forEach { product ->
+                    candidates["${product.code}|${product.barcode}|${product.id}"] = product
+                }
+                if (candidates.size >= 20) break
+            }
+        }
+        return candidates.values
+            .sortedByDescending { reviewMatchScore(cleanQuery, it.description) }
+            .take(20)
+    }
+
+    fun searchDescriptionInAcp() {
+        val cleanQuery = description.trim()
+        if (busy || cleanQuery.isBlank()) return
         busy = true
         error = null
-        searchHint = null
+        results = null
+        searchHint = "Buscando pela descrição diretamente na ACP…"
         scope.launch {
             try {
                 if (!api.restoreSession()) api.confirmAccess()
-                val cleanQuery = query.trim()
-                val direct = api.searchProducts(field, cleanQuery, null, page)
-                if (field != AcpSearchField.DESCRIPTION || page != 0 || direct.items.isNotEmpty()) {
-                    results = if (field == AcpSearchField.DESCRIPTION && direct.items.size > 1) {
-                        direct.copy(items = direct.items.sortedByDescending { reviewMatchScore(cleanQuery, it.description) })
-                    } else direct
+                val ranked = loadDescriptionCandidates(cleanQuery)
+                results = AcpProductPage(ranked, 0, if (ranked.isEmpty()) 0 else 1, ranked.size)
+                searchHint = if (ranked.isEmpty()) {
+                    "A ACP não encontrou produto por essa descrição."
                 } else {
-                    val candidates = linkedMapOf<String, AcpProduct>()
-                    for (fallback in smartDescriptionQueries(cleanQuery)) {
-                        if (fallback.equals(cleanQuery, ignoreCase = true)) continue
-                        val pageResult = api.searchProducts(AcpSearchField.DESCRIPTION, fallback, null, 0)
-                        pageResult.items.forEach { product ->
-                            candidates["${product.code}|${product.barcode}|${product.id}"] = product
-                        }
-                        if (candidates.size >= 20) break
-                    }
-                    val ranked = candidates.values
-                        .sortedByDescending { reviewMatchScore(cleanQuery, it.description) }
-                        .take(20)
+                    "Confira a descrição e toque no produto ACP correto."
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                error = "Não foi possível consultar a ACP. Confira o acesso em Consultar Produtos e tente novamente."
+                results = null
+            } finally {
+                busy = false
+            }
+        }
+    }
 
-                    if (ranked.isNotEmpty()) {
-                        results = AcpProductPage(ranked, 0, 1, ranked.size)
-                        searchHint = "A descrição reconhecida não bateu literalmente. Mostrando candidatos aproximados da ACP para você confirmar."
+    fun searchEanInAcp(ean: String, webName: String?) {
+        val cleanEan = ean.filter(Char::isDigit)
+        if (busy || cleanEan.isBlank()) return
+        busy = true
+        error = null
+        results = null
+        searchHint = "EAN $cleanEan encontrado. Conferindo automaticamente na ACP…"
+        scope.launch {
+            try {
+                if (!api.restoreSession()) api.confirmAccess()
+                val eanPage = api.searchProducts(AcpSearchField.BARCODE, cleanEan, null, 0)
+                val exact = eanPage.items.filter { product ->
+                    product.barcode.filter(Char::isDigit) == cleanEan
+                }
+                if (exact.isNotEmpty()) {
+                    results = AcpProductPage(exact, 0, 1, exact.size)
+                    searchHint = buildString {
+                        append("EAN $cleanEan confirmado na ACP")
+                        webName?.takeIf { it.isNotBlank() }?.let { append(" para $it") }
+                        append(". Compare as descrições e toque em CONFIRMAR ESTE PRODUTO.")
+                    }
+                } else {
+                    val ranked = loadDescriptionCandidates(description.trim())
+                    results = AcpProductPage(ranked, 0, if (ranked.isEmpty()) 0 else 1, ranked.size)
+                    searchHint = if (ranked.isEmpty()) {
+                        "O EAN $cleanEan não apareceu na ACP e também não encontrei candidato pela descrição."
                     } else {
-                        val eanLookup = GeminiMasterService.findEan(cleanQuery).getOrNull()
-                        val candidateEan = eanLookup?.ean?.filter(Char::isDigit).orEmpty()
-                        if (candidateEan.isNotBlank()) {
-                            val eanPage = api.searchProducts(AcpSearchField.BARCODE, candidateEan, null, 0)
-                            val exact = eanPage.items.filter { product ->
-                                product.barcode.filter(Char::isDigit) == candidateEan
-                            }
-                            if (exact.isNotEmpty()) {
-                                results = AcpProductPage(exact, 0, 1, exact.size)
-                                val webName = eanLookup?.productName?.takeIf { it.isNotBlank() }
-                                searchHint = buildString {
-                                    append("EAN $candidateEan encontrado pela Inteligência NRD e confirmado como existente na ACP")
-                                    if (webName != null) append(" para $webName")
-                                    append(". Compare as descrições e toque no produto ACP abaixo para autorizar o vínculo.")
-                                }
-                            } else {
-                                results = AcpProductPage(emptyList(), 0, 0, 0)
-                                searchHint = "A Inteligência NRD encontrou o EAN candidato $candidateEan, mas esse código não foi confirmado na ACP. Revise manualmente."
-                            }
-                        } else {
-                            results = AcpProductPage(emptyList(), 0, 0, 0)
-                            searchHint = "A ACP não encontrou candidatos e a Inteligência NRD não encontrou um EAN confiável para confirmar automaticamente."
-                        }
+                        "O EAN $cleanEan não apareceu na ACP. Mostrando candidatos pela descrição para você conferir."
                     }
                 }
             } catch (cancelled: CancellationException) {
@@ -112,7 +135,9 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
             } catch (_: Exception) {
                 error = "Não foi possível consultar a ACP. Confira o acesso em Consultar Produtos e tente novamente."
                 results = null
-            } finally { busy = false }
+            } finally {
+                busy = false
+            }
         }
     }
 
@@ -120,7 +145,7 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
         Surface(shape = MaterialTheme.shapes.large) {
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Revisar oferta do encarte", style = MaterialTheme.typography.titleLarge)
-                Text("Confira a página ${initial.page} do arquivo original. O Gemini pode sugerir um EAN, mas a ACP e sua confirmação definem o vínculo final; a regra comercial abaixo vem do encarte.")
+                Text("Confira a oferta e localize o produto ACP. O vínculo só é salvo depois da sua confirmação.")
                 if (initial.sourceText.isNotBlank()) Text("Texto reconhecido: ${initial.sourceText}", style = MaterialTheme.typography.bodySmall)
                 var typesOpen by remember { mutableStateOf(false) }
                 Box {
@@ -165,63 +190,61 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                     }
                 }
                 HorizontalDivider()
-                Text("Vincular ao produto ACP", style = MaterialTheme.typography.titleMedium)
-                Text(linked.matchedProductName ?: "Nenhum produto selecionado")
-                Text("Código: ${linked.productCodes.joinToString()} • EAN: ${linked.barcodes.joinToString()}", style = MaterialTheme.typography.bodySmall)
+                Text("Produto ACP", style = MaterialTheme.typography.titleMedium)
+                if (linked.matchedProductName.isNullOrBlank()) {
+                    Text("Nenhum produto ACP confirmado", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Text(linked.matchedProductName.orEmpty(), style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Código ${linked.productCodes.joinToString()} • EAN ${linked.barcodes.joinToString()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
                 FlyerEanLookupSection(
                     description = description,
                     enabled = !busy,
-                    onUseInAcp = { ean ->
-                        field = AcpSearchField.BARCODE
-                        query = ean
-                        results = null
-                        error = null
-                        searchHint = "EAN $ean preenchido. Toque em Buscar na ACP e confira se a descrição corresponde ao produto do encarte."
-                    }
+                    onEanFound = { ean, webName -> searchEanInAcp(ean, webName) }
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AcpSearchField.entries.forEach { option ->
-                        FilterChip(
-                            selected = field == option,
-                            onClick = { field = option; results = null; searchHint = null },
-                            label = { Text(option.label) },
-                            enabled = !busy
-                        )
-                    }
-                }
-                OutlinedTextField(
-                    query,
-                    { query = it.take(300); results = null; searchHint = null },
-                    label = { Text(field.label) },
-                    enabled = !busy
-                )
-                Button(onClick = { search(0) }, enabled = !busy && query.isNotBlank()) {
-                    Text(if (busy) "Buscando…" else "Buscar na ACP")
-                }
+
+                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 searchHint?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+
                 results?.let { page ->
-                    if (page.items.isEmpty()) Text("Nenhum produto confirmado. Tente o EAN, código ou uma palavra principal do produto.")
+                    if (page.items.isEmpty()) {
+                        Text("Nenhum produto ACP encontrado.", color = MaterialTheme.colorScheme.tertiary)
+                    }
                     page.items.forEach { product ->
-                        OutlinedCard(onClick = {
-                            selectProduct(product)
-                            results = null
-                            searchHint = null
-                        }, modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        OutlinedCard(
+                            onClick = {
+                                selectProduct(product)
+                                results = null
+                                error = null
+                                searchHint = "Produto ACP confirmado. Agora confira a oferta e salve."
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text("ACP", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                Text(product.description)
+                                Text(product.description, style = MaterialTheme.typography.titleSmall)
                                 Text("Código ${product.code} • EAN ${product.barcode}", style = MaterialTheme.typography.bodySmall)
                                 product.value?.let { Text("Preço ACP: R$ ${it.toPlainString().replace('.', ',')}") }
-                                Text("Encartado como: $description", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("Selecionar este produto", color = MaterialTheme.colorScheme.primary)
+                                Text("Encarte: $description", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("CONFIRMAR ESTE PRODUTO", color = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
-                    Row {
-                        TextButton(onClick = { search(page.pageIndex - 1) }, enabled = !busy && page.pageIndex > 0) { Text("Anterior") }
-                        TextButton(onClick = { search(page.pageIndex + 1) }, enabled = !busy && page.pageIndex + 1 < page.totalPages) { Text("Próxima") }
-                    }
                 }
+
+                TextButton(
+                    onClick = { searchDescriptionInAcp() },
+                    enabled = !busy && description.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Não achou? Buscar pela descrição na ACP")
+                }
+
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Button(onClick = {
                     val relevant = mutableListOf("regular")
