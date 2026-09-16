@@ -1,14 +1,10 @@
-name: Fix notification dialog contrast
-
+name: Corrigir popup por notificacao
 on:
   push:
     branches: [fix-notification-dialog-contrast]
-    paths:
-      - ".github/workflows/fix-notification-dialog-contrast.yml"
-
+    paths: ['.github/workflows/fix-notification-dialog-contrast.yml']
 permissions:
   contents: write
-
 jobs:
   patch:
     runs-on: ubuntu-latest
@@ -17,19 +13,17 @@ jobs:
         with:
           ref: fix-notification-dialog-contrast
           fetch-depth: 0
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Corrigir contraste do popup
+      - name: Aplicar correcao visual
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           from pathlib import Path
-          p = Path('app/src/main/java/com/example/ui/ProductBarcodeDialog.kt')
-          s = p.read_text()
-          old = '''                Surface(
+          p=Path('app/src/main/java/com/example/ui/ProductBarcodeDialog.kt')
+          s=p.read_text()
+          old='''                Surface(
                     shape = dialogShape,
                     color = if (highlightedFromNotification) {
                         MaterialTheme.colorScheme.primaryContainer
@@ -40,29 +34,25 @@ jobs:
                         BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
                     } else if (glassSoftStyle.enabled) {
 '''
-          new = '''                Surface(
+          new='''                Surface(
                     shape = dialogShape,
-                    // Mesmo balão normal para qualquer origem. A notificação ganha apenas
-                    // borda/etiqueta, sem tingir o conteúdo inteiro e destruir o contraste.
                     color = MaterialTheme.colorScheme.surface,
                     border = if (highlightedFromNotification) {
                         BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                     } else if (glassSoftStyle.enabled) {
 '''
-          if old not in s:
-              raise SystemExit('Bloco esperado do Surface não encontrado')
-          p.write_text(s.replace(old, new, 1))
+          if old not in s: raise SystemExit('bloco Surface nao encontrado')
+          p.write_text(s.replace(old,new,1))
           PY
-
-      - name: Validar diff
-        run: git diff --check
-
-      - name: Compilar
-        run: ./gradlew :app:compileReleaseKotlin --no-daemon
-
-      - name: Remover workflow temporário e commitar
+      - name: Remover workflow temporario
+        run: rm .github/workflows/fix-notification-dialog-contrast.yml
+      - name: Validar compilacao
         run: |
-          rm -f .github/workflows/fix-notification-dialog-contrast.yml
+          git diff --check
+          chmod +x gradlew
+          ./gradlew :app:compileDebugKotlin --no-daemon
+      - name: Commit e push
+        run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add app/src/main/java/com/example/ui/ProductBarcodeDialog.kt .github/workflows/fix-notification-dialog-contrast.yml
