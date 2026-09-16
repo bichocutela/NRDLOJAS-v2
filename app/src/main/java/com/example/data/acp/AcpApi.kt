@@ -449,8 +449,14 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
             if (response.code == 429) throw AcpFailure("Muitas consultas. Aguarde um momento e tente novamente.")
             if (!response.isSuccessful) throw AcpFailure("Não foi possível acessar a ACP agora (${response.code}).")
             val raw = response.body?.string() ?: throw AcpFailure("A ACP retornou uma resposta vazia.")
-            return try { JSONObject(raw) } catch (_: Exception) {
-                throw AcpFailure("A resposta da ACP não é compatível com esta consulta.")
+            return try {
+                JSONObject(raw)
+            } catch (_: Exception) {
+                try {
+                    JSONObject().put("items", JSONArray(raw))
+                } catch (_: Exception) {
+                    throw AcpFailure("A resposta da ACP não é compatível com esta consulta.")
+                }
             }
         }
     }
@@ -464,7 +470,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         private const val SILENT_REFRESH_DELAY_MILLIS = 900L
         private const val MAX_SILENT_PAGES = 30
         private const val MAX_CLUB_CATEGORY_PAGES = 10
-        private const val CLUB_PAGE_SIZE = 250
+        private const val CLUB_PAGE_SIZE = 20
         private val READ_ONLY_ENDPOINTS = setOf("Product/all", "ProductCategory/all", "Product/integrationInfo", "Campaign/all")
         private val DAILY_CACHE_ENDPOINTS = setOf("Product/all", "ProductCategory/all", "Campaign/all")
         private val SILENT_PAGED_ENDPOINTS = setOf("ProductCategory/all", "Campaign/all")
