@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.example.data.GeminiMasterService
 import com.example.data.acp.*
 import com.example.data.flyer.*
 import kotlinx.coroutines.CancellationException
@@ -41,6 +42,14 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
     var payUnit by remember { mutableStateOf(initial.payUnit.orEmpty()) }
     fun number(key: String) = numbers[key]?.trim()?.replace(',', '.')?.toDoubleOrNull()
 
+    fun selectProduct(product: AcpProduct) {
+        linked = linked.copy(
+            productCodes = listOf(product.code).filter { it.isNotBlank() },
+            barcodes = listOf(product.barcode).filter { it.isNotBlank() },
+            matchedProductName = product.description
+        )
+    }
+
     fun search(page: Int) {
         if (busy || query.isBlank()) return
         busy = true
@@ -68,9 +77,36 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                     val ranked = candidates.values
                         .sortedByDescending { reviewMatchScore(cleanQuery, it.description) }
                         .take(20)
-                    results = AcpProductPage(ranked, 0, if (ranked.isEmpty()) 0 else 1, ranked.size)
+
                     if (ranked.isNotEmpty()) {
+                        results = AcpProductPage(ranked, 0, 1, ranked.size)
                         searchHint = "A descrição reconhecida não bateu literalmente. Mostrando candidatos aproximados da ACP para você confirmar."
+                    } else {
+                        val eanLookup = GeminiMasterService.findEan(cleanQuery).getOrNull()
+                        val candidateEan = eanLookup?.ean?.filter(Char::isDigit).orEmpty()
+                        if (candidateEan.isNotBlank()) {
+                            val eanPage = api.searchProducts(AcpSearchField.BARCODE, candidateEan, null, 0)
+                            val exact = eanPage.items.filter { product ->
+                                product.barcode.filter(Char::isDigit) == candidateEan
+                            }
+                            if (exact.isNotEmpty()) {
+                                val product = exact.first()
+                                selectProduct(product)
+                                results = AcpProductPage(exact, 0, 1, exact.size)
+                                val webName = eanLookup?.productName?.takeIf { it.isNotBlank() }
+                                searchHint = buildString {
+                                    append("EAN $candidateEan encontrado pela Inteligência NRD e confirmado na ACP. Produto vinculado automaticamente")
+                                    if (webName != null) append(" como $webName")
+                                    append(". Confira antes de salvar.")
+                                }
+                            } else {
+                                results = AcpProductPage(emptyList(), 0, 0, 0)
+                                searchHint = "A Inteligência NRD encontrou o EAN candidato $candidateEan, mas esse código não foi confirmado na ACP. Revise manualmente."
+                            }
+                        } else {
+                            results = AcpProductPage(emptyList(), 0, 0, 0)
+                            searchHint = "A ACP não encontrou candidatos e a Inteligência NRD não encontrou um EAN confiável para confirmar automaticamente."
+                        }
                     }
                 }
             } catch (cancelled: CancellationException) {
@@ -155,14 +191,10 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                 }
                 searchHint?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
                 results?.let { page ->
-                    if (page.items.isEmpty()) Text("Nenhum produto encontrado. Tente o EAN, código ou uma palavra principal do produto.")
+                    if (page.items.isEmpty()) Text("Nenhum produto confirmado. Tente o EAN, código ou uma palavra principal do produto.")
                     page.items.forEach { product ->
                         OutlinedCard(onClick = {
-                            linked = linked.copy(
-                                productCodes = listOf(product.code).filter { it.isNotBlank() },
-                                barcodes = listOf(product.barcode).filter { it.isNotBlank() },
-                                matchedProductName = product.description
-                            )
+                            selectProduct(product)
                             results = null
                             searchHint = null
                         }, modifier = Modifier.fillMaxWidth()) {
