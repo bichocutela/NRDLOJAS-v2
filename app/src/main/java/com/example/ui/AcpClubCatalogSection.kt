@@ -28,19 +28,14 @@ import com.example.data.acp.AcpProductParser
 import com.example.data.acp.AcpUnauthorized
 import com.example.data.acp.brl
 import kotlinx.coroutines.CancellationException
-import kotlin.math.ceil
-import kotlin.math.min
+import java.text.Normalizer
 
 private const val CLUB_DISPLAY_PAGE_SIZE = 20
-private const val CLUB_SOURCE_PAGE_SIZE = 250
 
 /**
- * Lista enxuta dos produtos da categoria oficial "Clube de Vantagens" da ACP.
- *
- * O AcpApi já possui um caminho dedicado para esse catálogo: uma chamada Product/all
- * sem filtros e pageSize=100 é convertida internamente em uma consulta fresca da categoria
- * oficial Clube de Vantagens, com lote de 250. Aqui apenas repartimos esse lote em páginas
- * visuais de até 20 itens, sem inferir Clube por texto nem manter um catálogo paralelo.
+ * Lista dos produtos que a própria ACP identifica como Clube de Vantagens.
+ * A chamada sentinela pageSize=100 é reconhecida pelo AcpApi e convertida para
+ * Product/all filtrado pela categoria oficial do Clube, com pageSize real de 20.
  */
 @Composable
 internal fun AcpClubCatalogSection(
@@ -85,7 +80,7 @@ internal fun AcpClubCatalogSection(
             Column(Modifier.weight(1f)) {
                 Text("Produtos Clube", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
-                    "Direto da categoria Clube de Vantagens da ACP • até 20 por página",
+                    "Sincronizado com a categoria Clube de Vantagens da ACP • até 20 por página",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -114,7 +109,7 @@ internal fun AcpClubCatalogSection(
         val result = page
         if (!busy && error == null && result != null) {
             if (result.items.isEmpty()) {
-                Text("Nenhum produto Clube foi retornado pela ACP nesta página.")
+                Text("Nenhum produto marcado como Clube foi retornado pela ACP nesta página.")
             } else {
                 result.items.take(CLUB_DISPLAY_PAGE_SIZE).forEach { product ->
                     ClubProductCard(product = product, onClick = { onProductSelected(product) })
@@ -182,49 +177,29 @@ private fun ClubProductCard(product: AcpProduct, onClick: () -> Unit) {
     }
 }
 
-/**
- * Reaproveita o caminho Clube já existente em AcpApi, que resolve a categoria oficial no
- * servidor e consulta Product/all fresco. A ACP devolve lotes de 250; a UI usa páginas de 20.
- */
+private fun AcpProduct.isClubMarkedByAcp(): Boolean {
+    val categoryMarked = categories.any { category ->
+        val normalized = Normalizer.normalize(category, Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+            .lowercase()
+            .replace(Regex("[^a-z0-9]"), "")
+        normalized == "clubedevantagens" || normalized == "clubvantagens"
+    }
+    return categoryMarked || (clubValue?.signum() ?: 0) > 0
+}
+
+/** Consulta uma página real de 20 produtos da categoria Clube diretamente no Product/all. */
 private suspend fun AcpApi.clubCatalogPage(displayPage: Int): AcpProductPage {
     require(displayPage >= 0)
-
-    val absoluteStart = displayPage * CLUB_DISPLAY_PAGE_SIZE
-    val sourcePageIndex = absoluteStart / CLUB_SOURCE_PAGE_SIZE
-    val sourceOffset = absoluteStart % CLUB_SOURCE_PAGE_SIZE
-
-    suspend fun sourcePage(index: Int): AcpProductPage {
-        val root = get(
-            "Product/all",
-            listOf(
-                "pageSize" to "100",
-                "pageIndex" to index.toString()
-            )
+    val root = get(
+        "Product/all",
+        listOf(
+            // Sentinela interna: AcpApi substitui por pageSize=20 e acrescenta
+            // productCategoryIds da categoria Clube de Vantagens resolvida na ACP.
+            "pageSize" to "100",
+            "pageIndex" to displayPage.toString()
         )
-        return AcpProductParser.page(root, index)
-    }
-
-    val first = sourcePage(sourcePageIndex)
-    val totalCount = first.totalCount.coerceAtLeast(0)
-    val visualTotalPages = if (totalCount == 0) 0 else ceil(totalCount / CLUB_DISPLAY_PAGE_SIZE.toDouble()).toInt()
-
-    if (absoluteStart >= totalCount) {
-        return AcpProductPage(emptyList(), displayPage, visualTotalPages, totalCount)
-    }
-
-    val wanted = min(CLUB_DISPLAY_PAGE_SIZE, totalCount - absoluteStart)
-    val items = mutableListOf<AcpProduct>()
-    items += first.items.drop(sourceOffset).take(wanted)
-
-    if (items.size < wanted && sourcePageIndex + 1 < first.totalPages) {
-        val second = sourcePage(sourcePageIndex + 1)
-        items += second.items.take(wanted - items.size)
-    }
-
-    return AcpProductPage(
-        items = items.take(CLUB_DISPLAY_PAGE_SIZE),
-        pageIndex = displayPage,
-        totalPages = visualTotalPages,
-        totalCount = totalCount
     )
+    val source = AcpProductParser.page(root, displayPage)
+    return source.copy(items = source.items.filter { it.isClubMarkedByAcp() }.take(CLUB_DISPLAY_PAGE_SIZE))
 }
