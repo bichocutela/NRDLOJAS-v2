@@ -21,8 +21,8 @@ import com.example.data.GeminiMasterService
 import kotlinx.coroutines.launch
 
 /**
- * Fluxo simples de revisão: descrição do encarte -> EAN sugerido -> ACP.
- * O EAN continua sendo apenas uma pista até o Mestre tocar no produto ACP correto.
+ * Fluxo simples: descrição do encarte -> Google Search -> EAN -> ACP.
+ * O EAN continua sendo apenas uma pista até o Mestre confirmar o produto ACP.
  */
 @Composable
 internal fun FlyerEanLookupSection(
@@ -36,9 +36,9 @@ internal fun FlyerEanLookupSection(
     var message by remember(description) { mutableStateOf<String?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Localizar produto pelo EAN", style = MaterialTheme.typography.titleSmall)
+        Text("Buscar código de barras na web", style = MaterialTheme.typography.titleSmall)
         Text(
-            "Toque uma vez: o NRD pesquisa o EAN pela descrição e já confere o mesmo código na ACP.",
+            "O NRD pesquisa a descrição no Google, pega um EAN válido e já confere o mesmo código na ACP.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -48,7 +48,7 @@ internal fun FlyerEanLookupSection(
                 val clean = description.trim()
                 if (clean.length < 3 || busy) return@Button
                 busy = true
-                message = null
+                message = "Pesquisando no Google…"
                 candidate = null
                 scope.launch {
                     GeminiMasterService.findEan(clean)
@@ -56,9 +56,9 @@ internal fun FlyerEanLookupSection(
                             candidate = result
                             val ean = result.ean?.filter(Char::isDigit).orEmpty()
                             if (ean.isBlank()) {
-                                message = "Não encontrei um EAN confiável para esta descrição. Use a busca por descrição na ACP abaixo."
+                                message = "O Google não trouxe um EAN confiável para este produto. Use a busca por descrição na ACP abaixo."
                             } else {
-                                message = "EAN $ean encontrado. Conferindo automaticamente na ACP…"
+                                message = "EAN $ean encontrado no Google. Conferindo na ACP…"
                                 onEanFound(ean, result.productName.takeIf { it.isNotBlank() })
                             }
                         }
@@ -71,7 +71,7 @@ internal fun FlyerEanLookupSection(
             enabled = enabled && !busy && description.trim().length >= 3,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (busy) "Procurando produto…" else "Buscar EAN e conferir na ACP")
+            Text(if (busy) "Pesquisando no Google…" else "Pesquisar EAN no Google e conferir na ACP")
         }
 
         candidate?.let { result ->
@@ -82,12 +82,12 @@ internal fun FlyerEanLookupSection(
                         Modifier.fillMaxWidth().padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Text("EAN ENCONTRADO", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        Text("EAN ENCONTRADO NO GOOGLE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         Text(ean, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
                         if (result.productName.isNotBlank()) {
                             Text(result.productName, style = MaterialTheme.typography.bodyMedium)
                         }
-                        Text("Encartado como: ${description.trim()}", style = MaterialTheme.typography.bodySmall)
+                        Text("Descrição do encarte: ${description.trim()}", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
