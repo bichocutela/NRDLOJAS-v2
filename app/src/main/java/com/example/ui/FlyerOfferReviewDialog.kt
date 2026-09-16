@@ -122,7 +122,7 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
         Surface(shape = MaterialTheme.shapes.large) {
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Revisar oferta do encarte", style = MaterialTheme.typography.titleLarge)
-                Text("Confira a página ${initial.page} do arquivo original. A busca na ACP confirma a identidade do produto; a regra abaixo vem do encarte.")
+                Text("Confira a página ${initial.page} do arquivo original. O Gemini pode sugerir um EAN, mas a ACP e sua confirmação definem o vínculo final; a regra comercial abaixo vem do encarte.")
                 if (initial.sourceText.isNotBlank()) Text("Texto reconhecido: ${initial.sourceText}", style = MaterialTheme.typography.bodySmall)
                 var typesOpen by remember { mutableStateOf(false) }
                 Box {
@@ -170,6 +170,17 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                 Text("Vincular ao produto ACP", style = MaterialTheme.typography.titleMedium)
                 Text(linked.matchedProductName ?: "Nenhum produto selecionado")
                 Text("Código: ${linked.productCodes.joinToString()} • EAN: ${linked.barcodes.joinToString()}", style = MaterialTheme.typography.bodySmall)
+                FlyerEanLookupSection(
+                    description = description,
+                    enabled = !busy,
+                    onUseInAcp = { ean ->
+                        field = AcpSearchField.BARCODE
+                        query = ean
+                        results = null
+                        error = null
+                        searchHint = "EAN $ean preenchido. Toque em Buscar na ACP e confira se a descrição corresponde ao produto do encarte."
+                    }
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     AcpSearchField.entries.forEach { option ->
                         FilterChip(
