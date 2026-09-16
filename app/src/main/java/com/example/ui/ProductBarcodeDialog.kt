@@ -205,13 +205,9 @@ fun ProductBarcodeDialog(
                 val dialogShape = RoundedCornerShape(32.dp)
                 Surface(
                     shape = dialogShape,
-                    color = if (highlightedFromNotification) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surface
-                    },
+                    color = MaterialTheme.colorScheme.surface,
                     border = if (highlightedFromNotification) {
-                        BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
+                        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                     } else if (glassSoftStyle.enabled) {
                         BorderStroke(1.dp, glassSoftStyle.borderColor)
                     } else {
@@ -240,8 +236,6 @@ fun ProductBarcodeDialog(
                             Spacer(modifier = Modifier.height(8.dp))
                         }
 
-                        // Toque e segure para usar a seleção nativa do Android e copiar
-                        // nome, categoria ou código de barras sem alterar o leitor.
                         SelectionContainer {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -309,7 +303,7 @@ fun ProductBarcodeDialog(
                                 else -> 110.dp
                             }
                             val widthFraction = (0.9f * (zoomPercent / 100f)).coerceAtMost(1.0f)
-                            
+
                             Box(
                                 modifier = Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.Center
@@ -334,11 +328,11 @@ fun ProductBarcodeDialog(
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
-                        
+
                         Spacer(modifier = Modifier.height(24.dp))
                         Divider(color = MaterialTheme.colorScheme.outlineVariant)
                         Spacer(modifier = Modifier.height(16.dp))
-                        
+
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
@@ -405,7 +399,7 @@ fun ProductBarcodeDialog(
                             }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
-                        
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(if (screenProfile.veryCompact) 4.dp else 8.dp)
@@ -439,8 +433,8 @@ fun ProductBarcodeDialog(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             IconButton(
-                                onClick = { 
-                                    if (zoomPercent > 80) zoomPercent -= 10 
+                                onClick = {
+                                    if (zoomPercent > 80) zoomPercent -= 10
                                 },
                                 enabled = zoomPercent > 80
                             ) {
@@ -452,8 +446,8 @@ fun ProductBarcodeDialog(
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
                             IconButton(
-                                onClick = { 
-                                    if (zoomPercent < 120) zoomPercent += 10 
+                                onClick = {
+                                    if (zoomPercent < 120) zoomPercent += 10
                                 },
                                 enabled = zoomPercent < 120
                             ) {
