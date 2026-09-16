@@ -2,9 +2,6 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@5.9.6";
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-// A busca por EAN depende de Grounding with Google Search. No nivel gratuito,
-// os modelos Gemini 2.5 continuam oferecendo cota de grounding, enquanto os
-// modelos 3.x podem exigir tier pago. Portanto tentamos 2.5 primeiro.
 const MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash"];
 const FIREBASE_PROJECT_ID = "appcodigo-7f245";
 const FIREBASE_JWKS = createRemoteJWKSet(
@@ -65,14 +62,14 @@ function sources(payload: any) {
       title: typeof chunk?.web?.title === "string" ? chunk.web.title.trim().slice(0, 160) : "Fonte da web",
       url,
     });
-    if (out.length >= 5) break;
+    if (out.length >= 6) break;
   }
   return out;
 }
 
 function searchQueries(payload: any) {
   const q = payload?.candidates?.[0]?.groundingMetadata?.webSearchQueries;
-  return Array.isArray(q) ? q.filter((x: unknown) => typeof x === "string").slice(0, 6) : [];
+  return Array.isArray(q) ? q.filter((x: unknown) => typeof x === "string").slice(0, 8) : [];
 }
 
 function parseJsonText(raw: string) {
@@ -88,17 +85,49 @@ function parseJsonText(raw: string) {
   }
 }
 
+function hasValidGtinCheckDigit(digits: string): boolean {
+  if (![8, 12, 13, 14].includes(digits.length) || !/^\d+$/.test(digits)) return false;
+  const body = digits.slice(0, -1);
+  const expected = Number(digits.at(-1));
+  let sum = 0;
+  let factor = 3;
+  for (let i = body.length - 1; i >= 0; i--) {
+    sum += Number(body[i]) * factor;
+    factor = factor === 3 ? 1 : 3;
+  }
+  const check = (10 - (sum % 10)) % 10;
+  return check === expected;
+}
+
 function validGtin(value: unknown): string | null {
   const digits = typeof value === "string" || typeof value === "number"
     ? String(value).replace(/\D/g, "")
     : "";
-  return [8, 12, 13, 14].includes(digits.length) ? digits : null;
+  return hasValidGtinCheckDigit(digits) ? digits : null;
 }
 
 async function searchEan(model: string, description: string) {
   if (!GEMINI_API_KEY) throw new Error("gemini_not_configured");
-  const system = `Você auxilia o Mestre do NRD Lojas a IDENTIFICAR produtos de supermercado.\nUse a Pesquisa Google. Nunca invente GTIN/EAN. Só retorne um código quando a evidência da web ligar claramente o mesmo produto, marca e tamanho/volume ao código. Se houver dúvida, ean deve ser null. Não use códigos internos de lojas como EAN.`;
-  const prompt = `Pesquise o GTIN/EAN do produto abaixo. A descrição pode conter erros de OCR. Corrija apenas quando a evidência da web sustentar a correção.\n\nDescrição do encarte: ${description}\n\nRetorne SOMENTE JSON válido neste formato:\n{\"ean\":\"somente dígitos ou null\",\"productName\":\"nome encontrado\",\"reason\":\"explicação curta da correspondência\"}`;
+
+  const system = `Você é um pesquisador de produtos de supermercado para o NRD Lojas.
+Sua única tarefa é usar a ferramenta Google Search para localizar um GTIN/EAN real a partir da descrição recebida.
+Nunca invente, complete ou estime um código.
+Compare obrigatoriamente marca, variante/sabor/tipo e peso/volume/quantidade.
+Prefira evidências de fabricante, GS1, catálogo de produto, grandes varejistas ou páginas que mostrem claramente o mesmo item e o código de barras.
+Se houver mais de um produto parecido, só escolha quando a variante e o tamanho coincidirem.
+Se a evidência não for suficiente, retorne ean null.`;
+
+  const googleQuery = `"${description}" EAN GTIN "código de barras"`;
+  const prompt = `Faça uma pesquisa Google para localizar o EAN/GTIN deste produto do encarte.
+
+Descrição: ${description}
+Pesquisa inicial sugerida: ${googleQuery}
+
+Se a descrição tiver abreviação ou erro de OCR, faça também pesquisas equivalentes corrigindo apenas o texto, sem mudar marca, variante nem tamanho.
+
+Retorne SOMENTE JSON válido:
+{"ean":"somente dígitos ou null","productName":"nome exato encontrado na web","reason":"resumo curto de por que o código corresponde ao mesmo produto"}`;
+
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
@@ -108,13 +137,15 @@ async function searchEan(model: string, description: string) {
         system_instruction: { parts: [{ text: system }] },
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         tools: [{ google_search: {} }],
-        generationConfig: { temperature: 0.0, maxOutputTokens: 1400 },
+        generationConfig: { temperature: 0.0, maxOutputTokens: 1600 },
       }),
     },
   );
+
   const raw = await response.text();
   let payload: any = null;
   try { payload = raw ? JSON.parse(raw) : null; } catch { payload = null; }
+
   if (!response.ok) {
     const status = String(payload?.error?.status ?? "");
     const message = String(payload?.error?.message ?? "");
@@ -135,15 +166,20 @@ async function searchEan(model: string, description: string) {
     }
     throw new Error("gemini_upstream");
   }
-  const answer = parseJsonText(plainText(payload));
+
   const groundedSources = sources(payload);
-  const ean = groundedSources.length > 0 ? validGtin(answer?.ean) : null;
+  const queries = searchQueries(payload);
+  const answer = parseJsonText(plainText(payload));
+  const checkedEan = validGtin(answer?.ean);
+  const ean = groundedSources.length > 0 && queries.length > 0 ? checkedEan : null;
+
   return {
     ean,
     productName: typeof answer?.productName === "string" ? answer.productName.trim().slice(0, 300) : "",
     reason: typeof answer?.reason === "string" ? answer.reason.trim().slice(0, 500) : "",
     sources: groundedSources,
-    queries: searchQueries(payload),
+    queries,
+    requestedQuery: googleQuery,
     model,
   };
 }
@@ -171,11 +207,11 @@ function publicError(e: unknown) {
   const m = e instanceof Error ? e.message : "";
   if (m === "mestre_required") return [403, "Pesquisa de EAN disponível somente para o Mestre."] as const;
   if (m === "gemini_not_configured") return [503, "A chave do Gemini não está configurada no servidor."] as const;
-  if (m === "gemini_rate_limited") return [429, "A cota gratuita de pesquisa do Gemini foi atingida agora. Tente novamente mais tarde."] as const;
+  if (m === "gemini_rate_limited") return [429, "A cota da Pesquisa Google via Gemini foi atingida agora. Tente novamente mais tarde."] as const;
   if (m === "gemini_key_rejected") return [502, "O Google recusou a GEMINI_API_KEY."] as const;
-  if (m === "gemini_search_unavailable") return [502, "A Pesquisa Google do Gemini não está disponível neste projeto/modelo agora."] as const;
-  if (m === "ean_json_invalid") return [502, "A pesquisa não retornou um EAN estruturado."] as const;
-  return [502, "O Gemini não conseguiu concluir a pesquisa do EAN agora."] as const;
+  if (m === "gemini_search_unavailable") return [502, "A Pesquisa Google não está disponível neste projeto/modelo agora."] as const;
+  if (m === "ean_json_invalid") return [502, "A pesquisa Google não retornou um EAN estruturado."] as const;
+  return [502, "Não foi possível concluir a pesquisa Google do EAN agora."] as const;
 }
 
 Deno.serve(async (req: Request) => {
