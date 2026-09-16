@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.PendingActions
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.ViewCarousel
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -31,15 +32,22 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.data.GeminiMasterService
+import com.example.ui.theme.glassSoftShadow
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import com.example.ui.theme.glassSoftShadow
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun MestreDashboardOverview(
@@ -54,7 +62,7 @@ internal fun MestreDashboardOverview(
     onManageTabs: () -> Unit,
     onImportProducts: () -> Unit
 ) {
-    val screenProfile = rememberNrdScreenProfile()
+    rememberNrdScreenProfile()
     Text("Visão geral", style = MaterialTheme.typography.titleLarge)
     Text(
         "Acompanhe o aplicativo e acesse as tarefas mais usadas.",
@@ -89,6 +97,87 @@ internal fun MestreDashboardOverview(
         first = { m -> DashboardQuickAction("Abas", "Organizar conteúdo", Icons.Default.ViewCarousel, onManageTabs, modifier = m) },
         second = { m -> DashboardQuickAction("Importar", if (importEnabled) "CSV ou TSV" else "Aguarde...", Icons.Default.UploadFile, onImportProducts, enabled = importEnabled, modifier = m) }
     )
+
+    Spacer(modifier = Modifier.height(14.dp))
+    MestreGeminiConnectionCard()
+}
+
+@Composable
+private fun MestreGeminiConnectionCard() {
+    val coroutineScope = rememberCoroutineScope()
+    var isTesting by remember { mutableStateOf(false) }
+    var resultText by remember { mutableStateOf<String?>(null) }
+    var isError by remember { mutableStateOf(false) }
+
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(MaterialTheme.shapes.medium)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.CloudSync,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Inteligência NRD", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Gemini exclusivo do Mestre. A chave permanece protegida no Supabase.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            FilledTonalButton(
+                enabled = !isTesting,
+                onClick = {
+                    coroutineScope.launch {
+                        isTesting = true
+                        isError = false
+                        resultText = null
+                        val result = GeminiMasterService.ping()
+                        result.fold(
+                            onSuccess = { reply ->
+                                resultText = reply.text
+                                isError = false
+                            },
+                            onFailure = { error ->
+                                resultText = error.message ?: "Não foi possível testar o Gemini."
+                                isError = true
+                            }
+                        )
+                        isTesting = false
+                    }
+                }
+            ) {
+                if (isTesting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Testando...")
+                } else {
+                    Text("Testar Gemini")
+                }
+            }
+
+            resultText?.let { message ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
 }
 
 @Composable
