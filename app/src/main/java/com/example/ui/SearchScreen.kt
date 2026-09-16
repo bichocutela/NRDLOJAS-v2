@@ -214,6 +214,7 @@ fun rememberGlassVisualStyle(): GlassVisualStyle {
 @Composable
 fun SearchScreen(
     viewModel: MainViewModel,
+    notificationProductCode: String? = null,
     onOpenDrawer: () -> Unit = {},
     canQuickEditBanner: Boolean = false,
     onQuickEditBanner: (String) -> Unit = {}
@@ -266,6 +267,18 @@ fun SearchScreen(
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     var showNotificationsSheet by remember { mutableStateOf(false) }
     var selectedNotificationProduct by remember { mutableStateOf<Product?>(null) }
+    var handledNotificationProductCode by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(notificationProductCode, allProducts) {
+        val code = notificationProductCode?.trim().orEmpty()
+        if (code.isBlank() || handledNotificationProductCode == code) return@LaunchedEffect
+        val resolvedProduct = allProducts.firstOrNull { it.code.trim() == code }
+        if (resolvedProduct != null) {
+            handledNotificationProductCode = code
+            selectedNotificationProduct = resolvedProduct
+            viewModel.onProductSearched(resolvedProduct)
+        }
+    }
 
     LaunchedEffect(allProducts) {
         selectedMostUsedProduct = selectedMostUsedProduct?.let { selected ->
@@ -784,15 +797,21 @@ fun SearchScreen(
                                     .glassSoftShadow(MaterialTheme.shapes.medium)
                                     .clickable {
                                     viewModel.markNotificationRead(notification.id)
-                                    val notificationTarget = notification.body.trim()
+                                    val directCode = notification.productCode?.trim().orEmpty()
+                                    val notificationTarget = "${notification.title} ${notification.body}".trim()
                                     val normalizedTarget = normalizeNotificationText(notificationTarget)
-                                    val resolvedProduct = viewModel.allProducts.value.firstOrNull { it.code == notificationTarget }
-                                        ?: viewModel.allProducts.value.firstOrNull {
-                                            normalizeNotificationText(it.name) == normalizedTarget
-                                        }
-                                        ?: viewModel.allProducts.value.firstOrNull {
-                                            normalizeNotificationText(it.name).contains(normalizedTarget)
-                                        }
+                                    val codesInText = Regex("\\b\\d{4,14}\\b")
+                                        .findAll(notificationTarget)
+                                        .map { it.value }
+                                        .toSet()
+                                    val resolvedProduct = viewModel.allProducts.value.firstOrNull {
+                                        directCode.isNotBlank() && it.code.trim() == directCode
+                                    } ?: viewModel.allProducts.value.firstOrNull {
+                                        it.code.trim() in codesInText
+                                    } ?: viewModel.allProducts.value.firstOrNull {
+                                        val normalizedName = normalizeNotificationText(it.name)
+                                        normalizedName.isNotBlank() && normalizedTarget.contains(normalizedName)
+                                    }
                                     selectedNotificationProduct = resolvedProduct
                                     resolvedProduct?.let(viewModel::onProductSearched)
                                     showNotificationsSheet = false

@@ -42,7 +42,8 @@ private const val ADMIN_LOGIN_TAG = "AdminLogin"
 fun AppNavGraph(
     viewModel: MainViewModel,
     openAboutFromNotification: Boolean = false,
-    openPromotionsFromNotification: Boolean = false
+    openPromotionsFromNotification: Boolean = false,
+    productCodeFromNotification: String? = null
 ) {
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -161,6 +162,7 @@ fun AppNavGraph(
                 composable("search") {
                     SearchScreen(
                         viewModel = viewModel,
+                        notificationProductCode = productCodeFromNotification,
                         onOpenDrawer = { scope.launch { drawerState.open() } },
                         canQuickEditBanner = isLoggedIn && userRole == "mestre",
                         onQuickEditBanner = { themeKey ->

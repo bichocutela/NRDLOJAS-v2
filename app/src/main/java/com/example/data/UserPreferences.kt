@@ -24,7 +24,8 @@ data class AppNotification(
     val title: String,
     val body: String,
     val read: Boolean,
-    val timestamp: Long
+    val timestamp: Long,
+    val productCode: String? = null
 )
 
 class UserPreferences(private val context: Context) {
@@ -269,6 +270,7 @@ class UserPreferences(private val context: Context) {
                 put("body", item.body)
                 put("read", item.read)
                 put("timestamp", item.timestamp)
+                if (!item.productCode.isNullOrBlank()) put("productCode", item.productCode)
             })
         }
         return array.toString()
@@ -284,7 +286,8 @@ class UserPreferences(private val context: Context) {
                 title = item.optString("title"),
                 body = item.optString("body"),
                 read = item.optBoolean("read", false),
-                timestamp = item.optLong("timestamp")
+                timestamp = item.optLong("timestamp"),
+                productCode = item.optString("productCode").trim().takeIf { it.isNotBlank() }
             )
         }
     } catch (_: Exception) {

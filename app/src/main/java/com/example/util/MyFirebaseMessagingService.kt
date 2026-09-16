@@ -110,7 +110,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                     title = title,
                     body = body,
                     read = false,
-                    timestamp = System.currentTimeMillis()
+                    timestamp = System.currentTimeMillis(),
+                    productCode = productCode
                 )
             )
             Log.d("MyFirebaseMessaging", "Exibindo notificação local: type=$type, canal=$channelId")

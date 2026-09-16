@@ -224,7 +224,8 @@ class MainActivity : ComponentActivity() {
                                 AppNavGraph(
                                 viewModel = viewModel,
                                 openAboutFromNotification = openAboutFromNotification,
-                                openPromotionsFromNotification = openPromotionsFromNotification
+                                openPromotionsFromNotification = openPromotionsFromNotification,
+                                productCodeFromNotification = productCodeFromNotification
                                 )
                             }
 
