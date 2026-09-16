@@ -90,14 +90,12 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                                 product.barcode.filter(Char::isDigit) == candidateEan
                             }
                             if (exact.isNotEmpty()) {
-                                val product = exact.first()
-                                selectProduct(product)
                                 results = AcpProductPage(exact, 0, 1, exact.size)
                                 val webName = eanLookup?.productName?.takeIf { it.isNotBlank() }
                                 searchHint = buildString {
-                                    append("EAN $candidateEan encontrado pela Inteligência NRD e confirmado na ACP. Produto vinculado automaticamente")
-                                    if (webName != null) append(" como $webName")
-                                    append(". Confira antes de salvar.")
+                                    append("EAN $candidateEan encontrado pela Inteligência NRD e confirmado como existente na ACP")
+                                    if (webName != null) append(" para $webName")
+                                    append(". Compare as descrições e toque no produto ACP abaixo para autorizar o vínculo.")
                                 }
                             } else {
                                 results = AcpProductPage(emptyList(), 0, 0, 0)
