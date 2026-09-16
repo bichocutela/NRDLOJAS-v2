@@ -28,25 +28,56 @@ object GeminiMasterService {
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(90, TimeUnit.SECONDS)
-        .callTimeout(100, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .callTimeout(130, TimeUnit.SECONDS)
         .build()
 
-    suspend fun ping(): Result<Reply> = request(
+    suspend fun ping(): Result<Reply> = requestReply(
         JSONObject().put("action", "ping")
     )
 
     suspend fun ask(message: String): Result<Reply> {
         val clean = message.trim()
         if (clean.isEmpty()) return Result.failure(IllegalArgumentException("Digite uma pergunta."))
-        return request(
+        return requestReply(
             JSONObject()
                 .put("action", "ask")
                 .put("message", clean.take(4000))
         )
     }
 
-    private suspend fun request(payload: JSONObject): Result<Reply> = withContext(Dispatchers.IO) {
+    /**
+     * Envia somente o texto OCR do encarte. O arquivo original continua no aparelho.
+     * O retorno é o objeto `analysis` já saneado pela Edge Function.
+     */
+    suspend fun analyzeFlyer(sourceName: String, ocrText: String): Result<JSONObject> {
+        val cleanText = ocrText.trim()
+        if (cleanText.isEmpty()) {
+            return Result.failure(IllegalArgumentException("O texto do encarte está vazio."))
+        }
+        return requestJson(
+            JSONObject()
+                .put("action", "analyze_flyer")
+                .put("sourceName", sourceName.trim().take(120))
+                .put("ocrText", cleanText.take(60000))
+        ).mapCatching { root ->
+            root.optJSONObject("analysis") ?: error("O Gemini não retornou a análise do encarte.")
+        }
+    }
+
+    private suspend fun requestReply(payload: JSONObject): Result<Reply> = requestJson(payload).mapCatching { json ->
+        val text = json.optString("text").trim()
+        if (text.isBlank()) error("O Gemini respondeu sem conteúdo.")
+
+        Reply(
+            text = text,
+            model = json.optString("model").takeIf { it.isNotBlank() },
+            timestamp = json.optString("checkedAt").takeIf { it.isNotBlank() }
+                ?: json.optString("answeredAt").takeIf { it.isNotBlank() }
+        )
+    }
+
+    private suspend fun requestJson(payload: JSONObject): Result<JSONObject> = withContext(Dispatchers.IO) {
         runCatching {
             val token = FirebaseAuth.getInstance().currentUser
                 ?.getIdToken(false)
@@ -77,16 +108,7 @@ object GeminiMasterService {
                     val message = json?.optString("error")?.takeIf { it.isNotBlank() }
                     error(message ?: "Falha ao acessar a Inteligência NRD (${response.code}).")
                 }
-
-                val text = json?.optString("text")?.trim().orEmpty()
-                if (text.isBlank()) error("O Gemini respondeu sem conteúdo.")
-
-                Reply(
-                    text = text,
-                    model = json?.optString("model")?.takeIf { it.isNotBlank() },
-                    timestamp = json?.optString("checkedAt")?.takeIf { it.isNotBlank() }
-                        ?: json?.optString("answeredAt")?.takeIf { it.isNotBlank() }
-                )
+                json ?: error("A Inteligência NRD retornou uma resposta inválida.")
             }
         }
     }
