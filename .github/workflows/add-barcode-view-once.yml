@@ -1,4 +1,4 @@
-name: Adicionar Ver Cod Barra uma vez
+name: Corrigir destaque do popup por notificacao
 on:
   push:
     branches: [main]
@@ -19,30 +19,41 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('app/src/main/java/com/example/ui/AcpProductsPanel.kt')
+          p=Path('app/src/main/java/com/example/ui/ProductBarcodeDialog.kt')
           s=p.read_text()
-          s=s.replace('import com.example.data.NrdProductImportService\n', 'import com.example.data.NrdProductImportService\nimport com.example.data.Product\n')
-          s=s.replace('var addToNrdProduct by remember { mutableStateOf<AcpProduct?>(null) }', 'var barcodeDialogProduct by remember { mutableStateOf<Product?>(null) }\n    var addToNrdProduct by remember { mutableStateOf<AcpProduct?>(null) }')
-          old='''TextButton(onClick = { openProduct(product) }, enabled = !detailBusy, modifier = Modifier.weight(1f)) {\n                                Text("Atualizar preços")\n                            }\n                            if (canAddToNrd) {'''
-          new='''TextButton(onClick = { openProduct(product) }, enabled = !detailBusy, modifier = Modifier.weight(1f)) {\n                                Text("Atualizar preços")\n                            }\n                            OutlinedButton(\n                                onClick = {\n                                    val barcodeValue = product.barcode.ifBlank { product.code }\n                                    barcodeDialogProduct = Product(\n                                        code = barcodeValue,\n                                        name = product.description,\n                                        searchName = product.description.lowercase(),\n                                        category = product.productCategories.firstOrNull()?.description ?: "Consulta de preços",\n                                        unit = product.unit ?: "un"\n                                    )\n                                },\n                                enabled = !detailBusy && (product.barcode.isNotBlank() || product.code.isNotBlank()),\n                                modifier = Modifier.weight(1f)\n                            ) { Text("Ver Cód Barra") }\n                            if (canAddToNrd) {'''
-          if old not in s: raise SystemExit('bloco de botoes nao encontrado')
+          old='''                Surface(
+                    shape = dialogShape,
+                    color = if (highlightedFromNotification) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
+                    border = if (highlightedFromNotification) {
+                        BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
+                    } else if (glassSoftStyle.enabled) {
+'''
+          new='''                Surface(
+                    shape = dialogShape,
+                    color = MaterialTheme.colorScheme.surface,
+                    border = if (highlightedFromNotification) {
+                        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                    } else if (glassSoftStyle.enabled) {
+'''
+          if old not in s: raise SystemExit('bloco do Surface nao encontrado')
           s=s.replace(old,new,1)
-          anchor='''    if (scanning) {\n        AcpBarcodeScanner('''
-          insert='''    barcodeDialogProduct?.let { product ->\n        ProductBarcodeDialog(\n            product = product,\n            onDismiss = { barcodeDialogProduct = null }\n        )\n    }\n\n    if (scanning) {\n        AcpBarcodeScanner('''
-          if anchor not in s: raise SystemExit('ancora scanner nao encontrada')
-          s=s.replace(anchor,insert,1)
           p.write_text(s)
           PY
       - name: Remover workflow temporario
         run: rm .github/workflows/add-barcode-view-once.yml
       - name: Validar compilacao
         run: |
+          git diff --check
           chmod +x gradlew
           ./gradlew :app:compileDebugKotlin --no-daemon
       - name: Commit e push
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add app/src/main/java/com/example/ui/AcpProductsPanel.kt .github/workflows/add-barcode-view-once.yml
-          git commit -m 'Reutiliza balão de código de barras na consulta'
+          git add app/src/main/java/com/example/ui/ProductBarcodeDialog.kt .github/workflows/add-barcode-view-once.yml
+          git commit -m 'Corrige contraste do produto aberto por notificacao'
           git push
