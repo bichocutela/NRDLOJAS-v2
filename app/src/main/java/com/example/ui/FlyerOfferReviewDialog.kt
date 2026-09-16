@@ -47,10 +47,6 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
         )
     }
 
-    fun descriptionCandidates(cleanQuery: String): List<AcpProduct> {
-        return emptyList()
-    }
-
     suspend fun loadDescriptionCandidates(cleanQuery: String): List<AcpProduct> {
         val candidates = linkedMapOf<String, AcpProduct>()
         val direct = api.searchProducts(AcpSearchField.DESCRIPTION, cleanQuery, null, 0)
@@ -106,7 +102,7 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
         busy = true
         error = null
         results = null
-        searchHint = "EAN $cleanEan encontrado. Conferindo automaticamente na ACP…"
+        searchHint = "EAN $cleanEan encontrado no Google. Conferindo automaticamente na ACP…"
         scope.launch {
             try {
                 if (!api.restoreSession()) api.confirmAccess()
@@ -117,7 +113,7 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                 if (exact.isNotEmpty()) {
                     results = AcpProductPage(exact, 0, 1, exact.size)
                     searchHint = buildString {
-                        append("EAN $cleanEan confirmado na ACP")
+                        append("EAN $cleanEan encontrado no Google e confirmado na ACP")
                         webName?.takeIf { it.isNotBlank() }?.let { append(" para $it") }
                         append(". Compare as descrições e toque em CONFIRMAR ESTE PRODUTO.")
                     }
@@ -125,9 +121,9 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                     val ranked = loadDescriptionCandidates(description.trim())
                     results = AcpProductPage(ranked, 0, if (ranked.isEmpty()) 0 else 1, ranked.size)
                     searchHint = if (ranked.isEmpty()) {
-                        "O EAN $cleanEan não apareceu na ACP e também não encontrei candidato pela descrição."
+                        "O EAN $cleanEan encontrado no Google não apareceu na ACP e também não encontrei candidato pela descrição."
                     } else {
-                        "O EAN $cleanEan não apareceu na ACP. Mostrando candidatos pela descrição para você conferir."
+                        "O EAN $cleanEan encontrado no Google não apareceu na ACP. Mostrando candidatos pela descrição para você conferir."
                     }
                 }
             } catch (cancelled: CancellationException) {
