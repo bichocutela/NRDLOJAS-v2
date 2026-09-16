@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import com.example.data.GeminiMasterService
 import com.example.data.acp.AcpApi
 import com.example.data.acp.AcpProduct
 import com.example.data.acp.AcpSearchField
@@ -18,6 +19,7 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.net.URI
@@ -42,6 +44,7 @@ internal object FlyerImportEngine {
     private const val MAX_FILE_BYTES = 25L * 1024L * 1024L
     private const val MAX_PDF_PAGES = 24
     private const val TARGET_PDF_WIDTH = 1440
+    private const val MAX_GEMINI_OCR_CHARS = 60_000
 
     private val httpClient = OkHttpClient.Builder()
         .followRedirects(true)
@@ -79,9 +82,29 @@ internal object FlyerImportEngine {
         blocks: List<FlyerTextBlock>
     ): FlyerAnalysisResult {
         if (blocks.isEmpty()) throw IllegalArgumentException("Não foi possível ler texto no encarte.")
-        val parsed = FlyerOfferParser.parse(sourceName, blocks)
+
+        // Mantemos o parser local como rede de segurança. O Gemini interpreta o mesmo OCR
+        // já produzido no aparelho; o PDF/imagem original não precisa ser enviado.
+        val localParsed = FlyerOfferParser.parse(sourceName, blocks)
+        var geminiFailure: Throwable? = null
+        val geminiParsed = runCatching {
+            val ocrText = blocksToGeminiText(blocks)
+            val payload = GeminiMasterService.analyzeFlyer(sourceName, ocrText).getOrThrow()
+            parseGeminiDraft(sourceName, payload)
+        }.onFailure { geminiFailure = it }.getOrNull()
+
+        val useGemini = geminiParsed != null && (
+            geminiParsed.offers.isNotEmpty() ||
+                geminiParsed.validFrom != null ||
+                geminiParsed.validTo != null
+            )
+        val parsed = if (useGemini) geminiParsed!! else localParsed
         val warnings = parsed.warnings.toMutableList()
+        if (!useGemini && geminiFailure != null) {
+            warnings += "A Inteligência NRD não respondeu; a leitura local do encarte foi usada normalmente."
+        }
         val enriched = enrichWithAcp(context, parsed.offers, warnings)
+
         return FlyerAnalysisResult(
             name = parsed.name,
             validFrom = parsed.validFrom,
@@ -93,6 +116,122 @@ internal object FlyerImportEngine {
         )
     }
 
+    private fun blocksToGeminiText(blocks: List<FlyerTextBlock>): String {
+        val builder = StringBuilder()
+        var currentPage = -1
+        val ordered = blocks
+            .filter { it.text.isNotBlank() }
+            .sortedWith(compareBy<FlyerTextBlock> { it.page }.thenBy { it.top }.thenBy { it.left })
+        for (block in ordered) {
+            if (block.page != currentPage) {
+                currentPage = block.page
+                builder.append("\n=== PÁGINA ").append(currentPage).append(" ===\n")
+            }
+            val clean = block.text
+                .replace(Regex("\\s+"), " ")
+                .trim()
+                .take(600)
+            if (clean.isNotBlank()) builder.append(clean).append('\n')
+            if (builder.length >= MAX_GEMINI_OCR_CHARS) break
+        }
+        return builder.toString().take(MAX_GEMINI_OCR_CHARS)
+    }
+
+    private fun parseGeminiDraft(sourceName: String, root: JSONObject): FlyerParseDraft {
+        fun nullableNumber(obj: JSONObject, key: String): Double? {
+            val value = obj.opt(key)
+            return if (value is Number) value.toDouble().takeIf { it.isFinite() } else null
+        }
+        fun stringList(obj: JSONObject, key: String): List<String> {
+            val array = obj.optJSONArray(key) ?: return emptyList()
+            return buildList {
+                for (index in 0 until array.length()) {
+                    val value = array.optString(index).trim()
+                    if (value.isNotBlank()) add(value)
+                }
+            }.distinct().take(4)
+        }
+
+        val offersArray = root.optJSONArray("offers")
+        val offers = buildList {
+            if (offersArray != null) {
+                for (index in 0 until offersArray.length()) {
+                    val item = offersArray.optJSONObject(index) ?: continue
+                    val description = item.optString("description").trim().take(300)
+                    if (description.isBlank()) continue
+                    val type = runCatching {
+                        FlyerOfferType.valueOf(item.optString("type").trim())
+                    }.getOrDefault(FlyerOfferType.FLYER_PRICE)
+                    val club = runCatching {
+                        FlyerClubCondition.valueOf(item.optString("clubCondition").trim())
+                    }.getOrDefault(FlyerClubCondition.NOT_INFORMED)
+                    val confidence = item.optDouble("confidence", 0.65)
+                        .takeIf { it.isFinite() }
+                        ?.coerceIn(0.0, 1.0)
+                        ?: 0.65
+                    val detail = item.optString("detail").trim().take(1000)
+                    val productCodes = stringList(item, "productCodes")
+                    val barcodes = stringList(item, "barcodes")
+                        .map { it.filter(Char::isDigit) }
+                        .filter { it.length in 6..18 }
+                    val normalized = normalizeText(description)
+                    add(
+                        FlyerOffer(
+                            type = type,
+                            scope = FlyerOfferScope.PRODUCT,
+                            sourceDescription = description,
+                            detail = detail,
+                            page = item.optInt("page", 1).coerceAtLeast(1),
+                            confidence = confidence,
+                            matchStatus = FlyerMatchStatus.UNRESOLVED,
+                            productCodes = productCodes,
+                            barcodes = barcodes,
+                            matchTerms = normalized.split(' ').filter { it.length >= 3 }.distinct(),
+                            flyerPrice = nullableNumber(item, "flyerPrice"),
+                            regularPrice = nullableNumber(item, "regularPrice"),
+                            secondUnitDiscountPercent = nullableNumber(item, "secondUnitDiscountPercent"),
+                            takeQuantity = nullableNumber(item, "takeQuantity"),
+                            payQuantity = nullableNumber(item, "payQuantity"),
+                            takeUnit = item.optString("takeUnit").trim().takeIf { it.isNotBlank() },
+                            payUnit = item.optString("payUnit").trim().takeIf { it.isNotBlank() },
+                            cashbackPercent = nullableNumber(item, "cashbackPercent"),
+                            cashbackValue = nullableNumber(item, "cashbackValue"),
+                            sourceText = detail,
+                            clubCondition = club
+                        )
+                    )
+                }
+            }
+        }.distinctBy { offer ->
+            listOf(
+                offer.page,
+                offer.type,
+                normalizeText(offer.sourceDescription),
+                offer.flyerPrice,
+                offer.regularPrice,
+                offer.secondUnitDiscountPercent,
+                offer.takeQuantity,
+                offer.payQuantity,
+                offer.cashbackPercent,
+                offer.cashbackValue
+            ).joinToString("|")
+        }
+
+        val warningArray = root.optJSONArray("warnings")
+        val warnings = buildList {
+            if (warningArray != null) {
+                for (index in 0 until warningArray.length()) {
+                    warningArray.optString(index).trim().takeIf { it.isNotBlank() }?.let { add(it.take(300)) }
+                }
+            }
+        }
+        val name = root.optString("name").trim().take(120).ifBlank { sourceName.take(120).ifBlank { "Encarte" } }
+        val validFrom = root.optString("validFrom").trim().takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
+        val validTo = root.optString("validTo").trim().takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }
+
+        return FlyerParseDraft(name, validFrom, validTo, offers, warnings)
+    }
+
     private suspend fun enrichWithAcp(
         context: Context,
         offers: List<FlyerOffer>,
@@ -100,8 +239,7 @@ internal object FlyerImportEngine {
     ): List<FlyerOffer> {
         val candidatesForAcp = offers.filter {
             it.scope == FlyerOfferScope.PRODUCT &&
-                it.type != FlyerOfferType.FLYER_PRICE &&
-                it.confidence >= 0.75 &&
+                it.confidence >= 0.65 &&
                 it.sourceDescription.isNotBlank()
         }
         if (candidatesForAcp.isEmpty()) return offers
@@ -118,7 +256,7 @@ internal object FlyerImportEngine {
 
         val resolved = mutableMapOf<String, FlyerOffer>()
         for (offer in candidatesForAcp) {
-            val match = runCatching { resolveProduct(api, offer.sourceDescription) }.getOrNull()
+            val match = runCatching { resolveProduct(api, offer) }.getOrNull()
             if (match == null) {
                 resolved[offer.id] = offer.copy(matchStatus = FlyerMatchStatus.REVIEW)
                 continue
@@ -146,7 +284,23 @@ internal object FlyerImportEngine {
 
     private data class MatchResult(val product: AcpProduct, val score: Double, val runnerUp: Double?)
 
-    private suspend fun resolveProduct(api: AcpApi, description: String): MatchResult? {
+    private suspend fun resolveProduct(api: AcpApi, offer: FlyerOffer): MatchResult? {
+        // Se o OCR/Gemini leu um identificador, a ACP é quem confirma se ele realmente existe.
+        for (barcode in offer.barcodes.filter { it.isNotBlank() }.take(2)) {
+            val page = runCatching { api.searchProducts(AcpSearchField.BARCODE, barcode, null, 0) }.getOrNull()
+            val exact = page?.items?.firstOrNull { it.barcode.trim() == barcode.trim() }
+            if (exact != null) return MatchResult(exact, 1.0, null)
+        }
+        for (code in offer.productCodes.filter { it.isNotBlank() }.take(2)) {
+            val page = runCatching { api.searchProducts(AcpSearchField.CODE, code, null, 0) }.getOrNull()
+            val exact = page?.items?.firstOrNull { it.code.trim() == code.trim() }
+            if (exact != null) return MatchResult(exact, 1.0, null)
+        }
+
+        return resolveProductByDescription(api, offer.sourceDescription)
+    }
+
+    private suspend fun resolveProductByDescription(api: AcpApi, description: String): MatchResult? {
         val queries = descriptionQueries(description)
         val all = linkedMapOf<String, AcpProduct>()
         for (query in queries) {
@@ -346,7 +500,6 @@ internal object FlyerImportEngine {
                     }
                 }
             }
-            // Some Drive links do not return a useful MIME type. Fix extension from magic bytes.
             if (ext != ".pdf" && output.inputStream().use { input ->
                     val h = ByteArray(5); input.read(h) == 5 && String(h, Charsets.US_ASCII) == "%PDF-"
                 }
