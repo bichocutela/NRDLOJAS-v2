@@ -13,6 +13,7 @@ import com.example.data.acp.*
 import com.example.data.flyer.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import java.text.Normalizer
 
 @Composable
 internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, onSave: (FlyerOffer) -> Unit) {
@@ -29,6 +30,7 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
     var results by remember { mutableStateOf<AcpProductPage?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var searchHint by remember { mutableStateOf<String?>(null) }
     val numbers = remember { mutableStateMapOf(
         "regular" to formatQuantity(initial.regularPrice), "price" to formatQuantity(initial.flyerPrice),
         "percent" to formatQuantity(initial.secondUnitDiscountPercent),
@@ -38,14 +40,39 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
     var takeUnit by remember { mutableStateOf(initial.takeUnit.orEmpty()) }
     var payUnit by remember { mutableStateOf(initial.payUnit.orEmpty()) }
     fun number(key: String) = numbers[key]?.trim()?.replace(',', '.')?.toDoubleOrNull()
+
     fun search(page: Int) {
         if (busy || query.isBlank()) return
         busy = true
         error = null
+        searchHint = null
         scope.launch {
             try {
                 if (!api.restoreSession()) api.confirmAccess()
-                results = api.searchProducts(field, query.trim(), null, page)
+                val cleanQuery = query.trim()
+                val direct = api.searchProducts(field, cleanQuery, null, page)
+                if (field != AcpSearchField.DESCRIPTION || page != 0 || direct.items.isNotEmpty()) {
+                    results = if (field == AcpSearchField.DESCRIPTION && direct.items.size > 1) {
+                        direct.copy(items = direct.items.sortedByDescending { reviewMatchScore(cleanQuery, it.description) })
+                    } else direct
+                } else {
+                    val candidates = linkedMapOf<String, AcpProduct>()
+                    for (fallback in smartDescriptionQueries(cleanQuery)) {
+                        if (fallback.equals(cleanQuery, ignoreCase = true)) continue
+                        val pageResult = api.searchProducts(AcpSearchField.DESCRIPTION, fallback, null, 0)
+                        pageResult.items.forEach { product ->
+                            candidates["${product.code}|${product.barcode}|${product.id}"] = product
+                        }
+                        if (candidates.size >= 20) break
+                    }
+                    val ranked = candidates.values
+                        .sortedByDescending { reviewMatchScore(cleanQuery, it.description) }
+                        .take(20)
+                    results = AcpProductPage(ranked, 0, if (ranked.isEmpty()) 0 else 1, ranked.size)
+                    if (ranked.isNotEmpty()) {
+                        searchHint = "A descrição reconhecida não bateu literalmente. Mostrando candidatos aproximados da ACP para você confirmar."
+                    }
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -54,6 +81,7 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
             } finally { busy = false }
         }
     }
+
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = MaterialTheme.shapes.large) {
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -108,23 +136,42 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                 Text("Código: ${linked.productCodes.joinToString()} • EAN: ${linked.barcodes.joinToString()}", style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     AcpSearchField.entries.forEach { option ->
-                        FilterChip(selected = field == option, onClick = { field = option; results = null }, label = { Text(option.label) }, enabled = !busy)
+                        FilterChip(
+                            selected = field == option,
+                            onClick = { field = option; results = null; searchHint = null },
+                            label = { Text(option.label) },
+                            enabled = !busy
+                        )
                     }
                 }
-                OutlinedTextField(query, { query = it.take(300); results = null }, label = { Text(field.label) }, enabled = !busy)
-                Button(onClick = { search(0) }, enabled = !busy && query.isNotBlank()) { Text(if (busy) "Buscando…" else "Buscar na ACP") }
+                OutlinedTextField(
+                    query,
+                    { query = it.take(300); results = null; searchHint = null },
+                    label = { Text(field.label) },
+                    enabled = !busy
+                )
+                Button(onClick = { search(0) }, enabled = !busy && query.isNotBlank()) {
+                    Text(if (busy) "Buscando…" else "Buscar na ACP")
+                }
+                searchHint?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
                 results?.let { page ->
-                    if (page.items.isEmpty()) Text("Nenhum produto encontrado. Tente o EAN ou código.")
+                    if (page.items.isEmpty()) Text("Nenhum produto encontrado. Tente o EAN, código ou uma palavra principal do produto.")
                     page.items.forEach { product ->
                         OutlinedCard(onClick = {
-                            linked = linked.copy(productCodes = listOf(product.code).filter { it.isNotBlank() },
-                                barcodes = listOf(product.barcode).filter { it.isNotBlank() }, matchedProductName = product.description)
+                            linked = linked.copy(
+                                productCodes = listOf(product.code).filter { it.isNotBlank() },
+                                barcodes = listOf(product.barcode).filter { it.isNotBlank() },
+                                matchedProductName = product.description
+                            )
                             results = null
+                            searchHint = null
                         }, modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(10.dp)) {
+                            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("ACP", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                                 Text(product.description)
-                                Text("${product.code} • ${product.barcode}", style = MaterialTheme.typography.bodySmall)
+                                Text("Código ${product.code} • EAN ${product.barcode}", style = MaterialTheme.typography.bodySmall)
                                 product.value?.let { Text("Preço ACP: R$ ${it.toPlainString().replace('.', ',')}") }
+                                Text("Encartado como: $description", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("Selecionar este produto", color = MaterialTheme.colorScheme.primary)
                             }
                         }
@@ -146,15 +193,22 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                     if (relevant.any { !numbers[it].isNullOrBlank() && number(it) == null }) {
                         error = "Confira os números. Use, por exemplo, 45,49."
                     } else {
-                        val draft = linked.copy(type = type, sourceDescription = description.trim(), detail = conditions.trim(),
-                            scope = FlyerOfferScope.PRODUCT, clubCondition = club, regularPrice = number("regular"),
+                        val draft = linked.copy(
+                            type = type,
+                            sourceDescription = description.trim(),
+                            detail = conditions.trim(),
+                            scope = FlyerOfferScope.PRODUCT,
+                            clubCondition = club,
+                            regularPrice = number("regular"),
                             flyerPrice = if ("price" in relevant) number("price") else null,
                             secondUnitDiscountPercent = if ("percent" in relevant) number("percent") else null,
                             takeQuantity = if ("take" in relevant) number("take") else null,
                             payQuantity = if ("pay" in relevant) number("pay") else null,
-                            takeUnit = takeUnit, payUnit = payUnit,
+                            takeUnit = takeUnit,
+                            payUnit = payUnit,
                             cashbackPercent = if ("cashPercent" in relevant) number("cashPercent") else null,
-                            cashbackValue = if ("cashValue" in relevant) number("cashValue") else null)
+                            cashbackValue = if ("cashValue" in relevant) number("cashValue") else null
+                        )
                         val confirmed = draft.confirmedForPublication()
                         if (confirmed == null) error = draft.reviewError() else onSave(confirmed)
                     }
@@ -165,6 +219,48 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
     }
 }
 
+private val OCR_SEARCH_STOP_WORDS = setOf(
+    "de", "da", "do", "das", "dos", "em", "ou", "com", "sem", "para", "cada",
+    "pct", "pt", "cx", "lta", "vd", "tb", "bd", "gfa", "un", "und"
+)
+
+private fun normalizeForSearch(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFD)
+    .replace(Regex("\\p{M}+"), "")
+    .lowercase()
+    .replace(Regex("[^a-z0-9]+"), " ")
+    .trim()
+
+private fun reviewTokens(value: String): List<String> = normalizeForSearch(value)
+    .split(' ')
+    .filter { token -> token.length >= 3 && token !in OCR_SEARCH_STOP_WORDS }
+
+private fun smartDescriptionQueries(value: String): List<String> {
+    val tokens = reviewTokens(value)
+    val words = tokens.filterNot { it.matches(Regex("\\d+(?:g|kg|ml|l)?")) }
+    val measures = tokens.filter { it.matches(Regex("\\d+(?:g|kg|ml|l)")) }
+    return buildList {
+        if (words.size >= 2) add(words.take(2).joinToString(" "))
+        words.firstOrNull()?.let(::add)
+        measures.firstOrNull()?.let(::add)
+    }.distinct().filter { it.isNotBlank() }.take(3)
+}
+
+private fun reviewMatchScore(source: String, candidate: String): Double {
+    val sourceTokens = reviewTokens(source).toSet()
+    val candidateTokens = reviewTokens(candidate).toSet()
+    if (sourceTokens.isEmpty() || candidateTokens.isEmpty()) return 0.0
+    val exact = sourceTokens.intersect(candidateTokens).size.toDouble()
+    val coverage = exact / sourceTokens.size
+    val sourceMeasures = sourceTokens.filter { it.any(Char::isDigit) }.toSet()
+    val candidateMeasures = candidateTokens.filter { it.any(Char::isDigit) }.toSet()
+    val measureBonus = when {
+        sourceMeasures.isEmpty() -> 0.0
+        sourceMeasures.any { it in candidateMeasures } -> 0.25
+        else -> -0.20
+    }
+    return (coverage + measureBonus).coerceIn(0.0, 1.25)
+}
+
 private fun FlyerOfferType.reviewLabel() = when (this) {
     FlyerOfferType.SECOND_UNIT_PERCENT -> "Desconto na segunda unidade"
     FlyerOfferType.TAKE_PAY_QUANTITY -> "Leve / Pague — unidades"
@@ -173,6 +269,7 @@ private fun FlyerOfferType.reviewLabel() = when (this) {
     FlyerOfferType.CASHBACK -> "Cashback"
     FlyerOfferType.FLYER_PRICE -> "Preço do encarte"
 }
+
 internal fun FlyerClubCondition.reviewLabel() = when (this) {
     FlyerClubCondition.NOT_INFORMED -> "Clube: não informado no encarte"
     FlyerClubCondition.REQUIRED -> "Exclusivo Clube, conforme encarte"
