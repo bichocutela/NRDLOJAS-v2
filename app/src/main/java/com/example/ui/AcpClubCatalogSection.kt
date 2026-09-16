@@ -21,12 +21,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.acp.AcpApi
+import com.example.data.acp.AcpCategory
 import com.example.data.acp.AcpFailure
 import com.example.data.acp.AcpProduct
 import com.example.data.acp.AcpProductPage
 import com.example.data.acp.AcpProductParser
 import com.example.data.acp.AcpUnauthorized
 import com.example.data.acp.brl
+import com.example.data.acp.categories
 import kotlinx.coroutines.CancellationException
 import java.text.Normalizer
 
@@ -34,8 +36,8 @@ private const val CLUB_DISPLAY_PAGE_SIZE = 20
 
 /**
  * Lista dos produtos que a própria ACP identifica como Clube de Vantagens.
- * A chamada sentinela pageSize=100 é reconhecida pelo AcpApi e convertida para
- * Product/all filtrado pela categoria oficial do Clube, com pageSize real de 20.
+ * Reaproveita o mesmo contrato da busca normal: description + productCategoryIds,
+ * com 20 itens por página. Nenhum catálogo paralelo é mantido no NRD.
  */
 @Composable
 internal fun AcpClubCatalogSection(
@@ -177,27 +179,40 @@ private fun ClubProductCard(product: AcpProduct, onClick: () -> Unit) {
     }
 }
 
+private fun normalizeClubLabel(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFD)
+    .replace(Regex("\\p{M}+"), "")
+    .lowercase()
+    .replace(Regex("[^a-z0-9]"), "")
+
+private fun AcpCategory.isClubCategory(): Boolean {
+    val normalized = normalizeClubLabel(description)
+    return normalized == "clubedevantagens" || normalized == "clubvantagens"
+}
+
 private fun AcpProduct.isClubMarkedByAcp(): Boolean {
     val categoryMarked = categories.any { category ->
-        val normalized = Normalizer.normalize(category, Normalizer.Form.NFD)
-            .replace(Regex("\\p{M}+"), "")
-            .lowercase()
-            .replace(Regex("[^a-z0-9]"), "")
+        val normalized = normalizeClubLabel(category)
         normalized == "clubedevantagens" || normalized == "clubvantagens"
     }
     return categoryMarked || (clubValue?.signum() ?: 0) > 0
 }
 
-/** Consulta uma página real de 20 produtos da categoria Clube diretamente no Product/all. */
+/**
+ * Usa o mesmo formato da busca normal que já funciona no app: description + categoria.
+ * A descrição vazia serve apenas para pedir a página inteira da categoria Clube.
+ */
 private suspend fun AcpApi.clubCatalogPage(displayPage: Int): AcpProductPage {
     require(displayPage >= 0)
+    val clubCategory = categories().firstOrNull { it.isClubCategory() }
+        ?: throw AcpFailure("A categoria Clube de Vantagens não foi localizada na ACP.")
+
     val root = get(
         "Product/all",
         listOf(
-            // Sentinela interna: AcpApi substitui por pageSize=20 e acrescenta
-            // productCategoryIds da categoria Clube de Vantagens resolvida na ACP.
-            "pageSize" to "100",
-            "pageIndex" to displayPage.toString()
+            "pageSize" to CLUB_DISPLAY_PAGE_SIZE.toString(),
+            "pageIndex" to displayPage.toString(),
+            "description" to "",
+            "productCategoryIds" to clubCategory.id
         )
     )
     val source = AcpProductParser.page(root, displayPage)
