@@ -71,7 +71,7 @@ internal object VisualMixReportParser {
                 iso(year, r.groupValues[2].toInt(), r.groupValues[1].toInt()) to
                     iso(year, r.groupValues[4].toInt(), r.groupValues[3].toInt())
             }
-            val clubEnd = endOnlyRegex.find(body)?.let { r ->
+            val clubEnd = endOnlyRegex.findAll(body).lastOrNull()?.let { r ->
                 val year = targetDate?.substring(0, 4)?.toIntOrNull() ?: 2000
                 iso(year, r.groupValues[2].toInt(), r.groupValues[1].toInt())
             }
@@ -123,6 +123,8 @@ internal object VisualMixReportParser {
                 offers += common.copy(
                     type = FlyerOfferType.DE_POR,
                     flyerPrice = promoPrice,
+                    validFrom = promoRange?.first ?: targetDate,
+                    validTo = promoRange?.second ?: targetDate,
                     detail = "De ${formatMoney(regularPrice)} por ${formatMoney(promoPrice)}" +
                         promoRange?.let { " • ${it.first} a ${it.second}" }.orEmpty()
                 )
@@ -132,6 +134,8 @@ internal object VisualMixReportParser {
                     type = FlyerOfferType.FLYER_PRICE,
                     flyerPrice = clubPrice,
                     clubCondition = FlyerClubCondition.REQUIRED,
+                    validFrom = targetDate,
+                    validTo = clubEnd ?: targetDate,
                     detail = "Clube ${formatMoney(clubPrice)}" +
                         clubEnd?.let { " • até $it" }.orEmpty()
                 )
@@ -150,8 +154,9 @@ internal object VisualMixReportParser {
 
         val dateCandidates = mutableListOf<String>()
         targetDate?.let(dateCandidates::add)
-        for (offer in offers) {
-            Regex("\\d{4}-\\d{2}-\\d{2}").findAll(offer.detail).forEach { dateCandidates += it.value }
+        offers.forEach { offer ->
+            offer.validFrom?.let(dateCandidates::add)
+            offer.validTo?.let(dateCandidates::add)
         }
         val validFrom = dateCandidates.minOrNull() ?: targetDate
         val validTo = dateCandidates.maxOrNull() ?: targetDate
@@ -161,7 +166,7 @@ internal object VisualMixReportParser {
             validFrom = validFrom,
             validTo = validTo,
             offers = offers.distinctBy { "${it.type}|${it.barcodes.firstOrNull()}|${it.flyerPrice}|${it.clubCondition}" },
-            warnings = listOf("Relatório Visual Mix reconhecido. Confira a vigência individual exibida em cada oferta antes de publicar.")
+            warnings = listOf("Relatório Visual Mix reconhecido. A validade é guardada por oferta; confirme o vínculo ACP antes de publicar.")
         )
     }
 
