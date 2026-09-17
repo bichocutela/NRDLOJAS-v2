@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -166,11 +167,12 @@ internal fun AcpOfferLandscapePoster(
 ) {
     val validity by rememberOfferValidity(productName, offer)
     val isMaster = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email?.trim()?.lowercase() == "mestre@nrdlojas.com"
+    val narrowPhone = LocalConfiguration.current.screenWidthDp < 430
     var editValidity by remember { mutableStateOf(false) }
 
     if (banner != null) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            PersonalizedOfferBanner(productName, offer, banner, compact = false, validity = validity)
+            PersonalizedOfferBanner(productName, offer, banner, compact = narrowPhone, validity = validity)
             if (isMaster) TextButton(onClick = { editValidity = true }) { Text("Validade Oferta") }
         }
     } else {
@@ -179,19 +181,77 @@ internal fun AcpOfferLandscapePoster(
         val blue = Color(0xFF005A9C)
         val club = offer.family == AcpOfferFamily.CLUB
         val headerColor = if (club) blue else red
+        val headerLabel = when (offer.family) {
+            AcpOfferFamily.DE_POR -> "DE / POR"
+            AcpOfferFamily.CLUB -> "PREÇO CLUBE"
+            AcpOfferFamily.TAKE_PAY -> "LEVE / PAGUE"
+            AcpOfferFamily.SECOND_UNIT -> "NA SEGUNDA UNIDADE"
+            AcpOfferFamily.CASHBACK, AcpOfferFamily.CASHBACK_VALUE -> "CASHBACK"
+            else -> offer.title.uppercase()
+        }
         Surface(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, color = yellow, contentColor = Color.Black) {
-            Column {
-                Row(modifier = Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (narrowPhone) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OfferHeader(
+                        label = headerLabel,
+                        validity = validity,
+                        background = headerColor,
+                        compact = true
+                    )
+                    Text(productName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(offer.detail, style = MaterialTheme.typography.bodySmall)
+                    HorizontalDivider(color = Color.Black.copy(alpha = 0.12f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            offer.referencePrice?.let {
+                                Text(
+                                    it.brl(),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    textDecoration = if (offer.family == AcpOfferFamily.DE_POR) TextDecoration.LineThrough else TextDecoration.None
+                                )
+                            }
+                            offer.headline?.let {
+                                Text(it, color = red, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleSmall)
+                            }
+                        }
+                        offer.price?.let {
+                            Text(
+                                it.brl(),
+                                color = if (club) Color.White else red,
+                                fontWeight = FontWeight.Black,
+                                style = MaterialTheme.typography.headlineMedium,
+                                modifier = Modifier
+                                    .background(if (club) red else yellow)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    if (isMaster) {
+                        TextButton(
+                            onClick = { editValidity = true },
+                            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
+                        ) { Text("Validade Oferta") }
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Column(modifier = Modifier.weight(1.15f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         OfferHeader(
-                            label = when (offer.family) {
-                                AcpOfferFamily.DE_POR -> "DE / POR"
-                                AcpOfferFamily.CLUB -> "PREÇO CLUBE"
-                                AcpOfferFamily.TAKE_PAY -> "LEVE / PAGUE"
-                                AcpOfferFamily.SECOND_UNIT -> "NA SEGUNDA UNIDADE"
-                                AcpOfferFamily.CASHBACK, AcpOfferFamily.CASHBACK_VALUE -> "CASHBACK"
-                                else -> offer.title.uppercase()
-                            },
+                            label = headerLabel,
                             validity = validity,
                             background = headerColor,
                             compact = true
