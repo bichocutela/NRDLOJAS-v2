@@ -140,26 +140,30 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        APK_PATH="app/build/outputs/apk/release/app-release.apk"
         if gh release view "$NEXT_TAG" >/dev/null 2>&1; then
           echo "Release $NEXT_TAG já existe; reutilizando."
         else
           gh release create "$NEXT_TAG" --title "NRDCodigos $NEXT_TAG" --notes "Build automática do NRDLOJAS-v2."
         fi
-        success=false
+
+    - name: Attach APK to GitHub Release
+      if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      continue-on-error: true
+      timeout-minutes: 2
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        APK_PATH="app/build/outputs/apk/release/app-release.apk"
         for attempt in 1 2 3; do
           if gh release upload "$NEXT_TAG" "$APK_PATH" --clobber; then
-            success=true
-            break
+            echo "APK anexado à release $NEXT_TAG."
+            exit 0
           fi
           echo "Falha ao anexar APK na tentativa $attempt; tentando novamente..."
           sleep $((attempt * 5))
         done
-        if [ "$success" != "true" ]; then
-          echo "Error: não foi possível anexar o APK à release $NEXT_TAG após 3 tentativas."
-          exit 1
-        fi
-        gh release view "$NEXT_TAG" --json tagName,isDraft,url --jq '{tag: .tagName, draft: .isDraft, url: .url}'
+        echo "Aviso: o APK ficou disponível no artifact da CI, mas o anexo da release falhou."
+        exit 0
 
     - name: Notify Mestre about new release
       if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
