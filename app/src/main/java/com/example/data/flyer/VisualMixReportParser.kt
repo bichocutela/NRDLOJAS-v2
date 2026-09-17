@@ -1,11 +1,11 @@
 package com.example.data.flyer
 
-import java.util.Calendar
-
 /**
  * Parser dedicado ao relatório "Relatório de Produtos Alterados" do Visual Mix.
- * Só entra quando reconhece o cabeçalho tabular conhecido e transforma as linhas
- * atuais do relatório em ofertas para revisão humana.
+ *
+ * Ele não tenta adivinhar o layout de um encarte visual. Só entra quando reconhece
+ * o cabeçalho tabular conhecido e transforma linhas do relatório em ofertas para
+ * revisão humana. O vínculo/publicação continua obedecendo o fluxo já existente.
  */
 internal object VisualMixReportParser {
     private val reportHeader = Regex("(?i)Relat[oó]rio de Produtos Alterados")
@@ -27,7 +27,6 @@ internal object VisualMixReportParser {
         val targetDate = targetDateRegex.find(rawText)?.let { match ->
             iso(match.groupValues[3].toInt(), match.groupValues[2].toInt(), match.groupValues[1].toInt())
         }
-        val referenceYear = targetDate?.substring(0, 4)?.toIntOrNull() ?: currentYear()
 
         val offers = mutableListOf<FlyerOffer>()
         var pendingCode: String? = null
@@ -38,13 +37,14 @@ internal object VisualMixReportParser {
             if (line.endsWith("Produtos", ignoreCase = true)) continue
 
             if (codeOnlyRegex.matches(line) && !moneyRegex.containsMatchIn(line)) {
-                pendingCode = line.substringBefore('/')
+                val candidate = line.substringBefore('/')
+                pendingCode = candidate.takeIf { it.length >= 4 }
                 continue
             }
 
             val match = detailRegex.matchEntire(line) ?: continue
-            val inlineCode = match.groupValues[1].substringBefore('/')
-            val automationCode = match.groupValues[2].filter(Char::isDigit)
+            val rowCodeToken = match.groupValues[1]
+            val ean = match.groupValues[2].filter(Char::isDigit)
             val flags = match.groupValues[4].uppercase()
             if ('P' !in flags && 'C' !in flags) {
                 pendingCode = null
@@ -63,12 +63,13 @@ internal object VisualMixReportParser {
 
             val ranges = rangeRegex.findAll(body).toList()
             val promoRange = ranges.lastOrNull()?.let { r ->
-                val start = iso(referenceYear, r.groupValues[2].toInt(), r.groupValues[1].toInt())
-                val end = iso(referenceYear, r.groupValues[4].toInt(), r.groupValues[3].toInt())
-                if (start != null && end != null) start to end else null
+                val year = targetDate?.substring(0, 4)?.toIntOrNull() ?: 2000
+                iso(year, r.groupValues[2].toInt(), r.groupValues[1].toInt()) to
+                    iso(year, r.groupValues[4].toInt(), r.groupValues[3].toInt())
             }
             val clubEnd = endOnlyRegex.find(body)?.let { r ->
-                iso(referenceYear, r.groupValues[2].toInt(), r.groupValues[1].toInt())
+                val year = targetDate?.substring(0, 4)?.toIntOrNull() ?: 2000
+                iso(year, r.groupValues[2].toInt(), r.groupValues[1].toInt())
             }
 
             val regularPrice: Double
@@ -92,18 +93,23 @@ internal object VisualMixReportParser {
                 }
             }
 
-            val productCode = pendingCode?.takeIf { it.isNotBlank() } ?: inlineCode
+            val inlineCode = rowCodeToken.substringBefore('/').takeIf { it.length >= 4 }
+            val productCode = pendingCode ?: inlineCode
             val normalized = normalizeText(description)
             val common = FlyerOffer(
                 type = FlyerOfferType.FLYER_PRICE,
                 scope = FlyerOfferScope.PRODUCT,
                 sourceDescription = description,
-                detail = "Visual Mix",
+                detail = buildString {
+                    append("Visual Mix")
+                    promoRange?.let { append(" • promoção ").append(it.first).append(" a ").append(it.second) }
+                    if (clubEnd != null) append(" • clube até ").append(clubEnd)
+                },
                 page = 1,
                 confidence = 0.98,
                 matchStatus = FlyerMatchStatus.REVIEW,
-                productCodes = listOfNotNull(productCode.takeIf { it.isNotBlank() }),
-                barcodes = listOf(automationCode),
+                productCodes = listOfNotNull(productCode),
+                barcodes = listOf(ean),
                 matchTerms = normalized.split(' ').filter { it.length >= 3 }.distinct(),
                 regularPrice = regularPrice,
                 sourceText = line
@@ -143,20 +149,27 @@ internal object VisualMixReportParser {
         for (offer in offers) {
             Regex("\\d{4}-\\d{2}-\\d{2}").findAll(offer.detail).forEach { dateCandidates += it.value }
         }
+        val validFrom = dateCandidates.minOrNull() ?: targetDate
+        val validTo = dateCandidates.maxOrNull() ?: targetDate
 
         return FlyerParseDraft(
             name = sourceName.ifBlank { "Relatório Visual Mix" },
-            validFrom = dateCandidates.minOrNull() ?: targetDate,
-            validTo = dateCandidates.maxOrNull() ?: targetDate,
+            validFrom = validFrom,
+            validTo = validTo,
             offers = offers.distinctBy { "${it.type}|${it.barcodes.firstOrNull()}|${it.flyerPrice}|${it.clubCondition}" },
             warnings = listOf("Relatório Visual Mix reconhecido. Confira a vigência individual exibida em cada oferta antes de publicar.")
         )
     }
 
-    private fun currentYear(): Int = Calendar.getInstance().get(Calendar.YEAR)
-
     private fun iso(year: Int, month: Int, day: Int): String? {
-        val value = "%04d-%02d-%02d".format(year, month, day)
-        return value.takeIf { parseIsoDate(it) != null }
+        if (year !in 2000..2100 || month !in 1..12 || day !in 1..31) return null
+        val leap = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0)
+        val maxDay = when (month) {
+            2 -> if (leap) 29 else 28
+            4, 6, 9, 11 -> 30
+            else -> 31
+        }
+        if (day > maxDay) return null
+        return "%04d-%02d-%02d".format(year, month, day)
     }
 }
