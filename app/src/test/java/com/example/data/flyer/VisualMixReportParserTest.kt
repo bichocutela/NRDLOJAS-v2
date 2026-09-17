@@ -54,6 +54,45 @@ class VisualMixReportParserTest {
     }
 
     @Test
+    fun `prefere promocao atual quando existe promocao anterior diferente`() {
+        val text = """
+            VISUAL MIX LTDA.
+            Relatório de Produtos Alterados
+            Produtos do dia 16/09/2026 - Abertura
+            205000100
+            1/01 7891234567895 PRODUTO TESTE 20,00 14,99 (10/09 a 15/09) 20,00 11,99 (16/09 a 20/09) P
+        """.trimIndent()
+
+        val result = VisualMixReportParser.parse("CENTRO_0012.pdf", text)!!
+        val promo = result.offers.single()
+        assertEquals(20.00, promo.regularPrice!!, 0.001)
+        assertEquals(11.99, promo.flyerPrice!!, 0.001)
+        assertTrue(promo.detail.contains("2026-09-16"))
+        assertTrue(promo.detail.contains("2026-09-20"))
+    }
+
+    @Test
+    fun `prefere promocao e clube atuais quando historico anterior tambem existe`() {
+        val text = """
+            VISUAL MIX LTDA.
+            Relatório de Produtos Alterados
+            Produtos do dia 16/09/2026 - Abertura
+            205000200
+            1/01 7891234567888 PRODUTO TESTE PC 29,99 24,99 (10/09 a 15/09) 21,99 - 15/09 29,99 19,99 (16/09 a 22/09) 17,99 - 22/09 PC
+        """.trimIndent()
+
+        val result = VisualMixReportParser.parse("CLUBE_0012.pdf", text)!!
+        assertEquals(2, result.offers.size)
+        val promo = result.offers.first { it.clubCondition != FlyerClubCondition.REQUIRED }
+        val club = result.offers.first { it.clubCondition == FlyerClubCondition.REQUIRED }
+        assertEquals(29.99, promo.regularPrice!!, 0.001)
+        assertEquals(19.99, promo.flyerPrice!!, 0.001)
+        assertEquals(17.99, club.flyerPrice!!, 0.001)
+        assertTrue(promo.detail.contains("2026-09-22"))
+        assertTrue(club.detail.contains("2026-09-22"))
+    }
+
+    @Test
     fun `extrai clube puro do relatorio clube`() {
         val text = """
             VISUAL MIX LTDA.
