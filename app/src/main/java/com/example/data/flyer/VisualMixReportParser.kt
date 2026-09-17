@@ -1,13 +1,11 @@
 package com.example.data.flyer
 
-import java.time.LocalDate
+import java.util.Calendar
 
 /**
  * Parser dedicado ao relatório "Relatório de Produtos Alterados" do Visual Mix.
- *
- * Ele não tenta adivinhar o layout de um encarte visual. Só entra quando reconhece
- * o cabeçalho tabular conhecido e transforma linhas do relatório em ofertas para
- * revisão humana. O vínculo/publicação continua obedecendo o fluxo já existente.
+ * Só entra quando reconhece o cabeçalho tabular conhecido e transforma as linhas
+ * atuais do relatório em ofertas para revisão humana.
  */
 internal object VisualMixReportParser {
     private val reportHeader = Regex("(?i)Relat[oó]rio de Produtos Alterados")
@@ -29,6 +27,7 @@ internal object VisualMixReportParser {
         val targetDate = targetDateRegex.find(rawText)?.let { match ->
             iso(match.groupValues[3].toInt(), match.groupValues[2].toInt(), match.groupValues[1].toInt())
         }
+        val referenceYear = targetDate?.substring(0, 4)?.toIntOrNull() ?: currentYear()
 
         val offers = mutableListOf<FlyerOffer>()
         var pendingCode: String? = null
@@ -44,7 +43,8 @@ internal object VisualMixReportParser {
             }
 
             val match = detailRegex.matchEntire(line) ?: continue
-            val ean = match.groupValues[2].filter(Char::isDigit)
+            val inlineCode = match.groupValues[1].substringBefore('/')
+            val automationCode = match.groupValues[2].filter(Char::isDigit)
             val flags = match.groupValues[4].uppercase()
             if ('P' !in flags && 'C' !in flags) {
                 pendingCode = null
@@ -63,13 +63,12 @@ internal object VisualMixReportParser {
 
             val ranges = rangeRegex.findAll(body).toList()
             val promoRange = ranges.lastOrNull()?.let { r ->
-                val year = targetDate?.substring(0, 4)?.toIntOrNull() ?: LocalDate.now().year
-                iso(year, r.groupValues[2].toInt(), r.groupValues[1].toInt()) to
-                    iso(year, r.groupValues[4].toInt(), r.groupValues[3].toInt())
+                val start = iso(referenceYear, r.groupValues[2].toInt(), r.groupValues[1].toInt())
+                val end = iso(referenceYear, r.groupValues[4].toInt(), r.groupValues[3].toInt())
+                if (start != null && end != null) start to end else null
             }
             val clubEnd = endOnlyRegex.find(body)?.let { r ->
-                val year = targetDate?.substring(0, 4)?.toIntOrNull() ?: LocalDate.now().year
-                iso(year, r.groupValues[2].toInt(), r.groupValues[1].toInt())
+                iso(referenceYear, r.groupValues[2].toInt(), r.groupValues[1].toInt())
             }
 
             val regularPrice: Double
@@ -93,22 +92,18 @@ internal object VisualMixReportParser {
                 }
             }
 
-            val productCode = pendingCode.orEmpty()
+            val productCode = pendingCode?.takeIf { it.isNotBlank() } ?: inlineCode
             val normalized = normalizeText(description)
             val common = FlyerOffer(
                 type = FlyerOfferType.FLYER_PRICE,
                 scope = FlyerOfferScope.PRODUCT,
                 sourceDescription = description,
-                detail = buildString {
-                    append("Visual Mix")
-                    promoRange?.let { append(" • promoção ").append(it.first).append(" a ").append(it.second) }
-                    if (clubEnd != null) append(" • clube até ").append(clubEnd)
-                },
+                detail = "Visual Mix",
                 page = 1,
                 confidence = 0.98,
                 matchStatus = FlyerMatchStatus.REVIEW,
                 productCodes = listOfNotNull(productCode.takeIf { it.isNotBlank() }),
-                barcodes = listOf(ean),
+                barcodes = listOf(automationCode),
                 matchTerms = normalized.split(' ').filter { it.length >= 3 }.distinct(),
                 regularPrice = regularPrice,
                 sourceText = line
@@ -148,19 +143,20 @@ internal object VisualMixReportParser {
         for (offer in offers) {
             Regex("\\d{4}-\\d{2}-\\d{2}").findAll(offer.detail).forEach { dateCandidates += it.value }
         }
-        val validFrom = dateCandidates.minOrNull() ?: targetDate
-        val validTo = dateCandidates.maxOrNull() ?: targetDate
 
         return FlyerParseDraft(
             name = sourceName.ifBlank { "Relatório Visual Mix" },
-            validFrom = validFrom,
-            validTo = validTo,
+            validFrom = dateCandidates.minOrNull() ?: targetDate,
+            validTo = dateCandidates.maxOrNull() ?: targetDate,
             offers = offers.distinctBy { "${it.type}|${it.barcodes.firstOrNull()}|${it.flyerPrice}|${it.clubCondition}" },
             warnings = listOf("Relatório Visual Mix reconhecido. Confira a vigência individual exibida em cada oferta antes de publicar.")
         )
     }
 
-    private fun iso(year: Int, month: Int, day: Int): String? = runCatching {
-        LocalDate.of(year, month, day).toString()
-    }.getOrNull()
+    private fun currentYear(): Int = Calendar.getInstance().get(Calendar.YEAR)
+
+    private fun iso(year: Int, month: Int, day: Int): String? {
+        val value = "%04d-%02d-%02d".format(year, month, day)
+        return value.takeIf { parseIsoDate(it) != null }
+    }
 }
