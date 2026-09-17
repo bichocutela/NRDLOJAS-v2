@@ -1,0 +1,40 @@
+name: Cleanup broken releases
+
+on:
+  push:
+    branches: [ "maintenance/cleanup-broken-releases" ]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove incomplete releases and tags
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          for release_id in 390967473 390925822 390947607; do
+            if gh api "repos/${GITHUB_REPOSITORY}/releases/${release_id}" >/dev/null 2>&1; then
+              echo "Deleting release id ${release_id}"
+              gh api --method DELETE "repos/${GITHUB_REPOSITORY}/releases/${release_id}"
+            fi
+          done
+
+          for tag in v1.0.502 v1.0.500 v1.0.498; do
+            if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" >/dev/null 2>&1; then
+              echo "Deleting tag ${tag}"
+              gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/${tag}"
+            fi
+          done
+
+          latest=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq '.tag_name')
+          echo "Latest published release after cleanup: ${latest}"
+          test "${latest}" = "v1.0.501"
+
+          apk=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/v1.0.501" --jq '.assets[] | select(.name == "app-release.apk") | .name')
+          test "${apk}" = "app-release.apk"
+          echo "v1.0.501 is valid and contains app-release.apk"
