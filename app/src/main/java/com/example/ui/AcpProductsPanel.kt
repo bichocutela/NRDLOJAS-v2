@@ -148,7 +148,6 @@ internal fun AcpProductsPanel(
             lastExplicitQuery = searchText
             keyboard?.hide()
         } else {
-            // Sugestões nunca prendem a interface nem escondem o teclado.
             busy = false
         }
         error = null
@@ -158,17 +157,12 @@ internal fun AcpProductsPanel(
             try {
                 val result = api.searchProductsUnified(searchText, index)
                 if (ticket != generation) return@launch
-
-                // Product/all é o caminho crítico. Assim que ele responde, o produto já fica
-                // disponível e clicável. Dados complementares não seguram mais a pesquisa.
                 page = result
                 busy = false
-
                 if (!enrichCampaigns) {
                     previewCampaignOffers = emptyMap()
                     return@launch
                 }
-
                 previewCampaignOffers = try {
                     api.campaignOffersFor(result.items)
                 } catch (cancelled: CancellationException) {
@@ -201,13 +195,9 @@ internal fun AcpProductsPanel(
         closeDetail()
         searchJob = scope.launch {
             try {
-                // Confirma/reutiliza a sessão existente. Se ela expirou, AcpApi renova sem
-                // afetar o login do NRD e sem transformar o gesto em logout.
                 api.confirmAccess()
                 val clean = query.trim()
                 if (clean.isBlank()) {
-                    // Sem uma pesquisa aberta não há uma lista de preços para substituir.
-                    // Ainda assim validamos a sessão e a integração com o ACP.
                     integration = try { api.integrationInfo() } catch (_: Exception) { null }
                     refreshMessage = "Conexão com o ACP atualizada. Pesquise um produto para carregar o preço mais recente."
                 } else {
@@ -228,18 +218,13 @@ internal fun AcpProductsPanel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
-                if (ticket == generation) {
-                    // Mantém a tela autenticada. O gesto nunca expulsa o usuário da conta.
-                    error = acpErrorMessage(failure)
-                }
+                if (ticket == generation) error = acpErrorMessage(failure)
             } finally {
                 if (ticket == generation) refreshing = false
             }
         }
     }
 
-    // Comportamento do editor web: enquanto o nome é digitado, os candidatos aparecem abaixo.
-    // Um debounce curto evita uma chamada por tecla, e cada nova digitação cancela a anterior.
     LaunchedEffect(query) {
         val clean = query.trim()
         if (clean.isEmpty()) {
@@ -324,162 +309,164 @@ internal fun AcpProductsPanel(
         onRefresh = { refreshFromAcp() },
         modifier = Modifier.fillMaxSize()
     ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        item {
-            OutlinedTextField(
-                value = query,
-                onValueChange = {
-                    query = it.take(200)
-                    lastExplicitQuery = null
-                    refreshMessage = null
-                    error = null
-                },
-                placeholder = { Text("Faça sua busca") },
-                supportingText = { Text("Código, código de barras ou descrição do produto") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                trailingIcon = {
-                    IconButton(onClick = { scanning = true }, enabled = !busy) {
-                        Icon(Icons.Default.CameraAlt, contentDescription = "Ler código de barras")
-                    }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(28.dp),
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { search() })
-            )
-        }
-
-        item {
-            Button(
-                onClick = { search() },
-                enabled = !busy && query.isNotBlank(),
-                shape = RoundedCornerShape(26.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                modifier = Modifier.fillMaxWidth().height(54.dp)
-            ) {
-                Icon(Icons.Default.Search, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(if (busy) "Pesquisando…" else "Pesquisar produto", fontWeight = FontWeight.Bold)
-            }
-        }
-
-        if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-        refreshMessage?.let { message ->
-            item { Text(message, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
-        }
-        error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
-
-        if (result != null) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             item {
-                Row(
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = {
+                        query = it.take(200)
+                        lastExplicitQuery = null
+                        refreshMessage = null
+                        error = null
+                    },
+                    placeholder = { Text("Faça sua busca") },
+                    supportingText = { Text("Código, código de barras ou descrição do produto") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        IconButton(onClick = { scanning = true }, enabled = !busy) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = "Ler código de barras")
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(28.dp),
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("Consulta: ${acpQueryTime(result.queriedAtMillis)}", style = MaterialTheme.typography.bodySmall)
-                        if (result.items.isNotEmpty()) {
-                            val label = if (result.items.size == 1) "resultado nesta página" else "resultados nesta página"
-                            Text("${result.items.size} $label", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                    TextButton(onClick = { refreshFromAcp() }, enabled = !busy && !refreshing) { Text("Atualizar") }
-                }
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { search() })
+                )
             }
-        }
 
-        if (result == null && !busy && error == null) {
-            item { Text("Digite ao menos 2 caracteres para ver sugestões, ou pesquise por código/código de barras.") }
-        }
-        if (result != null && result.items.isEmpty() && !busy) {
-            item { Text("Nenhum produto encontrado. Confira o termo e tente novamente.") }
-        }
-
-        itemsIndexed(result?.items.orEmpty(), key = { index, product -> "${product.id}:$index" }) { _, product ->
-            val directOffers = product.offers()
-            val previewOffers = (directOffers + previewCampaignOffers[product.id].orEmpty()).forAutomaticDisplay()
-            OutlinedCard(
-                onClick = { openProduct(product) },
-                enabled = !busy,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(product.description, style = MaterialTheme.typography.titleMedium)
-                    val identifiers = buildString {
-                        append("Código: ${product.code.ifBlank { "não informado" }}")
-                        if (product.barcode.isNotBlank()) append(" • EAN: ${product.barcode}")
-                    }
-                    Text(identifiers, style = MaterialTheme.typography.bodySmall)
-                    Text(
-                        "Preço: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let {
-                        Text("Limite: ${it.quantity()} un. por CPF", style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (previewOffers.isNotEmpty()) {
-                        Spacer(Modifier.height(2.dp))
-                        previewOffers.forEach { offer ->
-                            AcpOfferPoster(
-                                offer = offer,
-                                compact = true,
-                                productName = product.description,
-                                banner = appearance.activeOfferBanner(offer.bannerKey)
-                            )
-                        }
-                    } else {
-                        val standardBanner = appearance.activeOfferBanner(com.example.data.OFFER_BANNER_STANDARD)
-                        if (standardBanner != null) {
-                            AcpOfferPoster(
-                                offer = AcpOffer(
-                                    "Preço cadastrado",
-                                    "Produto sem promoção especial.",
-                                    product.value
-                                ),
-                                compact = true,
-                                productName = product.description,
-                                banner = standardBanner
-                            )
-                        } else {
-                            Text("Sem promoção explícita identificada no cadastro do produto.", style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                    Text("Ver ficha completa", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                }
-            }
-        }
-
-        if (result != null && result.totalPages > 1) {
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Button(
+                    onClick = { search() },
+                    enabled = !busy && query.isNotBlank(),
+                    shape = RoundedCornerShape(26.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ),
+                    modifier = Modifier.fillMaxWidth().height(54.dp)
                 ) {
-                    TextButton(
-                        onClick = { search(result.pageIndex - 1) },
-                        enabled = !busy && result.pageIndex > 0
-                    ) { Text("Anterior") }
-                    Text("${result.pageIndex + 1} / ${result.totalPages}", style = MaterialTheme.typography.labelLarge)
-                    TextButton(
-                        onClick = { search(result.pageIndex + 1) },
-                        enabled = !busy && result.pageIndex + 1 < result.totalPages
-                    ) { Text("Próxima") }
+                    Icon(Icons.Default.Search, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (busy) "Pesquisando…" else "Pesquisar produto", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            item { VisualMixOrderImportButton(api) }
+
+            if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+            refreshMessage?.let { message ->
+                item { Text(message, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
+            }
+            error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
+
+            if (result != null) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("Consulta: ${acpQueryTime(result.queriedAtMillis)}", style = MaterialTheme.typography.bodySmall)
+                            if (result.items.isNotEmpty()) {
+                                val label = if (result.items.size == 1) "resultado nesta página" else "resultados nesta página"
+                                Text("${result.items.size} $label", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                        TextButton(onClick = { refreshFromAcp() }, enabled = !busy && !refreshing) { Text("Atualizar") }
+                    }
+                }
+            }
+
+            if (result == null && !busy && error == null) {
+                item { Text("Digite ao menos 2 caracteres para ver sugestões, ou pesquise por código/código de barras.") }
+            }
+            if (result != null && result.items.isEmpty() && !busy) {
+                item { Text("Nenhum produto encontrado. Confira o termo e tente novamente.") }
+            }
+
+            itemsIndexed(result?.items.orEmpty(), key = { index, product -> "${product.id}:$index" }) { _, product ->
+                val directOffers = product.offers()
+                val previewOffers = (directOffers + previewCampaignOffers[product.id].orEmpty()).forAutomaticDisplay()
+                OutlinedCard(
+                    onClick = { openProduct(product) },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(product.description, style = MaterialTheme.typography.titleMedium)
+                        val identifiers = buildString {
+                            append("Código: ${product.code.ifBlank { "não informado" }}")
+                            if (product.barcode.isNotBlank()) append(" • EAN: ${product.barcode}")
+                        }
+                        Text(identifiers, style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "Preço: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let {
+                            Text("Limite: ${it.quantity()} un. por CPF", style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (previewOffers.isNotEmpty()) {
+                            Spacer(Modifier.height(2.dp))
+                            previewOffers.forEach { offer ->
+                                AcpOfferPoster(
+                                    offer = offer,
+                                    compact = true,
+                                    productName = product.description,
+                                    banner = appearance.activeOfferBanner(offer.bannerKey)
+                                )
+                            }
+                        } else {
+                            val standardBanner = appearance.activeOfferBanner(com.example.data.OFFER_BANNER_STANDARD)
+                            if (standardBanner != null) {
+                                AcpOfferPoster(
+                                    offer = AcpOffer(
+                                        "Preço cadastrado",
+                                        "Produto sem promoção especial.",
+                                        product.value
+                                    ),
+                                    compact = true,
+                                    productName = product.description,
+                                    banner = standardBanner
+                                )
+                            } else {
+                                Text("Sem promoção explícita identificada no cadastro do produto.", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                        Text("Ver ficha completa", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+
+            if (result != null && result.totalPages > 1) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = { search(result.pageIndex - 1) },
+                            enabled = !busy && result.pageIndex > 0
+                        ) { Text("Anterior") }
+                        Text("${result.pageIndex + 1} / ${result.totalPages}", style = MaterialTheme.typography.labelLarge)
+                        TextButton(
+                            onClick = { search(result.pageIndex + 1) },
+                            enabled = !busy && result.pageIndex + 1 < result.totalPages
+                        ) { Text("Próxima") }
+                    }
                 }
             }
         }
-    }
     }
 
     if (scanning) {
@@ -641,7 +628,7 @@ internal fun AcpProductsPanel(
                                         campaign.code?.let { Text("Código: $it") }
                                         campaign.description?.takeIf { it != campaign.name }?.let { Text(it) }
                                         Text("Início: ${acpDateLabel(campaign.startDate) ?: "não informado"} • Fim: ${acpDateLabel(campaign.endDate) ?: "não informado"}")
-                                        Text("Ativa: ${campaign.active?.let { if (it) "sim" else "não" } ?: "não informado"} • Autoexclusão: ${campaign.autoExclusion?.let { if (it) "sim" else "não informado"} }")
+                                        Text("Ativa: ${campaign.active?.let { if (it) "sim" else "não informado"} ?: "não informado"} • Autoexclusão: ${campaign.autoExclusion?.let { if (it) "sim" else "não informado"} }")
                                         val rules = campaign.productRules.count { it.matches(product) }
                                         if (rules > 0) {
                                             Text("Regras promocionais vinculadas ao produto: $rules", style = MaterialTheme.typography.labelSmall)
@@ -825,8 +812,6 @@ private suspend fun AcpApi.searchProductsUnifiedFresh(
         store.clear(acpResponseCacheName("Product/all", parameters))
     }
 
-    // Product/all normalmente usa cache diário. O gesto explícito de atualizar é a exceção:
-    // limpamos somente as chaves da pesquisa visível, sem varrer nem apagar o restante do cache.
     clear(preferred, pageIndex)
     if (numeric && pageIndex == 0) {
         val alternate = if (preferred == AcpSearchField.BARCODE) AcpSearchField.CODE else AcpSearchField.BARCODE
