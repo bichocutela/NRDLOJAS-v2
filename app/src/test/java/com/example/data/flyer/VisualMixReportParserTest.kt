@@ -54,6 +54,59 @@ class VisualMixReportParserTest {
     }
 
     @Test
+    fun `extrai clube puro do relatorio clube`() {
+        val text = """
+            VISUAL MIX LTDA.
+            Relatório de Produtos Alterados
+            Produtos do dia 16/09/2026 - Abertura
+            201063600
+            1/01 7896102503708 KETCHUP HEINZ TB 397G TRAD 19,79 19,79 12,99 - 22/09 C
+        """.trimIndent()
+
+        val result = VisualMixReportParser.parse("CLUBE_0012.pdf", text)!!
+        val club = result.offers.single()
+        assertEquals("201063600", club.productCodes.single())
+        assertEquals("7896102503708", club.barcodes.single())
+        assertEquals(19.79, club.regularPrice!!, 0.001)
+        assertEquals(12.99, club.flyerPrice!!, 0.001)
+        assertEquals(FlyerClubCondition.REQUIRED, club.clubCondition)
+        assertTrue(club.detail.contains("2026-09-22"))
+    }
+
+    @Test
+    fun `preserva codigo quando ele vem na propria linha`() {
+        val text = """
+            VISUAL MIX LTDA.
+            Relatório de Produtos Alterados
+            Produtos do dia 16/09/2026 - Abertura
+            2033190/0 7898910185060 GOMA FRESCA DELICIA POTIGUAR PC 1KG 6,99 6,99 4,49 - 17/09 C
+        """.trimIndent()
+
+        val result = VisualMixReportParser.parse("CLUBE_0012.pdf", text)!!
+        val club = result.offers.single()
+        assertEquals("2033190", club.productCodes.single())
+        assertEquals("7898910185060", club.barcodes.single())
+        assertEquals(4.49, club.flyerPrice!!, 0.001)
+        assertTrue(club.detail.contains("2026-09-17"))
+    }
+
+    @Test
+    fun `nao transforma indice curto em codigo de produto`() {
+        val text = """
+            VISUAL MIX LTDA.
+            Relatório de Produtos Alterados
+            Produtos do dia 16/09/2026 - Abertura
+            1/01 7891008121629 CHOC TAB GAROTO TALENTO TB 85G DOCE LEITE 13,99 13,99 8,49 (16/09 a 21/09) P
+        """.trimIndent()
+
+        val result = VisualMixReportParser.parse("CENTRO_0012.pdf", text)!!
+        val offer = result.offers.single()
+        assertTrue(offer.productCodes.isEmpty())
+        assertEquals("7891008121629", offer.barcodes.single())
+        assertEquals(8.49, offer.flyerPrice!!, 0.001)
+    }
+
+    @Test
     fun `ignora alteracao simples de preco sem P ou C`() {
         val text = """
             VISUAL MIX LTDA.
