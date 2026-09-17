@@ -502,7 +502,7 @@ internal fun AcpProductsPanel(
             onDismissRequest = { closeDetail() },
             title = { Text(detail?.description ?: requested.description) },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (detail == null && detailBusy) {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         Text("Consultando preços…")
@@ -610,8 +610,8 @@ internal fun AcpProductsPanel(
                         ActiveFlyerOffersForAcpProduct(product)
                         OutlinedCard(onClick = { syncExpanded = !syncExpanded }, modifier = Modifier.fillMaxWidth()) {
                             Column(
-                                Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                verticalArrangement = Arrangement.spacedBy(7.dp)
+                                Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Row(
                                     Modifier.fillMaxWidth(),
