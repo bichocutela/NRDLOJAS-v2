@@ -180,30 +180,35 @@ internal object VisualMixReportParser {
         }
 
         for (line in lines) {
-            val isLongStandaloneCode = codeOnlyRegex.matches(line) && line.substringBefore('/').length >= 4
             val startsCompleteRow = rowStartRegex.containsMatchIn(line)
             val startsSplitRow = rowIndexRegex.matches(line)
 
+            val current = buffer
+            if (current != null) {
+                if (startsCompleteRow || startsSplitRow) {
+                    flushBuffer()
+                    buffer = StringBuilder(line)
+                    if (rowEndRegex.containsMatchIn(line) && moneyRegex.containsMatchIn(line)) flushBuffer()
+                } else {
+                    current.append(' ').append(line)
+                    if (rowEndRegex.containsMatchIn(line) && moneyRegex.containsMatchIn(current.toString())) flushBuffer()
+                }
+                continue
+            }
+
+            val isLongStandaloneCode = codeOnlyRegex.matches(line) && line.substringBefore('/').length >= 4
             if (isLongStandaloneCode) {
-                flushBuffer()
                 rebuilt += line
                 continue
             }
 
             if (startsCompleteRow || startsSplitRow) {
-                flushBuffer()
                 buffer = StringBuilder(line)
                 if (rowEndRegex.containsMatchIn(line) && moneyRegex.containsMatchIn(line)) flushBuffer()
                 continue
             }
 
-            val current = buffer
-            if (current != null) {
-                current.append(' ').append(line)
-                if (rowEndRegex.containsMatchIn(line) && moneyRegex.containsMatchIn(current.toString())) flushBuffer()
-            } else {
-                rebuilt += line
-            }
+            rebuilt += line
         }
         flushBuffer()
         return rebuilt
