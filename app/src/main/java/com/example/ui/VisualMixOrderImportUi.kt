@@ -58,6 +58,7 @@ private fun VisualMixOrderImportDialog(api: AcpApi, onDismiss: () -> Unit) {
     var compareProduct by remember { mutableStateOf<AcpProduct?>(null) }
     var compareBusy by remember { mutableStateOf(false) }
     var compareError by remember { mutableStateOf<String?>(null) }
+    var openPreviewAfterLoad by remember { mutableStateOf(false) }
     var savingValidity by remember { mutableStateOf(false) }
     var confirmedKeys by remember { mutableStateOf(VisualMixReviewStore.confirmedKeys(context)) }
     var draftAvailable by remember { mutableStateOf(VisualMixReviewStore.hasDraft(context)) }
@@ -70,17 +71,18 @@ private fun VisualMixOrderImportDialog(api: AcpApi, onDismiss: () -> Unit) {
     fun stableKey(offer: FlyerOffer) = VisualMixReviewStore.stableKey(offer)
     fun isVerified(offer: FlyerOffer) = stableKey(offer) in confirmedKeys
 
-    fun startComparison(offer: FlyerOffer) {
+    fun startComparison(offer: FlyerOffer, previewAfterLoad: Boolean = false) {
         if (compareBusy || batchBusy) return
         compareOffer = offer
         compareProduct = null
         compareError = null
+        openPreviewAfterLoad = previewAfterLoad
         compareBusy = true
         scope.launch {
             try {
                 if (!api.restoreSession()) api.confirmAccess()
                 compareProduct = findOrderProductInAcp(api, offer)
-                if (compareProduct == null) compareError = "O produto deixou de aparecer no sistema. Faça uma nova importação ou confira os códigos."
+                if (compareProduct == null) compareError = "O produto não foi localizado no sistema pelos códigos importados. Confira a descrição, código e EAN do Visual Mix."
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -304,7 +306,8 @@ private fun VisualMixOrderImportDialog(api: AcpApi, onDismiss: () -> Unit) {
                                     onToggleApproved = {
                                         expandedApproved = if (key in expandedApproved) expandedApproved - key else expandedApproved + key
                                     },
-                                    onCompare = { startComparison(offer) }
+                                    onCompare = { startComparison(offer) },
+                                    onPreview = { startComparison(offer, previewAfterLoad = true) }
                                 )
                             }
                         }
@@ -324,11 +327,13 @@ private fun VisualMixOrderImportDialog(api: AcpApi, onDismiss: () -> Unit) {
             error = compareError,
             saving = savingValidity,
             applied = isVerified(offer),
+            openPreviewInitially = openPreviewAfterLoad,
             onDismiss = {
                 if (!savingValidity) {
                     compareOffer = null
                     compareProduct = null
                     compareError = null
+                    openPreviewAfterLoad = false
                 }
             },
             onConfirm = {
@@ -375,10 +380,12 @@ private fun VisualMixOrderOfferCard(
     expandedApproved: Boolean,
     onSelectedChange: (Boolean) -> Unit,
     onToggleApproved: () -> Unit,
-    onCompare: () -> Unit
+    onCompare: () -> Unit,
+    onPreview: () -> Unit
 ) {
     val validity = validityForOrderOffer(result, offer)
     val canCompare = offer.canOpenAcpComparison()
+    val hasLookupKey = offer.productCodes.any { it.isNotBlank() } || offer.barcodes.any { it.isNotBlank() }
     val selectable = canCompare && !verified && validity != null
 
     OutlinedCard(Modifier.fillMaxWidth()) {
@@ -401,6 +408,7 @@ private fun VisualMixOrderOfferCard(
                         Text(offer.sourceDescription, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
                     Text("OK", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    TextButton(onClick = onPreview, enabled = hasLookupKey) { Text("Prévia") }
                     TextButton(onClick = onToggleApproved) { Text("Ver") }
                 }
                 return@Column
@@ -415,7 +423,9 @@ private fun VisualMixOrderOfferCard(
                 when {
                     verified -> Text("VALIDADE APLICADA", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     canCompare -> Text("sistema ENCONTRADO", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                    else -> Text("REVISAR", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                    else -> TextButton(onClick = onCompare, enabled = hasLookupKey, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) {
+                        Text("REVISAR", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                    }
                 }
             }
             Text(offer.sourceDescription, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
@@ -433,14 +443,19 @@ private fun VisualMixOrderOfferCard(
                     if (code.isNotBlank()) TextButton(onClick = onCompare, modifier = Modifier.weight(1f)) { Text("Código $code") }
                     if (ean.isNotBlank()) TextButton(onClick = onCompare, modifier = Modifier.weight(1f)) { Text("EAN $ean") }
                 } else {
-                    Column {
+                    Column(Modifier.weight(1f)) {
                         Text("Código: ${code.ifBlank { "não identificado" }}", style = MaterialTheme.typography.bodySmall)
                         Text("EAN: ${ean.ifBlank { "não identificado" }}", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
-            if (verified) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onPreview, enabled = hasLookupKey) { Text("Prévia") }
+                if (!canCompare && !verified) {
+                    TextButton(onClick = onCompare, enabled = hasLookupKey) { Text("Revisar") }
+                }
+                if (verified) {
                     TextButton(onClick = onToggleApproved) { Text("Minimizar") }
                 }
             }
@@ -457,11 +472,12 @@ private fun VisualMixAcpComparisonDialog(
     error: String?,
     saving: Boolean,
     applied: Boolean,
+    openPreviewInitially: Boolean,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
     val validity = result?.let { validityForOrderOffer(it, offer) }
-    var previewOpen by remember(offer.id) { mutableStateOf(false) }
+    var previewOpen by remember(offer.id, openPreviewInitially) { mutableStateOf(openPreviewInitially) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
