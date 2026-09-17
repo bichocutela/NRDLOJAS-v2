@@ -5,7 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
-import android.os.ParcelFileDescriptor
+import android.os.Build
 import com.example.data.GeminiMasterService
 import com.example.data.acp.AcpApi
 import com.example.data.acp.AcpProduct
@@ -45,6 +45,7 @@ internal object FlyerImportEngine {
     private const val MAX_PDF_PAGES = 24
     private const val TARGET_PDF_WIDTH = 1440
     private const val MAX_GEMINI_OCR_CHARS = 60_000
+    private const val MIN_NATIVE_PDF_TEXT_CHARS = 80
 
     private val httpClient = OkHttpClient.Builder()
         .followRedirects(true)
@@ -83,24 +84,36 @@ internal object FlyerImportEngine {
     ): FlyerAnalysisResult {
         if (blocks.isEmpty()) throw IllegalArgumentException("Não foi possível ler texto no encarte.")
 
-        // Mantemos o parser local como rede de segurança. O Gemini interpreta o mesmo OCR
-        // já produzido no aparelho; o PDF/imagem original não precisa ser enviado.
-        val localParsed = FlyerOfferParser.parse(sourceName, blocks)
-        var geminiFailure: Throwable? = null
-        val geminiParsed = runCatching {
-            val ocrText = blocksToGeminiText(blocks)
-            val payload = GeminiMasterService.analyzeFlyer(sourceName, ocrText).getOrThrow()
-            parseGeminiDraft(sourceName, payload)
-        }.onFailure { geminiFailure = it }.getOrNull()
+        // Relatórios Visual Mix têm estrutura tabular conhecida. Eles são interpretados
+        // localmente antes de qualquer chamada ao Gemini, preservando código/EAN/preço/data.
+        val structuredText = blocks
+            .filter { it.text.isNotBlank() }
+            .sortedWith(compareBy<FlyerTextBlock> { it.page }.thenBy { it.top }.thenBy { it.left })
+            .joinToString("\n") { it.text }
+        val visualMixParsed = VisualMixReportParser.parse(sourceName, structuredText)
 
-        val useGemini = geminiParsed != null && (
-            geminiParsed.offers.isNotEmpty() ||
-                geminiParsed.validFrom != null ||
-                geminiParsed.validTo != null
-            )
-        val parsed = if (useGemini) geminiParsed!! else localParsed
+        var geminiFailure: Throwable? = null
+        var usedGemini = false
+        val parsed = if (visualMixParsed != null) {
+            visualMixParsed
+        } else {
+            val localParsed = FlyerOfferParser.parse(sourceName, blocks)
+            val geminiParsed = runCatching {
+                val ocrText = blocksToGeminiText(blocks)
+                val payload = GeminiMasterService.analyzeFlyer(sourceName, ocrText).getOrThrow()
+                parseGeminiDraft(sourceName, payload)
+            }.onFailure { geminiFailure = it }.getOrNull()
+
+            usedGemini = geminiParsed != null && (
+                geminiParsed.offers.isNotEmpty() ||
+                    geminiParsed.validFrom != null ||
+                    geminiParsed.validTo != null
+                )
+            if (usedGemini) geminiParsed!! else localParsed
+        }
+
         val warnings = parsed.warnings.toMutableList()
-        if (!useGemini && geminiFailure != null) {
+        if (visualMixParsed == null && !usedGemini && geminiFailure != null) {
             warnings += "A Inteligência NRD não respondeu; a leitura local do encarte foi usada normalmente."
         }
         val enriched = enrichWithAcp(context, parsed.offers, warnings)
@@ -285,7 +298,6 @@ internal object FlyerImportEngine {
     private data class MatchResult(val product: AcpProduct, val score: Double, val runnerUp: Double?)
 
     private suspend fun resolveProduct(api: AcpApi, offer: FlyerOffer): MatchResult? {
-        // Se o OCR/Gemini leu um identificador, a ACP é quem confirma se ele realmente existe.
         for (barcode in offer.barcodes.filter { it.isNotBlank() }.take(2)) {
             val page = runCatching { api.searchProducts(AcpSearchField.BARCODE, barcode, null, 0) }.getOrNull()
             val exact = page?.items?.firstOrNull { it.barcode.trim() == barcode.trim() }
@@ -366,6 +378,10 @@ internal object FlyerImportEngine {
             PdfRenderer(pfd).use { renderer ->
                 if (renderer.pageCount <= 0) throw IllegalArgumentException("O PDF está vazio.")
                 if (renderer.pageCount > MAX_PDF_PAGES) throw IllegalArgumentException("O encarte excede o limite de $MAX_PDF_PAGES páginas.")
+
+                val native = runCatching { extractNativePdfText(renderer) }.getOrNull()
+                if (!native.isNullOrEmpty()) return native
+
                 val result = mutableListOf<FlyerTextBlock>()
                 for (index in 0 until renderer.pageCount) {
                     renderer.openPage(index).use { page ->
@@ -385,6 +401,47 @@ internal object FlyerImportEngine {
                 return result
             }
         }
+    }
+
+    private fun extractNativePdfText(renderer: PdfRenderer): List<FlyerTextBlock>? {
+        if (Build.VERSION.SDK_INT < 35) return null
+        val blocks = mutableListOf<FlyerTextBlock>()
+        var totalChars = 0
+        for (index in 0 until renderer.pageCount) {
+            renderer.openPage(index).use { page ->
+                val method = page.javaClass.methods.firstOrNull {
+                    it.name == "getTextContents" && it.parameterTypes.isEmpty()
+                } ?: return null
+                val contents = method.invoke(page) as? List<*> ?: return null
+                var row = 0
+                contents.forEach { content ->
+                    if (content == null) return@forEach
+                    val textMethod = content.javaClass.methods.firstOrNull {
+                        it.name == "getText" && it.parameterTypes.isEmpty()
+                    } ?: return@forEach
+                    val raw = runCatching { textMethod.invoke(content)?.toString().orEmpty() }.getOrDefault("")
+                    raw.lineSequence()
+                        .map { it.replace(Regex("\\s+"), " ").trim() }
+                        .filter { it.isNotBlank() }
+                        .forEach { line ->
+                            totalChars += line.length
+                            val top = row * 24
+                            blocks += FlyerTextBlock(
+                                page = index + 1,
+                                text = line,
+                                left = 0,
+                                top = top,
+                                right = 1000,
+                                bottom = top + 20,
+                                pageWidth = 1000,
+                                pageHeight = 10000
+                            )
+                            row++
+                        }
+                }
+            }
+        }
+        return blocks.takeIf { totalChars >= MIN_NATIVE_PDF_TEXT_CHARS }
     }
 
     private suspend fun recognizeBitmap(bitmap: Bitmap, page: Int): List<FlyerTextBlock> {
