@@ -1,5 +1,7 @@
 package com.example.data.flyer
 
+import java.util.UUID
+
 /**
  * Parser dedicado ao relatório "Relatório de Produtos Alterados" do Visual Mix.
  *
@@ -121,6 +123,7 @@ internal object VisualMixReportParser {
 
             if (promoPrice != null && promoPrice > 0.0 && promoPrice < regularPrice) {
                 offers += common.copy(
+                    id = UUID.randomUUID().toString(),
                     type = FlyerOfferType.DE_POR,
                     flyerPrice = promoPrice,
                     detail = "De ${formatMoney(regularPrice)} por ${formatMoney(promoPrice)}" +
@@ -129,6 +132,7 @@ internal object VisualMixReportParser {
             }
             if (clubPrice != null && clubPrice > 0.0 && clubPrice < regularPrice) {
                 offers += common.copy(
+                    id = UUID.randomUUID().toString(),
                     type = FlyerOfferType.FLYER_PRICE,
                     flyerPrice = clubPrice,
                     clubCondition = FlyerClubCondition.REQUIRED,
