@@ -21,8 +21,8 @@ import com.example.data.GeminiMasterService
 import kotlinx.coroutines.launch
 
 /**
- * Fluxo simples: descrição do encarte -> Google Search -> EAN -> ACP.
- * O EAN continua sendo apenas uma pista até o Mestre confirmar o produto ACP.
+ * Fluxo opcional: descrição do encarte -> Google Search -> EAN -> ACP.
+ * Relatórios Visual Mix com EAN/código já extraídos não dependem desta busca para salvar.
  */
 @Composable
 internal fun FlyerEanLookupSection(
@@ -36,9 +36,9 @@ internal fun FlyerEanLookupSection(
     var message by remember(description) { mutableStateOf<String?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Buscar código de barras na web", style = MaterialTheme.typography.titleSmall)
+        Text("Busca web opcional", style = MaterialTheme.typography.titleSmall)
         Text(
-            "O NRD pesquisa a descrição no Google, pega um EAN válido e já confere o mesmo código na ACP.",
+            "Use só quando o PDF não trouxer EAN/código suficiente. A cota do Google/Gemini não interfere em salvar uma oferta já vinculada à ACP.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -56,14 +56,23 @@ internal fun FlyerEanLookupSection(
                             candidate = result
                             val ean = result.ean?.filter(Char::isDigit).orEmpty()
                             if (ean.isBlank()) {
-                                message = "O Google não trouxe um EAN confiável para este produto. Use a busca por descrição na ACP abaixo."
+                                message = "O Google não trouxe um EAN confiável. Use o EAN/código do PDF ou a busca por descrição na ACP."
                             } else {
                                 message = "EAN $ean encontrado no Google. Conferindo na ACP…"
                                 onEanFound(ean, result.productName.takeIf { it.isNotBlank() })
                             }
                         }
                         .onFailure { failure ->
-                            message = failure.message ?: "Não foi possível pesquisar o EAN agora."
+                            val raw = failure.message.orEmpty()
+                            message = if (
+                                raw.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                                raw.contains("quota", ignoreCase = true) ||
+                                raw.contains("rate", ignoreCase = true)
+                            ) {
+                                "Cota da busca web esgotada. Isso NÃO bloqueia salvar as ofertas já encontradas pelo Visual Mix/ACP."
+                            } else {
+                                raw.ifBlank { "Não foi possível pesquisar o EAN agora. Isso não impede salvar um vínculo ACP já confirmado." }
+                            }
                         }
                     busy = false
                 }
