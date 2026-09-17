@@ -74,16 +74,20 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        MAX_PATCH=$(gh api "repos/${{ github.repository }}/releases?per_page=100" \
-          --jq '[.[].tag_name | select(test("^v1\\.0\\.[0-9]+$")) | capture("^v1\\.0\\.(?<n>[0-9]+)$").n | tonumber] | max // 130')
-        if [ "$MAX_PATCH" -lt 130 ]; then MAX_PATCH=130; fi
-        NEXT_PATCH=$((MAX_PATCH + 1))
+        LATEST_TAG=$(gh api repos/${{ github.repository }}/releases/latest --jq .tag_name 2>/dev/null || echo "v1.0.130")
+        if [[ "$LATEST_TAG" =~ ^v1\.0\.([0-9]+)$ ]]; then
+          PATCH="${BASH_REMATCH[1]}"
+        else
+          PATCH=130
+        fi
+        if [ "$PATCH" -lt 130 ]; then PATCH=130; fi
+        NEXT_PATCH=$((PATCH + 1))
         NEXT_TAG="v1.0.$NEXT_PATCH"
         echo "Calculated next tag: $NEXT_TAG"
         echo "APP_VERSION_CODE=$NEXT_PATCH" >> "$GITHUB_ENV"
         echo "APP_VERSION_NAME=1.0.$NEXT_PATCH" >> "$GITHUB_ENV"
         echo "NEXT_TAG=$NEXT_TAG" >> "$GITHUB_ENV"
-        echo "TAG=$NEXT_TAG" >> "$GITHUB_OUTPUT"
+        echo "TAG=$NEXT_TAG" >> $GITHUB_OUTPUT
 
     - name: Validate bundled ACP access
       env:
@@ -137,33 +141,13 @@ jobs:
 
     - name: Create GitHub Release
       if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.NEXT_TAG }}
+        name: NRDCodigos ${{ env.NEXT_TAG }}
+        files: app/build/outputs/apk/release/app-release.apk
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        if gh release view "$NEXT_TAG" >/dev/null 2>&1; then
-          echo "Release $NEXT_TAG já existe; reutilizando."
-        else
-          gh release create "$NEXT_TAG" --title "NRDCodigos $NEXT_TAG" --notes "Build automática do NRDLOJAS-v2."
-        fi
-
-    - name: Attach APK to GitHub Release
-      if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      continue-on-error: true
-      timeout-minutes: 2
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        APK_PATH="app/build/outputs/apk/release/app-release.apk"
-        for attempt in 1 2 3; do
-          if gh release upload "$NEXT_TAG" "$APK_PATH" --clobber; then
-            echo "APK anexado à release $NEXT_TAG."
-            exit 0
-          fi
-          echo "Falha ao anexar APK na tentativa $attempt; tentando novamente..."
-          sleep $((attempt * 5))
-        done
-        echo "Aviso: o APK ficou disponível no artifact da CI, mas o anexo da release falhou."
-        exit 0
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Notify Mestre about new release
       if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
