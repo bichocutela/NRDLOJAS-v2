@@ -1,9 +1,12 @@
 package com.example.data.acp
 
+import java.text.Normalizer
+
 /**
- * Catálogo leve para a tela Consultar Preços. A ACP entrega 20 itens por página e o filtro
- * visual é aplicado à família pedida. Quando uma página bruta não contém itens da família,
- * avançamos algumas páginas até encontrar resultados, sem baixar o catálogo inteiro.
+ * Catálogo leve da tela Consultar Preços.
+ *
+ * Cada toque faz uma única consulta paginada ao servidor ACP. O aparelho recebe somente
+ * a página solicitada e nunca percorre o catálogo geral procurando ofertas.
  */
 internal suspend fun AcpApi.offerCatalog(
     family: AcpOfferFamily,
@@ -13,24 +16,50 @@ internal suspend fun AcpApi.offerCatalog(
 ): AcpProductPage {
     require(page >= 0 && pageSize in 10..50 && query.length <= 120)
 
-    // Clube já possui uma rota otimizada dentro de AcpApi: a assinatura pageSize=100 sem
-    // filtros é convertida para a categoria Clube de Vantagens no servidor. Mantemos esse
-    // caminho e fazemos a paginação de 20 no resultado retornado.
-    if (family == AcpOfferFamily.CLUB && query.isBlank()) {
-        val root = get("Product/all", listOf("pageSize" to "100", "pageIndex" to page.toString()))
-        val parsed = AcpProductParser.page(root, page)
-        val filtered = parsed.items.filter { product -> product.offers().any { it.family == family } }
-        return parsed.copy(items = filtered, totalCount = parsed.totalCount)
+    val cleanQuery = query.trim()
+    val parameters = mutableListOf(
+        "pageSize" to pageSize.toString(),
+        "pageIndex" to page.toString()
+    )
+    if (cleanQuery.isNotBlank()) parameters += "description" to cleanQuery
+
+    // As famílias promocionais são pedidas pela categoria correspondente na própria ACP.
+    // Assim Product/all já devolve somente aquela seleção e a paginação continua no servidor.
+    val category = when (family) {
+        AcpOfferFamily.CLUB -> findOfferCategory(setOf("clubedevantagens", "clubvantagens"))
+        AcpOfferFamily.DE_POR -> findOfferCategory(setOf("depor"))
+        AcpOfferFamily.TAKE_PAY -> findOfferCategory(setOf("levepague", "leveepague"))
+        else -> null
+    }
+    if (family in setOf(AcpOfferFamily.CLUB, AcpOfferFamily.DE_POR, AcpOfferFamily.TAKE_PAY)) {
+        category ?: throw AcpFailure("A categoria ${family.catalogLabel()} não foi localizada na ACP.")
+        parameters += "productCategoryIds" to category.id
     }
 
-    val parameters = mutableListOf("pageSize" to pageSize.toString(), "pageIndex" to page.toString())
-    if (query.isNotBlank()) parameters += "description" to query.trim()
     val parsed = AcpProductParser.page(get("Product/all", parameters), page)
-    val filtered = parsed.items.filter { product ->
-        when (family) {
-            AcpOfferFamily.PRICE -> product.value != null && product.value.signum() > 0
-            else -> product.offers().any { it.family == family }
-        }
-    }
-    return parsed.copy(items = filtered)
+    val items = when (family) {
+        AcpOfferFamily.PRICE -> parsed.items.filter { it.value != null && it.value.signum() > 0 }
+        else -> parsed.items.filter { product -> product.offers().any { it.family == family } }
+    }.sortedBy { normalizeForSort(it.description) }
+
+    return parsed.copy(items = items)
+}
+
+private suspend fun AcpApi.findOfferCategory(names: Set<String>): AcpCategory? =
+    categories().firstOrNull { normalizeCategory(it.description) in names }
+
+private fun normalizeCategory(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFD)
+    .replace(Regex("\\p{M}+"), "")
+    .lowercase()
+    .replace(Regex("[^a-z0-9]"), "")
+
+private fun normalizeForSort(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFD)
+    .replace(Regex("\\p{M}+"), "")
+    .lowercase()
+
+private fun AcpOfferFamily.catalogLabel(): String = when (this) {
+    AcpOfferFamily.CLUB -> "Clube"
+    AcpOfferFamily.DE_POR -> "De/Por"
+    AcpOfferFamily.TAKE_PAY -> "Leve/Pague"
+    else -> "Preço normal"
 }
