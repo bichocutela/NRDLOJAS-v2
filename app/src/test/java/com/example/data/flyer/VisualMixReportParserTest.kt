@@ -1,6 +1,7 @@
 package com.example.data.flyer
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -51,6 +52,7 @@ class VisualMixReportParserTest {
         assertEquals("7891150103818", club.barcodes.single())
         assertEquals(26.99, club.flyerPrice!!, 0.001)
         assertTrue(club.detail.contains("2026-09-22"))
+        assertNotEquals("De/Por e Clube precisam ter chaves diferentes na LazyColumn", promo.id, club.id)
     }
 
     @Test
