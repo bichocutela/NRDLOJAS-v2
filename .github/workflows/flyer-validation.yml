@@ -2,7 +2,13 @@ name: Flyer import checks
 
 on:
   push:
-    branches: [feat/importar-encartes]
+    branches: [feat/importar-encartes, feat/native-pdf-flyer-parser]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/java/com/example/data/flyer/**'
+      - 'app/src/test/java/com/example/data/flyer/**'
+      - '.github/workflows/flyer-validation.yml'
   workflow_dispatch:
 
 permissions:
