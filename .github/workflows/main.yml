@@ -74,7 +74,7 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        MAX_PATCH=$(gh api --paginate "repos/${{ github.repository }}/releases?per_page=100" \
+        MAX_PATCH=$(gh api "repos/${{ github.repository }}/releases?per_page=100" \
           --jq '[.[].tag_name | select(test("^v1\\.0\\.[0-9]+$")) | capture("^v1\\.0\\.(?<n>[0-9]+)$").n | tonumber] | max // 130')
         if [ "$MAX_PATCH" -lt 130 ]; then MAX_PATCH=130; fi
         NEXT_PATCH=$((MAX_PATCH + 1))
