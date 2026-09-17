@@ -107,6 +107,30 @@ class VisualMixReportParserTest {
     }
 
     @Test
+    fun `remonta produto quando pdf quebra a linha em varios pedacos`() {
+        val text = """
+            VISUAL MIX LTDA.
+            Relatório de Produtos Alterados
+            Produtos do dia 16/09/2026 - Abertura
+            202896700
+            1/01
+            7891008121629
+            CHOC TAB GAROTO TALENTO TB 85G DOCE LEITE
+            13,99 13,99
+            8,49 (16/09 a 21/09)
+            P
+        """.trimIndent()
+
+        val result = VisualMixReportParser.parse("CENTRO_0012.pdf", text)!!
+        val offer = result.offers.single()
+        assertEquals("202896700", offer.productCodes.single())
+        assertEquals("7891008121629", offer.barcodes.single())
+        assertEquals(13.99, offer.regularPrice!!, 0.001)
+        assertEquals(8.49, offer.flyerPrice!!, 0.001)
+        assertTrue(offer.detail.contains("2026-09-21"))
+    }
+
+    @Test
     fun `ignora alteracao simples de preco sem P ou C`() {
         val text = """
             VISUAL MIX LTDA.
