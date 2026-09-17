@@ -8,12 +8,12 @@ import kotlinx.coroutines.tasks.await
 import java.security.MessageDigest
 
 /** Validade comercial confirmada manualmente pelo Mestre. */
-data class AcpOfferValidity(
+internal data class AcpOfferValidity(
     val startDate: String = "",
     val endDate: String = ""
 )
 
-object AcpOfferValidityStore {
+internal object AcpOfferValidityStore {
     private const val COLLECTION = "config"
     private const val DOCUMENT = "acpOfferValidity"
 
