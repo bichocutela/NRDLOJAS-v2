@@ -1,5 +1,6 @@
 package com.example.ui
 
+import android.app.DatePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.*
@@ -10,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -23,11 +25,14 @@ import com.example.data.ThemeBackground
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
 private val validityDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")).apply { isLenient = false }
 
 private fun validDate(value: String): Boolean = runCatching { validityDateFormat.parse(value) }.getOrNull() != null
+
+private fun dateMillis(value: String): Long? = runCatching { validityDateFormat.parse(value)?.time }.getOrNull()
 
 private fun shortValidity(value: String): String {
     val parts = value.split("/")
@@ -209,6 +214,51 @@ internal fun AcpOfferLandscapePoster(
 }
 
 @Composable
+private fun ValidityDateField(
+    label: String,
+    value: String,
+    minDate: String? = null,
+    enabled: Boolean,
+    onDateSelected: (String) -> Unit
+) {
+    val context = LocalContext.current
+
+    fun openCalendar() {
+        val calendar = Calendar.getInstance()
+        dateMillis(value)?.let { calendar.timeInMillis = it }
+
+        val picker = DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                onDateSelected(String.format(Locale("pt", "BR"), "%02d/%02d/%04d", dayOfMonth, month + 1, year))
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        )
+
+        minDate?.let { dateMillis(it) }?.let { picker.datePicker.minDate = it }
+        picker.show()
+    }
+
+    OutlinedTextField(
+        value = value,
+        onValueChange = {},
+        readOnly = true,
+        enabled = enabled,
+        label = { Text(label) },
+        placeholder = { Text("Selecione no calendário") },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        trailingIcon = {
+            TextButton(enabled = enabled, onClick = { openCalendar() }) {
+                Text("📅", style = MaterialTheme.typography.titleMedium)
+            }
+        }
+    )
+}
+
+@Composable
 private fun OfferValidityDialog(
     productName: String,
     offer: AcpOffer,
@@ -220,7 +270,10 @@ private fun OfferValidityDialog(
     var end by remember(current) { mutableStateOf(current?.endDate.orEmpty()) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val canSave = validDate(start) && validDate(end)
+    val startMillis = dateMillis(start)
+    val endMillis = dateMillis(end)
+    val invalidRange = startMillis != null && endMillis != null && endMillis < startMillis
+    val canSave = validDate(start) && validDate(end) && !invalidRange
 
     AlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
@@ -228,9 +281,28 @@ private fun OfferValidityDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(productName, style = MaterialTheme.typography.titleSmall)
-                Text("Informe a vigência confirmada desta oferta.", style = MaterialTheme.typography.bodySmall)
-                OutlinedTextField(value = start, onValueChange = { start = it.take(10); error = null }, label = { Text("Validade inicial") }, placeholder = { Text("DD/MM/AAAA") }, singleLine = true)
-                OutlinedTextField(value = end, onValueChange = { end = it.take(10); error = null }, label = { Text("Validade final") }, placeholder = { Text("DD/MM/AAAA") }, singleLine = true)
+                Text("Selecione a data inicial e final da oferta nos calendários.", style = MaterialTheme.typography.bodySmall)
+                ValidityDateField(
+                    label = "Validade inicial",
+                    value = start,
+                    enabled = !saving,
+                    onDateSelected = {
+                        start = it
+                        if (dateMillis(end)?.let { currentEnd -> dateMillis(it)?.let { selectedStart -> currentEnd < selectedStart } } == true) end = ""
+                        error = null
+                    }
+                )
+                ValidityDateField(
+                    label = "Validade final",
+                    value = end,
+                    minDate = start.takeIf { validDate(it) },
+                    enabled = !saving,
+                    onDateSelected = {
+                        end = it
+                        error = null
+                    }
+                )
+                if (invalidRange) Text("A validade final não pode ser anterior à data inicial.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 if (saving) LinearProgressIndicator(Modifier.fillMaxWidth())
             }
