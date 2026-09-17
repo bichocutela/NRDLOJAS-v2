@@ -15,14 +15,18 @@ internal object VisualMixReportParser {
     private val moneyRegex = Regex("(?<!\\d)(\\d{1,4},\\d{2})(?!\\d)")
     private val detailRegex = Regex("^\\s*([0-9]+(?:/[0-9]+)?)\\s+([0-9]{7,14})\\s+(.+?)\\s+([VPC]+)\\s*$", RegexOption.IGNORE_CASE)
     private val codeOnlyRegex = Regex("^[0-9]+(?:/[0-9]+)?$")
+    private val rowStartRegex = Regex("^[0-9]+(?:/[0-9]+)?\\s+[0-9]{7,14}\\b")
+    private val rowIndexRegex = Regex("^[0-9]{1,3}/[0-9]{1,3}$")
+    private val rowEndRegex = Regex("\\b[VPC]{1,3}\\s*$", RegexOption.IGNORE_CASE)
 
     fun parse(sourceName: String, rawText: String): FlyerParseDraft? {
         if (!reportHeader.containsMatchIn(rawText)) return null
 
-        val lines = rawText.lineSequence()
+        val physicalLines = rawText.lineSequence()
             .map { it.replace(Regex("\\s+"), " ").trim() }
             .filter { it.isNotBlank() }
             .toList()
+        val lines = rebuildLogicalLines(physicalLines)
 
         val targetDate = targetDateRegex.find(rawText)?.let { match ->
             iso(match.groupValues[3].toInt(), match.groupValues[2].toInt(), match.groupValues[1].toInt())
@@ -159,6 +163,50 @@ internal object VisualMixReportParser {
             offers = offers.distinctBy { "${it.type}|${it.barcodes.firstOrNull()}|${it.flyerPrice}|${it.clubCondition}" },
             warnings = listOf("Relatório Visual Mix reconhecido. Confira a vigência individual exibida em cada oferta antes de publicar.")
         )
+    }
+
+    /**
+     * PdfRenderer/ML Kit e alguns extratores de texto podem dividir uma linha da tabela
+     * em vários pedaços. Aqui remontamos somente linhas que parecem registros de produto,
+     * sem concatenar cabeçalhos ou códigos internos isolados.
+     */
+    private fun rebuildLogicalLines(lines: List<String>): List<String> {
+        val rebuilt = mutableListOf<String>()
+        var buffer: StringBuilder? = null
+
+        fun flushBuffer() {
+            buffer?.toString()?.trim()?.takeIf { it.isNotBlank() }?.let(rebuilt::add)
+            buffer = null
+        }
+
+        for (line in lines) {
+            val isLongStandaloneCode = codeOnlyRegex.matches(line) && line.substringBefore('/').length >= 4
+            val startsCompleteRow = rowStartRegex.containsMatchIn(line)
+            val startsSplitRow = rowIndexRegex.matches(line)
+
+            if (isLongStandaloneCode) {
+                flushBuffer()
+                rebuilt += line
+                continue
+            }
+
+            if (startsCompleteRow || startsSplitRow) {
+                flushBuffer()
+                buffer = StringBuilder(line)
+                if (rowEndRegex.containsMatchIn(line) && moneyRegex.containsMatchIn(line)) flushBuffer()
+                continue
+            }
+
+            val current = buffer
+            if (current != null) {
+                current.append(' ').append(line)
+                if (rowEndRegex.containsMatchIn(line) && moneyRegex.containsMatchIn(current.toString())) flushBuffer()
+            } else {
+                rebuilt += line
+            }
+        }
+        flushBuffer()
+        return rebuilt
     }
 
     private fun iso(year: Int, month: Int, day: Int): String? {
