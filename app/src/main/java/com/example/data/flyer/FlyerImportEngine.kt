@@ -6,7 +6,6 @@ import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Build
-import android.os.ParcelFileDescriptor
 import com.example.data.GeminiMasterService
 import com.example.data.acp.AcpApi
 import com.example.data.acp.AcpProduct
@@ -85,24 +84,36 @@ internal object FlyerImportEngine {
     ): FlyerAnalysisResult {
         if (blocks.isEmpty()) throw IllegalArgumentException("Não foi possível ler texto no encarte.")
 
-        // O parser local continua como rede de segurança. Em PDFs digitais, blocks agora
-        // prefere o texto embutido no próprio arquivo; OCR fica apenas como fallback.
-        val localParsed = FlyerOfferParser.parse(sourceName, blocks)
-        var geminiFailure: Throwable? = null
-        val geminiParsed = runCatching {
-            val ocrText = blocksToGeminiText(blocks)
-            val payload = GeminiMasterService.analyzeFlyer(sourceName, ocrText).getOrThrow()
-            parseGeminiDraft(sourceName, payload)
-        }.onFailure { geminiFailure = it }.getOrNull()
+        // Relatórios Visual Mix têm estrutura tabular conhecida. Eles são interpretados
+        // localmente antes de qualquer chamada ao Gemini, preservando código/EAN/preço/data.
+        val structuredText = blocks
+            .filter { it.text.isNotBlank() }
+            .sortedWith(compareBy<FlyerTextBlock> { it.page }.thenBy { it.top }.thenBy { it.left })
+            .joinToString("\n") { it.text }
+        val visualMixParsed = VisualMixReportParser.parse(sourceName, structuredText)
 
-        val useGemini = geminiParsed != null && (
-            geminiParsed.offers.isNotEmpty() ||
-                geminiParsed.validFrom != null ||
-                geminiParsed.validTo != null
-            )
-        val parsed = if (useGemini) geminiParsed!! else localParsed
+        var geminiFailure: Throwable? = null
+        var usedGemini = false
+        val parsed = if (visualMixParsed != null) {
+            visualMixParsed
+        } else {
+            val localParsed = FlyerOfferParser.parse(sourceName, blocks)
+            val geminiParsed = runCatching {
+                val ocrText = blocksToGeminiText(blocks)
+                val payload = GeminiMasterService.analyzeFlyer(sourceName, ocrText).getOrThrow()
+                parseGeminiDraft(sourceName, payload)
+            }.onFailure { geminiFailure = it }.getOrNull()
+
+            usedGemini = geminiParsed != null && (
+                geminiParsed.offers.isNotEmpty() ||
+                    geminiParsed.validFrom != null ||
+                    geminiParsed.validTo != null
+                )
+            if (usedGemini) geminiParsed!! else localParsed
+        }
+
         val warnings = parsed.warnings.toMutableList()
-        if (!useGemini && geminiFailure != null) {
+        if (visualMixParsed == null && !usedGemini && geminiFailure != null) {
             warnings += "A Inteligência NRD não respondeu; a leitura local do encarte foi usada normalmente."
         }
         val enriched = enrichWithAcp(context, parsed.offers, warnings)
@@ -368,13 +379,9 @@ internal object FlyerImportEngine {
                 if (renderer.pageCount <= 0) throw IllegalArgumentException("O PDF está vazio.")
                 if (renderer.pageCount > MAX_PDF_PAGES) throw IllegalArgumentException("O encarte excede o limite de $MAX_PDF_PAGES páginas.")
 
-                // Android 15+ expõe o texto embutido de PDFs digitais. Usamos reflexão
-                // para manter compatibilidade com aparelhos antigos e, quando houver texto
-                // suficiente, evitamos converter tabelas em imagem antes da leitura.
                 val native = runCatching { extractNativePdfText(renderer) }.getOrNull()
                 if (!native.isNullOrEmpty()) return native
 
-                // PDF escaneado/fotografado continua funcionando pelo OCR existente.
                 val result = mutableListOf<FlyerTextBlock>()
                 for (index in 0 until renderer.pageCount) {
                     renderer.openPage(index).use { page ->
