@@ -15,7 +15,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -312,19 +314,21 @@ private fun VisualMixAcpComparisonDialog(
     onConfirm: () -> Unit
 ) {
     val validity = result?.let { validityForOrderOffer(it, offer) }
+    var previewOpen by remember(offer.id) { mutableStateOf(false) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Visual Mix × ACP") },
+        title = { Text("Visual Mix × sistema") },
         text = {
             Column(
                 Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text("VISUAL MIX", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                Text(offer.sourceDescription, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                CopyableReviewField("Descrição", offer.sourceDescription, strong = true)
                 Text("Tipo: ${offer.orderLabel()}")
-                Text("Código: ${offer.productCodes.firstOrNull().orEmpty().ifBlank { "não informado" }}")
-                Text("EAN: ${offer.barcodes.firstOrNull().orEmpty().ifBlank { "não informado" }}")
+                CopyableReviewField("Código", offer.productCodes.firstOrNull().orEmpty().ifBlank { "não informado" })
+                CopyableReviewField("EAN", offer.barcodes.firstOrNull().orEmpty().ifBlank { "não informado" })
                 offer.regularPrice?.let { Text("Preço normal: ${formatMoney(it)}") }
                 offer.flyerPrice?.let { Text("Preço oferta: ${formatMoney(it)}") }
                 validity?.let { (from, to) ->
@@ -333,14 +337,15 @@ private fun VisualMixAcpComparisonDialog(
                 if (offer.detail.isNotBlank()) Text(offer.detail, style = MaterialTheme.typography.bodySmall)
 
                 HorizontalDivider()
-                Text("ACP", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text("sistema", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 if (busy) {
                     LinearProgressIndicator(Modifier.fillMaxWidth())
                     Text("Carregando o produto ACP…")
                 }
                 product?.let { acp ->
-                    Text(acp.description, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Text("Código: ${acp.code.ifBlank { "não informado" }} • EAN: ${acp.barcode.ifBlank { "não informado" }}")
+                    CopyableReviewField("Descrição", acp.description, strong = true)
+                    CopyableReviewField("Código", acp.code.ifBlank { "não informado" })
+                    CopyableReviewField("EAN", acp.barcode.ifBlank { "não informado" })
                     Text("Preço principal: ${acp.value?.brl() ?: "não informado"}")
                     val expectedFamily = offer.orderAcpFamily()
                     val allOffers = acp.offers()
@@ -367,6 +372,15 @@ private fun VisualMixAcpComparisonDialog(
                             }
                         }
                     }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { previewOpen = true }) {
+                            Text("Prévia")
+                        }
+                    }
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 HorizontalDivider()
@@ -390,6 +404,161 @@ private fun VisualMixAcpComparisonDialog(
         },
         confirmButton = { TextButton(onClick = onDismiss, enabled = !saving) { Text("Fechar") } }
     )
+
+    if (previewOpen && product != null) {
+        VisualMixUserPreviewDialog(
+            offer = offer,
+            product = product,
+            validity = validity,
+            applied = applied,
+            onDismiss = { previewOpen = false }
+        )
+    }
+}
+
+@Suppress("DEPRECATION")
+@Composable
+private fun CopyableReviewField(label: String, value: String, strong: Boolean = false) {
+    val clipboard = LocalClipboardManager.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            "$label: $value",
+            modifier = Modifier.weight(1f),
+            style = if (strong) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium,
+            fontWeight = if (strong) FontWeight.Bold else FontWeight.Normal
+        )
+        TextButton(
+            onClick = { if (value.isNotBlank() && value != "não informado") clipboard.setText(AnnotatedString(value)) },
+            enabled = value.isNotBlank() && value != "não informado",
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+        ) {
+            Text("Copiar", style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@Composable
+private fun VisualMixUserPreviewDialog(
+    offer: FlyerOffer,
+    product: AcpProduct,
+    validity: Pair<String, String>?,
+    applied: Boolean,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Prévia para o usuário") },
+        text = {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    if (applied) "Abaixo está o antes e o resultado que já foi aplicado."
+                    else "Abaixo está o antes e uma simulação de como ficará depois que você confirmar.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                UserSearchPreviewCard(
+                    title = "ANTES DA REVISÃO",
+                    product = product,
+                    offer = offer,
+                    validityEnd = null
+                )
+                UserProductDetailPreview(
+                    product = product,
+                    offer = offer,
+                    validityEnd = null
+                )
+                HorizontalDivider()
+                UserSearchPreviewCard(
+                    title = if (applied) "DEPOIS DA REVISÃO" else "DEPOIS DA REVISÃO • SIMULAÇÃO",
+                    product = product,
+                    offer = offer,
+                    validityEnd = validity?.second
+                )
+                UserProductDetailPreview(
+                    product = product,
+                    offer = offer,
+                    validityEnd = validity?.second
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Fechar") } }
+    )
+}
+
+@Composable
+private fun UserSearchPreviewCard(
+    title: String,
+    product: AcpProduct,
+    offer: FlyerOffer,
+    validityEnd: String?
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        Text("Na busca", style = MaterialTheme.typography.labelMedium)
+        OutlinedCard(Modifier.fillMaxWidth()) {
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(product.description, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Código: ${product.code.ifBlank { "não informado" }} • EAN: ${product.barcode.ifBlank { "não informado" }}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text("Preço: ${product.value?.brl() ?: "não informado"}", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AssistChip(onClick = {}, label = { Text(offer.orderLabel()) })
+                    shortValidityLabel(validityEnd)?.let { end ->
+                        AssistChip(onClick = {}, label = { Text("Válido até $end") })
+                    }
+                }
+                Text("Ver ficha completa", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+}
+
+@Composable
+private fun UserProductDetailPreview(
+    product: AcpProduct,
+    offer: FlyerOffer,
+    validityEnd: String?
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text("Ao abrir o produto", style = MaterialTheme.typography.labelMedium)
+        OutlinedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(product.description, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("Código: ${product.code.ifBlank { "não informado" }}")
+                Text("Cód. barras: ${product.barcode.ifBlank { "não informado" }}")
+                Text("Preço principal: ${product.value?.brl() ?: "não informado"}", style = MaterialTheme.typography.titleMedium)
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(offer.orderLabel(), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    shortValidityLabel(validityEnd)?.let { end ->
+                        Text("Válido até $end", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    }
+                }
+                offer.regularPrice?.let { Text("Normal: ${formatMoney(it)}") }
+                offer.flyerPrice?.let { Text("Oferta: ${formatMoney(it)}") }
+            }
+        }
+    }
+}
+
+private fun shortValidityLabel(value: String?): String? {
+    val formatted = formatIsoDate(value) ?: return null
+    return formatted.takeIf { it.length >= 5 }?.take(5)
 }
 
 private suspend fun findOrderProductInAcp(api: AcpApi, offer: FlyerOffer): AcpProduct? {
