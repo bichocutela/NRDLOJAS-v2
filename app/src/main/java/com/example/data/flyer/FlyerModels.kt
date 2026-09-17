@@ -52,7 +52,9 @@ data class FlyerOffer(
     val cashbackValue: Double? = null,
     val sourceText: String = "",
     val reviewed: Boolean = false,
-    val clubCondition: FlyerClubCondition = FlyerClubCondition.NOT_INFORMED
+    val clubCondition: FlyerClubCondition = FlyerClubCondition.NOT_INFORMED,
+    val validFrom: String? = null,
+    val validTo: String? = null
 ) {
     /** Identity suggestions from OCR are never commercial approval. */
     fun reviewError(): String? {
@@ -80,8 +82,12 @@ data class FlyerOffer(
         if (reviewError() != null) return null
         val second = if (type == FlyerOfferType.SECOND_UNIT_PERCENT) calculateSecondUnit(regularPrice!!, secondUnitDiscountPercent!!) else null
         val average = if (type == FlyerOfferType.TAKE_PAY_QUANTITY && regularPrice != null) calculateTakePayAverage(regularPrice, takeQuantity!!, payQuantity!!) else null
-        return copy(reviewed = true, matchStatus = FlyerMatchStatus.CONFIRMED,
-            secondUnitPrice = second?.first, equivalentUnitPrice = second?.second ?: average)
+        return copy(
+            reviewed = true,
+            matchStatus = FlyerMatchStatus.CONFIRMED,
+            secondUnitPrice = second?.first,
+            equivalentUnitPrice = second?.second ?: average
+        )
     }
 
     fun matchesAcp(code: String, barcode: String): Boolean = reviewed &&
@@ -95,8 +101,22 @@ data class FlyerOffer(
         if (productCode.isBlank()) return false
         if (productCodes.any { normalizeIdentifier(it) == productCode }) return true
         if (barcodes.any { normalizeIdentifier(it) == productCode }) return true
-
         return false
+    }
+
+    fun effectiveValidFrom(campaign: FlyerCampaign): String =
+        validFrom?.takeIf { parseIsoDate(it) != null } ?: campaign.validFrom
+
+    fun effectiveValidTo(campaign: FlyerCampaign): String =
+        validTo?.takeIf { parseIsoDate(it) != null } ?: campaign.validTo
+
+    fun isActiveAt(campaign: FlyerCampaign, nowMillis: Long = System.currentTimeMillis()): Boolean {
+        if (!campaign.isActiveAt(nowMillis)) return false
+        val start = parseIsoDate(effectiveValidFrom(campaign)) ?: return false
+        val end = parseIsoDate(effectiveValidTo(campaign)) ?: return false
+        val dayFormat = isoDateFormat()
+        val today = dayFormat.parse(dayFormat.format(Date(nowMillis))) ?: return false
+        return !today.before(start) && !today.after(end)
     }
 
     fun displayTitle(): String = when (type) {
