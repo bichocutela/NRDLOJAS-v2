@@ -75,7 +75,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,7 +97,10 @@ import androidx.compose.foundation.Image
 import com.example.R
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
@@ -109,6 +114,7 @@ import android.os.Build
 import android.app.Activity
 import android.content.Intent
 import android.speech.RecognizerIntent
+import android.widget.Toast
 import java.text.Normalizer
 
 import androidx.compose.ui.unit.dp
@@ -1073,6 +1079,9 @@ fun ProductCard(
 ) {
     val glass = rememberGlassVisualStyle()
     val cardShape = RoundedCornerShape(24.dp)
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val shareLayer = rememberGraphicsLayer()
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(
@@ -1099,7 +1108,30 @@ fun ProductCard(
                 if (glass.enabled) glass.border else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
                 cardShape
             )
-            .vibrateClickable(viewModel) {
+            .drawWithContent {
+                shareLayer.record {
+                    this@drawWithContent.drawContent()
+                }
+                drawLayer(shareLayer)
+            }
+            .vibrateClickable(
+                viewModel = viewModel,
+                onLongClick = {
+                    scope.launch {
+                        val copied = copyProductCardToClipboard(
+                            context = context,
+                            layer = shareLayer,
+                            productName = product.name
+                        )
+                        Toast.makeText(
+                            context,
+                            if (copied) "Copiado na Área de Transferência"
+                            else "Não foi possível copiar o quadradinho.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            ) {
                 if (onProductClick != null) {
                     onProductClick(product)
                 } else {
@@ -1573,15 +1605,17 @@ fun ThemeBanner(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 fun Modifier.vibrateClickable(
     viewModel: MainViewModel,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ): Modifier = composed {
     val vibrateOnClick by viewModel.userPreferences.vibrateOnClick.collectAsState(initial = true)
     val context = LocalContext.current
     val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
-    
-    this.clickable {
+
+    fun vibrate() {
         if (vibrateOnClick) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 vibrator?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
@@ -1590,6 +1624,23 @@ fun Modifier.vibrateClickable(
                 vibrator?.vibrate(50)
             }
         }
-        onClick()
+    }
+
+    if (onLongClick == null) {
+        this.clickable {
+            vibrate()
+            onClick()
+        }
+    } else {
+        this.combinedClickable(
+            onClick = {
+                vibrate()
+                onClick()
+            },
+            onLongClick = {
+                vibrate()
+                onLongClick()
+            }
+        )
     }
 }
