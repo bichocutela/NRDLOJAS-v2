@@ -6,6 +6,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.graphics.Bitmap
 import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,8 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.graphics.drawscope.drawLayer
-import androidx.compose.ui.graphics.layer.rememberGraphicsLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -53,7 +54,7 @@ import java.util.Locale
 
 private enum class NrdIdentifier { BARCODE, PRODUCT_CODE }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 internal fun AcpProductsPanel(
     api: AcpApi,
@@ -445,7 +446,7 @@ internal fun AcpProductsPanel(
                                 )
                                 Toast.makeText(
                                     context,
-                                    if (copied) "Quadradinho copiado como imagem. Cole no WhatsApp."
+                                    if (copied) "Copiado na Área de Transferência"
                                     else "Não foi possível copiar o quadradinho.",
                                     Toast.LENGTH_SHORT
                                 ).show()
@@ -835,7 +836,7 @@ internal fun AcpProductsPanel(
 }
 
 
-private suspend fun copyProductCardToClipboard(
+internal suspend fun copyProductCardToClipboard(
     context: android.content.Context,
     layer: androidx.compose.ui.graphics.layer.GraphicsLayer,
     productName: String
