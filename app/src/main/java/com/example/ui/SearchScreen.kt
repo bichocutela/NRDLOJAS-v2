@@ -78,6 +78,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -116,6 +118,9 @@ import android.content.Intent
 import android.speech.RecognizerIntent
 import android.widget.Toast
 import java.text.Normalizer
+import java.io.File
+import java.io.FileOutputStream
+import androidx.core.content.FileProvider
 
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -132,12 +137,20 @@ import com.example.data.Product
 import com.example.data.ProductStandards
 import com.example.data.AppNotification
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
+import android.content.ClipData
+import android.content.ClipboardManager
 import androidx.compose.ui.graphics.FilterQuality
 import com.google.zxing.EncodeHintType
 import java.util.EnumMap
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.ui.window.Dialog
@@ -1082,6 +1095,13 @@ fun ProductCard(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val shareLayer = rememberGraphicsLayer()
+    val shareAccentColor = getDynamicThemeColor(
+        index,
+        appTheme,
+        MaterialTheme.colorScheme.primaryContainer,
+        MaterialTheme.colorScheme.onPrimaryContainer
+    ).first.toArgb()
+    val shareCodeColor = MaterialTheme.colorScheme.primary.toArgb()
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(
@@ -1118,11 +1138,12 @@ fun ProductCard(
                 viewModel = viewModel,
                 onLongClick = {
                     scope.launch {
-                        val copied = copyProductCardToClipboard(
+                        val copied = copyHomeProductCardToClipboard(
                             context = context,
                             layer = shareLayer,
-                            productName = product.name,
-                            backgroundColor = 0xFFE5E5E5.toInt()
+                            product = product,
+                            accentColor = shareAccentColor,
+                            codeBackgroundColor = shareCodeColor
                         )
                         Toast.makeText(
                             context,
@@ -1223,6 +1244,178 @@ fun ProductCard(
 
     }
 }
+
+
+private suspend fun copyHomeProductCardToClipboard(
+    context: Context,
+    layer: androidx.compose.ui.graphics.layer.GraphicsLayer,
+    product: Product,
+    accentColor: Int,
+    codeBackgroundColor: Int
+): Boolean = runCatching {
+    val captured = layer.toImageBitmap().asAndroidBitmap()
+    val width = captured.width.coerceAtLeast(1)
+    val height = captured.height.coerceAtLeast(1)
+    val density = context.resources.displayMetrics.density
+    fun dp(value: Float) = value * density
+
+    val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(output)
+
+    val neutral = 0xFFE5E5E5.toInt()
+    val border = 0xFFC7C7C7.toInt()
+    val titleColor = 0xFF202124.toInt()
+    val metaColor = 0xFF666666.toInt()
+
+    canvas.drawColor(neutral)
+
+    val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = neutral
+        style = Paint.Style.FILL
+    }
+    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = border
+        style = Paint.Style.STROKE
+        strokeWidth = dp(1f)
+    }
+    val outer = RectF(dp(1f), dp(1f), width - dp(1f), height - dp(1f))
+    val radius = dp(22f)
+    canvas.drawRoundRect(outer, radius, radius, cardPaint)
+    canvas.drawRoundRect(outer, radius, radius, borderPaint)
+
+    val pad = dp(16f)
+    val circleSize = dp(48f).coerceAtMost(height - dp(20f))
+    val circleCx = pad + circleSize / 2f
+    val circleCy = height / 2f
+
+    val circlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accentColor }
+    canvas.drawCircle(circleCx, circleCy, circleSize / 2f, circlePaint)
+
+    val initialPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+        textSize = dp(18f)
+    }
+    val initialBaseline = circleCy - (initialPaint.ascent() + initialPaint.descent()) / 2f
+    canvas.drawText(product.name.take(1).uppercase(), circleCx, initialBaseline, initialPaint)
+
+    val codePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+        textSize = dp(16f)
+    }
+    val codeHorizontal = dp(14f)
+    val codeWidth = (codePaint.measureText(product.code) + codeHorizontal * 2f)
+        .coerceIn(dp(92f), dp(150f))
+    val codeHeight = dp(48f).coerceAtMost(height - dp(20f))
+    val codeRight = width - pad
+    val codeLeft = codeRight - codeWidth
+    val codeTop = (height - codeHeight) / 2f
+    val codeRect = RectF(codeLeft, codeTop, codeRight, codeTop + codeHeight)
+    val codeBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = codeBackgroundColor }
+    canvas.drawRoundRect(codeRect, dp(14f), dp(14f), codeBg)
+    val codeBaseline = codeRect.centerY() - (codePaint.ascent() + codePaint.descent()) / 2f
+    canvas.drawText(product.code, codeRect.centerX(), codeBaseline, codePaint)
+
+    val textX = circleCx + circleSize / 2f + dp(16f)
+    val textRight = codeLeft - dp(14f)
+    val maxTextWidth = (textRight - textX).coerceAtLeast(dp(80f))
+
+    val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = titleColor
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textSize = dp(17f)
+    }
+    val metaPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = metaColor
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textSize = dp(11f)
+    }
+
+    fun drawWrapped(
+        text: String,
+        paint: Paint,
+        startX: Float,
+        startY: Float,
+        maxWidth: Float,
+        maxLines: Int,
+        lineHeight: Float
+    ): Float {
+        var remaining = text.trim()
+        var y = startY
+        repeat(maxLines) { lineIndex ->
+            if (remaining.isEmpty()) return y
+            var count = paint.breakText(remaining, true, maxWidth, null).coerceAtLeast(1)
+            if (count < remaining.length) {
+                val wordEnd = remaining.lastIndexOf(' ', count - 1)
+                if (wordEnd > 0) count = wordEnd
+            }
+            var line = remaining.take(count).trim()
+            remaining = remaining.drop(count).trim()
+            if (lineIndex == maxLines - 1 && remaining.isNotEmpty()) {
+                while (line.isNotEmpty() && paint.measureText("${line}…") > maxWidth) {
+                    line = line.dropLast(1)
+                }
+                line += "…"
+                remaining = ""
+            }
+            canvas.drawText(line, startX, y, paint)
+            y += lineHeight
+        }
+        return y
+    }
+
+    val titleLineHeight = dp(20f)
+    val metaLineHeight = dp(15f)
+    val titleStart = (height / 2f - dp(10f)).coerceAtLeast(dp(24f))
+    val afterTitle = drawWrapped(
+        product.name,
+        titlePaint,
+        textX,
+        titleStart,
+        maxTextWidth,
+        2,
+        titleLineHeight
+    )
+    drawWrapped(
+        "${getCategoryIcon(product.category)} ${product.category.uppercase()}",
+        metaPaint,
+        textX,
+        (afterTitle + dp(3f)).coerceAtMost(height - dp(10f)),
+        maxTextWidth,
+        1,
+        metaLineHeight
+    )
+
+    val file = withContext(Dispatchers.IO) {
+        val directory = File(context.cacheDir, "shared_cards").apply { mkdirs() }
+        directory.listFiles()?.forEach { old ->
+            if (System.currentTimeMillis() - old.lastModified() > 24 * 60 * 60 * 1000L) old.delete()
+        }
+        val safeName = product.name
+            .lowercase()
+            .replace(Regex("[^a-z0-9]+"), "-")
+            .trim('-')
+            .take(48)
+            .ifBlank { "produto" }
+        File(directory, "nrd-home-${safeName}-${System.currentTimeMillis()}.png").also { target ->
+            FileOutputStream(target).use { stream ->
+                check(output.compress(Bitmap.CompressFormat.PNG, 100, stream))
+            }
+        }
+    }
+
+    val uri = FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file
+    )
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newUri(context.contentResolver, "Produto NRD", uri))
+    true
+}.getOrDefault(false)
 
 @Composable
 fun MiniProductCard(
