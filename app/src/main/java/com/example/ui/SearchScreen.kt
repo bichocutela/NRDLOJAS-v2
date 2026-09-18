@@ -1121,7 +1121,8 @@ fun ProductCard(
                         val copied = copyProductCardToClipboard(
                             context = context,
                             layer = shareLayer,
-                            productName = product.name
+                            productName = product.name,
+                            backgroundColor = 0xFFE5E5E5.toInt()
                         )
                         Toast.makeText(
                             context,
