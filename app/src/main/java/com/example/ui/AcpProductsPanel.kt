@@ -9,6 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
@@ -500,8 +501,9 @@ internal fun AcpProductsPanel(
     selected?.let { requested ->
         AlertDialog(
             onDismissRequest = { closeDetail() },
-            title = { Text(detail?.description ?: requested.description) },
+            title = { SelectionContainer { Text(detail?.description ?: requested.description) } },
             text = {
+                SelectionContainer {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (detail == null && detailBusy) {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -656,6 +658,7 @@ internal fun AcpProductsPanel(
                         }
                         detailWarning?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     }
+                }
                 }
             },
             confirmButton = { TextButton(onClick = { closeDetail() }) { Text("Fechar") } }
