@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -839,10 +840,21 @@ internal fun AcpProductsPanel(
 internal suspend fun copyProductCardToClipboard(
     context: android.content.Context,
     layer: androidx.compose.ui.graphics.layer.GraphicsLayer,
-    productName: String
+    productName: String,
+    backgroundColor: Int? = null
 ): Boolean = runCatching {
     val imageBitmap = layer.toImageBitmap()
     val bitmap = imageBitmap.asAndroidBitmap()
+    val exportBitmap = if (backgroundColor == null) {
+        bitmap
+    } else {
+        Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888).also { flattened ->
+            Canvas(flattened).apply {
+                drawColor(backgroundColor)
+                drawBitmap(bitmap, 0f, 0f, null)
+            }
+        }
+    }
     val file = withContext(Dispatchers.IO) {
         val directory = File(context.cacheDir, "shared_cards").apply { mkdirs() }
         directory.listFiles()?.forEach { old ->
@@ -856,7 +868,7 @@ internal suspend fun copyProductCardToClipboard(
             .ifBlank { "produto" }
         File(directory, "nrd-${safeName}-${System.currentTimeMillis()}.png").also { target ->
             FileOutputStream(target).use { output ->
-                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
+                check(exportBitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
             }
         }
     }
