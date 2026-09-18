@@ -2,6 +2,11 @@ package com.example.ui
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.graphics.Bitmap
+import android.widget.Toast
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -19,6 +24,10 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.drawscope.drawLayer
+import androidx.compose.ui.graphics.layer.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -34,6 +43,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -411,10 +423,35 @@ internal fun AcpProductsPanel(
         itemsIndexed(result?.items.orEmpty(), key = { index, product -> "${product.id}:$index" }) { _, product ->
             val directOffers = product.offers()
             val previewOffers = (directOffers + previewCampaignOffers[product.id].orEmpty()).forAutomaticDisplay()
+            val shareLayer = rememberGraphicsLayer()
             OutlinedCard(
-                onClick = { openProduct(product) },
-                enabled = !busy,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .drawWithContent {
+                        shareLayer.record {
+                            this@drawWithContent.drawContent()
+                        }
+                        drawLayer(shareLayer)
+                    }
+                    .combinedClickable(
+                        enabled = !busy,
+                        onClick = { openProduct(product) },
+                        onLongClick = {
+                            scope.launch {
+                                val copied = copyProductCardToClipboard(
+                                    context = context,
+                                    layer = shareLayer,
+                                    productName = product.description
+                                )
+                                Toast.makeText(
+                                    context,
+                                    if (copied) "Quadradinho copiado como imagem. Cole no WhatsApp."
+                                    else "Não foi possível copiar o quadradinho.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    )
             ) {
                 Column(
                     Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
@@ -796,6 +833,41 @@ internal fun AcpProductsPanel(
         )
     }
 }
+
+
+private suspend fun copyProductCardToClipboard(
+    context: android.content.Context,
+    layer: androidx.compose.ui.graphics.layer.GraphicsLayer,
+    productName: String
+): Boolean = runCatching {
+    val imageBitmap = layer.toImageBitmap()
+    val bitmap = imageBitmap.asAndroidBitmap()
+    val file = withContext(Dispatchers.IO) {
+        val directory = File(context.cacheDir, "shared_cards").apply { mkdirs() }
+        directory.listFiles()?.forEach { old ->
+            if (System.currentTimeMillis() - old.lastModified() > 24 * 60 * 60 * 1000L) old.delete()
+        }
+        val safeName = productName
+            .lowercase(Locale.getDefault())
+            .replace(Regex("[^a-z0-9]+"), "-")
+            .trim('-')
+            .take(48)
+            .ifBlank { "produto" }
+        File(directory, "nrd-${safeName}-${System.currentTimeMillis()}.png").also { target ->
+            FileOutputStream(target).use { output ->
+                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
+            }
+        }
+    }
+    val uri = FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file
+    )
+    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newUri(context.contentResolver, "Produto NRD", uri))
+    true
+}.getOrDefault(false)
 
 private suspend fun AcpApi.searchProductsUnified(query: String, pageIndex: Int): AcpProductPage {
     val clean = query.trim()
