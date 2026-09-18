@@ -214,8 +214,24 @@ fun ProductBarcodeDialog(
                         null
                     },
                     modifier = Modifier
-                        .fillMaxWidth(if (screenProfile.compact) 0.96f else 0.9f)
-                        .padding(vertical = if (screenProfile.compact) 10.dp else 24.dp)
+                        .fillMaxWidth(
+                            when {
+                                screenProfile.veryCompact -> 0.98f
+                                screenProfile.compact -> 0.95f
+                                else -> 0.88f
+                            }
+                        )
+                        .then(
+                            if (screenProfile.tablet) Modifier.widthIn(max = screenProfile.dialogMaxWidth)
+                            else Modifier
+                        )
+                        .padding(
+                            vertical = when {
+                                screenProfile.veryCompact -> 4.dp
+                                screenProfile.compact -> 8.dp
+                                else -> 14.dp
+                            }
+                        )
                         .glassSoftShadow(dialogShape)
                 ) {
                     Column(
@@ -223,7 +239,13 @@ fun ProductBarcodeDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
-                            .padding(if (screenProfile.compact) 14.dp else 24.dp)
+                            .padding(
+                                when {
+                                    screenProfile.veryCompact -> 10.dp
+                                    screenProfile.compact -> 14.dp
+                                    else -> 20.dp
+                                }
+                            )
                     ) {
                         if (highlightedFromNotification) {
                             Text(
@@ -254,7 +276,7 @@ fun ProductBarcodeDialog(
                                     maxLines = 3,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(modifier = Modifier.height(16.dp))
+                                Spacer(modifier = Modifier.height(if (screenProfile.compact) 8.dp else 12.dp))
                                 Text(
                                     text = product.code,
                                     style = MaterialTheme.typography.displayMedium.copy(
@@ -265,7 +287,7 @@ fun ProductBarcodeDialog(
                                     modifier = Modifier.fillMaxWidth(),
                                     textAlign = TextAlign.Center
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(if (screenProfile.compact) 4.dp else 6.dp))
                                 StylizedText(
                                     text = product.category,
                                     baseStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -276,11 +298,11 @@ fun ProductBarcodeDialog(
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(if (screenProfile.compact) 6.dp else 8.dp))
 
                         ActiveFlyerOffersForProduct(product)
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(if (screenProfile.compact) 8.dp else 10.dp))
 
                         val barcodeCacheKey = "${product.code}|$scannerProfile"
                         val barcodeBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(
@@ -298,9 +320,9 @@ fun ProductBarcodeDialog(
                         val renderedBarcode = barcodeBitmap
                         if (renderedBarcode != null) {
                             val targetHeight = when (scannerProfile) {
-                                "Symbol" -> 130.dp
-                                "Datalogic" -> 140.dp
-                                else -> 110.dp
+                                "Symbol" -> if (screenProfile.compact) 108.dp else 120.dp
+                                "Datalogic" -> if (screenProfile.compact) 116.dp else 128.dp
+                                else -> if (screenProfile.compact) 94.dp else 106.dp
                             }
                             val widthFraction = (0.9f * (zoomPercent / 100f)).coerceAtMost(1.0f)
 
@@ -319,7 +341,7 @@ fun ProductBarcodeDialog(
                                         .background(Color.White)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(if (screenProfile.compact) 8.dp else 10.dp))
                         }
 
                         SelectionContainer {
@@ -329,9 +351,9 @@ fun ProductBarcodeDialog(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(if (screenProfile.compact) 10.dp else 14.dp))
                         Divider(color = MaterialTheme.colorScheme.outlineVariant)
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(if (screenProfile.compact) 8.dp else 10.dp))
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -398,7 +420,7 @@ fun ProductBarcodeDialog(
                                 }
                             }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(if (screenProfile.compact) 4.dp else 6.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -425,7 +447,7 @@ fun ProductBarcodeDialog(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(if (screenProfile.compact) 8.dp else 10.dp))
                         Text("Ajuste de leitura", style = MaterialTheme.typography.titleSmall)
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -443,7 +465,7 @@ fun ProductBarcodeDialog(
                             Text(
                                 text = "${zoomPercent}%",
                                 style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(horizontal = 16.dp)
+                                modifier = Modifier.padding(horizontal = if (screenProfile.compact) 10.dp else 14.dp)
                             )
                             IconButton(
                                 onClick = {
@@ -455,10 +477,10 @@ fun ProductBarcodeDialog(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(if (screenProfile.compact) 10.dp else 14.dp))
                         Button(
                             onClick = { closeDialog() },
-                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            modifier = Modifier.fillMaxWidth().height(if (screenProfile.compact) 50.dp else 54.dp),
                             shape = RoundedCornerShape(24.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
