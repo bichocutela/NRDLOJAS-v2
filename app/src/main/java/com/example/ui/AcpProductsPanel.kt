@@ -55,6 +55,8 @@ import java.util.Locale
 
 private enum class NrdIdentifier { BARCODE, PRODUCT_CODE }
 
+private const val AUTO_PRICE_REFRESH_MILLIS = 15_000L
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 internal fun AcpProductsPanel(
@@ -171,7 +173,13 @@ internal fun AcpProductsPanel(
         if (index == 0 && canCopyDiagnostic && interactive) api.beginDiagnosticSession()
         searchJob = scope.launch {
             try {
-                val result = api.searchProductsUnified(searchText, index)
+                val result = if (interactive) {
+                    // Busca explícita sempre vai direto ao ACP. As sugestões em segundo plano
+                    // continuam podendo aproveitar o cache para não consultar a cada tecla.
+                    api.searchProductsUnifiedFresh(searchText, index, freshStore)
+                } else {
+                    api.searchProductsUnified(searchText, index)
+                }
                 if (ticket != generation) return@launch
 
                 // Product/all é o caminho crítico. Assim que ele responde, o produto já fica
@@ -271,6 +279,51 @@ internal fun AcpProductsPanel(
         delay(180)
         if (query.trim() == clean && clean != lastExplicitQuery) {
             search(index = 0, interactive = false, enrichCampaigns = false)
+        }
+    }
+
+    // Mantém a consulta visível próxima do ACP sem exigir gesto do usuário.
+    // O ACP não envia eventos para este cliente; por isso fazemos uma leitura leve e silenciosa
+    // somente enquanto existe uma busca aberta. "Atualizar" e pull-to-refresh continuam sendo
+    // o caminho imediato, sem aguardar o próximo ciclo.
+    LaunchedEffect(api, query, page?.pageIndex) {
+        while (true) {
+            delay(AUTO_PRICE_REFRESH_MILLIS)
+            val clean = query.trim()
+            val currentPage = page ?: continue
+            if (clean.length < 2 || busy || refreshing) continue
+
+            try {
+                val fresh = api.searchProductsUnifiedFresh(clean, currentPage.pageIndex, freshStore)
+                if (query.trim() != clean || page?.pageIndex != currentPage.pageIndex) continue
+
+                page = fresh
+                val currentSelected = selected
+                if (currentSelected != null) {
+                    fresh.items.firstOrNull { item -> item.id == currentSelected.id }?.let { updated ->
+                        detail = updated
+                        detailTime = System.currentTimeMillis()
+                        selected = updated
+                    }
+                }
+
+                // Mantém também os selos/condições que já são montados para a lista.
+                previewCampaignOffers = try {
+                    api.campaignOffersFor(fresh.items)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    previewCampaignOffers
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: AcpUnauthorized) {
+                onSessionExpired()
+                return@LaunchedEffect
+            } catch (_: Exception) {
+                // Falha automática é silenciosa. O usuário mantém os últimos dados visíveis
+                // e ainda pode usar Atualizar/pull-to-refresh para uma tentativa imediata.
+            }
         }
     }
 
