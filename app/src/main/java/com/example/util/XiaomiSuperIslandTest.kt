@@ -36,8 +36,9 @@ data class XiaomiIslandProbe(
 }
 
 object XiaomiSuperIslandTest {
-    private const val CHANNEL_ID = "xiaomi_super_island_test"
+    private const val CHANNEL_ID = "xiaomi_super_island_live_test_v2"
     private const val NOTIFICATION_ID = 93031
+    private const val FOREGROUND_TEST_NOTIFICATION_ID = 93032
 
     suspend fun probe(context: Context): XiaomiIslandProbe = withContext(Dispatchers.IO) {
         val protocol = runCatching {
@@ -145,6 +146,43 @@ object XiaomiSuperIslandTest {
     }
 
     /**
+     * Teste específico para descobrir se o HyperOS deixa a Super Island visível
+     * enquanto o próprio NRD está em primeiro plano. Usa um ID novo e canal de
+     * alta importância para forçar um primeiro destaque legítimo, sem abrir tela
+     * cheia nem alterar qualquer função do app.
+     */
+    suspend fun runForegroundVisibilityTest(context: Context): String {
+        if (!canPostNotifications(context)) {
+            return "Permissão de notificações do Android está desativada."
+        }
+
+        createChannel(context)
+        NotificationManagerCompat.from(context).cancel(FOREGROUND_TEST_NOTIFICATION_ID)
+        delay(350)
+
+        val checkpoints = listOf(0, 20, 40, 60, 80, 100)
+        checkpoints.forEach { progress ->
+            val finished = progress == 100
+            postIslandNotification(
+                context = context,
+                title = if (finished) "NRD · teste concluído" else "NRD · fique no app",
+                content = if (finished) {
+                    "Teste com o NRD aberto concluído"
+                } else {
+                    "Mantenha esta tela aberta · " + progress + "%"
+                },
+                detail = if (finished) "Concluído" else progress.toString() + "%",
+                progress = progress,
+                ongoing = !finished,
+                notificationId = FOREGROUND_TEST_NOTIFICATION_ID
+            )
+            if (!finished) delay(2600)
+        }
+
+        return "Teste com o app aberto concluído. Se a ilha apareceu sem sair do NRD, o foreground está funcionando."
+    }
+
+    /**
      * Simula uma atualização real do NRD. O roteiro vem do Firestore sempre que
      * o teste começa, então textos, percentuais e tempos podem ser alterados
      * remotamente sem gerar outro APK.
@@ -192,7 +230,8 @@ object XiaomiSuperIslandTest {
         content: String,
         detail: String,
         progress: Int?,
-        ongoing: Boolean
+        ongoing: Boolean,
+        notificationId: Int = NOTIFICATION_ID
     ) {
         val pics = Bundle().apply {
             putParcelable(
@@ -208,12 +247,15 @@ object XiaomiSuperIslandTest {
                 put("islandFirstFloat", true)
                 put("enableFloat", true)
                 put("updatable", true)
+                put("reopen", "reopen")
                 put("filterWhenNoPermission", false)
                 put("ticker", if (progress == null) "NRD" else "NRD " + progress + "%")
                 put("aodTitle", content)
                 put("param_island", JSONObject().apply {
                     put("islandProperty", 1)
-                    put("islandTimeout", 120)
+                    put("islandOrder", true)
+                    put("dismissIsland", false)
+                    put("islandTimeout", 300)
                     put("highlightColor", "#1976D2")
                     put("bigIslandArea", JSONObject().apply {
                         put("imageTextInfoLeft", JSONObject().apply {
@@ -273,7 +315,9 @@ object XiaomiSuperIslandTest {
             .setContentTitle(title)
             .setContentText(content)
             .setStyle(NotificationCompat.BigTextStyle().bigText(detail + " · " + content))
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(ongoing)
             .setOnlyAlertOnce(true)
             .setAutoCancel(!ongoing)
@@ -285,11 +329,12 @@ object XiaomiSuperIslandTest {
             builder.setProgress(0, 0, false)
         }
 
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
+        NotificationManagerCompat.from(context).notify(notificationId, builder.build())
     }
 
     fun cancel(context: Context) {
         NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
+        NotificationManagerCompat.from(context).cancel(FOREGROUND_TEST_NOTIFICATION_ID)
     }
 
     private fun createChannel(context: Context) {
@@ -298,7 +343,7 @@ object XiaomiSuperIslandTest {
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Teste Xiaomi Super Island",
-            NotificationManager.IMPORTANCE_DEFAULT
+            NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "Canal de teste restrito ao Painel Mestre para Xiaomi Super Island."
         }
