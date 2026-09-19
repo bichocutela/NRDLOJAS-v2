@@ -21,6 +21,7 @@ class NossaGenteApi(context: Context) {
     @Volatile
     private var inMemoryToken: String? = null
     private val secureSession = NossaGenteSecureSession(context)
+    private val credentialStore = NossaGenteCredentialStore(context.applicationContext)
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -73,9 +74,17 @@ class NossaGenteApi(context: Context) {
     }
 
     suspend fun fetchPromotions(): NossaGentePromotionsResult = withContext(Dispatchers.IO) {
-        val token = currentToken()
-            ?: return@withContext NossaGentePromotionsResult.Unauthorized
-        try {
+        fetchPromotionsOnce(allowSavedCredentialRecovery = true)
+    }
+
+    /**
+     * Mantém o acesso persistente enquanto o usuário não tocar em "Sair".
+     * Se o token expirar no servidor, tenta uma única renovação silenciosa com as
+     * credenciais que o próprio usuário escolheu salvar neste aparelho.
+     */
+    private suspend fun fetchPromotionsOnce(allowSavedCredentialRecovery: Boolean): NossaGentePromotionsResult {
+        val token = currentToken() ?: return NossaGentePromotionsResult.Unauthorized
+        return try {
             val request = Request.Builder()
                 .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/promocoes?limit=10&_sync=${System.currentTimeMillis()}")
                 .get()
@@ -88,16 +97,17 @@ class NossaGenteApi(context: Context) {
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (response.code == 401 || response.code == 403) {
-                    // Uma consulta de atualização não deve apagar a sessão salva.
-                    // A tela decide quando realmente precisa pedir novo login.
-                    return@withContext NossaGentePromotionsResult.Unauthorized
+                    if (allowSavedCredentialRecovery && renewFromSavedCredentials()) {
+                        return fetchPromotionsOnce(allowSavedCredentialRecovery = false)
+                    }
+                    return NossaGentePromotionsResult.Unauthorized
                 }
                 if (!response.isSuccessful) {
-                    return@withContext NossaGentePromotionsResult.Error("Não foi possível carregar as promoções agora.")
+                    return NossaGentePromotionsResult.Error("Não foi possível carregar as promoções agora.")
                 }
                 val promotions = parsePromotions(body)
                 if (body.isBlank() || (promotions.isEmpty() && !isEmptyPromotionsPayload(body))) {
-                    return@withContext NossaGentePromotionsResult.Error("O Nossa Gente respondeu em um formato inesperado. Tente novamente.")
+                    return NossaGentePromotionsResult.Error("O Nossa Gente respondeu em um formato inesperado. Tente novamente.")
                 }
                 NossaGentePromotionsResult.Success(
                     promotions = promotions,
@@ -106,6 +116,15 @@ class NossaGenteApi(context: Context) {
             }
         } catch (_: Exception) {
             NossaGentePromotionsResult.Error("Não foi possível carregar as promoções. Verifique a internet.")
+        }
+    }
+
+    private suspend fun renewFromSavedCredentials(): Boolean {
+        val saved = credentialStore.load() ?: return false
+        clearSession()
+        return when (login(saved.cpf, saved.password)) {
+            NossaGenteLoginResult.Success -> true
+            is NossaGenteLoginResult.Error -> false
         }
     }
 
