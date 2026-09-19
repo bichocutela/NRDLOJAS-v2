@@ -353,9 +353,12 @@ fun PromotionsScreen(
                     }
                 }
                 NossaGentePromotionsResult.Unauthorized -> {
-                    // Atualizar promoções nunca deve expulsar o usuário da tela.
-                    // Só pedimos login na entrada, quando não existe catálogo carregado.
+                    // Atualizar promoções nunca deve expulsar o usuário da tela quando já existe
+                    // catálogo carregado. Porém, na entrada, um token expirado precisa ser
+                    // descartado antes de abrir o login; caso contrário a tela de login detecta
+                    // o mesmo token e volta imediatamente para Promoções, causando o "pisca-pisca".
                     if (initialLoad && promotions.isEmpty()) {
+                        api.invalidateSession()
                         requestLoginOnce()
                     }
                 }
