@@ -46,7 +46,7 @@ internal suspend fun AcpApi.offerCatalog(
 }
 
 private suspend fun AcpApi.findOfferCategory(names: Set<String>): AcpCategory? =
-    categories().firstOrNull { normalizeCategory(it.description) in names }
+    liveProductCategories().firstOrNull { normalizeCategory(it.description) in names }
 
 private fun normalizeCategory(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFD)
     .replace(Regex("\\p{M}+"), "")
