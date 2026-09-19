@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.R
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
@@ -78,15 +79,86 @@ object XiaomiSuperIslandTest {
 
     suspend fun sendTest(context: Context): String {
         val probe = probe(context)
+        if (!canPostNotifications(context)) {
+            return "Permissão de notificações do Android está desativada."
+        }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
+        createChannel(context)
+        postIslandNotification(
+            context = context,
+            title = "NRD Códigos",
+            content = "Teste da Xiaomi Super Island",
+            detail = "Teste Mestre",
+            progress = null,
+            ongoing = false
+        )
+
+        return when {
+            probe.protocolVersion >= 3 && probe.focusPermission ->
+                "Teste enviado com parâmetros da Super Island. Veja a ilha e a central de notificações."
+            probe.protocolVersion >= 3 ->
+                "HyperOS 3 detectado, mas a permissão Focus/Super Island não está liberada para o NRD. A notificação comum foi enviada como fallback."
+            probe.protocolVersion in 1..2 ->
+                "Focus Notification detectada (protocolo " + probe.protocolVersion + "). A notificação de teste foi enviada."
+            else ->
+                "Notificação de teste enviada, mas o protocolo Super Island não foi detectado neste aparelho."
+        }
+    }
+
+    /**
+     * Atualiza a MESMA notificação várias vezes para testar o comportamento em tempo real.
+     * Isso ajuda a separar três coisas: notificação Android comum, Focus Notification e
+     * atualização da Super Island. O teste é local e fica restrito ao Painel Mestre.
+     */
+    suspend fun runProgressTest(context: Context): String {
+        if (!canPostNotifications(context)) {
             return "Permissão de notificações do Android está desativada."
         }
 
         createChannel(context)
 
+        for (progress in 0..100 step 10) {
+            val finished = progress >= 100
+            postIslandNotification(
+                context = context,
+                title = if (finished) "NRD · concluído" else "NRD · sincronizando",
+                content = if (finished) "Sincronização concluída" else "Carregando… " + progress + "%",
+                detail = if (finished) "100%" else progress.toString() + "%",
+                progress = progress,
+                ongoing = !finished
+            )
+            if (!finished) delay(900)
+        }
+
+        delay(1800)
+        postIslandNotification(
+            context = context,
+            title = "NRD Códigos",
+            content = "Teste de carregamento concluído",
+            detail = "Concluído",
+            progress = null,
+            ongoing = false
+        )
+
+        return "Teste concluído. A mesma notificação foi atualizada de 0% a 100% em tempo real."
+    }
+
+    private fun canPostNotifications(context: Context): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun postIslandNotification(
+        context: Context,
+        title: String,
+        content: String,
+        detail: String,
+        progress: Int?,
+        ongoing: Boolean
+    ) {
         val pics = Bundle().apply {
             putParcelable(
                 "miui.focus.pic_imageText",
@@ -102,8 +174,8 @@ object XiaomiSuperIslandTest {
                 put("enableFloat", true)
                 put("updatable", true)
                 put("filterWhenNoPermission", false)
-                put("ticker", "NRD")
-                put("aodTitle", "NRD · teste Super Island")
+                put("ticker", if (progress == null) "NRD" else "NRD " + progress + "%")
+                put("aodTitle", content)
                 put("param_island", JSONObject().apply {
                     put("islandProperty", 1)
                     put("islandTimeout", 120)
@@ -117,8 +189,8 @@ object XiaomiSuperIslandTest {
                             })
                             put("miui.focus.paramtextInfo", JSONObject().apply {
                                 put("frontTitle", "NRD")
-                                put("title", "Teste")
-                                put("content", "Super Island")
+                                put("title", detail)
+                                put("content", content)
                                 put("useHighLight", true)
                             })
                         })
@@ -128,27 +200,31 @@ object XiaomiSuperIslandTest {
                         })
                     })
                     put("smallIslandArea", JSONObject().apply {
-                        put("picInfo", JSONObject().apply {
-                            put("type", 1)
-                            put("pic", "miui.focus.pic_imageText")
+                        put("imageTextInfoRight", JSONObject().apply {
+                            put("type", 6)
+                            put("picInfo", JSONObject().apply {
+                                put("type", 1)
+                                put("pic", "miui.focus.pic_imageText")
+                            })
+                            put("text", progress?.toString() ?: "NRD")
                         })
                     })
                     put("shareData", JSONObject().apply {
-                        put("title", "NRD Códigos")
-                        put("content", "Teste da Xiaomi Super Island")
+                        put("title", title)
+                        put("content", content)
                         put("shareContent", "NRD Códigos")
                         put("pic", "miui.focus.pic_imageText")
                     })
                 })
                 put("baseInfo", JSONObject().apply {
-                    put("title", "NRD Códigos")
-                    put("content", "Teste da Xiaomi Super Island")
+                    put("title", title)
+                    put("content", content)
                     put("colorTitle", "#1976D2")
                     put("type", 2)
                 })
                 put("hintInfo", JSONObject().apply {
                     put("type", 1)
-                    put("title", "Teste Mestre")
+                    put("title", detail)
                 })
             })
         }.toString()
@@ -158,28 +234,24 @@ object XiaomiSuperIslandTest {
             putBundle("miui.focus.pics", pics)
         }
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_default)
-            .setContentTitle("NRD Códigos")
-            .setContentText("Teste da Xiaomi Super Island")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("Teste Mestre · Xiaomi Super Island / Focus Notification"))
+            .setContentTitle(title)
+            .setContentText(content)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(detail + " · " + content))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
+            .setOngoing(ongoing)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(!ongoing)
             .addExtras(extras)
-            .build()
 
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
-
-        return when {
-            probe.protocolVersion >= 3 && probe.focusPermission ->
-                "Teste enviado com parâmetros da Super Island. Veja a ilha e a central de notificações."
-            probe.protocolVersion >= 3 ->
-                "HyperOS 3 detectado, mas a permissão Focus/Super Island não está liberada para o NRD. A notificação comum foi enviada como fallback."
-            probe.protocolVersion in 1..2 ->
-                "Focus Notification detectada (protocolo " + probe.protocolVersion + "). A notificação de teste foi enviada."
-            else ->
-                "Notificação de teste enviada, mas o protocolo Super Island não foi detectado neste aparelho."
+        if (progress != null) {
+            builder.setProgress(100, progress.coerceIn(0, 100), false)
+        } else {
+            builder.setProgress(0, 0, false)
         }
+
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
     }
 
     fun cancel(context: Context) {
