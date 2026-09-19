@@ -229,6 +229,24 @@ internal fun MestreAdvancedSection(
                 onClick = {
                     scope.launch {
                         checkingIsland = true
+                        islandMessage = "Teste iniciado. NÃO saia do NRD; observe a ilha no topo."
+                        val result = XiaomiSuperIslandTest.runForegroundVisibilityTest(context)
+                        probe = XiaomiSuperIslandTest.probe(context)
+                        islandMessage = result
+                        checkingIsland = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !checkingIsland
+            ) {
+                Text("Testar ilha com NRD aberto")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = {
+                    scope.launch {
+                        checkingIsland = true
                         islandMessage = "Simulando atualização do NRD..."
                         val result = XiaomiSuperIslandTest.runFakeAppUpdateTest(context)
                         probe = XiaomiSuperIslandTest.probe(context)
