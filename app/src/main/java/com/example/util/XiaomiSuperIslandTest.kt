@@ -127,10 +127,10 @@ object XiaomiSuperIslandTest {
                 progress = progress,
                 ongoing = !finished
             )
-            if (!finished) delay(900)
+            if (!finished) delay(1500)
         }
 
-        delay(1800)
+        delay(2500)
         postIslandNotification(
             context = context,
             title = "NRD Códigos",
@@ -199,14 +199,13 @@ object XiaomiSuperIslandTest {
                             put("pic", "miui.focus.pic_imageText")
                         })
                     })
+                    // Mantém exatamente a estrutura que já apareceu corretamente no aparelho.
+                    // O progresso é enviado pelo texto/baseInfo e pela barra Android, sem inventar
+                    // um template de ilha pequena que o SystemUI possa rejeitar.
                     put("smallIslandArea", JSONObject().apply {
-                        put("imageTextInfoRight", JSONObject().apply {
-                            put("type", 6)
-                            put("picInfo", JSONObject().apply {
-                                put("type", 1)
-                                put("pic", "miui.focus.pic_imageText")
-                            })
-                            put("text", progress?.toString() ?: "NRD")
+                        put("picInfo", JSONObject().apply {
+                            put("type", 1)
+                            put("pic", "miui.focus.pic_imageText")
                         })
                     })
                     put("shareData", JSONObject().apply {
