@@ -41,6 +41,7 @@ internal fun AcpOfferCatalog(
     var busy by remember(kind) { mutableStateOf(false) }
     var error by remember(kind) { mutableStateOf<String?>(null) }
     var drag by remember { mutableFloatStateOf(0f) }
+    var selected by remember(kind) { mutableStateOf<AcpProduct?>(null) }
 
     fun load(target: Int) {
         if (busy || target < 0) return
@@ -106,8 +107,8 @@ internal fun AcpOfferCatalog(
         if (result != null) {
             Text("${result.totalCount} produtos • Página ${result.pageIndex + 1} de ${result.totalPages.coerceAtLeast(1)}", style = MaterialTheme.typography.bodySmall)
             LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(result.items, key = { "catalog:${kind.name}:${it.id}:${it.code}:${it.barcode}" }) { product ->
-                    OutlinedCard(onClick = { onProduct(product) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+                    items(result.items, key = { "catalog:${kind.name}:${it.id}:${it.code}:${it.barcode}" }) { product ->
+                    OutlinedCard(onClick = { selected = product; onProduct(product) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(product.description, fontWeight = FontWeight.SemiBold)
                             Text("Código: ${product.code.ifBlank { "não informado" }} • EAN: ${product.barcode.ifBlank { "não informado" }}", style = MaterialTheme.typography.bodySmall)
@@ -128,5 +129,27 @@ internal fun AcpOfferCatalog(
             }
             Text("Deslize para a esquerda ou direita para trocar de página.", style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.CenterHorizontally))
         }
+    }
+
+    selected?.let { product ->
+        val offers = product.offers().forAutomaticDisplay()
+        AlertDialog(
+            onDismissRequest = { selected = null },
+            title = { Text(product.description) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Código: ${product.code.ifBlank { "não informado" }}")
+                    Text("EAN: ${product.barcode.ifBlank { "não informado" }}")
+                    product.value?.let { Text("Preço normal: ${it.brl()}", fontWeight = FontWeight.Bold) }
+                    if (offers.isEmpty()) Text("Nenhuma condição promocional informada para este cadastro.")
+                    offers.forEach { offer ->
+                        Text(offer.title, fontWeight = FontWeight.Bold)
+                        Text(offer.detail)
+                    }
+                    product.stockQuantity?.let { Text("Estoque: ${it.quantity()}") }
+                }
+            },
+            confirmButton = { TextButton(onClick = { selected = null }) { Text("Fechar") } }
+        )
     }
 }
