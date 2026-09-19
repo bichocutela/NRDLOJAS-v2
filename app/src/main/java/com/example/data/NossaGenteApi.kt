@@ -113,6 +113,15 @@ class NossaGenteApi(context: Context) {
         clearSession()
     }
 
+    /**
+     * Descarta apenas a sessão inválida detectada pelo servidor.
+     * Isso evita o ciclo Promoções -> Login -> Promoções quando um token salvo expirou.
+     * As credenciais salvas no aparelho continuam preservadas para preencher o login.
+     */
+    fun invalidateSession() {
+        clearSession()
+    }
+
     private fun currentToken(): String? {
         inMemoryToken?.takeIf { it.isNotBlank() }?.let { return it }
         return secureSession.readToken()?.also { inMemoryToken = it }
