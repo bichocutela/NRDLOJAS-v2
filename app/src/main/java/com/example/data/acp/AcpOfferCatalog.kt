@@ -25,12 +25,14 @@ internal suspend fun AcpApi.offerCatalog(
 
     // As famílias promocionais são pedidas pela categoria correspondente na própria ACP.
     // Assim Product/all já devolve somente aquela seleção e a paginação continua no servidor.
-    val category = when (family) {
+    // Com uma busca preenchida, Product/all já restringe pelo texto/EAN. Evitamos
+    // a consulta extra de categorias e validamos a família localmente no resultado.
+    val category = if (cleanQuery.isBlank()) when (family) {
         AcpOfferFamily.CLUB -> findOfferCategory(setOf("clubedevantagens", "clubvantagens"))
         AcpOfferFamily.DE_POR -> findOfferCategory(setOf("depor"))
         AcpOfferFamily.TAKE_PAY -> findOfferCategory(setOf("levepague", "leveepague"))
         else -> null
-    }
+    } else null
     if (family in setOf(AcpOfferFamily.CLUB, AcpOfferFamily.DE_POR, AcpOfferFamily.TAKE_PAY)) {
         category ?: throw AcpFailure("A categoria ${family.catalogLabel()} não foi localizada na ACP.")
         parameters += "productCategoryIds" to category.id
@@ -39,10 +41,22 @@ internal suspend fun AcpApi.offerCatalog(
     val parsed = AcpProductParser.page(get("Product/all", parameters), page)
     val items = when (family) {
         AcpOfferFamily.PRICE -> parsed.items.filter { it.value != null && it.value.signum() > 0 }
-        else -> parsed.items.filter { product -> product.offers().any { it.family == family } }
+        else -> parsed.items.filter { product ->
+            product.offers().any { it.family == family } || product.belongsToOfferFamily(family)
+        }
     }.sortedBy { normalizeForSort(it.description) }
 
     return parsed.copy(items = items)
+}
+
+private fun AcpProduct.belongsToOfferFamily(family: AcpOfferFamily): Boolean {
+    val expected = when (family) {
+        AcpOfferFamily.CLUB -> setOf("clubedevantagens", "clubvantagens")
+        AcpOfferFamily.DE_POR -> setOf("depor")
+        AcpOfferFamily.TAKE_PAY -> setOf("levepague", "leveepague")
+        else -> emptySet()
+    }
+    return categories.any { normalizeCategory(it) in expected }
 }
 
 private suspend fun AcpApi.findOfferCategory(names: Set<String>): AcpCategory? =
