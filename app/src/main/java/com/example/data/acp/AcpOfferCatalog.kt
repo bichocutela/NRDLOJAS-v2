@@ -32,7 +32,7 @@ internal suspend fun AcpApi.offerCatalog(
         AcpOfferFamily.DE_POR -> findOfferCategory(setOf("depor"))
         AcpOfferFamily.TAKE_PAY -> findOfferCategory(setOf("levepague", "leveepague"))
         else -> null
-    }
+    } else null
     if (family in setOf(AcpOfferFamily.CLUB, AcpOfferFamily.DE_POR, AcpOfferFamily.TAKE_PAY)) {
         category ?: throw AcpFailure("A categoria ${family.catalogLabel()} não foi localizada na ACP.")
         parameters += "productCategoryIds" to category.id
