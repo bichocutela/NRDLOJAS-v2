@@ -11,7 +11,11 @@ import android.os.Environment
 import android.widget.Toast
 import android.util.Log
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -36,6 +40,7 @@ object UpdateChecker {
     private const val LATEST_RELEASE_URL = "https://api.github.com/repos/bichocutela/NRDLOJAS-v2/releases/latest"
     private const val LATEST_RELEASE_PAGE_URL = "https://github.com/bichocutela/NRDLOJAS-v2/releases/latest"
     private const val LATEST_RELEASE_APK_URL = "https://github.com/bichocutela/NRDLOJAS-v2/releases/latest/download/app-release.apk"
+    private val updateIslandScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
      * Consulta a última release sem autenticação. A API REST é a fonte primária;
@@ -231,6 +236,7 @@ object UpdateChecker {
 
             val downloadId = manager.enqueue(request)
             val handle = ApkDownloadHandle(downloadId, file.absolutePath)
+            startXiaomiIslandProgressObserver(context.applicationContext, handle, versionTag)
             val onComplete = object : BroadcastReceiver() {
                 override fun onReceive(ctxt: Context, intent: Intent) {
                     val completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
@@ -262,6 +268,55 @@ object UpdateChecker {
             Log.e(TAG, "Erro ao iniciar download interno", e)
             Toast.makeText(context, "Erro ao iniciar download", Toast.LENGTH_SHORT).show()
             null
+        }
+    }
+
+    private fun startXiaomiIslandProgressObserver(
+        context: Context,
+        handle: ApkDownloadHandle,
+        versionTag: String
+    ) {
+        if (!XiaomiSuperIslandUpdateNotifier.isAvailable(context)) return
+
+        updateIslandScope.launch {
+            var lastProgress = -1
+            var lastStatus = -1
+
+            while (true) {
+                val state = runCatching { queryApkDownload(context, handle) }.getOrNull()
+                if (state == null) {
+                    delay(900)
+                    continue
+                }
+
+                when (state.status) {
+                    DownloadManager.STATUS_PENDING,
+                    DownloadManager.STATUS_RUNNING,
+                    DownloadManager.STATUS_PAUSED -> {
+                        if (state.progressPercent != lastProgress || state.status != lastStatus) {
+                            XiaomiSuperIslandUpdateNotifier.showDownload(
+                                context,
+                                versionTag,
+                                state.progressPercent
+                            )
+                            lastProgress = state.progressPercent
+                            lastStatus = state.status
+                        }
+                    }
+
+                    DownloadManager.STATUS_SUCCESSFUL -> {
+                        XiaomiSuperIslandUpdateNotifier.showReady(context, versionTag)
+                        break
+                    }
+
+                    DownloadManager.STATUS_FAILED -> {
+                        XiaomiSuperIslandUpdateNotifier.showFailed(context)
+                        break
+                    }
+                }
+
+                delay(900)
+            }
         }
     }
 
