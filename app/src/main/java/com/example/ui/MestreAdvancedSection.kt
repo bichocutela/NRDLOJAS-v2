@@ -206,6 +206,24 @@ internal fun MestreAdvancedSection(
                 }
             }
 
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    scope.launch {
+                        checkingIsland = true
+                        islandMessage = "Executando carregamento de 0% a 100%..."
+                        val result = XiaomiSuperIslandTest.runProgressTest(context)
+                        probe = XiaomiSuperIslandTest.probe(context)
+                        islandMessage = result
+                        checkingIsland = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !checkingIsland
+            ) {
+                Text(if (checkingIsland) "Teste em andamento..." else "Testar carregamento em tempo real")
+            }
+
             islandMessage?.let { message ->
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
