@@ -78,17 +78,57 @@ private fun FlyerImportDialog(onDismiss: () -> Unit) {
     var validFrom by remember { mutableStateOf("") }
     var validTo by remember { mutableStateOf("") }
     var editingCampaign by remember { mutableStateOf<FlyerCampaign?>(null) }
+    var draftCampaignId by remember { mutableStateOf<String?>(null) }
     var editingOffer by remember { mutableStateOf<FlyerOffer?>(null) }
     var deleteTarget by remember { mutableStateOf<FlyerCampaign?>(null) }
+    var showConfirmed by remember { mutableStateOf(false) }
+    var selectedOfferIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
-    fun acceptResult(result: FlyerAnalysisResult) {
-        editingCampaign = null
+    fun acceptResult(result: FlyerAnalysisResult, campaign: FlyerCampaign? = null) {
+        editingCampaign = campaign
+        draftCampaignId = campaign?.id ?: java.util.UUID.randomUUID().toString()
         analysis = result
         name = result.name
         validFrom = result.validFrom.orEmpty()
         validTo = result.validTo.orEmpty()
+        showConfirmed = false
+        selectedOfferIds = emptySet()
         error = null
         success = null
+    }
+
+    fun persistProgress(result: FlyerAnalysisResult, message: String) {
+        val startDate = parseIsoDate(validFrom)
+        val endDate = parseIsoDate(validTo)
+        if (startDate == null || endDate == null || endDate.before(startDate)) {
+            error = "Confira as datas de início e fim antes de salvar."
+            return
+        }
+        if (saving) return
+        val campaign = FlyerCampaign(
+            id = editingCampaign?.id ?: draftCampaignId ?: java.util.UUID.randomUUID().toString(),
+            createdAt = editingCampaign?.createdAt ?: System.currentTimeMillis(),
+            enabled = editingCampaign?.enabled ?: true,
+            name = name.trim().ifBlank { "Encarte" },
+            sourceType = result.sourceType,
+            sourceLabel = result.sourceLabel,
+            validFrom = validFrom,
+            validTo = validTo,
+            offers = result.offers
+        )
+        saving = true
+        error = null
+        scope.launch {
+            val saved = FlyerRepository.saveCampaign(campaign)
+            if (saved) {
+                editingCampaign = campaign
+                draftCampaignId = campaign.id
+                success = message
+            } else {
+                error = FlyerRepository.lastError ?: "Não foi possível salvar o encarte."
+            }
+            saving = false
+        }
     }
 
     fun analyze(block: suspend () -> FlyerAnalysisResult) {
@@ -130,7 +170,7 @@ private fun FlyerImportDialog(onDismiss: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        "Importe o arquivo, confira as datas e revise cada oferta. Vincule ao produto ACP e confirme as condições antes de publicar em Consultar Produtos. O cadastro da ACP não será alterado.",
+                        "Importe o arquivo, confira as datas e revise cada oferta. Cada confirmação é salva como progresso; as restantes ficam como rascunho para continuar depois.",
                         style = MaterialTheme.typography.bodyMedium
                     )
 
@@ -188,7 +228,7 @@ private fun FlyerImportDialog(onDismiss: () -> Unit) {
                             OutlinedTextField(
                                 value = validFrom,
                                 onValueChange = { validFrom = it.take(10) },
-                                label = { Text("Início") },
+                                label = { Text("Início geral") },
                                 supportingText = { Text("AAAA-MM-DD") },
                                 modifier = Modifier.weight(1f),
                                 enabled = !saving
@@ -196,7 +236,7 @@ private fun FlyerImportDialog(onDismiss: () -> Unit) {
                             OutlinedTextField(
                                 value = validTo,
                                 onValueChange = { validTo = it.take(10) },
-                                label = { Text("Fim") },
+                                label = { Text("Fim geral") },
                                 supportingText = { Text("AAAA-MM-DD") },
                                 modifier = Modifier.weight(1f),
                                 enabled = !saving
@@ -215,15 +255,79 @@ private fun FlyerImportDialog(onDismiss: () -> Unit) {
                             Text("⚠ $warning", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
                         }
 
-                        if (result.offers.isEmpty()) {
-                            Text("Nenhuma oferta adicional foi reconhecida. Você pode adicionar e revisar manualmente uma oferta do arquivo.")
+                        val confirmedOffers = result.offers.filter { it.reviewed && it.matchStatus == FlyerMatchStatus.CONFIRMED }
+                        val pendingOffers = result.offers.filterNot { it.reviewed && it.matchStatus == FlyerMatchStatus.CONFIRMED }
+                        val visibleOffers = if (showConfirmed) result.offers else pendingOffers
+                        val readyToConfirm = pendingOffers.filter { it.matchStatus == FlyerMatchStatus.CONFIRMED && it.reviewError() == null }
+
+                        if (confirmedOffers.isNotEmpty()) {
+                            OutlinedCard(Modifier.fillMaxWidth()) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("${confirmedOffers.size} confirmada(s) e salva(s)", fontWeight = FontWeight.Bold)
+                                    TextButton(onClick = { showConfirmed = !showConfirmed }) {
+                                        Text(if (showConfirmed) "Ocultar" else "Mostrar")
+                                    }
+                                }
+                            }
+                        }
+
+                        if (readyToConfirm.isNotEmpty()) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(
+                                    onClick = { selectedOfferIds = readyToConfirm.map { it.id }.toSet() },
+                                    enabled = !saving,
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("Selecionar prontos") }
+                                OutlinedButton(
+                                    onClick = { selectedOfferIds = emptySet() },
+                                    enabled = !saving && selectedOfferIds.isNotEmpty(),
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("Limpar seleção") }
+                            }
+                            Button(
+                                onClick = {
+                                    val updated = result.copy(offers = result.offers.map { offer ->
+                                        if (offer.id in selectedOfferIds) offer.confirmedForPublication() ?: offer else offer
+                                    })
+                                    analysis = updated
+                                    selectedOfferIds = emptySet()
+                                    persistProgress(updated, "Selecionadas confirmadas e salvas. As restantes continuam como rascunho.")
+                                },
+                                enabled = !saving && selectedOfferIds.isNotEmpty(),
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Confirmar e salvar selecionados") }
+                        }
+
+                        if (visibleOffers.isEmpty()) {
+                            Text(if (result.offers.isEmpty()) "Nenhuma oferta adicional foi reconhecida." else "Todas as ofertas visíveis já foram confirmadas.")
                         } else {
-                            Text("Ofertas detectadas", style = MaterialTheme.typography.titleSmall)
-                            result.offers.forEach { offer ->
-                                DetectedOfferCard(offer)
+                            Text("Ofertas pendentes", style = MaterialTheme.typography.titleSmall)
+                            visibleOffers.forEach { offer ->
+                                val canBulkConfirm = !offer.reviewed && offer.matchStatus == FlyerMatchStatus.CONFIRMED && offer.reviewError() == null
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(
+                                        checked = offer.id in selectedOfferIds,
+                                        onCheckedChange = { checked ->
+                                            selectedOfferIds = if (checked) selectedOfferIds + offer.id else selectedOfferIds - offer.id
+                                        },
+                                        enabled = canBulkConfirm && !saving
+                                    )
+                                    Column(Modifier.weight(1f)) {
+                                        DetectedOfferCard(offer)
+                                    }
+                                }
                                 Row {
-                                    TextButton(onClick = { editingOffer = offer }, enabled = !saving) { Text("Revisar / vincular") }
-                                    TextButton(onClick = { analysis = result.copy(offers = result.offers.filterNot { it.id == offer.id }) }, enabled = !saving) { Text("Remover") }
+                                    TextButton(onClick = { editingOffer = offer }, enabled = !saving) { Text("Revisar / comparar ACP") }
+                                    TextButton(onClick = {
+                                        val updated = result.copy(offers = result.offers.filterNot { it.id == offer.id })
+                                        analysis = updated
+                                        selectedOfferIds = selectedOfferIds - offer.id
+                                        if (editingCampaign != null) persistProgress(updated, "Rascunho atualizado.")
+                                    }, enabled = !saving) { Text("Remover") }
                                 }
                             }
                         }
@@ -231,48 +335,16 @@ private fun FlyerImportDialog(onDismiss: () -> Unit) {
                         OutlinedButton(onClick = {
                             editingOffer = FlyerOffer(type = FlyerOfferType.FLYER_PRICE, sourceDescription = "")
                         }, enabled = !saving) { Text("Adicionar oferta não reconhecida") }
-                        Text("Somente ofertas revisadas e vinculadas serão exibidas. As demais ficam salvas para revisão.")
+                        Text("Confirmadas ficam ocultas para não atrapalhar. Pendentes permanecem no rascunho e podem ser retomadas sem reenviar o PDF.")
                         Button(
-                            onClick = save@{
-                                if (!datesValid) {
-                                    error = "Confira as datas de início e fim antes de salvar."
-                                    return@save
-                                }
-                                saving = true
-                                error = null
-                                scope.launch {
-                                    val campaign = FlyerCampaign(
-                                        id = editingCampaign?.id ?: java.util.UUID.randomUUID().toString(),
-                                        createdAt = editingCampaign?.createdAt ?: System.currentTimeMillis(),
-                                        enabled = editingCampaign?.enabled ?: true,
-                                        name = name.trim().ifBlank { "Encarte" },
-                                        sourceType = result.sourceType,
-                                        sourceLabel = result.sourceLabel,
-                                        validFrom = validFrom,
-                                        validTo = validTo,
-                                        offers = result.offers.map { offer ->
-                                            if (offer.reviewed && offer.reviewError() == null) offer
-                                            else offer.copy(reviewed = false, matchStatus = FlyerMatchStatus.REVIEW)
-                                        }
-                                    )
-                                    val saved = FlyerRepository.saveCampaign(campaign)
-                                    if (saved) {
-                                        success = "Encarte salvo. Ofertas revisadas serão exibidas durante a vigência, se o encarte estiver ativado."
-                                        analysis = null
-                                        driveUrl = ""
-                                    } else {
-                                        error = FlyerRepository.lastError ?: "Não foi possível salvar o encarte."
-                                    }
-                                    saving = false
-                                }
-                            },
+                            onClick = { persistProgress(result, "Progresso salvo. Confirmadas já podem aparecer em Consultar Preços durante a validade; pendentes ficaram em rascunho.") },
                             enabled = !saving && !busy && name.isNotBlank() && datesValid,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text(if (saving) "Salvando…" else "Salvar e disponibilizar revisadas") }
+                        ) { Text(if (saving) "Salvando…" else "Salvar progresso") }
                     }
 
                     HorizontalDivider()
-                    Text("Encartes cadastrados", style = MaterialTheme.typography.titleMedium)
+                    Text("Encartes e rascunhos", style = MaterialTheme.typography.titleMedium)
                     if (campaigns.isEmpty()) {
                         Text("Nenhum encarte cadastrado.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
@@ -287,9 +359,18 @@ private fun FlyerImportDialog(onDismiss: () -> Unit) {
                                     }
                                 },
                                 onEdit = {
-                                    acceptResult(FlyerAnalysisResult(campaign.name, campaign.validFrom, campaign.validTo,
-                                        campaign.offers, emptyList(), campaign.sourceType, campaign.sourceLabel))
-                                    editingCampaign = campaign
+                                    acceptResult(
+                                        FlyerAnalysisResult(
+                                            campaign.name,
+                                            campaign.validFrom,
+                                            campaign.validTo,
+                                            campaign.offers,
+                                            emptyList(),
+                                            campaign.sourceType,
+                                            campaign.sourceLabel
+                                        ),
+                                        campaign
+                                    )
                                 },
                                 onDelete = { deleteTarget = campaign }
                             )
@@ -304,10 +385,15 @@ private fun FlyerImportDialog(onDismiss: () -> Unit) {
     editingOffer?.let { offer ->
         key(offer.id) {
             FlyerOfferReviewDialog(offer, onDismiss = { editingOffer = null }, onSave = { reviewed ->
-                analysis = analysis?.let { result ->
+                val updated = analysis?.let { result ->
                     result.copy(offers = if (result.offers.any { it.id == reviewed.id })
                         result.offers.map { if (it.id == reviewed.id) reviewed else it }
                         else result.offers + reviewed)
+                }
+                if (updated != null) {
+                    analysis = updated
+                    selectedOfferIds = selectedOfferIds - reviewed.id
+                    persistProgress(updated, "Oferta confirmada e salva. Ela foi ocultada; continue revisando as restantes quando quiser.")
                 }
                 editingOffer = null
             })
@@ -347,7 +433,7 @@ private fun SummaryMetric(label: String, count: Int, modifier: Modifier = Modifi
 @Composable
 private fun DetectedOfferCard(offer: FlyerOffer) {
     val status = when (offer.matchStatus) {
-        FlyerMatchStatus.CONFIRMED -> if (offer.reviewed) "REVISADA" else "VÍNCULO SUGERIDO"
+        FlyerMatchStatus.CONFIRMED -> if (offer.reviewed) "SALVA" else "ACP ENCONTRADO"
         FlyerMatchStatus.REVIEW -> "REVISAR"
         FlyerMatchStatus.UNRESOLVED -> "NÃO RESOLVIDA"
     }
@@ -363,6 +449,13 @@ private fun DetectedOfferCard(offer: FlyerOffer) {
             }
             Text(offer.matchedProductName ?: offer.sourceDescription, style = MaterialTheme.typography.bodyMedium)
             if (offer.detail.isNotBlank()) Text(offer.detail, style = MaterialTheme.typography.bodySmall)
+            if (!offer.validFrom.isNullOrBlank() || !offer.validTo.isNullOrBlank()) {
+                Text(
+                    "Validade: ${offer.validFrom?.let(::dateLabel).orEmpty()} até ${offer.validTo?.let(::dateLabel).orEmpty()}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
             Text("Página ${offer.page} • confiança ${(offer.confidence * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -382,6 +475,8 @@ private fun CampaignManagementCard(
         FlyerCampaignStatus.EXPIRED -> "ENCERRADO"
         FlyerCampaignStatus.DISABLED -> "DESATIVADO"
     }
+    val confirmed = campaign.offers.count { it.reviewed && it.matchStatus == FlyerMatchStatus.CONFIRMED }
+    val pending = campaign.offers.count { !it.reviewed }
     OutlinedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -392,12 +487,12 @@ private fun CampaignManagementCard(
                 Text(statusLabel, style = MaterialTheme.typography.labelSmall, color = if (status == FlyerCampaignStatus.ACTIVE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(
-                "${campaign.offers.count { it.reviewed && it.matchStatus == FlyerMatchStatus.CONFIRMED }} oferta(s) confirmada(s) • ${campaign.offers.count { !it.reviewed }} para revisão",
+                "$confirmed confirmada(s) • $pending pendente(s) em rascunho",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onEdit) { Text("Revisar ofertas") }
+                TextButton(onClick = onEdit) { Text(if (pending > 0) "Continuar revisão" else "Revisar ofertas") }
                 Text("Ativado", style = MaterialTheme.typography.labelMedium)
                 Switch(
                     checked = campaign.enabled && status != FlyerCampaignStatus.EXPIRED,
@@ -424,8 +519,13 @@ internal fun ActiveFlyerOffersForProduct(product: Product) {
     }
     val matches = remember(product.code, campaigns, now) {
         campaigns.filter { it.isActiveAt(now) }
-            .flatMap { campaign -> campaign.offers.filter { it.matches(product) }.map { campaign to it } }
-            .sortedWith(compareBy<Pair<FlyerCampaign, FlyerOffer>> { offerPriority(it.second.type) }.thenBy { it.first.validTo })
+            .flatMap { campaign ->
+                campaign.offers
+                    .filter { it.isActiveAt(campaign, now) && it.matches(product) }
+                    .map { campaign to it }
+            }
+            .sortedWith(compareBy<Pair<FlyerCampaign, FlyerOffer>> { offerPriority(it.second.type) }
+                .thenBy { it.second.effectiveValidTo(it.first) })
     }
     if (matches.isEmpty()) return
 
@@ -456,8 +556,10 @@ internal fun ActiveFlyerOffersForAcpProduct(product: AcpProduct) {
     }
     val matches = remember(product.code, product.barcode, campaigns, now) {
         campaigns.filter { it.isActiveAt(now) }.flatMap { campaign ->
-            campaign.offers.filter { it.matchesAcp(product.code, product.barcode) }.map { campaign to it }
-        }.sortedBy { it.first.validTo }
+            campaign.offers
+                .filter { it.isActiveAt(campaign, now) && it.matchesAcp(product.code, product.barcode) }
+                .map { campaign to it }
+        }.sortedBy { it.second.effectiveValidTo(it.first) }
     }
     if (matches.isEmpty()) return
     HorizontalDivider()
@@ -511,7 +613,7 @@ private fun FlyerOfferDisplayCard(campaign: FlyerCampaign, offer: FlyerOffer) {
             Text(offer.clubCondition.reviewLabel(), fontWeight = FontWeight.Bold)
             Text("Fonte: encarte • página ${offer.page}", style = MaterialTheme.typography.labelSmall)
             Text(
-                "${campaign.name} • válido de ${dateLabel(campaign.validFrom)} até ${dateLabel(campaign.validTo)}",
+                "${campaign.name} • válido de ${dateLabel(offer.effectiveValidFrom(campaign))} até ${dateLabel(offer.effectiveValidTo(campaign))}",
                 style = MaterialTheme.typography.labelSmall,
                 color = androidx.compose.ui.graphics.Color.Black
             )

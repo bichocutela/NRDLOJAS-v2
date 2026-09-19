@@ -26,6 +26,8 @@ class VisualMixReportParserTest {
         assertEquals(5.79, offer.regularPrice!!, 0.001)
         assertEquals(3.49, offer.flyerPrice!!, 0.001)
         assertEquals(FlyerOfferType.DE_POR, offer.type)
+        assertEquals("2026-09-16", offer.validFrom)
+        assertEquals("2026-09-23", offer.validTo)
         assertTrue(offer.detail.contains("2026-09-16"))
         assertTrue(offer.detail.contains("2026-09-23"))
     }
@@ -47,10 +49,14 @@ class VisualMixReportParserTest {
         val promo = result.offers.first { it.clubCondition != FlyerClubCondition.REQUIRED }
         assertEquals(32.90, promo.flyerPrice!!, 0.001)
         assertEquals(FlyerOfferType.DE_POR, promo.type)
+        assertEquals("2026-09-16", promo.validFrom)
+        assertEquals("2026-09-30", promo.validTo)
 
         val club = result.offers.first { it.clubCondition == FlyerClubCondition.REQUIRED }
         assertEquals("7891150103818", club.barcodes.single())
         assertEquals(26.99, club.flyerPrice!!, 0.001)
+        assertEquals("2026-09-16", club.validFrom)
+        assertEquals("2026-09-22", club.validTo)
         assertTrue(club.detail.contains("2026-09-22"))
         assertNotEquals("De/Por e Clube precisam ter chaves diferentes na LazyColumn", promo.id, club.id)
     }
@@ -69,6 +75,8 @@ class VisualMixReportParserTest {
         val promo = result.offers.single()
         assertEquals(20.00, promo.regularPrice!!, 0.001)
         assertEquals(11.99, promo.flyerPrice!!, 0.001)
+        assertEquals("2026-09-16", promo.validFrom)
+        assertEquals("2026-09-20", promo.validTo)
         assertTrue(promo.detail.contains("2026-09-16"))
         assertTrue(promo.detail.contains("2026-09-20"))
     }
@@ -90,6 +98,8 @@ class VisualMixReportParserTest {
         assertEquals(29.99, promo.regularPrice!!, 0.001)
         assertEquals(19.99, promo.flyerPrice!!, 0.001)
         assertEquals(17.99, club.flyerPrice!!, 0.001)
+        assertEquals("2026-09-22", promo.validTo)
+        assertEquals("2026-09-22", club.validTo)
         assertTrue(promo.detail.contains("2026-09-22"))
         assertTrue(club.detail.contains("2026-09-22"))
     }
@@ -111,6 +121,8 @@ class VisualMixReportParserTest {
         assertEquals(19.79, club.regularPrice!!, 0.001)
         assertEquals(12.99, club.flyerPrice!!, 0.001)
         assertEquals(FlyerClubCondition.REQUIRED, club.clubCondition)
+        assertEquals("2026-09-16", club.validFrom)
+        assertEquals("2026-09-22", club.validTo)
         assertTrue(club.detail.contains("2026-09-22"))
     }
 
@@ -128,6 +140,7 @@ class VisualMixReportParserTest {
         assertEquals("2033190", club.productCodes.single())
         assertEquals("7898910185060", club.barcodes.single())
         assertEquals(4.49, club.flyerPrice!!, 0.001)
+        assertEquals("2026-09-17", club.validTo)
         assertTrue(club.detail.contains("2026-09-17"))
     }
 
@@ -168,6 +181,7 @@ class VisualMixReportParserTest {
         assertEquals("7891008121629", offer.barcodes.single())
         assertEquals(13.99, offer.regularPrice!!, 0.001)
         assertEquals(8.49, offer.flyerPrice!!, 0.001)
+        assertEquals("2026-09-21", offer.validTo)
         assertTrue(offer.detail.contains("2026-09-21"))
     }
 
