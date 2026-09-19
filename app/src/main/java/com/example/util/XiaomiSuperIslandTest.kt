@@ -14,6 +14,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.R
+import com.example.data.XiaomiIslandScenarioStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -144,8 +145,9 @@ object XiaomiSuperIslandTest {
     }
 
     /**
-     * Simula uma atualização real do NRD para observar as transições da Super Island.
-     * Nenhum arquivo é baixado e nenhuma instalação é iniciada.
+     * Simula uma atualização real do NRD. O roteiro vem do Firestore sempre que
+     * o teste começa, então textos, percentuais e tempos podem ser alterados
+     * remotamente sem gerar outro APK.
      */
     suspend fun runFakeAppUpdateTest(context: Context): String {
         if (!canPostNotifications(context)) {
@@ -153,28 +155,13 @@ object XiaomiSuperIslandTest {
         }
 
         createChannel(context)
+        val scenario = XiaomiIslandScenarioStore.loadOrSeedDefault()
 
-        data class Phase(
-            val progress: Int,
-            val title: String,
-            val content: String,
-            val detail: String,
-            val waitMillis: Long
-        )
+        if (!scenario.enabled) {
+            return "O cenário remoto da Super Island está desativado."
+        }
 
-        val phases = listOf(
-            Phase(0, "NRD · atualização", "Conectando ao servidor…", "Conectando", 2200),
-            Phase(8, "NRD · atualização", "Preparando download…", "Preparando", 2200),
-            Phase(20, "NRD · baixando", "Baixando atualização… 20%", "20%", 2200),
-            Phase(38, "NRD · baixando", "Baixando atualização… 38%", "38%", 2200),
-            Phase(56, "NRD · baixando", "Baixando atualização… 56%", "56%", 2200),
-            Phase(74, "NRD · baixando", "Baixando atualização… 74%", "74%", 2200),
-            Phase(88, "NRD · verificando", "Verificando pacote…", "Verificando", 2600),
-            Phase(96, "NRD · preparando", "Preparando instalação…", "96%", 2600),
-            Phase(100, "NRD · pronto", "Atualização pronta para instalar", "Concluído", 3500)
-        )
-
-        phases.forEach { phase ->
+        scenario.phases.forEach { phase ->
             postIslandNotification(
                 context = context,
                 title = phase.title,
@@ -186,7 +173,9 @@ object XiaomiSuperIslandTest {
             delay(phase.waitMillis)
         }
 
-        return "Teste fake concluído. Foram simuladas as fases Conectando → Baixando → Verificando → Preparando → Pronto."
+        val source = if (scenario.remote) "nuvem" else "padrão local"
+        return "Teste fake concluído com o cenário \"" + scenario.name + "\" v" + scenario.version +
+            " (" + source + ")."
     }
 
     private fun canPostNotifications(context: Context): Boolean {
