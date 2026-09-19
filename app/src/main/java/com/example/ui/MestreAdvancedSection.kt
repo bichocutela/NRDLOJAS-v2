@@ -22,13 +22,7 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -37,9 +31,6 @@ import com.example.data.CatalogSnapshot
 import com.example.data.CategoryCount
 import com.example.data.MaintenanceSummary
 import com.example.ui.theme.glassSoftShadow
-import com.example.util.XiaomiIslandProbe
-import com.example.util.XiaomiSuperIslandTest
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -129,152 +120,6 @@ internal fun MestreAdvancedSection(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Atualizar diagnóstico")
                 }
-            }
-        }
-    }
-    Spacer(modifier = Modifier.height(16.dp))
-
-    MestreSectionHeader(
-        title = "Teste Xiaomi Super Island",
-        description = "Área experimental restrita ao Mestre para HyperOS 3"
-    )
-    Spacer(modifier = Modifier.height(8.dp))
-    OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
-        val context = LocalContext.current
-        val scope = rememberCoroutineScope()
-        var probe by remember { mutableStateOf<XiaomiIslandProbe?>(null) }
-        var checkingIsland by remember { mutableStateOf(false) }
-        var islandMessage by remember { mutableStateOf<String?>(null) }
-
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                "Este teste não substitui as notificações normais. Em aparelho sem permissão oficial da Xiaomi, a notificação comum continua sendo exibida.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-
-            probe?.let { info ->
-                AdvancedMaintenanceMetricRow("Sistema detectado", info.hyperOsLabel)
-                AdvancedMaintenanceMetricRow(
-                    "Suporte à ilha",
-                    if (info.islandSupported || info.protocolVersion >= 3) "Detectado" else "Não detectado"
-                )
-                AdvancedMaintenanceMetricRow(
-                    "Permissão Focus/Super Island",
-                    if (info.focusPermission) "Liberada" else "Não liberada"
-                )
-                AdvancedMaintenanceMetricRow(
-                    "Notificações Android",
-                    if (info.notificationsEnabled) "Ativadas" else "Desativadas"
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = {
-                        scope.launch {
-                            checkingIsland = true
-                            islandMessage = null
-                            probe = XiaomiSuperIslandTest.probe(context)
-                            checkingIsland = false
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = !checkingIsland
-                ) {
-                    Text(if (checkingIsland) "Verificando..." else "Verificar aparelho")
-                }
-
-                Button(
-                    onClick = {
-                        scope.launch {
-                            checkingIsland = true
-                            islandMessage = XiaomiSuperIslandTest.sendTest(context)
-                            probe = XiaomiSuperIslandTest.probe(context)
-                            checkingIsland = false
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = !checkingIsland
-                ) {
-                    Text("Testar ilha")
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = {
-                    scope.launch {
-                        checkingIsland = true
-                        islandMessage = "Executando carregamento de 0% a 100%..."
-                        val result = XiaomiSuperIslandTest.runProgressTest(context)
-                        probe = XiaomiSuperIslandTest.probe(context)
-                        islandMessage = result
-                        checkingIsland = false
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !checkingIsland
-            ) {
-                Text(if (checkingIsland) "Teste em andamento..." else "Testar carregamento em tempo real")
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = {
-                    scope.launch {
-                        checkingIsland = true
-                        islandMessage = "Teste iniciado. NÃO saia do NRD; observe a ilha no topo."
-                        val result = XiaomiSuperIslandTest.runForegroundVisibilityTest(context)
-                        probe = XiaomiSuperIslandTest.probe(context)
-                        islandMessage = result
-                        checkingIsland = false
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !checkingIsland
-            ) {
-                Text("Testar ilha com NRD aberto")
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = {
-                    scope.launch {
-                        checkingIsland = true
-                        islandMessage = "Simulando atualização do NRD..."
-                        val result = XiaomiSuperIslandTest.runFakeAppUpdateTest(context)
-                        probe = XiaomiSuperIslandTest.probe(context)
-                        islandMessage = result
-                        checkingIsland = false
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !checkingIsland
-            ) {
-                Text("Simular atualização do NRD")
-            }
-
-            islandMessage?.let { message ->
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-            TextButton(
-                onClick = { XiaomiSuperIslandTest.cancel(context) },
-                modifier = Modifier.align(Alignment.End)
-            ) {
-                Text("Encerrar teste")
             }
         }
     }
