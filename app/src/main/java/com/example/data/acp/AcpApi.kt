@@ -35,6 +35,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     private var accessConfirmed = false
     private var clubCategoryId: String? = null
     private var clubCategoryResolved = false
+    private var catalogCategories: List<AcpCategory>? = null
     private val cookies = AcpCookieJar(store.read("session")) { store.write("session", it) }
     private val client = clientBuilder
         .cookieJar(cookies)
@@ -237,6 +238,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
 
     /** Catalog filters need the live category list; the background cache may intentionally start empty. */
     internal suspend fun liveProductCategories(): List<AcpCategory> {
+        catalogCategories?.let { return it }
         val result = mutableListOf<AcpCategory>()
         var page = 0
         var totalPages = 1
@@ -253,7 +255,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
             totalPages = responseTotalPages(root).coerceAtLeast(1)
             page++
         }
-        return result.distinctBy { it.id }
+        return result.distinctBy { it.id }.also { catalogCategories = it }
     }
 
     private suspend fun authenticatedRead(path: String, parameters: List<Pair<String, String>>, record: Boolean): JSONObject =

@@ -23,58 +23,18 @@ internal fun AcpProductsExperience(
     onSessionExpired: () -> Unit
 ) {
     var catalog by remember { mutableStateOf<AcpCatalogKind?>(null) }
-
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AcpCatalogKind.entries.forEach { kind ->
-                val selected = catalog == kind
-                if (selected) {
-                    Button(
-                        onClick = { catalog = null },
-                        shape = RoundedCornerShape(22.dp),
-                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
-                    ) { Text(kind.label, fontWeight = FontWeight.Bold) }
-                } else {
-                    OutlinedButton(
-                        onClick = { catalog = kind },
-                        shape = RoundedCornerShape(22.dp),
-                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
-                    ) { Text(kind.label, fontWeight = FontWeight.SemiBold) }
-                }
+                if (catalog == kind) Button(onClick = { catalog = null }, shape = RoundedCornerShape(22.dp)) { Text(kind.label, fontWeight = FontWeight.Bold) }
+                else OutlinedButton(onClick = { catalog = kind }, shape = RoundedCornerShape(22.dp)) { Text(kind.label, fontWeight = FontWeight.SemiBold) }
             }
         }
-
         val active = catalog
-        if (active == null) {
-            Box(Modifier.weight(1f)) {
-                AcpProductsPanel(
-                    api = api,
-                    canAddToNrd = canAddToNrd,
-                    appearance = appearance,
-                    historyExportBusy = historyExportBusy,
-                    historyExportMessage = historyExportMessage,
-                    onExportHistory = onExportHistory,
-                    onSessionExpired = onSessionExpired
-                )
-            }
-        } else {
-            Box(Modifier.weight(1f)) {
-                AcpOfferCatalog(
-                    api = api,
-                    kind = active,
-                    onClose = { catalog = null },
-                    onProduct = { product ->
-                        // A pesquisa principal já possui a ficha completa. Ao escolher um item
-                        // do catálogo, fechamos o filtro e deixamos o usuário localizar pelo EAN
-                        // ou descrição sem criar uma segunda ficha concorrente.
-                        catalog = null
-                    },
-                    onSessionExpired = onSessionExpired
-                )
-            }
+        if (active == null) Box(Modifier.weight(1f)) {
+            AcpProductsPanel(api, canAddToNrd, appearance, historyExportBusy, historyExportMessage, onExportHistory, onSessionExpired)
+        } else Box(Modifier.weight(1f)) {
+            AcpOfferCatalog(api, active, onClose = { catalog = null }, onProduct = { _ -> }, onSessionExpired = onSessionExpired)
         }
     }
 }
