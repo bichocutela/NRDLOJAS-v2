@@ -143,6 +143,52 @@ object XiaomiSuperIslandTest {
         return "Teste concluído. A mesma notificação foi atualizada de 0% a 100% em tempo real."
     }
 
+    /**
+     * Simula uma atualização real do NRD para observar as transições da Super Island.
+     * Nenhum arquivo é baixado e nenhuma instalação é iniciada.
+     */
+    suspend fun runFakeAppUpdateTest(context: Context): String {
+        if (!canPostNotifications(context)) {
+            return "Permissão de notificações do Android está desativada."
+        }
+
+        createChannel(context)
+
+        data class Phase(
+            val progress: Int,
+            val title: String,
+            val content: String,
+            val detail: String,
+            val waitMillis: Long
+        )
+
+        val phases = listOf(
+            Phase(0, "NRD · atualização", "Conectando ao servidor…", "Conectando", 2200),
+            Phase(8, "NRD · atualização", "Preparando download…", "Preparando", 2200),
+            Phase(20, "NRD · baixando", "Baixando atualização… 20%", "20%", 2200),
+            Phase(38, "NRD · baixando", "Baixando atualização… 38%", "38%", 2200),
+            Phase(56, "NRD · baixando", "Baixando atualização… 56%", "56%", 2200),
+            Phase(74, "NRD · baixando", "Baixando atualização… 74%", "74%", 2200),
+            Phase(88, "NRD · verificando", "Verificando pacote…", "Verificando", 2600),
+            Phase(96, "NRD · preparando", "Preparando instalação…", "96%", 2600),
+            Phase(100, "NRD · pronto", "Atualização pronta para instalar", "Concluído", 3500)
+        )
+
+        phases.forEach { phase ->
+            postIslandNotification(
+                context = context,
+                title = phase.title,
+                content = phase.content,
+                detail = phase.detail,
+                progress = phase.progress,
+                ongoing = phase.progress < 100
+            )
+            delay(phase.waitMillis)
+        }
+
+        return "Teste fake concluído. Foram simuladas as fases Conectando → Baixando → Verificando → Preparando → Pronto."
+    }
+
     private fun canPostNotifications(context: Context): Boolean {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ActivityCompat.checkSelfPermission(
