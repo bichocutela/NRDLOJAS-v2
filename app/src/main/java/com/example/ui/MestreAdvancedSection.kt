@@ -224,6 +224,24 @@ internal fun MestreAdvancedSection(
                 Text(if (checkingIsland) "Teste em andamento..." else "Testar carregamento em tempo real")
             }
 
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = {
+                    scope.launch {
+                        checkingIsland = true
+                        islandMessage = "Simulando atualização do NRD..."
+                        val result = XiaomiSuperIslandTest.runFakeAppUpdateTest(context)
+                        probe = XiaomiSuperIslandTest.probe(context)
+                        islandMessage = result
+                        checkingIsland = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !checkingIsland
+            ) {
+                Text("Simular atualização do NRD")
+            }
+
             islandMessage?.let { message ->
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
