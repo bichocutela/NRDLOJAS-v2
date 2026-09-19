@@ -235,6 +235,27 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         .lowercase()
         .replace(Regex("[^a-z0-9]"), "")
 
+    /** Catalog filters need the live category list; the background cache may intentionally start empty. */
+    internal suspend fun liveProductCategories(): List<AcpCategory> {
+        val result = mutableListOf<AcpCategory>()
+        var page = 0
+        var totalPages = 1
+        while (page < totalPages && page < MAX_CLUB_CATEGORY_PAGES) {
+            val root = authenticatedRead("ProductCategory/all",
+                listOf("pageSize" to "100", "pageIndex" to page.toString()), record = false)
+            val items = root.optJSONArray("items") ?: JSONArray()
+            for (index in 0 until items.length()) {
+                val item = items.optJSONObject(index) ?: continue
+                val id = item.opt("id")?.toString()?.trim().orEmpty()
+                val description = item.optString("description").trim()
+                if (id.isNotEmpty() && description.isNotEmpty()) result += AcpCategory(id, description)
+            }
+            totalPages = responseTotalPages(root).coerceAtLeast(1)
+            page++
+        }
+        return result.distinctBy { it.id }
+    }
+
     private suspend fun authenticatedRead(path: String, parameters: List<Pair<String, String>>, record: Boolean): JSONObject =
         sessionLock.withLock {
             withContext(Dispatchers.IO) {
