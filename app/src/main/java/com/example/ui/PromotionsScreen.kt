@@ -1,9 +1,11 @@
 package com.example.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,8 +71,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -1073,6 +1078,7 @@ private fun OfferSortSelector(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DetailedOfferCard(
     offer: OfferGroup,
@@ -1080,10 +1086,37 @@ private fun DetailedOfferCard(
     onImageClick: (String) -> Unit
 ) {
     val cardShape = RoundedCornerShape(16.dp)
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val shareLayer = rememberGraphicsLayer()
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
+            .drawWithContent {
+                shareLayer.record {
+                    this@drawWithContent.drawContent()
+                }
+                drawLayer(shareLayer)
+            }
+            .combinedClickable(
+                onClick = {},
+                onLongClick = {
+                    scope.launch {
+                        val copied = copyProductCardToClipboard(
+                            context = context,
+                            layer = shareLayer,
+                            productName = offer.name
+                        )
+                        android.widget.Toast.makeText(
+                            context,
+                            if (copied) "Copiado na Área de Transferência"
+                            else "Não foi possível copiar o quadradinho.",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            )
             .glassSoftShadow(cardShape),
         shape = cardShape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
