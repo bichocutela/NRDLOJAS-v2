@@ -32,7 +32,15 @@ internal fun AcpProductsExperience(
         }
         val active = catalog
         if (active == null) Box(Modifier.weight(1f)) {
-            AcpProductsPanel(api, canAddToNrd, appearance, historyExportBusy, historyExportMessage, onExportHistory, onSessionExpired)
+            AcpProductsPanel(
+                api = api,
+                canAddToNrd = canAddToNrd,
+                appearance = appearance,
+                historyExportBusy = historyExportBusy,
+                historyExportMessage = historyExportMessage,
+                onExportHistory = onExportHistory,
+                onSessionExpired = onSessionExpired
+            )
         } else Box(Modifier.weight(1f)) {
             AcpOfferCatalog(api, active, onClose = { catalog = null }, onProduct = { _ -> }, onSessionExpired = onSessionExpired)
         }
