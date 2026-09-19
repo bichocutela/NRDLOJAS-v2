@@ -241,7 +241,8 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         var page = 0
         var totalPages = 1
         while (page < totalPages && page < MAX_CLUB_CATEGORY_PAGES) {
-            val root = authenticatedRead("ProductCategory/all", listOf("pageSize" to "100", "pageIndex" to page.toString()), record = false)
+            val root = authenticatedRead("ProductCategory/all",
+                listOf("pageSize" to "100", "pageIndex" to page.toString()), record = false)
             val items = root.optJSONArray("items") ?: JSONArray()
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index) ?: continue
@@ -469,8 +470,18 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
             if (response.code == 429) throw AcpFailure("Muitas consultas. Aguarde um momento e tente novamente.")
             if (!response.isSuccessful) throw AcpFailure("Não foi possível acessar a ACP agora (${response.code}).")
             val raw = response.body?.string() ?: throw AcpFailure("A ACP retornou uma resposta vazia.")
-            return try { JSONObject(raw) } catch (_: Exception) {
-                throw AcpFailure("A resposta da ACP não é compatível com esta consulta.")
+            return try {
+                JSONObject(raw)
+            } catch (_: Exception) {
+                // Some filtered ACP reads return the item collection directly. Normalize that
+                // response to the same paged envelope consumed by Product/all.
+                runCatching {
+                    val items = JSONArray(raw)
+                    JSONObject().put("items", items).put("pageIndex", 0)
+                        .put("totalPages", 1).put("totalCount", items.length())
+                }.getOrElse {
+                    throw AcpFailure("A resposta da ACP não é compatível com esta consulta.")
+                }
             }
         }
     }
