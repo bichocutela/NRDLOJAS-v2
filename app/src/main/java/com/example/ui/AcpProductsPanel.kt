@@ -59,6 +59,14 @@ private enum class NrdIdentifier { BARCODE, PRODUCT_CODE }
 
 private const val AUTO_PRICE_REFRESH_MILLIS = 15_000L
 
+private enum class AcpFeaturedSort(val label: String) {
+    MAIOR_DESCONTO("Maior desconto"),
+    MENOS_DESCONTO("Menos desconto"),
+    NOME("Nome"),
+    MENOR_PRECO("Menor preço"),
+    MAIOR_PRECO("Maior preço")
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 internal fun AcpProductsPanel(
@@ -106,6 +114,7 @@ internal fun AcpProductsPanel(
     var featuredOffers by remember { mutableStateOf<List<AcpFeaturedOffer>>(emptyList()) }
     var featuredLoading by remember { mutableStateOf(false) }
     var featuredExpanded by remember { mutableStateOf(false) }
+    var featuredSort by remember { mutableStateOf(AcpFeaturedSort.MAIOR_DESCONTO) }
 
     LaunchedEffect(api) {
         // Let an explicit user search win the first network slot; this carousel is secondary.
@@ -467,8 +476,10 @@ internal fun AcpProductsPanel(
                     offers = featuredOffers,
                     loading = featuredLoading,
                     expanded = featuredExpanded,
+                    sort = featuredSort,
                     appearance = appearance,
                     onToggleExpanded = { featuredExpanded = !featuredExpanded },
+                    onSortChanged = { featuredSort = it },
                     onOpen = { openProduct(it.product) }
                 )
             }
@@ -1071,10 +1082,24 @@ private fun AcpFeaturedOffers(
     offers: List<AcpFeaturedOffer>,
     loading: Boolean,
     expanded: Boolean,
+    sort: AcpFeaturedSort,
     appearance: AppearanceSettings,
     onToggleExpanded: () -> Unit,
+    onSortChanged: (AcpFeaturedSort) -> Unit,
     onOpen: (AcpFeaturedOffer) -> Unit
 ) {
+    val orderedOffers = remember(offers, sort) {
+        val comparator = when (sort) {
+            AcpFeaturedSort.MAIOR_DESCONTO -> compareByDescending<AcpFeaturedOffer> { it.discountAmount() }
+            AcpFeaturedSort.MENOS_DESCONTO -> compareBy<AcpFeaturedOffer> { it.discountAmount() }
+            AcpFeaturedSort.NOME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.product.description }
+            AcpFeaturedSort.MENOR_PRECO -> compareBy<AcpFeaturedOffer> { it.offer.price }
+            AcpFeaturedSort.MAIOR_PRECO -> compareByDescending<AcpFeaturedOffer> { it.offer.price }
+        }
+        offers.sortedWith(comparator.thenBy { it.product.description })
+    }
+    var filterMenuExpanded by remember { mutableStateOf(false) }
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1086,8 +1111,32 @@ private fun AcpFeaturedOffers(
                 Text("Condições promocionais informadas pela ACP", style = MaterialTheme.typography.bodySmall)
             }
             if (offers.isNotEmpty()) {
-                TextButton(onClick = onToggleExpanded) {
-                    Text(if (expanded) "Ver menos" else "Ver todos")
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Box {
+                        TextButton(onClick = { filterMenuExpanded = true }) {
+                            Text("Filtro")
+                        }
+                        DropdownMenu(
+                            expanded = filterMenuExpanded,
+                            onDismissRequest = { filterMenuExpanded = false }
+                        ) {
+                            AcpFeaturedSort.values().forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option.label) },
+                                    onClick = {
+                                        onSortChanged(option)
+                                        filterMenuExpanded = false
+                                    },
+                                    trailingIcon = if (option == sort) {
+                                        { Text("✓") }
+                                    } else null
+                                )
+                            }
+                        }
+                    }
+                    TextButton(onClick = onToggleExpanded) {
+                        Text(if (expanded) "Ver menos" else "Ver todos")
+                    }
                 }
             }
         }
@@ -1095,14 +1144,14 @@ private fun AcpFeaturedOffers(
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         } else if (expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                offers.forEach { item -> AcpFeaturedOfferCard(item, appearance, onOpen) }
+                orderedOffers.forEach { item -> AcpFeaturedOfferCard(item, appearance, onOpen) }
             }
         } else {
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(horizontal = 2.dp)
             ) {
-                items(offers.take(20), key = { "${it.product.id}:${it.offer.family}" }) { item ->
+                items(orderedOffers.take(20), key = { "${it.product.id}:${it.offer.family}" }) { item ->
                     Box(modifier = Modifier.width(280.dp)) {
                         AcpFeaturedOfferCard(item, appearance, onOpen)
                     }
@@ -1110,6 +1159,12 @@ private fun AcpFeaturedOffers(
             }
         }
     }
+}
+
+private fun AcpFeaturedOffer.discountAmount(): java.math.BigDecimal {
+    val reference = offer.referencePrice ?: return java.math.BigDecimal.ZERO
+    val price = offer.price ?: return java.math.BigDecimal.ZERO
+    return reference.subtract(price)
 }
 
 @Composable
