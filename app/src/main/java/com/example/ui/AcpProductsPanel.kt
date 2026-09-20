@@ -519,6 +519,7 @@ internal fun AcpProductsPanel(
                     hasMore = featuredHasMore,
                     appearance = appearance,
                     onToggleExpanded = { featuredExpanded = !featuredExpanded },
+                    onHide = { featuredVisible = false },
                     onSortChanged = { featuredSort = it },
                     onLoadNextServerPage = { loadFeaturedPage(featuredServerPage + 1, append = true) },
                     onOpen = { openProduct(it.product) }
@@ -1139,6 +1140,7 @@ private fun AcpFeaturedOffers(
     hasMore: Boolean,
     appearance: AppearanceSettings,
     onToggleExpanded: () -> Unit,
+    onHide: () -> Unit,
     onSortChanged: (AcpFeaturedSort) -> Unit,
     onLoadNextServerPage: () -> Unit,
     onOpen: (AcpFeaturedOffer) -> Unit
@@ -1206,6 +1208,9 @@ private fun AcpFeaturedOffers(
                                 )
                             }
                         }
+                    }
+                    TextButton(onClick = onHide) {
+                        Text("Ocultar")
                     }
                     TextButton(onClick = onToggleExpanded) {
                         Text(if (expanded) "Ver menos" else "Ver todos")
