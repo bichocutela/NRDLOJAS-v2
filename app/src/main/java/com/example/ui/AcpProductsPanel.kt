@@ -1200,7 +1200,9 @@ private fun AcpFeaturedOffers(
                 }
             }
         }
-        if (expanded) {
+        if (loading && offers.isEmpty()) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        } else if (expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 pages.getOrNull(displayPage).orEmpty().forEach { item -> AcpFeaturedOfferCard(item, appearance, onOpen) }
                 if (pages.isNotEmpty()) {
