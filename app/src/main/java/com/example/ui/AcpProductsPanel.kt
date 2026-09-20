@@ -1196,10 +1196,18 @@ private fun AcpFeaturedOffers(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .pointerInput(displayPage, pages.size) {
+                            .pointerInput(displayPage, pages.size, hasMore, loading) {
+                                var handled = false
                                 detectHorizontalDragGestures { _, dragAmount ->
-                                    if (dragAmount < -80f && displayPage < pages.lastIndex) expandedPage++
-                                    if (dragAmount > 80f && displayPage > 0) expandedPage--
+                                    if (!handled && dragAmount < -80f) {
+                                        if (displayPage < pages.lastIndex) expandedPage++
+                                        else if (hasMore && !loading) onLoadNextServerPage()
+                                        handled = true
+                                    }
+                                    if (!handled && dragAmount > 80f && displayPage > 0) {
+                                        expandedPage--
+                                        handled = true
+                                    }
                                 }
                             },
                         verticalAlignment = Alignment.CenterVertically,
