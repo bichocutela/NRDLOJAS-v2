@@ -272,8 +272,10 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         var page = 0
         var totalPages = 1
         while (page < totalPages && page < MAX_CLUB_CATEGORY_PAGES) {
-            val root = authenticatedRead("ProductCategory/all",
-                listOf("pageSize" to "100", "pageIndex" to page.toString()), record = false)
+            val parameters = listOf("pageSize" to "100", "pageIndex" to page.toString())
+            val cached = get("ProductCategory/all", parameters)
+            val root = if (cached.optJSONArray("items")?.length() ?: 0 > 0) cached
+            else authenticatedRead("ProductCategory/all", parameters, record = false)
             val items = root.optJSONArray("items") ?: JSONArray()
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index) ?: continue

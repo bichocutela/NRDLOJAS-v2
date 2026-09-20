@@ -161,8 +161,8 @@ internal fun AcpProductsPanel(
     }
 
     LaunchedEffect(api) {
-        // Let an explicit user search win the first network slot; this carousel is secondary.
-        delay(750)
+        // Reuse persisted ACP pages immediately when returning to this screen.
+        // Fresh data is warmed independently in AcpApi's background scope.
         loadFeaturedPage(0, append = false)
     }
 
