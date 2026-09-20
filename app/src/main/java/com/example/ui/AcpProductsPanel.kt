@@ -62,6 +62,7 @@ import java.util.Locale
 private enum class NrdIdentifier { BARCODE, PRODUCT_CODE }
 
 private const val AUTO_PRICE_REFRESH_MILLIS = 15_000L
+private const val FEATURED_LOAD_IDLE_DELAY_MILLIS = 1_200L
 
 private enum class AcpFeaturedSort(val label: String) {
     MAIOR_DESCONTO("Maior desconto"),
@@ -122,6 +123,7 @@ internal fun AcpProductsPanel(
     var featuredSort by remember { mutableStateOf(AcpFeaturedSort.MENOR_PRECO) }
     var featuredServerPage by remember { mutableIntStateOf(0) }
     var featuredHasMore by remember { mutableStateOf(true) }
+    var featuredJob by remember { mutableStateOf<Job?>(null) }
     val remoteHomeSettings by remember { FirebaseService.observeHomeSettings() }
         .collectAsState(initial = com.example.data.RemoteHomeSettings())
     val featuredIntervalSeconds = (remoteHomeSettings.carouselIntervalSeconds ?: 4).coerceIn(3, 30)
@@ -129,7 +131,7 @@ internal fun AcpProductsPanel(
     fun loadFeaturedPage(serverPage: Int, append: Boolean, loadAll: Boolean = false) {
         if (featuredLoading || serverPage < 0) return
         featuredLoading = true
-        scope.launch {
+        featuredJob = scope.launch {
             try {
                 var nextPage = serverPage
                 var shouldAppend = append
@@ -157,6 +159,7 @@ internal fun AcpProductsPanel(
                 featuredHasMore = false
             } finally {
                 featuredLoading = false
+                featuredJob = null
             }
         }
     }
@@ -164,6 +167,7 @@ internal fun AcpProductsPanel(
     LaunchedEffect(api) {
         // Reuse persisted ACP pages immediately when returning to this screen.
         // Fresh data is warmed independently in AcpApi's background scope.
+        delay(FEATURED_LOAD_IDLE_DELAY_MILLIS)
         loadFeaturedPage(0, append = false)
     }
 
@@ -227,6 +231,8 @@ internal fun AcpProductsPanel(
         searchJob?.cancel()
         val ticket = ++generation
         if (interactive) {
+            featuredJob?.cancel()
+            api.stopBackgroundSync()
             busy = true
             featuredVisible = false
             featuredExpanded = false
@@ -278,6 +284,7 @@ internal fun AcpProductsPanel(
                 if (ticket == generation && interactive) error = acpErrorMessage(failure)
             } finally {
                 if (ticket == generation) busy = false
+                if (interactive && ticket == generation) api.warmFeaturedCatalog()
             }
         }
     }

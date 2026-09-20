@@ -6,6 +6,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -36,6 +38,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     private var clubCategoryId: String? = null
     private var clubCategoryResolved = false
     private var catalogCategories: List<AcpCategory>? = null
+    private var featuredWarmupJob: Job? = null
     private var featuredWarmupAtMillis = 0L
     private val cookies = AcpCookieJar(store.read("session")) { store.write("session", it) }
     private val client = clientBuilder
@@ -84,30 +87,49 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     }
 
     /**
-     * Warms only the ACP offer catalog in the API-owned background scope. Once the
-     * user has authenticated, this keeps Product/all pages cached while they use
-     * other parts of the app, so returning to Consultar Preços is immediate.
+     * Keeps the featured ACP cache warm without competing with the first explicit search.
+     * The worker below also runs this pass periodically when the feature was used once.
      */
     internal fun warmFeaturedCatalog() {
-        val now = System.currentTimeMillis()
         synchronized(this) {
-            if (now - featuredWarmupAtMillis < FEATURED_WARMUP_INTERVAL_MILLIS) return
-            featuredWarmupAtMillis = now
-        }
-        backgroundScope.launch {
-            try {
-                var page = 0
-                var hasMore: Boolean
-                do {
-                    val result = featuredOffersPage(page)
-                    hasMore = result.hasMore
-                    page++
-                    if (hasMore) delay(FEATURED_WARMUP_PAGE_DELAY_MILLIS)
-                } while (hasMore && page < MAX_FEATURED_WARMUP_PAGES)
-            } catch (_: Exception) {
-                // The visible consultation remains authoritative; a later interval retries.
-                synchronized(this@AcpApi) { featuredWarmupAtMillis = 0L }
+            if (featuredWarmupJob?.isActive == true) return
+            featuredWarmupJob = backgroundScope.launch {
+                delay(FEATURED_WARMUP_INITIAL_DELAY_MILLIS)
+                while (isActive) {
+                    try {
+                        refreshFeaturedCatalogOnce(MAX_FEATURED_WARMUP_PAGES)
+                    } catch (_: Exception) {
+                        // A later cycle retries without affecting the visible consultation.
+                    }
+                    delay(FEATURED_WARMUP_INTERVAL_MILLIS)
+                }
             }
+        }
+    }
+
+    /** Enables the ACP cache refresh after the user has successfully opened this feature once. */
+    internal fun enableBackgroundSync() {
+        store.write(BACKGROUND_SYNC_ENABLED_KEY, "true")
+    }
+
+    internal fun backgroundSyncEnabled(): Boolean =
+        store.read(BACKGROUND_SYNC_ENABLED_KEY) == "true"
+
+    internal suspend fun refreshFeaturedCatalogOnce(maxPages: Int = MAX_FEATURED_WARMUP_PAGES) {
+        var page = 0
+        var hasMore: Boolean
+        do {
+            val result = featuredOffersPage(page)
+            hasMore = result.hasMore
+            page++
+            if (hasMore && page < maxPages) delay(FEATURED_WARMUP_PAGE_DELAY_MILLIS)
+        } while (hasMore && page < maxPages)
+    }
+
+    internal fun stopBackgroundSync() {
+        synchronized(this) {
+            featuredWarmupJob?.cancel()
+            featuredWarmupJob = null
         }
     }
 
@@ -527,9 +549,12 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         private const val DAILY_CACHE_TTL_MILLIS = 24L * 60L * 60L * 1000L
         private const val SILENT_REFRESH_DELAY_MILLIS = 900L
         private const val MAX_SILENT_PAGES = 30
-        private const val MAX_FEATURED_WARMUP_PAGES = 300
+        // Keep the periodic cache refresh bounded; “Ver todos” loads later pages on demand.
+        private const val MAX_FEATURED_WARMUP_PAGES = 6
         private const val FEATURED_WARMUP_PAGE_DELAY_MILLIS = 100L
+        private const val FEATURED_WARMUP_INITIAL_DELAY_MILLIS = 2_500L
         private const val FEATURED_WARMUP_INTERVAL_MILLIS = 10L * 60L * 1000L
+        private const val BACKGROUND_SYNC_ENABLED_KEY = "acp_background_sync_enabled"
         private const val MAX_CLUB_CATEGORY_PAGES = 10
         private const val CLUB_PAGE_SIZE = 250
         private val READ_ONLY_ENDPOINTS = setOf("Product/all", "ProductCategory/all", "Product/integrationInfo", "Campaign/all")

@@ -36,6 +36,12 @@ class MyApplication : Application() {
         } catch (e: IllegalStateException) {
             Log.w("MyApplication", "Favorite store promotion check not scheduled in this process", e)
         }
+        try {
+            com.example.util.AcpCatalogSyncWorker.schedule(this)
+            Log.d("MyApplication", "ACP catalog sync scheduled")
+        } catch (e: IllegalStateException) {
+            Log.w("MyApplication", "ACP catalog sync not scheduled in this process", e)
+        }
         Log.d("MyApplication", "Application started and CrashReporter setup")
     }
 

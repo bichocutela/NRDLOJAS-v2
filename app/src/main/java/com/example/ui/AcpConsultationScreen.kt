@@ -102,6 +102,7 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
             configured = api.hasCredentials()
             if (configured) {
                 api.confirmAccess()
+                api.enableBackgroundSync()
                 api.warmFeaturedCatalog()
                 authenticated = true
             } else authenticated = false
@@ -202,7 +203,7 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
                         Button(onClick = {
                             busy = true; error = null
                             scope.launch {
-                                try { api.confirmAccess(); api.warmFeaturedCatalog(); authenticated = true }
+                                try { api.confirmAccess(); api.enableBackgroundSync(); api.warmFeaturedCatalog(); authenticated = true }
                                 catch (cancelled: CancellationException) { throw cancelled }
                                 catch (failure: Exception) { error = acpErrorMessage(failure) }
                                 finally { busy = false }
