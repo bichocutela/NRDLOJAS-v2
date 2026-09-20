@@ -16,6 +16,7 @@ internal data class AcpCategory(val id: String, val description: String)
 internal data class AcpProductPage(val items: List<AcpProduct>, val pageIndex: Int, val totalPages: Int, val totalCount: Int, val queriedAtMillis: Long = System.currentTimeMillis())
 internal data class AcpOffer(val title: String, val detail: String, val price: BigDecimal? = null, val referencePrice: BigDecimal? = null, val headline: String? = null)
 internal data class AcpFeaturedOffer(val product: AcpProduct, val offer: AcpOffer)
+internal data class AcpFeaturedPage(val items: List<AcpFeaturedOffer>, val hasMore: Boolean)
 
 internal enum class AcpOfferFamily {
     DE_POR, CLUB, WHOLESALE, TAKE_PAY, SECOND_UNIT, CASHBACK, CASHBACK_VALUE, PRICE
@@ -252,11 +253,11 @@ internal suspend fun AcpApi.categories(): List<AcpCategory> {
 }
 
 /**
- * Loads only the first server page of categories that can carry an explicit offer.
- * It deliberately does not walk Product/all: the ACP remains the source of truth and
- * the consultation screen stays responsive even with a large catalog.
+ * Loads one server page of categories that can carry an explicit offer. The carousel
+ * asks for successive pages in the background and performs the final ordering locally,
+ * so the 30-item UI pages are slices of one global price-sorted catalog.
  */
-internal suspend fun AcpApi.featuredOffers(page: Int = 0): List<AcpFeaturedOffer> {
+internal suspend fun AcpApi.featuredOffersPage(page: Int = 0): AcpFeaturedPage {
     require(page >= 0)
     val promotionCategories = liveProductCategories().filter { category ->
         val normalized = category.description.lowercase()
@@ -267,23 +268,27 @@ internal suspend fun AcpApi.featuredOffers(page: Int = 0): List<AcpFeaturedOffer
             "descontosegundaunidade", "oferta"
         )
     }
-    if (promotionCategories.isEmpty()) return emptyList()
+    if (promotionCategories.isEmpty()) return AcpFeaturedPage(emptyList(), false)
 
     val deduplicated = linkedMapOf<String, AcpProduct>()
+    var hasMore = false
     promotionCategories.forEach { category ->
         val parameters = listOf(
-            "pageSize" to "30",
+            // Keep the UI at 30 items, but fetch a larger ACP page so the global
+            // price ordering is not reset at every screen page.
+            "pageSize" to "100",
             "pageIndex" to page.toString(),
             "productCategoryIds" to category.id
         )
         val result = AcpProductParser.page(get("Product/all", parameters), page)
+        hasMore = hasMore || page + 1 < result.totalPages
         result.items.forEach { product ->
             val key = product.id.ifBlank { "${product.code}|${product.barcode}" }
             deduplicated.putIfAbsent(key, product)
         }
     }
 
-    return deduplicated.values.asSequence()
+    val items = deduplicated.values.asSequence()
         .flatMap { product ->
             product.offers().asSequence()
                 // Cashback is shown in the product detail, but is not an immediate price
@@ -308,4 +313,8 @@ internal suspend fun AcpApi.featuredOffers(page: Int = 0): List<AcpFeaturedOffer
         )
         .distinctBy { "${it.product.id}|${it.offer.family}" }
         .toList()
+    return AcpFeaturedPage(items, hasMore)
 }
+
+internal suspend fun AcpApi.featuredOffers(page: Int = 0): List<AcpFeaturedOffer> =
+    featuredOffersPage(page).items

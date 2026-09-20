@@ -118,27 +118,39 @@ internal fun AcpProductsPanel(
     var featuredOffers by remember { mutableStateOf<List<AcpFeaturedOffer>>(emptyList()) }
     var featuredLoading by remember { mutableStateOf(false) }
     var featuredExpanded by remember { mutableStateOf(false) }
-    var featuredSort by remember { mutableStateOf(AcpFeaturedSort.MAIOR_DESCONTO) }
+    var featuredSort by remember { mutableStateOf(AcpFeaturedSort.MENOR_PRECO) }
     var featuredServerPage by remember { mutableIntStateOf(0) }
     var featuredHasMore by remember { mutableStateOf(true) }
     val remoteHomeSettings by remember { FirebaseService.observeHomeSettings() }
         .collectAsState(initial = com.example.data.RemoteHomeSettings())
     val featuredIntervalSeconds = (remoteHomeSettings.carouselIntervalSeconds ?: 4).coerceIn(3, 30)
 
-    fun loadFeaturedPage(serverPage: Int, append: Boolean) {
+    fun loadFeaturedPage(serverPage: Int, append: Boolean, loadAll: Boolean = false) {
         if (featuredLoading || serverPage < 0) return
         featuredLoading = true
         scope.launch {
             try {
-                val loaded = api.featuredOffers(serverPage)
-                if (append) {
-                    featuredOffers = (featuredOffers + loaded)
-                        .distinctBy { "${it.product.id}|${it.offer.family}" }
-                } else {
-                    featuredOffers = loaded
-                }
-                featuredServerPage = serverPage
-                featuredHasMore = loaded.isNotEmpty()
+                var nextPage = serverPage
+                var shouldAppend = append
+                var more = true
+                do {
+                    val result = api.featuredOffersPage(nextPage)
+                    val loaded = result.items
+                    if (shouldAppend) {
+                        featuredOffers = (featuredOffers + loaded)
+                            .distinctBy { "${it.product.id}|${it.offer.family}" }
+                    } else {
+                        featuredOffers = loaded
+                    }
+                    featuredServerPage = nextPage
+                    more = result.hasMore
+                    featuredHasMore = more
+                    shouldAppend = true
+                    nextPage++
+                    // Yield between ACP pages so search and the rest of the screen
+                    // remain responsive while the complete ordering is assembled.
+                    if (loadAll && more) delay(40)
+                } while (loadAll && more)
             } catch (_: Exception) {
                 if (!append) featuredOffers = emptyList()
                 featuredHasMore = false
@@ -151,7 +163,7 @@ internal fun AcpProductsPanel(
     LaunchedEffect(api) {
         // Let an explicit user search win the first network slot; this carousel is secondary.
         delay(750)
-        loadFeaturedPage(0, append = false)
+        loadFeaturedPage(0, append = false, loadAll = true)
     }
 
     var detail by remember { mutableStateOf<AcpProduct?>(null) }
@@ -1188,9 +1200,7 @@ private fun AcpFeaturedOffers(
                 }
             }
         }
-        if (loading && offers.isEmpty()) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        } else if (expanded) {
+        if (expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 pages.getOrNull(displayPage).orEmpty().forEach { item -> AcpFeaturedOfferCard(item, appearance, onOpen) }
                 if (pages.isNotEmpty()) {
