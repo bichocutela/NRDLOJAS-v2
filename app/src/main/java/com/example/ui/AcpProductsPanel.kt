@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -32,6 +34,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -115,21 +118,39 @@ internal fun AcpProductsPanel(
     var featuredLoading by remember { mutableStateOf(false) }
     var featuredExpanded by remember { mutableStateOf(false) }
     var featuredSort by remember { mutableStateOf(AcpFeaturedSort.MAIOR_DESCONTO) }
+    var featuredServerPage by remember { mutableIntStateOf(0) }
+    var featuredHasMore by remember { mutableStateOf(true) }
+    val remoteHomeSettings by remember { FirebaseService.observeHomeSettings() }
+        .collectAsState(initial = com.example.data.RemoteHomeSettings())
+    val featuredIntervalSeconds = (remoteHomeSettings.carouselIntervalSeconds ?: 4).coerceIn(3, 30)
+
+    fun loadFeaturedPage(serverPage: Int, append: Boolean) {
+        if (featuredLoading || serverPage < 0) return
+        featuredLoading = true
+        scope.launch {
+            try {
+                val loaded = api.featuredOffers(serverPage)
+                if (append) {
+                    featuredOffers = (featuredOffers + loaded)
+                        .distinctBy { "${it.product.id}|${it.offer.family}" }
+                } else {
+                    featuredOffers = loaded
+                }
+                featuredServerPage = serverPage
+                featuredHasMore = loaded.isNotEmpty()
+            } catch (_: Exception) {
+                if (!append) featuredOffers = emptyList()
+                featuredHasMore = false
+            } finally {
+                featuredLoading = false
+            }
+        }
+    }
 
     LaunchedEffect(api) {
         // Let an explicit user search win the first network slot; this carousel is secondary.
         delay(750)
-        featuredLoading = true
-        try {
-            featuredOffers = api.featuredOffers()
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            // The carousel is an optional convenience; the normal ACP search must remain usable.
-            featuredOffers = emptyList()
-        } finally {
-            featuredLoading = false
-        }
+        loadFeaturedPage(0, append = false)
     }
 
     var detail by remember { mutableStateOf<AcpProduct?>(null) }
@@ -477,9 +498,13 @@ internal fun AcpProductsPanel(
                     loading = featuredLoading,
                     expanded = featuredExpanded,
                     sort = featuredSort,
+                    intervalSeconds = featuredIntervalSeconds,
+                    serverPage = featuredServerPage,
+                    hasMore = featuredHasMore,
                     appearance = appearance,
                     onToggleExpanded = { featuredExpanded = !featuredExpanded },
                     onSortChanged = { featuredSort = it },
+                    onLoadNextServerPage = { loadFeaturedPage(featuredServerPage + 1, append = true) },
                     onOpen = { openProduct(it.product) }
                 )
             }
@@ -1083,22 +1108,44 @@ private fun AcpFeaturedOffers(
     loading: Boolean,
     expanded: Boolean,
     sort: AcpFeaturedSort,
+    intervalSeconds: Int,
+    serverPage: Int,
+    hasMore: Boolean,
     appearance: AppearanceSettings,
     onToggleExpanded: () -> Unit,
     onSortChanged: (AcpFeaturedSort) -> Unit,
+    onLoadNextServerPage: () -> Unit,
     onOpen: (AcpFeaturedOffer) -> Unit
 ) {
     val orderedOffers = remember(offers, sort) {
         val comparator = when (sort) {
             AcpFeaturedSort.MAIOR_DESCONTO -> compareByDescending<AcpFeaturedOffer> { it.discountAmount() }
             AcpFeaturedSort.MENOS_DESCONTO -> compareBy<AcpFeaturedOffer> { it.discountAmount() }
-            AcpFeaturedSort.NOME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.product.description }
+            AcpFeaturedSort.NOME -> compareBy<AcpFeaturedOffer>(String.CASE_INSENSITIVE_ORDER) { it.product.description }
             AcpFeaturedSort.MENOR_PRECO -> compareBy<AcpFeaturedOffer> { it.offer.price }
             AcpFeaturedSort.MAIOR_PRECO -> compareByDescending<AcpFeaturedOffer> { it.offer.price }
         }
         offers.sortedWith(comparator.thenBy { it.product.description })
     }
     var filterMenuExpanded by remember { mutableStateOf(false) }
+    var expandedPage by rememberSaveable { mutableIntStateOf(0) }
+    val pages = remember(orderedOffers) { orderedOffers.chunked(30) }
+    val displayPage = expandedPage.coerceIn(0, (pages.size - 1).coerceAtLeast(0))
+    val carouselOffers = orderedOffers.take(20)
+    val carouselState = rememberLazyListState()
+
+    LaunchedEffect(carouselOffers, intervalSeconds, expanded) {
+        if (expanded || carouselOffers.size < 2) return@LaunchedEffect
+        while (true) {
+            delay(intervalSeconds * 1000L)
+            val next = (carouselState.firstVisibleItemIndex + 1) % carouselOffers.size
+            carouselState.animateScrollToItem(next)
+        }
+    }
+
+    LaunchedEffect(serverPage) {
+        if (serverPage == 0) expandedPage = 0
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -1144,14 +1191,41 @@ private fun AcpFeaturedOffers(
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         } else if (expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                orderedOffers.forEach { item -> AcpFeaturedOfferCard(item, appearance, onOpen) }
+                pages.getOrNull(displayPage).orEmpty().forEach { item -> AcpFeaturedOfferCard(item, appearance, onOpen) }
+                if (pages.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .pointerInput(displayPage, pages.size) {
+                                detectHorizontalDragGestures { _, dragAmount ->
+                                    if (dragAmount < -80f && displayPage < pages.lastIndex) expandedPage++
+                                    if (dragAmount > 80f && displayPage > 0) expandedPage--
+                                }
+                            },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        TextButton(
+                            onClick = { expandedPage-- },
+                            enabled = displayPage > 0 && !loading
+                        ) { Text("Anterior") }
+                        Text("Página ${displayPage + 1}/${pages.size}", style = MaterialTheme.typography.labelMedium)
+                        TextButton(
+                            onClick = {
+                                if (displayPage < pages.lastIndex) expandedPage++ else onLoadNextServerPage()
+                            },
+                            enabled = !loading && (displayPage < pages.lastIndex || hasMore)
+                        ) { Text(if (displayPage < pages.lastIndex) "Próxima" else "Mais ofertas") }
+                    }
+                }
             }
         } else {
             LazyRow(
+                state = carouselState,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(horizontal = 2.dp)
             ) {
-                items(orderedOffers.take(20), key = { "${it.product.id}:${it.offer.family}" }) { item ->
+                items(carouselOffers, key = { "${it.product.id}:${it.offer.family}" }) { item ->
                     Box(modifier = Modifier.width(280.dp)) {
                         AcpFeaturedOfferCard(item, appearance, onOpen)
                     }

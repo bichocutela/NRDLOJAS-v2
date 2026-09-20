@@ -272,7 +272,7 @@ internal suspend fun AcpApi.featuredOffers(page: Int = 0): List<AcpFeaturedOffer
     val deduplicated = linkedMapOf<String, AcpProduct>()
     promotionCategories.forEach { category ->
         val parameters = listOf(
-            "pageSize" to "20",
+            "pageSize" to "30",
             "pageIndex" to page.toString(),
             "productCategoryIds" to category.id
         )
