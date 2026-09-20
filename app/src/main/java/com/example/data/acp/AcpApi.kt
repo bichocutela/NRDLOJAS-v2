@@ -36,6 +36,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     private var clubCategoryId: String? = null
     private var clubCategoryResolved = false
     private var catalogCategories: List<AcpCategory>? = null
+    private var featuredWarmupAtMillis = 0L
     private val cookies = AcpCookieJar(store.read("session")) { store.write("session", it) }
     private val client = clientBuilder
         .cookieJar(cookies)
@@ -79,6 +80,34 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
             accessConfirmed = false
             try { session() } catch (_: AcpUnauthorized) { signIn() }
             accessConfirmed = true
+        }
+    }
+
+    /**
+     * Warms only the ACP offer catalog in the API-owned background scope. Once the
+     * user has authenticated, this keeps Product/all pages cached while they use
+     * other parts of the app, so returning to Consultar Preços is immediate.
+     */
+    internal fun warmFeaturedCatalog() {
+        val now = System.currentTimeMillis()
+        synchronized(this) {
+            if (now - featuredWarmupAtMillis < FEATURED_WARMUP_INTERVAL_MILLIS) return
+            featuredWarmupAtMillis = now
+        }
+        backgroundScope.launch {
+            try {
+                var page = 0
+                var hasMore: Boolean
+                do {
+                    val result = featuredOffersPage(page)
+                    hasMore = result.hasMore
+                    page++
+                    if (hasMore) delay(FEATURED_WARMUP_PAGE_DELAY_MILLIS)
+                } while (hasMore && page < MAX_FEATURED_WARMUP_PAGES)
+            } catch (_: Exception) {
+                // The visible consultation remains authoritative; a later interval retries.
+                synchronized(this@AcpApi) { featuredWarmupAtMillis = 0L }
+            }
         }
     }
 
@@ -496,6 +525,9 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         private const val DAILY_CACHE_TTL_MILLIS = 24L * 60L * 60L * 1000L
         private const val SILENT_REFRESH_DELAY_MILLIS = 900L
         private const val MAX_SILENT_PAGES = 30
+        private const val MAX_FEATURED_WARMUP_PAGES = 300
+        private const val FEATURED_WARMUP_PAGE_DELAY_MILLIS = 100L
+        private const val FEATURED_WARMUP_INTERVAL_MILLIS = 10L * 60L * 1000L
         private const val MAX_CLUB_CATEGORY_PAGES = 10
         private const val CLUB_PAGE_SIZE = 250
         private val READ_ONLY_ENDPOINTS = setOf("Product/all", "ProductCategory/all", "Product/integrationInfo", "Campaign/all")

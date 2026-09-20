@@ -163,7 +163,7 @@ internal fun AcpProductsPanel(
     LaunchedEffect(api) {
         // Let an explicit user search win the first network slot; this carousel is secondary.
         delay(750)
-        loadFeaturedPage(0, append = false, loadAll = true)
+        loadFeaturedPage(0, append = false)
     }
 
     var detail by remember { mutableStateOf<AcpProduct?>(null) }
