@@ -15,6 +15,7 @@ internal enum class AcpSearchField(val parameter: String, val label: String) { B
 internal data class AcpCategory(val id: String, val description: String)
 internal data class AcpProductPage(val items: List<AcpProduct>, val pageIndex: Int, val totalPages: Int, val totalCount: Int, val queriedAtMillis: Long = System.currentTimeMillis())
 internal data class AcpOffer(val title: String, val detail: String, val price: BigDecimal? = null, val referencePrice: BigDecimal? = null, val headline: String? = null)
+internal data class AcpFeaturedOffer(val product: AcpProduct, val offer: AcpOffer)
 
 internal enum class AcpOfferFamily {
     DE_POR, CLUB, WHOLESALE, TAKE_PAY, SECOND_UNIT, CASHBACK, CASHBACK_VALUE, PRICE
@@ -248,4 +249,63 @@ internal suspend fun AcpApi.categories(): List<AcpCategory> {
         if (page + 1 >= root.optInt("totalPages", 1) || items.length() == 0) return result.distinctBy { it.id }
     }
     throw AcpFailure("A lista de categorias ACP excedeu o limite da consulta.")
+}
+
+/**
+ * Loads only the first server page of categories that can carry an explicit offer.
+ * It deliberately does not walk Product/all: the ACP remains the source of truth and
+ * the consultation screen stays responsive even with a large catalog.
+ */
+internal suspend fun AcpApi.featuredOffers(page: Int = 0): List<AcpFeaturedOffer> {
+    require(page >= 0)
+    val promotionCategories = liveProductCategories().filter { category ->
+        val normalized = category.description.lowercase()
+            .replace(Regex("[^a-z0-9]"), "")
+        normalized in setOf(
+            "depor", "clubedevantagens", "clubvantagens", "levepague", "leveepague",
+            "cashback", "cashbackpercentual", "cashbackvalor", "segundaunidade",
+            "descontosegundaunidade", "oferta"
+        )
+    }
+    if (promotionCategories.isEmpty()) return emptyList()
+
+    val deduplicated = linkedMapOf<String, AcpProduct>()
+    promotionCategories.forEach { category ->
+        val parameters = listOf(
+            "pageSize" to "20",
+            "pageIndex" to page.toString(),
+            "productCategoryIds" to category.id
+        )
+        val result = AcpProductParser.page(get("Product/all", parameters), page)
+        result.items.forEach { product ->
+            val key = product.id.ifBlank { "${product.code}|${product.barcode}" }
+            deduplicated.putIfAbsent(key, product)
+        }
+    }
+
+    return deduplicated.values.asSequence()
+        .flatMap { product ->
+            product.offers().asSequence()
+                // Cashback is shown in the product detail, but is not an immediate price
+                // reduction and therefore must not be ranked as a "cheap" offer here.
+                .filter { offer ->
+                    offer.family != AcpOfferFamily.PRICE &&
+                        offer.family != AcpOfferFamily.CASHBACK &&
+                        offer.family != AcpOfferFamily.CASHBACK_VALUE &&
+                        offer.price != null && offer.referencePrice != null &&
+                        offer.price < offer.referencePrice
+                }
+                .map { offer -> AcpFeaturedOffer(product, offer) }
+        }
+        .sortedWith(
+            compareBy<AcpFeaturedOffer> { it.offer.price }
+                .thenByDescending { item ->
+                    val reference = item.offer.referencePrice
+                    val price = item.offer.price
+                    if (reference != null && price != null) reference.subtract(price) else BigDecimal.ZERO
+                }
+                .thenBy { it.product.description }
+        )
+        .distinctBy { "${it.product.id}|${it.offer.family}" }
+        .toList()
 }

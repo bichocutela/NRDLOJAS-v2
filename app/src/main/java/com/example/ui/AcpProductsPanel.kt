@@ -11,6 +11,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -100,6 +102,26 @@ internal fun AcpProductsPanel(
     var detailWarning by remember { mutableStateOf<String?>(null) }
     var syncExpanded by remember { mutableStateOf(false) }
     var lastExplicitQuery by remember { mutableStateOf<String?>(null) }
+
+    var featuredOffers by remember { mutableStateOf<List<AcpFeaturedOffer>>(emptyList()) }
+    var featuredLoading by remember { mutableStateOf(false) }
+    var featuredExpanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(api) {
+        // Let an explicit user search win the first network slot; this carousel is secondary.
+        delay(750)
+        featuredLoading = true
+        try {
+            featuredOffers = api.featuredOffers()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // The carousel is an optional convenience; the normal ACP search must remain usable.
+            featuredOffers = emptyList()
+        } finally {
+            featuredLoading = false
+        }
+    }
 
     var detail by remember { mutableStateOf<AcpProduct?>(null) }
     var detailError by remember { mutableStateOf<String?>(null) }
@@ -436,6 +458,19 @@ internal fun AcpProductsPanel(
                 Icon(Icons.Default.Search, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text(if (busy) "Pesquisando…" else "Pesquisar produto", fontWeight = FontWeight.Bold)
+            }
+        }
+
+        if (featuredLoading || featuredOffers.isNotEmpty()) {
+            item {
+                AcpFeaturedOffers(
+                    offers = featuredOffers,
+                    loading = featuredLoading,
+                    expanded = featuredExpanded,
+                    appearance = appearance,
+                    onToggleExpanded = { featuredExpanded = !featuredExpanded },
+                    onOpen = { openProduct(it.product) }
+                )
             }
         }
 
@@ -1030,3 +1065,78 @@ private fun acpResponseCacheName(path: String, parameters: List<Pair<String, Str
 
 private fun acpQueryTime(value: Long): String =
     SimpleDateFormat("dd/MM HH:mm:ss", Locale("pt", "BR")).format(Date(value))
+
+@Composable
+private fun AcpFeaturedOffers(
+    offers: List<AcpFeaturedOffer>,
+    loading: Boolean,
+    expanded: Boolean,
+    appearance: AppearanceSettings,
+    onToggleExpanded: () -> Unit,
+    onOpen: (AcpFeaturedOffer) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Ofertas em destaque", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("Condições promocionais informadas pela ACP", style = MaterialTheme.typography.bodySmall)
+            }
+            if (offers.isNotEmpty()) {
+                TextButton(onClick = onToggleExpanded) {
+                    Text(if (expanded) "Ver menos" else "Ver todos")
+                }
+            }
+        }
+        if (loading && offers.isEmpty()) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        } else if (expanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                offers.forEach { item -> AcpFeaturedOfferCard(item, appearance, onOpen) }
+            }
+        } else {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(horizontal = 2.dp)
+            ) {
+                items(offers.take(20), key = { "${it.product.id}:${it.offer.family}" }) { item ->
+                    Box(modifier = Modifier.width(280.dp)) {
+                        AcpFeaturedOfferCard(item, appearance, onOpen)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AcpFeaturedOfferCard(
+    item: AcpFeaturedOffer,
+    appearance: AppearanceSettings,
+    onOpen: (AcpFeaturedOffer) -> Unit
+) {
+    OutlinedCard(onClick = { onOpen(item) }, modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Text(item.product.description, style = MaterialTheme.typography.titleSmall, maxLines = 2)
+            Text(
+                "Código: ${item.product.code.ifBlank { "não informado" }}" +
+                    item.product.barcode.takeIf { it.isNotBlank() }?.let { " • EAN: $it" }.orEmpty(),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1
+            )
+            AcpOfferPoster(
+                offer = item.offer,
+                compact = true,
+                productName = item.product.description,
+                banner = appearance.activeOfferBanner(item.offer.bannerKey)
+            )
+            Text("Toque para ver todas as condições", style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
