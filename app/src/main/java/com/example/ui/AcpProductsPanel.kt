@@ -117,6 +117,7 @@ internal fun AcpProductsPanel(
 
     var featuredOffers by remember { mutableStateOf<List<AcpFeaturedOffer>>(emptyList()) }
     var featuredLoading by remember { mutableStateOf(false) }
+    var featuredVisible by remember { mutableStateOf(true) }
     var featuredExpanded by remember { mutableStateOf(false) }
     var featuredSort by remember { mutableStateOf(AcpFeaturedSort.MENOR_PRECO) }
     var featuredServerPage by remember { mutableIntStateOf(0) }
@@ -227,6 +228,8 @@ internal fun AcpProductsPanel(
         val ticket = ++generation
         if (interactive) {
             busy = true
+            featuredVisible = false
+            featuredExpanded = false
             lastExplicitQuery = searchText
             keyboard?.hide()
         } else {
@@ -504,7 +507,7 @@ internal fun AcpProductsPanel(
             }
         }
 
-        if (featuredLoading || featuredOffers.isNotEmpty()) {
+        if (featuredVisible && (featuredLoading || featuredOffers.isNotEmpty())) {
             item {
                 AcpFeaturedOffers(
                     offers = featuredOffers,
@@ -520,6 +523,16 @@ internal fun AcpProductsPanel(
                     onLoadNextServerPage = { loadFeaturedPage(featuredServerPage + 1, append = true) },
                     onOpen = { openProduct(it.product) }
                 )
+            }
+        } else if (!featuredVisible) {
+            item {
+                OutlinedButton(
+                    onClick = { featuredVisible = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp)
+                ) {
+                    Text("Mostrar ofertas em destaque", fontWeight = FontWeight.Bold)
+                }
             }
         }
 
@@ -1268,17 +1281,28 @@ private fun AcpFeaturedOfferCard(
     appearance: AppearanceSettings,
     onOpen: (AcpFeaturedOffer) -> Unit
 ) {
-    OutlinedCard(onClick = { onOpen(item) }, modifier = Modifier.fillMaxWidth()) {
+    OutlinedCard(
+        onClick = { onOpen(item) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 360.dp)
+    ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            Text(item.product.description, style = MaterialTheme.typography.titleSmall, maxLines = 2)
+            Text(
+                item.product.description,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 2,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp)
+            )
             Text(
                 "Código: ${item.product.code.ifBlank { "não informado" }}" +
                     item.product.barcode.takeIf { it.isNotBlank() }?.let { " • EAN: $it" }.orEmpty(),
                 style = MaterialTheme.typography.bodySmall,
-                maxLines = 1
+                maxLines = 1,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 20.dp)
             )
             AcpOfferPoster(
                 offer = item.offer,
