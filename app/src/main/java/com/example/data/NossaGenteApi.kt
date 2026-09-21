@@ -77,6 +77,50 @@ class NossaGenteApi(context: Context) {
         fetchPromotionsOnce(allowSavedCredentialRecovery = true)
     }
 
+    /** Endpoint confirmado no APK oficial do Nossa Gente: GET /ponto?limit=. */
+    suspend fun fetchPoint(limit: Int = 100): NossaGentePointResult = withContext(Dispatchers.IO) {
+        val token = currentToken() ?: return@withContext NossaGentePointResult.Unauthorized
+        try {
+            val request = Request.Builder()
+                .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/ponto?limit=${limit.coerceIn(1, 100)}&_sync=${System.currentTimeMillis()}")
+                .get()
+                .header("Accept", "application/json")
+                .header("Authorization", "Bearer $token")
+                .header("Cache-Control", "no-cache, no-store")
+                .build()
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (response.code == 401 || response.code == 403) return@withContext NossaGentePointResult.Unauthorized
+                if (!response.isSuccessful) return@withContext NossaGentePointResult.Error("Não foi possível carregar o ponto agora.")
+                NossaGentePointResult.Success(parsePoint(body))
+            }
+        } catch (_: Exception) {
+            NossaGentePointResult.Error("Não foi possível carregar o ponto. Verifique a internet.")
+        }
+    }
+
+    private fun parsePoint(raw: String): PointSummary {
+        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return PointSummary()
+        val records = firstArray(root, "data", "ponto", "items", "results", "registros", "batidas")
+            ?.let { array -> (0 until array.length()).mapNotNull { array.optJSONObject(it)?.let(::parsePointEntry) } }
+            .orEmpty()
+        return PointSummary(
+            period = firstNonBlank(root.optString("periodo"), root.optString("period"), root.optString("mesAno"), root.optString("competencia")),
+            status = firstNonBlank(root.optString("status"), root.optString("situacao"), root.optString("PontoStatus")),
+            balance = firstNonBlank(root.optString("saldo"), root.optString("saldoHoras"), root.optString("bancoHoras")),
+            worked = firstNonBlank(root.optString("horasTrabalhadas"), root.optString("horas"), root.optString("totalHoras")),
+            records = records
+        )
+    }
+
+    private fun parsePointEntry(item: JSONObject): PointEntry = PointEntry(
+        date = firstNonBlank(item.optString("data"), item.optString("dia"), item.optString("date"), item.optString("dataPonto")),
+        entry = firstNonBlank(item.optString("entrada"), item.optString("horaEntrada"), item.optString("in")),
+        exit = firstNonBlank(item.optString("saida"), item.optString("horaSaida"), item.optString("out")),
+        interval = firstNonBlank(item.optString("intervalo"), item.optString("almoco"), item.optString("pausa")),
+        status = firstNonBlank(item.optString("status"), item.optString("situacao"))
+    )
+
     /**
      * Mantém o acesso persistente enquanto o usuário não tocar em "Sair".
      * Se o token expirar no servidor, tenta uma única renovação silenciosa com as
@@ -411,4 +455,26 @@ sealed interface NossaGentePromotionsResult {
     ) : NossaGentePromotionsResult
     data object Unauthorized : NossaGentePromotionsResult
     data class Error(val message: String) : NossaGentePromotionsResult
+}
+
+data class PointSummary(
+    val period: String? = null,
+    val status: String? = null,
+    val balance: String? = null,
+    val worked: String? = null,
+    val records: List<PointEntry> = emptyList()
+)
+
+data class PointEntry(
+    val date: String? = null,
+    val entry: String? = null,
+    val exit: String? = null,
+    val interval: String? = null,
+    val status: String? = null
+)
+
+sealed interface NossaGentePointResult {
+    data class Success(val point: PointSummary) : NossaGentePointResult
+    data object Unauthorized : NossaGentePointResult
+    data class Error(val message: String) : NossaGentePointResult
 }

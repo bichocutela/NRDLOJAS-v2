@@ -131,6 +131,10 @@ fun AppNavGraph(
                         scope.launch { drawerState.close() }
                         navController.navigate(if (nossaGenteApi.hasSession()) "promotions" else "promotions_login")
                     },
+                    onGoToMyPoint = {
+                        scope.launch { drawerState.close() }
+                        navController.navigate(if (nossaGenteApi.hasSession()) "my_point" else "my_point_login")
+                    },
                     onGoToSettings = { scope.launch { drawerState.close() }; navController.navigate("settings") },
                     onGoToAcp = { scope.launch { drawerState.close() }; navController.navigate("acp_consultation") { launchSingleTop = true } },
                     onGoToAdmin = {
@@ -205,6 +209,12 @@ fun AppNavGraph(
                 }
                 composable("promotions_login") { PromotionsLoginScreen(nossaGenteApi, { navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true } }, { navController.popBackStack() }) }
                 composable("promotions") { PromotionsScreen(nossaGenteApi, { navController.popBackStack() }, { navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true } } }, { nossaGenteApi.logout(); navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true }; launchSingleTop = true } }) }
+                composable("my_point_login") { PromotionsLoginScreen(nossaGenteApi, { navController.navigate("my_point") { popUpTo("my_point_login") { inclusive = true }; launchSingleTop = true } }, { navController.popBackStack() }) }
+                composable("my_point") {
+                    ProtectedManagementRoute(isLoggedIn, userRole, setOf("mestre"), { navController.navigateToSearch() }) {
+                        MyPointScreen(nossaGenteApi, { navController.popBackStack() }, { navController.navigate("my_point_login") { popUpTo("my_point") { inclusive = true } } })
+                    }
+                }
                 composable("settings") { SettingsScreen(viewModel, onNavigateBack = { navController.popBackStack() }) }
                 composable("acp_consultation") {
                     AcpConsultationScreen(canConfigure = isLoggedIn && userRole in setOf("admin", "mestre"),
@@ -240,6 +250,7 @@ fun LoginDrawerContent(
     onLogout: () -> Unit,
     onGoToAdmin: () -> Unit,
     onGoToPromotions: () -> Unit,
+    onGoToMyPoint: () -> Unit,
     onGoToSettings: () -> Unit,
     onGoToAbout: () -> Unit,
     onGoToDynamicTab: (Int) -> Unit,
@@ -370,6 +381,10 @@ fun LoginDrawerContent(
         Spacer(modifier = Modifier.height(8.dp))
         Button(onClick = onGoToPromotions, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Promoções") }
         Spacer(modifier = Modifier.height(8.dp))
+        if (isLoggedIn && userRole == "mestre") {
+            Button(onClick = onGoToMyPoint, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Meu Ponto") }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
         Button(onClick = onGoToSettings, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Configurações") }
         Spacer(modifier = Modifier.height(8.dp))
         Button(onClick = onGoToAbout, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Sobre") }
