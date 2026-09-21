@@ -38,6 +38,8 @@ import com.example.data.NossaGenteApi
 import com.example.data.NossaGentePointResult
 import com.example.data.PointEntry
 import com.example.data.PointSummary
+import com.example.data.HoursSummary
+import com.example.data.NossaGenteHoursResult
 import kotlinx.coroutines.launch
 import androidx.compose.material3.ExperimentalMaterial3Api
 
@@ -51,6 +53,7 @@ fun MyPointScreen(
     var point by remember { mutableStateOf<PointSummary?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var hours by remember { mutableStateOf<HoursSummary?>(null) }
     val scope = rememberCoroutineScope()
 
     fun load() {
@@ -67,6 +70,11 @@ fun MyPointScreen(
                 NossaGentePointResult.Unauthorized -> onRequireLogin()
                 is NossaGentePointResult.Error -> error = result.message
             }
+            when (val result = api.fetchHours()) {
+                is NossaGenteHoursResult.Success -> hours = result.hours
+                NossaGenteHoursResult.Unauthorized -> onRequireLogin()
+                is NossaGenteHoursResult.Error -> if (point == null) error = result.message
+            }
             loading = false
         }
     }
@@ -80,6 +88,11 @@ fun MyPointScreen(
                 is NossaGentePointResult.Success -> point = result.point
                 NossaGentePointResult.Unauthorized -> onRequireLogin()
                 is NossaGentePointResult.Error -> error = result.message
+            }
+            when (val result = api.fetchHours()) {
+                is NossaGenteHoursResult.Success -> hours = result.hours
+                NossaGenteHoursResult.Unauthorized -> onRequireLogin()
+                is NossaGenteHoursResult.Error -> if (point == null) error = result.message
             }
             loading = false
         }
@@ -112,6 +125,24 @@ fun MyPointScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item {
+                    hours?.let { summary ->
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                                Text("Banco de horas", style = MaterialTheme.typography.titleLarge)
+                                Spacer(Modifier.height(8.dp))
+                                Text("Saldo atual: ${summary.total}", style = MaterialTheme.typography.titleMedium)
+                                Spacer(Modifier.height(10.dp))
+                                Text("Saldos a vencer", style = MaterialTheme.typography.titleMedium)
+                                summary.months.forEach { month ->
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("${month.month}/${month.year}")
+                                        Text(month.balance)
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                    }
                     point?.let { summary ->
                         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                             Column(Modifier.fillMaxWidth().padding(16.dp)) {

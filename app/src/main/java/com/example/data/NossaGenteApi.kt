@@ -82,6 +82,45 @@ class NossaGenteApi(context: Context) {
         fetchPointOnce(limit.coerceIn(1, 100), allowSavedCredentialRecovery = true)
     }
 
+    /** Banco de horas do Nossa Gente. O contrato oficial usa SALDOTOTAL e MESES. */
+    suspend fun fetchHours(): NossaGenteHoursResult = withContext(Dispatchers.IO) {
+        val token = currentToken() ?: return@withContext NossaGenteHoursResult.Unauthorized
+        try {
+            val request = Request.Builder()
+                .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/horas?_sync=${System.currentTimeMillis()}")
+                .get().header("Accept", "application/json")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .header("Authorization", "Bearer $token").build()
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (response.code == 401 || response.code == 403) return@use NossaGenteHoursResult.Unauthorized
+                if (!response.isSuccessful) return@use NossaGenteHoursResult.Error("Não foi possível carregar o banco de horas agora.")
+                runCatching { NossaGenteHoursResult.Success(parseHours(body)) }
+                    .getOrElse { NossaGenteHoursResult.Error("A resposta do banco de horas não pôde ser lida.") }
+            }
+        } catch (_: Exception) {
+            NossaGenteHoursResult.Error("Não foi possível carregar o banco de horas. Verifique a internet.")
+        }
+    }
+
+    private fun parseHours(raw: String): HoursSummary {
+        val json = JSONObject(raw)
+        val months = json.optJSONArray("MESES") ?: JSONArray()
+        val entries = (0 until months.length()).mapNotNull { index ->
+            months.optJSONObject(index)?.let { month ->
+                HoursMonth(month.optInt("ano"), month.optString("mes"), normalizeHours(month.optString("saldo")))
+            }
+        }
+        return HoursSummary(
+            total = normalizeHours(json.optString("SALDOTOTAL")),
+            months = entries
+        )
+    }
+
+    private fun normalizeHours(value: String): String = value.trim().let {
+        if (it.matches(Regex("\\d{3}:\\d{2}"))) it.removePrefix("0") else it
+    }
+
     private suspend fun fetchPointOnce(limit: Int, allowSavedCredentialRecovery: Boolean): NossaGentePointResult {
         val token = currentToken() ?: return NossaGentePointResult.Unauthorized
         return try {
@@ -557,6 +596,15 @@ data class PointEntry(
     val interval: String? = null,
     val status: String? = null
 )
+
+data class HoursSummary(val total: String, val months: List<HoursMonth>)
+data class HoursMonth(val year: Int, val month: String, val balance: String)
+
+sealed interface NossaGenteHoursResult {
+    data class Success(val hours: HoursSummary) : NossaGenteHoursResult
+    data object Unauthorized : NossaGenteHoursResult
+    data class Error(val message: String) : NossaGenteHoursResult
+}
 
 sealed interface NossaGentePointResult {
     data class Success(val point: PointSummary) : NossaGentePointResult
