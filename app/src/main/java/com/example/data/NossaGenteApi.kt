@@ -49,7 +49,7 @@ class NossaGenteApi(context: Context) {
                 .header("X-Requested-With", "XMLHttpRequest")
                 .build()
 
-            return client.newCall(request).execute().use { response ->
+            client.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext NossaGenteLoginResult.Error(loginErrorMessage(response.code, body))
@@ -94,7 +94,7 @@ class NossaGenteApi(context: Context) {
                 .header("Cache-Control", "no-cache, no-store")
                 .header("Pragma", "no-cache")
                 .build()
-            client.newCall(request).execute().use { response ->
+            return client.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (response.code == 401 || response.code == 403) {
                     if (allowSavedCredentialRecovery && renewFromSavedCredentials()) {
