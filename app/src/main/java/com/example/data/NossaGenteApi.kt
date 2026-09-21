@@ -84,7 +84,7 @@ class NossaGenteApi(context: Context) {
 
     private suspend fun fetchPointOnce(limit: Int, allowSavedCredentialRecovery: Boolean): NossaGentePointResult {
         val token = currentToken() ?: return NossaGentePointResult.Unauthorized
-        try {
+        return try {
             val request = Request.Builder()
                 .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/ponto?limit=$limit&_sync=${System.currentTimeMillis()}")
                 .get()
@@ -105,7 +105,7 @@ class NossaGenteApi(context: Context) {
                 if (!response.isSuccessful) return@use NossaGentePointResult.Error("Não foi possível carregar o ponto agora.")
                 NossaGentePointResult.Success(parsePoint(body))
             }
-            return result
+            result
         } catch (_: Exception) {
             NossaGentePointResult.Error("Não foi possível carregar o ponto. Verifique a internet.")
         }
