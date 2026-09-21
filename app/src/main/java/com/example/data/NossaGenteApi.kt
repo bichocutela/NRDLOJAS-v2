@@ -112,22 +112,55 @@ class NossaGenteApi(context: Context) {
     }
 
     private fun parsePoint(raw: String): PointSummary {
-        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return PointSummary()
-        val dataObject = firstObject(root, "data", "resultado", "result", "payload", "ponto")
-        val recordArray = arrayOf("data", "ponto", "items", "results", "registros", "batidas", "pontos", "marcacoes", "registrosPonto", "historico")
-            .asSequence()
-            .mapNotNull { key -> root.optJSONArray(key) ?: dataObject?.optJSONArray(key) }
-            .firstOrNull()
-        val records = recordArray?.let { array ->
-            (0 until array.length()).mapNotNull { array.optJSONObject(it)?.let(::parsePointEntry) }
-        }.orEmpty()
+        val trimmed = raw.trim()
+        if (trimmed.isBlank()) return PointSummary()
+        val rootObject = runCatching { if (trimmed.startsWith("[")) null else JSONObject(trimmed) }.getOrNull()
+        val rootArray = if (trimmed.startsWith("[")) runCatching { JSONArray(trimmed) }.getOrNull() else null
+        val dataObject = rootObject?.let { firstObject(it, "data", "resultado", "result", "payload", "ponto", "folha", "espelho") }
+        val records = linkedMapOf<String, PointEntry>()
+        rootObject?.let { collectPointEntries(it, records) }
+        rootArray?.let { collectPointEntries(it, records) }
         return PointSummary(
-            period = firstPointString(root, dataObject, "periodo", "period", "mesAno", "competencia", "mes"),
-            status = firstPointString(root, dataObject, "status", "situacao", "PontoStatus", "pontoStatus"),
-            balance = firstPointString(root, dataObject, "saldo", "saldoHoras", "bancoHoras", "saldoBanco"),
-            worked = firstPointString(root, dataObject, "horasTrabalhadas", "horas", "totalHoras", "horasApuradas"),
-            records = records
+            period = firstPointString(rootObject, dataObject, "periodo", "period", "mesAno", "competencia", "mes", "referencia"),
+            status = firstPointString(rootObject, dataObject, "status", "situacao", "PontoStatus", "pontoStatus", "situacaoPonto"),
+            balance = firstPointString(rootObject, dataObject, "saldo", "saldoHoras", "bancoHoras", "saldoBanco", "saldo_horas"),
+            worked = firstPointString(rootObject, dataObject, "horasTrabalhadas", "horas", "totalHoras", "horasApuradas", "horas_trabalhadas"),
+            records = records.values.toList()
         )
+    }
+
+    /** A API já mudou entre respostas paginadas e listas simples. Percorremos os
+     * contêineres em vez de depender de uma única chave/nível de aninhamento. */
+    private fun collectPointEntries(value: Any, out: LinkedHashMap<String, PointEntry>, depth: Int = 0) {
+        if (depth > 8) return
+        when (value) {
+            is JSONArray -> for (index in 0 until value.length()) value.opt(index)?.let { collectPointEntries(it, out, depth + 1) }
+            is JSONObject -> {
+                if (looksLikePointEntry(value)) {
+                    val entry = parsePointEntry(value)
+                    val key = listOf(entry.date, entry.entry, entry.exit, entry.interval, entry.status).joinToString("|")
+                    if (key.replace("|", "").isNotBlank()) out.putIfAbsent(key, entry)
+                }
+                val keys = value.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val child = value.opt(key)
+                    if (child is JSONObject || child is JSONArray) collectPointEntries(child, out, depth + 1)
+                }
+            }
+        }
+    }
+
+    private fun looksLikePointEntry(item: JSONObject): Boolean {
+        val keys = setOf(
+            "data", "dia", "date", "dataPonto", "data_ponto", "entrada", "horaEntrada", "hora_entrada",
+            "entradaHora", "in", "saida", "horaSaida", "hora_saida", "saidaHora", "out", "batida", "marcacao"
+        )
+        return keys.any { key ->
+            val value = item.opt(key)
+            value != null && value != JSONObject.NULL && value !is JSONArray &&
+                (value !is JSONObject || key in setOf("entrada", "saida", "intervalo", "batida", "marcacao"))
+        }
     }
 
     private fun firstPointString(root: JSONObject, data: JSONObject?, vararg keys: String): String? {
@@ -136,12 +169,25 @@ class NossaGenteApi(context: Context) {
     }
 
     private fun parsePointEntry(item: JSONObject): PointEntry = PointEntry(
-        date = firstNonBlank(item.optString("data"), item.optString("dia"), item.optString("date"), item.optString("dataPonto")),
-        entry = firstNonBlank(item.optString("entrada"), item.optString("horaEntrada"), item.optString("in")),
-        exit = firstNonBlank(item.optString("saida"), item.optString("horaSaida"), item.optString("out")),
-        interval = firstNonBlank(item.optString("intervalo"), item.optString("almoco"), item.optString("pausa")),
-        status = firstNonBlank(item.optString("status"), item.optString("situacao"))
+        date = firstValueString(item, "data", "dia", "date", "dataPonto", "data_ponto"),
+        entry = firstValueString(item, "entrada", "horaEntrada", "hora_entrada", "entradaHora", "in", "inicio"),
+        exit = firstValueString(item, "saida", "horaSaida", "hora_saida", "saidaHora", "out", "fim"),
+        interval = firstValueString(item, "intervalo", "almoco", "pausa", "horaIntervalo", "interval"),
+        status = firstValueString(item, "status", "situacao", "situacaoPonto")
     )
+
+    private fun firstValueString(item: JSONObject, vararg keys: String): String? {
+        keys.forEach { key ->
+            val value = item.opt(key)
+            when (value) {
+                is JSONObject -> firstValueString(value, "hora", "horario", "time", "valor", "value", "data")?.let { return it }
+                is JSONArray -> Unit
+                null, JSONObject.NULL -> Unit
+                else -> value.toString().trim().takeIf { it.isNotBlank() && it != "null" }?.let { return it }
+            }
+        }
+        return null
+    }
 
     /**
      * Mantém o acesso persistente enquanto o usuário não tocar em "Sair".
