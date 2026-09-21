@@ -165,8 +165,8 @@ class NossaGenteApi(context: Context) {
         }
     }
 
-    private fun firstPointString(root: JSONObject, data: JSONObject?, vararg keys: String): String? {
-        keys.forEach { key -> firstNonBlank(root.optString(key), data?.optString(key))?.let { return it } }
+    private fun firstPointString(root: JSONObject?, data: JSONObject?, vararg keys: String): String? {
+        keys.forEach { key -> firstNonBlank(root?.optString(key), data?.optString(key))?.let { return it } }
         return null
     }
 
