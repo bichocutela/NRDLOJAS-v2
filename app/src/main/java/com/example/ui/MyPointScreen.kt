@@ -65,15 +65,11 @@ fun MyPointScreen(
         loading = true
         error = null
         scope.launch {
-            when (val result = api.fetchPoint()) {
-                is NossaGentePointResult.Success -> point = result.point
-                NossaGentePointResult.Unauthorized -> onRequireLogin()
-                is NossaGentePointResult.Error -> error = result.message
-            }
+
             when (val result = api.fetchHours()) {
                 is NossaGenteHoursResult.Success -> hours = result.hours
                 NossaGenteHoursResult.Unauthorized -> onRequireLogin()
-                is NossaGenteHoursResult.Error -> if (point == null) error = result.message
+                is NossaGenteHoursResult.Error -> error = result.message
             }
             loading = false
         }
@@ -84,15 +80,11 @@ fun MyPointScreen(
             loading = false
             onRequireLogin()
         } else {
-            when (val result = api.fetchPoint()) {
-                is NossaGentePointResult.Success -> point = result.point
-                NossaGentePointResult.Unauthorized -> onRequireLogin()
-                is NossaGentePointResult.Error -> error = result.message
-            }
+
             when (val result = api.fetchHours()) {
                 is NossaGenteHoursResult.Success -> hours = result.hours
                 NossaGenteHoursResult.Unauthorized -> onRequireLogin()
-                is NossaGenteHoursResult.Error -> if (point == null) error = result.message
+                is NossaGenteHoursResult.Error -> error = result.message
             }
             loading = false
         }
