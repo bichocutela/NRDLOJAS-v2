@@ -92,7 +92,7 @@ fun MyPointScreen(
                     IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, "Voltar") }
                 },
                 actions = {
-                    if (!api.hasSession()) TextButton(onClick = onRequireLogin) { Text("Entrar") }
+                    TextButton(onClick = onRequireLogin) { Text(if (api.hasSession()) "Trocar acesso" else "Entrar") }
                     IconButton(onClick = ::load, enabled = !loading) { Icon(Icons.Default.Refresh, "Atualizar") }
                 }
             )
@@ -125,13 +125,9 @@ fun MyPointScreen(
                 }
                 if (point?.records.isNullOrEmpty()) {
                     item {
-                        if (!api.hasSession()) {
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text("Entre com sua conta do Nossa Gente para consultar seu ponto.")
-                                androidx.compose.material3.Button(onClick = onRequireLogin) { Text("Entrar no Nossa Gente") }
-                            }
-                        } else {
-                            Text("Nenhum registro de ponto disponível para este período.")
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(if (api.hasSession()) "Nenhum registro de ponto disponível. Confirme o acesso do Nossa Gente para atualizar seu ponto." else "Entre com sua conta do Nossa Gente para consultar seu ponto.")
+                            androidx.compose.material3.Button(onClick = onRequireLogin) { Text(if (api.hasSession()) "Trocar acesso" else "Entrar no Nossa Gente") }
                         }
                     }
                 } else {

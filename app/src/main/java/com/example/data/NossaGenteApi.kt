@@ -79,19 +79,30 @@ class NossaGenteApi(context: Context) {
 
     /** Endpoint confirmado no APK oficial do Nossa Gente: GET /ponto?limit=. */
     suspend fun fetchPoint(limit: Int = 100): NossaGentePointResult = withContext(Dispatchers.IO) {
-        val token = currentToken() ?: return@withContext NossaGentePointResult.Unauthorized
+        fetchPointOnce(limit.coerceIn(1, 100), allowSavedCredentialRecovery = true)
+    }
+
+    private suspend fun fetchPointOnce(limit: Int, allowSavedCredentialRecovery: Boolean): NossaGentePointResult {
+        val token = currentToken() ?: return NossaGentePointResult.Unauthorized
         try {
             val request = Request.Builder()
-                .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/ponto?limit=${limit.coerceIn(1, 100)}&_sync=${System.currentTimeMillis()}")
+                .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/ponto?limit=$limit&_sync=${System.currentTimeMillis()}")
                 .get()
                 .header("Accept", "application/json")
+                .header("X-Requested-With", "XMLHttpRequest")
                 .header("Authorization", "Bearer $token")
                 .header("Cache-Control", "no-cache, no-store")
+                .header("Pragma", "no-cache")
                 .build()
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
-                if (response.code == 401 || response.code == 403) return@withContext NossaGentePointResult.Unauthorized
-                if (!response.isSuccessful) return@withContext NossaGentePointResult.Error("Não foi possível carregar o ponto agora.")
+                if (response.code == 401 || response.code == 403) {
+                    if (allowSavedCredentialRecovery && renewFromSavedCredentials()) {
+                        return fetchPointOnce(limit, allowSavedCredentialRecovery = false)
+                    }
+                    return NossaGentePointResult.Unauthorized
+                }
+                if (!response.isSuccessful) return NossaGentePointResult.Error("Não foi possível carregar o ponto agora.")
                 NossaGentePointResult.Success(parsePoint(body))
             }
         } catch (_: Exception) {

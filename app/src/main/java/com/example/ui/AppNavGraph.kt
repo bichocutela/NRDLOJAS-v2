@@ -212,7 +212,7 @@ fun AppNavGraph(
                 composable("my_point_login") { PromotionsLoginScreen(nossaGenteApi, { navController.navigate("my_point") { popUpTo("my_point_login") { inclusive = true }; launchSingleTop = true } }, { navController.popBackStack() }) }
                 composable("my_point") {
                     ProtectedManagementRoute(isLoggedIn, userRole, setOf("mestre"), { navController.navigateToSearch() }) {
-                        MyPointScreen(nossaGenteApi, { navController.popBackStack() }, { navController.navigate("my_point_login") { popUpTo("my_point") { inclusive = true } } })
+                        MyPointScreen(nossaGenteApi, { navController.popBackStack() }, { nossaGenteApi.logout(); navController.navigate("my_point_login") { popUpTo("my_point") { inclusive = true } } })
                     }
                 }
                 composable("settings") { SettingsScreen(viewModel, onNavigateBack = { navController.popBackStack() }) }
