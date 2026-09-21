@@ -1,6 +1,10 @@
 package com.example.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -74,6 +78,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -670,14 +675,60 @@ fun PromotionsScreen(
 
 @Composable
 private fun LoadingPromotionsState(innerPadding: PaddingValues) {
-    Box(
-        modifier = Modifier.padding(innerPadding).fillMaxSize(),
-        contentAlignment = Alignment.Center
+    val transition = rememberInfiniteTransition(label = "promotions-loading-line")
+
+    Column(
+        modifier = Modifier
+            .padding(innerPadding)
+            .fillMaxSize()
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.LocalOffer, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-            Spacer(Modifier.height(12.dp))
-            Text("Carregando ofertas…", style = MaterialTheme.typography.bodyMedium)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            val lineColors = listOf(
+                Color(0xFFE53935), // vermelho
+                Color(0xFF43A047), // verde
+                Color(0xFFFB8C00), // laranja
+                Color(0xFF1E88E5), // azul
+                Color(0xFFFFC107)  // dourado
+            )
+            lineColors.forEachIndexed { index, color ->
+                val alpha = transition.animateFloat(
+                    initialValue = 0.45f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(850, delayMillis = index * 110),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "promotions-loading-segment-$index"
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(color.copy(alpha = alpha.value))
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    Icons.Default.LocalOffer,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
+                )
+                Spacer(Modifier.height(12.dp))
+                Text("Carregando ofertas…", style = MaterialTheme.typography.bodyMedium)
+            }
         }
     }
 }
