@@ -94,17 +94,18 @@ class NossaGenteApi(context: Context) {
                 .header("Cache-Control", "no-cache, no-store")
                 .header("Pragma", "no-cache")
                 .build()
-            return client.newCall(request).execute().use { response ->
+            val result = client.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (response.code == 401 || response.code == 403) {
                     if (allowSavedCredentialRecovery && renewFromSavedCredentials()) {
-                        return fetchPointOnce(limit, allowSavedCredentialRecovery = false)
+                        return@use fetchPointOnce(limit, allowSavedCredentialRecovery = false)
                     }
-                    return NossaGentePointResult.Unauthorized
+                    return@use NossaGentePointResult.Unauthorized
                 }
-                if (!response.isSuccessful) return NossaGentePointResult.Error("Não foi possível carregar o ponto agora.")
+                if (!response.isSuccessful) return@use NossaGentePointResult.Error("Não foi possível carregar o ponto agora.")
                 NossaGentePointResult.Success(parsePoint(body))
             }
+            return result
         } catch (_: Exception) {
             NossaGentePointResult.Error("Não foi possível carregar o ponto. Verifique a internet.")
         }
