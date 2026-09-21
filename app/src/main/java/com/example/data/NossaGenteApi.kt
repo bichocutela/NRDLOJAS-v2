@@ -101,16 +101,26 @@ class NossaGenteApi(context: Context) {
 
     private fun parsePoint(raw: String): PointSummary {
         val root = runCatching { JSONObject(raw) }.getOrNull() ?: return PointSummary()
-        val records = firstArray(root, "data", "ponto", "items", "results", "registros", "batidas")
-            ?.let { array -> (0 until array.length()).mapNotNull { array.optJSONObject(it)?.let(::parsePointEntry) } }
-            .orEmpty()
+        val dataObject = firstObject(root, "data", "resultado", "result", "payload", "ponto")
+        val recordArray = arrayOf("data", "ponto", "items", "results", "registros", "batidas", "pontos", "marcacoes", "registrosPonto", "historico")
+            .asSequence()
+            .mapNotNull { key -> root.optJSONArray(key) ?: dataObject?.optJSONArray(key) }
+            .firstOrNull()
+        val records = recordArray?.let { array ->
+            (0 until array.length()).mapNotNull { array.optJSONObject(it)?.let(::parsePointEntry) }
+        }.orEmpty()
         return PointSummary(
-            period = firstNonBlank(root.optString("periodo"), root.optString("period"), root.optString("mesAno"), root.optString("competencia")),
-            status = firstNonBlank(root.optString("status"), root.optString("situacao"), root.optString("PontoStatus")),
-            balance = firstNonBlank(root.optString("saldo"), root.optString("saldoHoras"), root.optString("bancoHoras")),
-            worked = firstNonBlank(root.optString("horasTrabalhadas"), root.optString("horas"), root.optString("totalHoras")),
+            period = firstPointString(root, dataObject, "periodo", "period", "mesAno", "competencia", "mes"),
+            status = firstPointString(root, dataObject, "status", "situacao", "PontoStatus", "pontoStatus"),
+            balance = firstPointString(root, dataObject, "saldo", "saldoHoras", "bancoHoras", "saldoBanco"),
+            worked = firstPointString(root, dataObject, "horasTrabalhadas", "horas", "totalHoras", "horasApuradas"),
             records = records
         )
+    }
+
+    private fun firstPointString(root: JSONObject, data: JSONObject?, vararg keys: String): String? {
+        keys.forEach { key -> firstNonBlank(root.optString(key), data?.optString(key))?.let { return it } }
+        return null
     }
 
     private fun parsePointEntry(item: JSONObject): PointEntry = PointEntry(
@@ -360,6 +370,12 @@ class NossaGenteApi(context: Context) {
         keys.forEach { key ->
             objectValue.optJSONArray(key)?.let { return it }
         }
+        return null
+    }
+
+    private fun firstObject(objectValue: JSONObject?, vararg keys: String): JSONObject? {
+        if (objectValue == null) return null
+        keys.forEach { key -> objectValue.optJSONObject(key)?.let { return it } }
         return null
     }
 

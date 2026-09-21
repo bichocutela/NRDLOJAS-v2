@@ -54,6 +54,10 @@ fun MyPointScreen(
 
     fun load() {
         if (loading) return
+        if (!api.hasSession()) {
+            onRequireLogin()
+            return
+        }
         loading = true
         error = null
         scope.launch {
@@ -67,12 +71,16 @@ fun MyPointScreen(
     }
 
     LaunchedEffect(Unit) {
-        when (val result = api.fetchPoint()) {
-            is NossaGentePointResult.Success -> point = result.point
-            NossaGentePointResult.Unauthorized -> onRequireLogin()
-            is NossaGentePointResult.Error -> error = result.message
+        if (!api.hasSession()) {
+            loading = false
+        } else {
+            when (val result = api.fetchPoint()) {
+                is NossaGentePointResult.Success -> point = result.point
+                NossaGentePointResult.Unauthorized -> onRequireLogin()
+                is NossaGentePointResult.Error -> error = result.message
+            }
+            loading = false
         }
-        loading = false
     }
 
     Scaffold(
@@ -83,6 +91,7 @@ fun MyPointScreen(
                     IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, "Voltar") }
                 },
                 actions = {
+                    if (!api.hasSession()) TextButton(onClick = onRequireLogin) { Text("Entrar") }
                     IconButton(onClick = ::load, enabled = !loading) { Icon(Icons.Default.Refresh, "Atualizar") }
                 }
             )
@@ -114,7 +123,16 @@ fun MyPointScreen(
                     }
                 }
                 if (point?.records.isNullOrEmpty()) {
-                    item { Text("Nenhum registro de ponto disponível para este período.") }
+                    item {
+                        if (!api.hasSession()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("Entre com sua conta do Nossa Gente para consultar seu ponto.")
+                                androidx.compose.material3.Button(onClick = onRequireLogin) { Text("Entrar no Nossa Gente") }
+                            }
+                        } else {
+                            Text("Nenhum registro de ponto disponível para este período.")
+                        }
+                    }
                 } else {
                     items(point!!.records) { entry -> PointEntryCard(entry) }
                 }
