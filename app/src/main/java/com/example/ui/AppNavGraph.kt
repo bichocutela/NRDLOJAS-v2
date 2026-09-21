@@ -133,7 +133,7 @@ fun AppNavGraph(
                     },
                     onGoToMyPoint = {
                         scope.launch { drawerState.close() }
-                        navController.navigate(if (nossaGenteApi.hasSession()) "my_point" else "my_point_login")
+                        navController.navigate("my_point_login") { launchSingleTop = true }
                     },
                     onGoToSettings = { scope.launch { drawerState.close() }; navController.navigate("settings") },
                     onGoToAcp = { scope.launch { drawerState.close() }; navController.navigate("acp_consultation") { launchSingleTop = true } },
@@ -209,7 +209,17 @@ fun AppNavGraph(
                 }
                 composable("promotions_login") { PromotionsLoginScreen(nossaGenteApi, { navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true } }, { navController.popBackStack() }) }
                 composable("promotions") { PromotionsScreen(nossaGenteApi, { navController.popBackStack() }, { navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true } } }, { nossaGenteApi.logout(); navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true }; launchSingleTop = true } }) }
-                composable("my_point_login") { PromotionsLoginScreen(nossaGenteApi, { navController.navigate("my_point") { popUpTo("my_point_login") { inclusive = true }; launchSingleTop = true } }, { navController.popBackStack() }) }
+                composable("my_point_login") {
+                    ProtectedManagementRoute(isLoggedIn, userRole, setOf("mestre"), { navController.navigateToSearch() }) {
+                        PromotionsLoginScreen(
+                            api = nossaGenteApi,
+                            onLoginSuccess = { navController.navigate("my_point") { popUpTo("my_point_login") { inclusive = true }; launchSingleTop = true } },
+                            onNavigateBack = { navController.popBackStack() },
+                            reuseExistingSession = false,
+                            title = "Acesso ao Meu Ponto"
+                        )
+                    }
+                }
                 composable("my_point") {
                     ProtectedManagementRoute(isLoggedIn, userRole, setOf("mestre"), { navController.navigateToSearch() }) {
                         MyPointScreen(nossaGenteApi, { navController.popBackStack() }, { nossaGenteApi.logout(); navController.navigate("my_point_login") { popUpTo("my_point") { inclusive = true } } })

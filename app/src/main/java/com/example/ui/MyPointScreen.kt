@@ -74,6 +74,7 @@ fun MyPointScreen(
     LaunchedEffect(Unit) {
         if (!api.hasSession()) {
             loading = false
+            onRequireLogin()
         } else {
             when (val result = api.fetchPoint()) {
                 is NossaGentePointResult.Success -> point = result.point
@@ -116,7 +117,7 @@ fun MyPointScreen(
                             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                                 Text(summary.period ?: "Período atual", style = MaterialTheme.typography.titleLarge)
                                 Spacer(Modifier.height(8.dp))
-                                Text("Status: ${summary.status ?: "Não informado"}")
+                                summary.status?.let { Text("Status: $it") }
                                 summary.worked?.let { Text("Horas trabalhadas: $it") }
                                 summary.balance?.let { Text("Saldo: $it") }
                             }
@@ -126,7 +127,7 @@ fun MyPointScreen(
                 if (point?.records.isNullOrEmpty()) {
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(if (api.hasSession()) "Nenhum registro de ponto disponível. Confirme o acesso do Nossa Gente para atualizar seu ponto." else "Entre com sua conta do Nossa Gente para consultar seu ponto.")
+                            Text("Não foi possível apresentar os dias e horários com os dados recebidos. Isso não confirma ausência de registros. Tente atualizar; se persistir, a integração do ponto precisa ser verificada.")
                             androidx.compose.material3.Button(onClick = onRequireLogin) { Text(if (api.hasSession()) "Trocar acesso" else "Entrar no Nossa Gente") }
                         }
                     }

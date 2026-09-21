@@ -103,7 +103,13 @@ class NossaGenteApi(context: Context) {
                     return@use NossaGentePointResult.Unauthorized
                 }
                 if (!response.isSuccessful) return@use NossaGentePointResult.Error("Não foi possível carregar o ponto agora.")
-                NossaGentePointResult.Success(parsePoint(body))
+                val point = parsePoint(body)
+                if (point.records.isEmpty() && point.period == null && point.status == null &&
+                    point.balance == null && point.worked == null && body.trim() != "[]") {
+                    NossaGentePointResult.Error("A API respondeu, mas o app não reconheceu os dados do ponto. Isso não significa que você está sem registros. É necessário verificar o formato da resposta da integração.")
+                } else {
+                    NossaGentePointResult.Success(point)
+                }
             }
             result
         } catch (_: Exception) {
@@ -129,8 +135,8 @@ class NossaGenteApi(context: Context) {
         )
     }
 
-    /** A API já mudou entre respostas paginadas e listas simples. Percorremos os
-     * contêineres em vez de depender de uma única chave/nível de aninhamento. */
+    /** Compatibilidade com contêineres JSON; o contrato autenticado ainda precisa
+     * de validação. Uma resposta desconhecida não comprova ausência de ponto. */
     private fun collectPointEntries(value: Any, out: LinkedHashMap<String, PointEntry>, depth: Int = 0) {
         if (depth > 8) return
         when (value) {
@@ -138,8 +144,11 @@ class NossaGenteApi(context: Context) {
             is JSONObject -> {
                 if (looksLikePointEntry(value)) {
                     val entry = parsePointEntry(value)
-                    val key = listOf(entry.date, entry.entry, entry.exit, entry.interval, entry.status).joinToString("|")
-                    if (key.replace("|", "").isNotBlank()) out.putIfAbsent(key, entry)
+                    val fields = listOf(entry.date, entry.entry, entry.exit, entry.interval, entry.status)
+                    if (fields.any { !it.isNullOrBlank() }) {
+                        val key = fields.joinToString("|") { it.orEmpty() }
+                        out.putIfAbsent(key, entry)
+                    }
                 }
                 val keys = value.keys()
                 while (keys.hasNext()) {

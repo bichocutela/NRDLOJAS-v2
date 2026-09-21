@@ -133,7 +133,9 @@ private data class PendingPromotionUpdate(
 fun PromotionsLoginScreen(
     api: NossaGenteApi,
     onLoginSuccess: () -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    reuseExistingSession: Boolean = true,
+    title: String = "Acesso às promoções"
 ) {
     var cpf by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -153,8 +155,8 @@ fun PromotionsLoginScreen(
         }
     }
 
-    LaunchedEffect(api) {
-        if (api.hasSession()) {
+    LaunchedEffect(api, reuseExistingSession) {
+        if (reuseExistingSession && api.hasSession()) {
             onLoginSuccess()
         }
     }
@@ -162,7 +164,7 @@ fun PromotionsLoginScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Acesso às promoções") },
+                title = { Text(title) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
