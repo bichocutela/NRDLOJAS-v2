@@ -85,6 +85,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.data.NossaGenteApi
 import com.example.data.NossaGenteCredentialStore
 import com.example.data.NossaGenteLoginResult
@@ -285,7 +286,7 @@ fun PromotionsScreen(
     onRequireLogin: () -> Unit,
     onLogout: () -> Unit
 ) {
-    var promotions by remember { mutableStateOf<List<Promotion>>(emptyList()) }
+    var hasPromotions by remember { mutableStateOf(false) }
     var offerGroups by remember { mutableStateOf<List<OfferGroup>>(emptyList()) }
     var loadedFingerprint by remember { mutableStateOf<String?>(null) }
     var pendingUpdate by remember { mutableStateOf<PendingPromotionUpdate?>(null) }
@@ -311,6 +312,7 @@ fun PromotionsScreen(
     var enlargedImageUrl by remember { mutableStateOf<String?>(null) }
     var selectedOffer by remember { mutableStateOf<OfferGroup?>(null) }
     val scope = rememberCoroutineScope()
+    var promotionRequestRunning by remember { mutableStateOf(false) }
 
     fun requestLoginOnce() {
         if (loginRedirectRequested) return
@@ -319,7 +321,7 @@ fun PromotionsScreen(
     }
 
     fun applyPromotionUpdate(update: PendingPromotionUpdate) {
-        promotions = update.promotions
+        hasPromotions = update.promotions.isNotEmpty()
         offerGroups = update.offerGroups
         loadedFingerprint = update.fingerprint
         pendingUpdate = null
@@ -330,6 +332,8 @@ fun PromotionsScreen(
     }
 
     fun checkForPromotions(initialLoad: Boolean) {
+        if (promotionRequestRunning) return
+        promotionRequestRunning = true
         scope.launch {
             if (initialLoad) {
                 isLoading = true
@@ -362,16 +366,17 @@ fun PromotionsScreen(
                     // catálogo carregado. Porém, na entrada, um token expirado precisa ser
                     // descartado antes de abrir o login; caso contrário a tela de login detecta
                     // o mesmo token e volta imediatamente para Promoções, causando o "pisca-pisca".
-                    if (initialLoad && promotions.isEmpty()) {
+                    if (initialLoad && !hasPromotions) {
                         api.invalidateSession()
                         requestLoginOnce()
                     }
                 }
                 is NossaGentePromotionsResult.Error -> {
-                    if (initialLoad || promotions.isEmpty()) error = result.message
+                    if (initialLoad || !hasPromotions) error = result.message
                 }
             }
             if (initialLoad) isLoading = false else isChecking = false
+            promotionRequestRunning = false
         }
     }
 
@@ -405,7 +410,7 @@ fun PromotionsScreen(
     }
 
     LaunchedEffect(api) {
-        while (true) {
+        while (kotlinx.coroutines.currentCoroutineContext().isActive) {
             delay(60_000)
             if (!api.hasSession()) break
             checkForPromotions(initialLoad = false)
@@ -625,7 +630,7 @@ fun PromotionsScreen(
                 message = error!!,
                 onRetry = { checkForPromotions(initialLoad = true) }
             )
-            promotions.isEmpty() -> EmptyPromotionsState(
+            !hasPromotions -> EmptyPromotionsState(
                 innerPadding = innerPadding,
                 onRetry = { checkForPromotions(initialLoad = true) }
             )
@@ -667,7 +672,7 @@ private fun LoadingPromotionsState(innerPadding: PaddingValues) {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator()
+            Icon(Icons.Default.LocalOffer, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
             Spacer(Modifier.height(12.dp))
             Text("Carregando ofertas…", style = MaterialTheme.typography.bodyMedium)
         }
@@ -1359,7 +1364,7 @@ private fun ProductImage(
         )
         if (!imageUrl.isNullOrBlank()) {
             AsyncImage(
-                model = imageUrl,
+                model = ImageRequest.Builder(LocalContext.current).data(imageUrl).size(360, 280).crossfade(false).build(),
                 contentDescription = contentDescription,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit
@@ -1402,7 +1407,7 @@ private fun PromotionImageDialog(imageUrl: String, onDismiss: () -> Unit) {
                     contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
-                        model = imageUrl,
+                        model = ImageRequest.Builder(LocalContext.current).data(imageUrl).size(1200, 900).crossfade(false).build(),
                         contentDescription = "Imagem ampliada da oferta",
                         modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
                         contentScale = ContentScale.Fit
@@ -1482,7 +1487,7 @@ private fun PromotionDetailsDialog(
                         )
                         if (!offer.imageUrl.isNullOrBlank()) {
                             AsyncImage(
-                                model = offer.imageUrl,
+                                model = ImageRequest.Builder(LocalContext.current).data(offer.imageUrl).size(1200, 900).crossfade(false).build(),
                                 contentDescription = offer.name,
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Fit
