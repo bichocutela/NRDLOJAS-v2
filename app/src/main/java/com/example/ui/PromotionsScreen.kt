@@ -103,6 +103,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.isActive
 
 private const val INITIAL_OFFER_PAGE = 48
 private const val OFFER_PAGE_INCREMENT = 48

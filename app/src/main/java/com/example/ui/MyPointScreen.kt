@@ -38,7 +38,9 @@ import com.example.data.NossaGentePointResult
 import com.example.data.PointEntry
 import com.example.data.PointSummary
 import kotlinx.coroutines.launch
+import androidx.compose.material3.ExperimentalMaterial3Api
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MyPointScreen(
     api: NossaGenteApi,
