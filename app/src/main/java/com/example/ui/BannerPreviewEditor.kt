@@ -1,5 +1,10 @@
 package com.example.ui
 
+import android.app.DownloadManager
+import android.content.Context
+import android.net.Uri
+import android.os.Environment
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -40,6 +46,7 @@ fun BannerPreviewEditor(
     onEditBackground: (() -> Unit)? = null,
     onSave: (ThemeBackground, BannerMaskSettings) -> Unit
 ) {
+    val context = LocalContext.current
     val storedMask = rememberBannerMaskSettings(themeKey, background.url)
     var maskDraft by remember(background.id) { mutableStateOf<BannerMaskSettings?>(null) }
     val effectiveMask = (maskDraft ?: storedMask).normalized()
@@ -378,6 +385,19 @@ fun BannerPreviewEditor(
                             Text("Editar fundo")
                         }
                     }
+
+                    OutlinedButton(
+                        onClick = {
+                            startBackgroundDownload(
+                                context = context,
+                                background = background
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isSaving && background.url.isNotBlank()
+                    ) {
+                        Text("Baixar imagem original")
+                    }
                 }
 
                 Button(
@@ -420,6 +440,45 @@ fun BannerPreviewEditor(
                 }
             }
         }
+    }
+}
+
+/**
+ * Enfileira o arquivo original no DownloadManager, sem passar pela imagem
+ * renderizada da prévia. Assim o download mantém a resolução do URL salvo.
+ */
+private fun startBackgroundDownload(context: Context, background: ThemeBackground) {
+    val uri = runCatching { Uri.parse(background.url) }.getOrNull()
+    if (uri == null || uri.scheme !in setOf("http", "https")) {
+        Toast.makeText(context, "URL da imagem inválida", Toast.LENGTH_LONG).show()
+        return
+    }
+
+    val originalName = uri.lastPathSegment
+        ?.substringBefore('?')
+        ?.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        ?.takeIf { it.isNotBlank() }
+    val fallbackName = background.label
+        .trim()
+        .ifBlank { "fundo_nrd" }
+        .replace(Regex("[^A-Za-z0-9._-]"), "_")
+    val fileName = (originalName ?: fallbackName).let {
+        if (it.contains('.')) it else "$it.jpg"
+    }
+
+    runCatching {
+        val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val request = DownloadManager.Request(uri)
+            .setTitle(background.label.ifBlank { "Fundo NRD" })
+            .setDescription("Baixando imagem original")
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setAllowedOverMetered(true)
+            .setAllowedOverRoaming(false)
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+        manager.enqueue(request)
+        Toast.makeText(context, "Download iniciado em Downloads", Toast.LENGTH_SHORT).show()
+    }.onFailure {
+        Toast.makeText(context, "Não foi possível iniciar o download", Toast.LENGTH_LONG).show()
     }
 }
 
