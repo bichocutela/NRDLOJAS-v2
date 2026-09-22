@@ -43,7 +43,7 @@ class NossaGenteApi(
             return@withContext NossaGenteLoginResult.Error("Informe um CPF válido e sua senha.")
         }
 
-        return try {
+        try {
             val payload = JSONObject()
                 .put("cpf", cleanCpf)
                 .put("senha", password)
