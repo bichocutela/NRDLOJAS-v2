@@ -41,6 +41,7 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
 import com.example.data.AppearanceSettings
+import com.example.data.BannerMaskSettings
 import com.example.data.CategoryDefinition
 import com.example.data.CatalogSnapshot
 import com.example.data.CatalogHistoryBackend
@@ -73,6 +74,12 @@ private fun offerKeyFromEditorKey(editorKey: String): String? = editorKey
     .takeIf { it.startsWith(OFFER_BANNER_KEY_PREFIX) }
     ?.removePrefix(OFFER_BANNER_KEY_PREFIX)
     ?.takeIf { it in SupportedOfferBannerKeys }
+
+private data class PendingDefaultBannerChange(
+    val themeKey: String,
+    val background: ThemeBackground,
+    val maskSettings: BannerMaskSettings
+)
 
 private enum class MestrePanelPage(val title: String) {
     DASHBOARD("Painel Mestre"),
@@ -148,6 +155,9 @@ fun MestreScreen(
     val appearanceSettings by appearanceSettingsFlow
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
     var draftAppearanceSettings by remember(appearanceSettings) { mutableStateOf(appearanceSettings) }
+    var draftDefaultThemeBackgrounds by remember(appearanceSettings.defaultThemeBackgrounds) {
+        mutableStateOf(appearanceSettings.defaultThemeBackgrounds)
+    }
     var draftThemeBackgrounds by remember(appearanceSettings.themeBackgrounds) {
         mutableStateOf(appearanceSettings.themeBackgrounds)
     }
@@ -165,6 +175,7 @@ fun MestreScreen(
     var showThemeBackgroundDialog by remember { mutableStateOf(false) }
     var editingBackgroundTheme by remember { mutableStateOf<String?>(null) }
     var editingBackground by remember { mutableStateOf<ThemeBackground?>(null) }
+    var editingDefaultBackground by remember { mutableStateOf(false) }
     var backgroundLabelInput by remember { mutableStateOf("") }
     var backgroundUrlInput by remember { mutableStateOf("") }
     var backgroundStartDateInput by remember { mutableStateOf("") }
@@ -175,6 +186,7 @@ fun MestreScreen(
     var isUploadingThemeBackground by remember { mutableStateOf(false) }
     var backgroundToDelete by remember { mutableStateOf<Pair<String, ThemeBackground>?>(null) }
     var backgroundToPreview by remember { mutableStateOf<Pair<String, ThemeBackground>?>(null) }
+    var pendingDefaultBannerChange by remember { mutableStateOf<PendingDefaultBannerChange?>(null) }
     var quickPreviewOpened by remember(quickEditThemeKey) { mutableStateOf(false) }
     var maintenanceSummary by remember { mutableStateOf<MaintenanceSummary?>(null) }
     var isLoadingMaintenance by remember { mutableStateOf(false) }
@@ -247,9 +259,21 @@ fun MestreScreen(
     var expandedRemoteTheme by remember { mutableStateOf(false) }
     var expandedRemoteMode by remember { mutableStateOf(false) }
 
-    fun openBackgroundEditor(themeKey: String, background: ThemeBackground?) {
+    fun defaultBackgroundFor(themeKey: String): ThemeBackground =
+        draftDefaultThemeBackgrounds[themeKey] ?: ThemeBackground(
+            id = "default-$themeKey",
+            label = "Banner padrão do aplicativo",
+            url = ""
+        )
+
+    fun openBackgroundEditor(
+        themeKey: String,
+        background: ThemeBackground?,
+        isDefault: Boolean = false
+    ) {
         editingBackgroundTheme = themeKey
         editingBackground = background
+        editingDefaultBackground = isDefault
         backgroundLabelInput = background?.label.orEmpty()
         backgroundUrlInput = background?.url.orEmpty()
         backgroundStartDateInput = background?.startDate.orEmpty()
@@ -298,6 +322,7 @@ fun MestreScreen(
     val homeHasChanges = draftHomeSettings != homeSettings
     val notificationsHaveChanges = draftNotificationSettings != notificationSettings
     val appearanceDraft = draftAppearanceSettings.copy(
+        defaultThemeBackgrounds = draftDefaultThemeBackgrounds,
         themeBackgrounds = draftThemeBackgrounds,
         consultationBackgrounds = draftConsultationBackgrounds,
         offerBanners = draftOfferBanners
@@ -918,25 +943,35 @@ fun MestreScreen(
                                         )
                                     }
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        "Padrão do aplicativo",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                val defaultBackground = defaultBackgroundFor(themeKey)
+                                Text(
+                                    "Banner padrão",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                DefaultThemeBackgroundItem(
+                                    themeKey = themeKey,
+                                    background = defaultBackground,
+                                    onPreview = { backgroundToPreview = themeKey to defaultBackground },
+                                    onEdit = { openBackgroundEditor(themeKey, defaultBackground, isDefault = true) }
+                                )
+                                if (backgrounds.any { it.isActive }) {
                                     TextButton(
                                         onClick = {
                                             updateBackgrounds(themeKey, backgrounds.map { it.copy(isActive = false) })
                                         },
-                                        enabled = backgrounds.any { it.isActive }
+                                        modifier = Modifier.align(Alignment.End)
                                     ) {
-                                        Text("Usar fundo padrão")
+                                        Text("Usar padrão agora")
                                     }
                                 }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    "Banners programados",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                                )
                                 if (backgrounds.isNotEmpty()) {
                                     Text(
                                         "Exibindo ${backgroundPagination.fromIndex + 1}–${backgroundPagination.toIndex} de ${backgrounds.size}",
@@ -1241,6 +1276,7 @@ fun MestreScreen(
                                     MestrePanelPage.APPEARANCE_SETTINGS,
                                     MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS -> {
                                         draftAppearanceSettings = appearanceSettings
+                                        draftDefaultThemeBackgrounds = appearanceSettings.defaultThemeBackgrounds
                                         draftThemeBackgrounds = appearanceSettings.themeBackgrounds
                                         draftConsultationBackgrounds = appearanceSettings.consultationBackgrounds
                                         draftOfferBanners = appearanceSettings.offerBanners
@@ -1445,6 +1481,7 @@ fun MestreScreen(
                                 }
                             } else {
                                 when {
+                                    editingDefaultBackground -> "Editar banner padrão"
                                     consultation -> "Editar fundo da consulta"
                                     offerBanner -> "Editar banner de oferta"
                                     else -> "Editar fundo do tema"
@@ -1474,7 +1511,9 @@ fun MestreScreen(
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Text(
-                                if (editingBackgroundTheme?.let(::offerKeyFromEditorKey) != null) {
+                                if (editingDefaultBackground) {
+                                    "Troque a imagem por URL ou pelo seletor abaixo. A alteração só será publicada ao salvar a aparência."
+                                } else if (editingBackgroundTheme?.let(::offerKeyFromEditorKey) != null) {
                                     "Use uma imagem 3:1 acessível por link HTTP/HTTPS. O cartaz atual continuará disponível como padrão."
                                 } else {
                                     "Use uma imagem acessível por link HTTP/HTTPS. O fundo padrão continuará disponível."
@@ -1482,44 +1521,46 @@ fun MestreScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                "Período de ativação (opcional)",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
-                            )
-                            Text(
-                                "A data de início é obrigatória para ativar. Sem data de fim, permanece ativo até ser desativado. Após o fim, o fundo padrão volta automaticamente.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            OutlinedButton(
-                                onClick = { showStartDatePicker = true },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
+                            if (!editingDefaultBackground) {
+                                Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    if (backgroundStartDateInput.isBlank()) "Definir data de início"
-                                    else "Início: ${formatThemeBackgroundDate(backgroundStartDateInput)}"
+                                    "Período de ativação (opcional)",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                                 )
-                            }
-                            if (backgroundStartDateInput.isNotBlank()) {
-                                TextButton(onClick = { backgroundStartDateInput = "" }) {
-                                    Text("Limpar data de início")
+                                Text(
+                                    "A data de início é obrigatória para ativar. Sem data de fim, permanece ativo até ser desativado. Após o fim, o fundo padrão volta automaticamente.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                OutlinedButton(
+                                    onClick = { showStartDatePicker = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        if (backgroundStartDateInput.isBlank()) "Definir data de início"
+                                        else "Início: ${formatThemeBackgroundDate(backgroundStartDateInput)}"
+                                    )
                                 }
-                            }
-                            OutlinedButton(
-                                onClick = { showEndDatePicker = true },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    if (backgroundEndDateInput.isBlank()) "Definir data de fim"
-                                    else "Fim: ${formatThemeBackgroundDate(backgroundEndDateInput)}"
-                                )
-                            }
-                            if (backgroundEndDateInput.isNotBlank()) {
-                                TextButton(onClick = { backgroundEndDateInput = "" }) {
-                                    Text("Limpar data de fim")
+                                if (backgroundStartDateInput.isNotBlank()) {
+                                    TextButton(onClick = { backgroundStartDateInput = "" }) {
+                                        Text("Limpar data de início")
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = { showEndDatePicker = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        if (backgroundEndDateInput.isBlank()) "Definir data de fim"
+                                        else "Fim: ${formatThemeBackgroundDate(backgroundEndDateInput)}"
+                                    )
+                                }
+                                if (backgroundEndDateInput.isNotBlank()) {
+                                    TextButton(onClick = { backgroundEndDateInput = "" }) {
+                                        Text("Limpar data de fim")
+                                    }
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
@@ -1554,15 +1595,30 @@ fun MestreScreen(
                                     val current = themeKey?.let(::backgroundsForKey).orEmpty()
                                     when {
                                         themeKey == null -> backgroundInputError = "Tema inválido."
-                                        normalizedUrl.isBlank() || !(normalizedUrl.startsWith("https://") || normalizedUrl.startsWith("http://")) ->
+                                        !editingDefaultBackground && normalizedUrl.isBlank() ->
                                             backgroundInputError = "Informe uma URL HTTP/HTTPS válida."
-                                        backgroundStartDateInput.isNotBlank() && normalizedStartDate == null ->
+                                        normalizedUrl.isNotBlank() && !(normalizedUrl.startsWith("https://") || normalizedUrl.startsWith("http://")) ->
+                                            backgroundInputError = "Informe uma URL HTTP/HTTPS válida."
+                                        !editingDefaultBackground && backgroundStartDateInput.isNotBlank() && normalizedStartDate == null ->
                                             backgroundInputError = "Informe uma data de início válida."
-                                        backgroundEndDateInput.isNotBlank() && normalizedEndDate == null ->
+                                        !editingDefaultBackground && backgroundEndDateInput.isNotBlank() && normalizedEndDate == null ->
                                             backgroundInputError = "Informe uma data de fim válida."
-                                        normalizedStartDate != null && normalizedEndDate != null && normalizedEndDate < normalizedStartDate ->
+                                        !editingDefaultBackground && normalizedStartDate != null && normalizedEndDate != null && normalizedEndDate < normalizedStartDate ->
                                             backgroundInputError = "A data de fim não pode ser anterior à data de início."
                                         else -> {
+                                        if (editingDefaultBackground) {
+                                            val previous = editingBackground ?: defaultBackgroundFor(themeKey!!)
+                                            draftDefaultThemeBackgrounds = draftDefaultThemeBackgrounds + (
+                                                themeKey!! to previous.copy(
+                                                    id = "default-$themeKey",
+                                                    label = backgroundLabelInput.trim().ifBlank { "Banner padrão" },
+                                                    url = normalizedUrl,
+                                                    isActive = false,
+                                                    startDate = null,
+                                                    endDate = null
+                                                )
+                                            )
+                                        } else {
                                         val updated = if (editingBackground == null) {
                                             current + ThemeBackground(
                                                 id = UUID.randomUUID().toString(),
@@ -1588,6 +1644,7 @@ fun MestreScreen(
                                             }
                                         }
                                         updateBackgrounds(themeKey!!, updated)
+                                        }
                                         showThemeBackgroundDialog = false
                                     }
                                 }
@@ -1606,6 +1663,9 @@ fun MestreScreen(
 
   backgroundToPreview?.let { (themeKey, background) ->
       val previewOfferKey = offerKeyFromEditorKey(themeKey)
+      val previewIsDefault = previewOfferKey == null &&
+          themeKey != CONSULTATION_BACKGROUND_KEY &&
+          background.id == "default-$themeKey"
       BannerPreviewEditor(
           themeKey = if (themeKey == CONSULTATION_BACKGROUND_KEY || previewOfferKey != null) "multicolor" else themeKey,
           themeLabel = when {
@@ -1621,14 +1681,33 @@ fun MestreScreen(
           onEditBackground = if (themeKey != CONSULTATION_BACKGROUND_KEY && previewOfferKey == null) {
               {
                   backgroundToPreview = null
-                  openBackgroundEditor(themeKey, background)
+                  openBackgroundEditor(themeKey, background, isDefault = previewIsDefault)
+              }
+          } else null,
+          onMakeDefault = if (
+              themeKey != CONSULTATION_BACKGROUND_KEY &&
+              previewOfferKey == null &&
+              !previewIsDefault
+          ) {
+              { candidate, maskSettings ->
+                  pendingDefaultBannerChange = PendingDefaultBannerChange(
+                      themeKey = themeKey,
+                      background = candidate,
+                      maskSettings = maskSettings
+                  )
               }
           } else null,
           onSave = { updatedBackground, maskSettings ->
               val updatedList = backgroundsForKey(themeKey).map { item ->
                   if (item.id == updatedBackground.id) updatedBackground else item
               }
+              val updatedDefaultThemeBackgrounds = if (previewIsDefault) {
+                  draftDefaultThemeBackgrounds + (themeKey to updatedBackground)
+              } else {
+                  draftDefaultThemeBackgrounds
+              }
               val updatedThemeBackgrounds = if (themeKey == CONSULTATION_BACKGROUND_KEY || previewOfferKey != null) draftThemeBackgrounds
+              else if (previewIsDefault) draftThemeBackgrounds
               else draftThemeBackgrounds + (themeKey to updatedList)
               val updatedConsultationBackgrounds = if (themeKey == CONSULTATION_BACKGROUND_KEY) {
                   updatedList
@@ -1638,10 +1717,12 @@ fun MestreScreen(
               val updatedOfferBanners = if (previewOfferKey != null) {
                   draftOfferBanners + (previewOfferKey to updatedList)
               } else draftOfferBanners
+              draftDefaultThemeBackgrounds = updatedDefaultThemeBackgrounds
               draftThemeBackgrounds = updatedThemeBackgrounds
               draftConsultationBackgrounds = updatedConsultationBackgrounds
               draftOfferBanners = updatedOfferBanners
               val settingsToSave = draftAppearanceSettings.copy(
+                  defaultThemeBackgrounds = updatedDefaultThemeBackgrounds,
                   themeBackgrounds = updatedThemeBackgrounds,
                   consultationBackgrounds = updatedConsultationBackgrounds,
                   offerBanners = updatedOfferBanners
@@ -1686,6 +1767,74 @@ fun MestreScreen(
                               ?: "O enquadramento foi salvo, mas não foi possível salvar a máscara."
                       )
                   }
+              }
+          }
+      )
+  }
+
+  pendingDefaultBannerChange?.let { pending ->
+      AlertDialog(
+          onDismissRequest = {
+              if (!isSavingAppearanceSettings) pendingDefaultBannerChange = null
+          },
+          title = { Text("Tornar este o banner padrão?") },
+          text = {
+              Text(
+                  "O padrão atual de ${themeOptions.firstOrNull { it.first == pending.themeKey }?.second ?: pending.themeKey} será substituído para todos. Os banners com período ativo continuarão tendo prioridade."
+              )
+          },
+          confirmButton = {
+              TextButton(
+                  enabled = !isSavingAppearanceSettings,
+                  onClick = {
+                      val newDefault = pending.background.copy(
+                          id = "default-${pending.themeKey}",
+                          label = pending.background.label.ifBlank { "Banner padrão" },
+                          isActive = false,
+                          startDate = null,
+                          endDate = null
+                      )
+                      val updatedDefaults = draftDefaultThemeBackgrounds + (pending.themeKey to newDefault)
+                      val settingsToSave = appearanceDraft.copy(
+                          defaultThemeBackgrounds = updatedDefaults
+                      )
+                      coroutineScope.launch {
+                          isSavingAppearanceSettings = true
+                          val maskSaved = com.example.data.BannerMaskStore.save(
+                              themeKey = pending.themeKey,
+                              backgroundUrl = newDefault.url,
+                              settings = pending.maskSettings
+                          )
+                          val appearanceSaved = maskSaved &&
+                              FirebaseService.saveAppearanceSettings(settingsToSave)
+                          isSavingAppearanceSettings = false
+                          if (appearanceSaved && maskSaved) {
+                              draftDefaultThemeBackgrounds = updatedDefaults
+                              draftAppearanceSettings = settingsToSave
+                              pendingDefaultBannerChange = null
+                              backgroundToPreview = pending.themeKey to newDefault
+                              snackbarHostState.showSnackbar("Novo banner padrão publicado para todos.")
+                          } else {
+                              snackbarHostState.showSnackbar(
+                                  FirebaseService.lastError ?: "Não foi possível trocar o banner padrão."
+                              )
+                          }
+                      }
+                  }
+              ) {
+                  if (isSavingAppearanceSettings) {
+                      CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                  } else {
+                      Text("Confirmar troca")
+                  }
+              }
+          },
+          dismissButton = {
+              TextButton(
+                  enabled = !isSavingAppearanceSettings,
+                  onClick = { pendingDefaultBannerChange = null }
+              ) {
+                  Text("Cancelar")
               }
           }
       )
@@ -1738,6 +1887,53 @@ private fun backgroundScheduleStatus(background: ThemeBackground): String {
         start != null && end != null ->
             "Ativo de ${formatThemeBackgroundDate(background.startDate.orEmpty())} a ${formatThemeBackgroundDate(background.endDate.orEmpty())} (inclusive)"
         else -> "Ativo desde ${formatThemeBackgroundDate(background.startDate.orEmpty())} — sem data de fim"
+    }
+}
+
+@Composable
+private fun DefaultThemeBackgroundItem(
+    themeKey: String,
+    background: ThemeBackground,
+    onPreview: () -> Unit,
+    onEdit: () -> Unit
+) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 10.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            MaskedThemeBanner(
+                appTheme = themeKey,
+                backgroundUrl = background.url,
+                imageScale = background.imageScale,
+                imageOffsetX = background.imageOffsetX,
+                imageOffsetY = background.imageOffsetY,
+                imageStretchX = background.imageStretchX,
+                imageStretchY = background.imageStretchY,
+                modifier = Modifier
+                    .size(width = 72.dp, height = 44.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = onPreview)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(background.label, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    if (background.url.isBlank()) "Arte original do aplicativo" else "Padrão personalizado",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(
+                    onClick = onPreview,
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
+                ) {
+                    Text("Visualizar e ajustar")
+                }
+            }
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Default.Edit, contentDescription = "Editar banner padrão")
+            }
+        }
     }
 }
 
