@@ -54,7 +54,9 @@ import kotlinx.coroutines.launch
 fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () -> Unit) {
     var point by remember { mutableStateOf<PointSummary?>(null) }
     var hours by remember { mutableStateOf<HoursSummary?>(null) }
-    var benefit by remember { mutableStateOf<BenefitSummary?>(null) }
+    // O card permanece visível mesmo quando o endpoint ainda não devolveu
+    // compras, para o usuário sempre ter acesso à área de convênio.
+    var benefit by remember { mutableStateOf<BenefitSummary?>(BenefitSummary()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var showBenefitDetails by remember { mutableStateOf(false) }
@@ -104,7 +106,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
             }
         )
     }) { padding ->
-        if (loading && hours == null && point == null && benefit == null) {
+        if (loading && hours == null && point == null) {
             Column(Modifier.fillMaxSize().padding(padding), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator() }
         } else {
             LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -139,7 +141,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                     }
                     if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
                 }
-                if (point?.records.isNullOrEmpty()) item { Text("Não foi possível apresentar os dias e horários com os dados recebidos. Tente atualizar; a integração do ponto pode precisar ser verificada.") }
+                if (point?.records.isNullOrEmpty()) item { Text("Nenhum registro de ponto disponível para o período informado.") }
                 else items(point!!.records) { PointEntryCard(it) }
             }
         }
