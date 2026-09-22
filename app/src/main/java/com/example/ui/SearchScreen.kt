@@ -368,7 +368,7 @@ fun SearchScreen(
                     .clip(headerShape)
                     .background(
                         if (isGlassTheme) {
-                            MaterialTheme.colorScheme.surface
+                            Color.Transparent
                         } else Color.Transparent
                     )
             ) {
