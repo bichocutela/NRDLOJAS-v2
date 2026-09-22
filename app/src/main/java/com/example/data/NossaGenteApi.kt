@@ -187,13 +187,9 @@ class NossaGenteApi(context: Context) {
                     return@use NossaGentePointResult.Unauthorized
                 }
                 if (!response.isSuccessful) return@use NossaGentePointResult.Error("Não foi possível carregar o ponto agora.")
-                val point = parsePoint(body)
-                if (point.records.isEmpty() && point.period == null && point.status == null &&
-                    point.balance == null && point.worked == null && body.trim() != "[]") {
-                    NossaGentePointResult.Error("A API respondeu, mas o app não reconheceu os dados do ponto. Isso não significa que você está sem registros. É necessário verificar o formato da resposta da integração.")
-                } else {
-                    NossaGentePointResult.Success(point)
-                }
+                // Uma resposta válida pode ter apenas o banco de horas ou uma lista
+                // vazia de marcações. Isso não deve bloquear o restante do Meu Perfil.
+                NossaGentePointResult.Success(parsePoint(body))
             }
             result
         } catch (_: Exception) {
@@ -211,7 +207,7 @@ class NossaGenteApi(context: Context) {
         rootObject?.let { collectPointEntries(it, records) }
         rootArray?.let { collectPointEntries(it, records) }
         return PointSummary(
-            period = firstPointString(rootObject, dataObject, "periodo", "period", "mesAno", "competencia", "mes", "referencia", "periodoReferencia", "periodo_atual"),
+            period = firstPointString(rootObject, dataObject, "periodo", "PERIODO", "period", "mesAno", "competencia", "mes", "referencia", "periodoReferencia", "periodo_atual"),
             status = firstPointString(rootObject, dataObject, "status", "situacao", "PontoStatus", "pontoStatus", "situacaoPonto"),
             balance = firstPointString(rootObject, dataObject, "saldo", "saldoHoras", "bancoHoras", "saldoBanco", "saldo_horas"),
             worked = firstPointString(rootObject, dataObject, "horasTrabalhadas", "horas", "totalHoras", "horasApuradas", "horas_trabalhadas"),
@@ -246,9 +242,9 @@ class NossaGenteApi(context: Context) {
 
     private fun looksLikePointEntry(item: JSONObject): Boolean {
         val keys = setOf(
-            "data", "dia", "date", "dataPonto", "data_ponto", "dataMarcacao", "data_marcacao", "diaPonto", "dia_ponto", "dtPonto", "dt_ponto",
-            "entrada", "horaEntrada", "hora_entrada", "horarioEntrada", "horario_entrada", "entradaHora", "entrada1", "entrada_1", "in", "in1",
-            "saida", "horaSaida", "hora_saida", "horarioSaida", "horario_saida", "saidaHora", "saida1", "saida_1", "out", "out1",
+            "data", "DATA", "dia", "date", "dataPonto", "data_ponto", "dataMarcacao", "data_marcacao", "diaPonto", "dia_ponto", "dtPonto", "dt_ponto",
+            "entrada", "ENTRADA", "horaEntrada", "hora_entrada", "horarioEntrada", "horario_entrada", "entradaHora", "entrada1", "entrada_1", "in", "in1",
+            "saida", "SAIDA", "horaSaida", "hora_saida", "horarioSaida", "horario_saida", "saidaHora", "saida1", "saida_1", "out", "out1",
             "hora", "horario", "time", "batida", "marcacao", "tipoMarcacao", "tipo_marcacao"
         )
         return keys.any { key ->
@@ -264,9 +260,9 @@ class NossaGenteApi(context: Context) {
     }
 
     private fun parsePointEntry(item: JSONObject): PointEntry = PointEntry(
-        date = firstValueString(item, "data", "dia", "date", "dataPonto", "data_ponto", "dataMarcacao", "data_marcacao", "diaPonto", "dia_ponto", "dtPonto", "dt_ponto"),
-        entry = firstValueString(item, "entrada", "horaEntrada", "hora_entrada", "horarioEntrada", "horario_entrada", "entradaHora", "entrada1", "entrada_1", "in", "in1", "inicio"),
-        exit = firstValueString(item, "saida", "horaSaida", "hora_saida", "horarioSaida", "horario_saida", "saidaHora", "saida1", "saida_1", "out", "out1", "fim"),
+        date = firstValueString(item, "data", "DATA", "dia", "date", "dataPonto", "data_ponto", "dataMarcacao", "data_marcacao", "diaPonto", "dia_ponto", "dtPonto", "dt_ponto"),
+        entry = firstValueString(item, "entrada", "ENTRADA", "horaEntrada", "hora_entrada", "horarioEntrada", "horario_entrada", "entradaHora", "entrada1", "entrada_1", "in", "in1", "inicio"),
+        exit = firstValueString(item, "saida", "SAIDA", "horaSaida", "hora_saida", "horarioSaida", "horario_saida", "saidaHora", "saida1", "saida_1", "out", "out1", "fim"),
         interval = firstValueString(item, "intervalo", "almoco", "pausa", "horaIntervalo", "interval"),
         status = firstValueString(item, "status", "situacao", "situacaoPonto")
     )
