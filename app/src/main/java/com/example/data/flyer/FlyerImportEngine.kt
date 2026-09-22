@@ -42,7 +42,6 @@ internal data class FlyerAnalysisResult(
 
 internal object FlyerImportEngine {
     private const val MAX_FILE_BYTES = 25L * 1024L * 1024L
-    private const val MAX_PDF_PAGES = 24
     private const val TARGET_PDF_WIDTH = 1440
     private const val MAX_GEMINI_OCR_CHARS = 60_000
     private const val MIN_NATIVE_PDF_TEXT_CHARS = 80
@@ -377,7 +376,6 @@ internal object FlyerImportEngine {
         descriptor.use { pfd ->
             PdfRenderer(pfd).use { renderer ->
                 if (renderer.pageCount <= 0) throw IllegalArgumentException("O PDF está vazio.")
-                if (renderer.pageCount > MAX_PDF_PAGES) throw IllegalArgumentException("O encarte excede o limite de $MAX_PDF_PAGES páginas.")
 
                 val native = runCatching { extractNativePdfText(renderer) }.getOrNull()
                 if (!native.isNullOrEmpty()) return native
