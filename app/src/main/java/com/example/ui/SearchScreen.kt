@@ -369,7 +369,7 @@ fun SearchScreen(
                     .background(
                         if (isGlassTheme) {
                             MaterialTheme.colorScheme.surface
-                        } else Color.White
+                        } else Color.Transparent
                     )
             ) {
                 MaskedThemeBanner(
