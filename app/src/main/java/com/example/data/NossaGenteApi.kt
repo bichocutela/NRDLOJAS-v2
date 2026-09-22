@@ -20,13 +20,10 @@ import java.util.concurrent.TimeUnit
 /** Cliente mínimo para autenticar e consultar promoções da Nossa Gente.
  *  A senha é usada somente na requisição de login e nunca é persistida.
  */
-class NossaGenteApi(
-    context: Context,
-    sessionScope: NossaGenteSessionScope = NossaGenteSessionScope.PROMOTIONS,
-) {
+class NossaGenteApi(context: Context) {
     @Volatile
     private var inMemoryToken: String? = null
-    private val secureSession = NossaGenteSecureSession(context, sessionScope)
+    private val secureSession = NossaGenteSecureSession(context)
     private val credentialStore = NossaGenteCredentialStore(context.applicationContext)
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)

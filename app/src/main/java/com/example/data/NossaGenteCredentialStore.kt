@@ -65,6 +65,12 @@ class NossaGenteCredentialStore(context: Context) {
         preferences.edit().putBoolean(KEY_PROFILE_ENABLED, enabled).apply()
     }
 
+    fun isPromotionsEnabled(): Boolean = preferences.getBoolean(KEY_PROMOTIONS_ENABLED, true)
+
+    fun setPromotionsEnabled(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_PROMOTIONS_ENABLED, enabled).apply()
+    }
+
     fun isBenefitNotificationsEnabled(): Boolean = preferences.getBoolean(KEY_BENEFIT_NOTIFICATIONS, false)
 
     fun setBenefitNotificationsEnabled(enabled: Boolean) {
@@ -98,6 +104,7 @@ class NossaGenteCredentialStore(context: Context) {
         const val PREFERENCES_NAME = "nossa_gente_secure_credentials"
         const val KEY_CREDENTIALS = "credentials_v1"
         const val KEY_PROFILE_ENABLED = "profile_enabled_v1"
+        const val KEY_PROMOTIONS_ENABLED = "promotions_enabled_v1"
         const val KEY_BENEFIT_NOTIFICATIONS = "benefit_notifications_v1"
         const val KEY_HOURS_NOTIFICATIONS = "hours_notifications_v1"
         const val KEY_ALIAS = "nrd_nossa_gente_credentials_v1"
