@@ -111,49 +111,57 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
         finally { checking = false }
     }
 
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Box(Modifier.fillMaxSize().background(Color.Transparent)) {
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
-                Surface(tonalElevation = 2.dp) {
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .then(
-                                    if (screenProfile.tablet) Modifier.widthIn(max = screenProfile.contentMaxWidth)
-                                    else Modifier
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (screenProfile.tablet) Modifier.widthIn(max = screenProfile.contentMaxWidth)
+                                else Modifier
+                            )
+                            .aspectRatio(3f)
+                            .clip(
+                                RoundedCornerShape(
+                                    bottomStart = if (screenProfile.veryCompact) 16.dp else 22.dp,
+                                    bottomEnd = if (screenProfile.veryCompact) 16.dp else 22.dp
                                 )
-                                .padding(
-                                    horizontal = if (screenProfile.veryCompact) 4.dp else 10.dp,
-                                    vertical = 4.dp
-                                ),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(if (screenProfile.veryCompact) 4.dp else 8.dp)
+                            )
+                            .background(Color.Transparent)
+                    ) {
+                        if (activeConsultationBackground != null) {
+                            MaskedThemeBanner(
+                                appTheme = "multicolor",
+                                backgroundUrl = activeConsultationBackground.url,
+                                imageScale = activeConsultationBackground.imageScale,
+                                imageOffsetX = activeConsultationBackground.imageOffsetX,
+                                imageOffsetY = activeConsultationBackground.imageOffsetY,
+                                imageStretchX = activeConsultationBackground.imageStretchX,
+                                imageStretchY = activeConsultationBackground.imageStretchY,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else if (bannerBitmap != null) {
+                            Image(
+                                bitmap = bannerBitmap,
+                                contentDescription = "Consultar Produtos",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(start = if (screenProfile.veryCompact) 4.dp else 10.dp),
+                            shape = RoundedCornerShape(50),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+                            tonalElevation = 0.dp
                         ) {
-                            IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar") }
-                            Box(
-                                Modifier
-                                    .weight(1f)
-                                    .aspectRatio(3f)
-                                    .clip(RoundedCornerShape(if (screenProfile.veryCompact) 16.dp else 22.dp))
-                                    .background(MaterialTheme.colorScheme.surface),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (activeConsultationBackground != null) {
-                                    MaskedThemeBanner(
-                                        appTheme = "multicolor",
-                                        backgroundUrl = activeConsultationBackground.url,
-                                        imageScale = activeConsultationBackground.imageScale,
-                                        imageOffsetX = activeConsultationBackground.imageOffsetX,
-                                        imageOffsetY = activeConsultationBackground.imageOffsetY,
-                                        imageStretchX = activeConsultationBackground.imageStretchX,
-                                        imageStretchY = activeConsultationBackground.imageStretchY,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                } else if (bannerBitmap != null) {
-                                    Image(bannerBitmap, "Consultar Produtos", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-                                }
+                            IconButton(onClick = onNavigateBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar")
                             }
                         }
                     }
