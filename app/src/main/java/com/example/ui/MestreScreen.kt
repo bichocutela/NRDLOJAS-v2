@@ -489,6 +489,22 @@ fun MestreScreen(
                         checked = draftHomeSettings.showFavorites,
                         onCheckedChange = { draftHomeSettings = draftHomeSettings.copy(showFavorites = it) }
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "Ações do cabeçalho",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                    HomeSettingSwitch(
+                        label = "Mostrar ícone do menu",
+                        checked = draftHomeSettings.showDrawerIcon,
+                        onCheckedChange = { draftHomeSettings = draftHomeSettings.copy(showDrawerIcon = it) }
+                    )
+                    HomeSettingSwitch(
+                        label = "Mostrar sino quando houver notificações",
+                        checked = draftHomeSettings.showNotificationIcon,
+                        onCheckedChange = { draftHomeSettings = draftHomeSettings.copy(showNotificationIcon = it) }
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Mais utilizados: ${draftHomeSettings.mostUsedLimit} produtos", style = MaterialTheme.typography.bodyMedium)
                     Slider(
