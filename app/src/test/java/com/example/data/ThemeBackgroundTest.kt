@@ -2,6 +2,7 @@ package com.example.data
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -34,6 +35,31 @@ class ThemeBackgroundTest {
         )
 
         assertNull(settings.activeBackgroundFor("green", "2026-08-28"))
+    }
+
+    @Test
+    fun configuredDefaultIsUsedWhenNoScheduledBannerIsAvailable() {
+        val default = background(id = "default-green").copy(isActive = false, startDate = null)
+        val settings = AppearanceSettings(
+            defaultThemeBackgrounds = mapOf("green" to default),
+            themeBackgrounds = mapOf(
+                "green" to listOf(background(startDate = "2026-08-20", endDate = "2026-08-27"))
+            )
+        )
+
+        assertEquals("default-green", settings.activeBackgroundFor("green", "2026-08-28")?.id)
+    }
+
+    @Test
+    fun scheduledBannerKeepsPriorityOverConfiguredDefault() {
+        val default = background(id = "default-red").copy(isActive = false, startDate = null)
+        val scheduled = background(id = "scheduled-red", startDate = "2026-09-01")
+        val settings = AppearanceSettings(
+            defaultThemeBackgrounds = mapOf("red" to default),
+            themeBackgrounds = mapOf("red" to listOf(scheduled))
+        )
+
+        assertEquals("scheduled-red", settings.activeBackgroundFor("red", "2026-09-22")?.id)
     }
 
     @Test

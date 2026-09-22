@@ -44,6 +44,7 @@ fun BannerPreviewEditor(
     isSaving: Boolean,
     onDismiss: () -> Unit,
     onEditBackground: (() -> Unit)? = null,
+    onMakeDefault: ((ThemeBackground, BannerMaskSettings) -> Unit)? = null,
     onSave: (ThemeBackground, BannerMaskSettings) -> Unit
 ) {
     val context = LocalContext.current
@@ -383,6 +384,27 @@ fun BannerPreviewEditor(
                             Icon(Icons.Default.Edit, contentDescription = null)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Editar fundo")
+                        }
+                    }
+
+                    if (onMakeDefault != null) {
+                        Button(
+                            onClick = {
+                                onMakeDefault(
+                                    background.copy(
+                                        imageScale = previewScale,
+                                        imageOffsetX = previewOffsetX,
+                                        imageOffsetY = previewOffsetY,
+                                        imageStretchX = previewStretchX,
+                                        imageStretchY = previewStretchY
+                                    ),
+                                    effectiveMask
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isSaving
+                        ) {
+                            Text("Tornar padrão")
                         }
                     }
 

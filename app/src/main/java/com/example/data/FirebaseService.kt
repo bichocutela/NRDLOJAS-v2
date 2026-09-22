@@ -914,6 +914,27 @@ object FirebaseService {
         }.toMap()
     }
 
+    private fun parseDefaultThemeBackgrounds(raw: Any?): Map<String, ThemeBackground> {
+        val rawMap = raw as? Map<*, *> ?: return emptyMap()
+        return SupportedThemeKeys.mapNotNull { themeKey ->
+            val map = rawMap[themeKey] as? Map<*, *> ?: return@mapNotNull null
+            val url = (map["url"] as? String)?.trim().orEmpty()
+            if (url.isNotBlank() && !url.startsWith("https://") && !url.startsWith("http://")) {
+                return@mapNotNull null
+            }
+            themeKey to ThemeBackground(
+                id = "default-$themeKey",
+                label = (map["label"] as? String)?.trim().orEmpty().ifBlank { "Banner padrão" },
+                url = url,
+                imageScale = ((map["imageScale"] as? Number)?.toFloat() ?: 1f).coerceIn(0.5f, 3f),
+                imageOffsetX = ((map["imageOffsetX"] as? Number)?.toFloat() ?: 0f).coerceIn(-1f, 1f),
+                imageOffsetY = ((map["imageOffsetY"] as? Number)?.toFloat() ?: 0f).coerceIn(-1f, 1f),
+                imageStretchX = ((map["imageStretchX"] as? Number)?.toFloat() ?: 1f).coerceIn(0.5f, 2.5f),
+                imageStretchY = ((map["imageStretchY"] as? Number)?.toFloat() ?: 1f).coerceIn(0.5f, 2.5f)
+            )
+        }.toMap()
+    }
+
     private fun parseConsultationBackgrounds(raw: Any?): List<ThemeBackground> {
         return (raw as? List<*>)
             ?.mapNotNull { item ->
@@ -999,6 +1020,7 @@ object FirebaseService {
                         appearanceMode = snapshot?.getString("appearanceMode")
                             ?.takeIf { it in setOf("system", "light", "dark") }
                             ?: "system",
+                        defaultThemeBackgrounds = parseDefaultThemeBackgrounds(snapshot?.get("appearanceDefaultThemeBackgrounds")),
                         themeBackgrounds = parseThemeBackgrounds(snapshot?.get("appearanceThemeBackgrounds")),
                         consultationBackgrounds = parseConsultationBackgrounds(snapshot?.get("appearanceConsultationBackgrounds")),
                         offerBanners = parseOfferBanners(snapshot?.get("appearanceOfferBanners")),
@@ -1042,6 +1064,25 @@ object FirebaseService {
             lastError = "Revise o período do fundo: use datas válidas e não informe fim anterior ao início."
             return false
         }
+        val safeDefaultBackgrounds = SupportedThemeKeys.mapNotNull { themeKey ->
+            settings.defaultThemeBackgrounds[themeKey]?.let { background ->
+                val url = background.url.trim()
+                if (url.isNotBlank() && !url.startsWith("https://") && !url.startsWith("http://")) {
+                    null
+                } else {
+                    themeKey to linkedMapOf<String, Any>(
+                        "id" to "default-$themeKey",
+                        "label" to background.label.trim().take(80).ifBlank { "Banner padrão" },
+                        "url" to url,
+                        "imageScale" to background.imageScale.coerceIn(0.5f, 3f),
+                        "imageOffsetX" to background.imageOffsetX.coerceIn(-1f, 1f),
+                        "imageOffsetY" to background.imageOffsetY.coerceIn(-1f, 1f),
+                        "imageStretchX" to background.imageStretchX.coerceIn(0.5f, 2.5f),
+                        "imageStretchY" to background.imageStretchY.coerceIn(0.5f, 2.5f)
+                    )
+                }
+            }
+        }.toMap()
         val safeBackgrounds = SupportedThemeKeys.associateWith { themeKey ->
             settings.themeBackgrounds[themeKey]
                 .orEmpty()
@@ -1123,6 +1164,7 @@ object FirebaseService {
             overrideLocalTheme = settings.overrideLocalTheme,
             theme = safeTheme,
             appearanceMode = safeMode,
+            defaultThemeBackgrounds = safeDefaultBackgrounds,
             themeBackgrounds = safeBackgrounds,
             consultationBackgrounds = safeConsultationBackgrounds,
             offerBanners = safeOfferBanners,
@@ -1151,6 +1193,7 @@ object FirebaseService {
                         "appearanceOverrideLocalTheme" to settings.overrideLocalTheme,
                         "appearanceTheme" to safeTheme,
                         "appearanceMode" to safeMode,
+                        "appearanceDefaultThemeBackgrounds" to safeDefaultBackgrounds,
                         "appearanceThemeBackgrounds" to safeBackgrounds,
                         "appearanceConsultationBackgrounds" to safeConsultationBackgrounds,
                         "appearanceOfferBanners" to safeOfferBanners,
@@ -1173,11 +1216,16 @@ object FirebaseService {
         overrideLocalTheme: Boolean,
         theme: String,
         appearanceMode: String,
+        defaultThemeBackgrounds: Map<String, Map<String, Any>>,
         themeBackgrounds: Map<String, List<Map<String, Any>>>,
         consultationBackgrounds: List<Map<String, Any>>,
         offerBanners: Map<String, List<Map<String, Any>>>,
         revision: Long
     ): String {
+        val defaultsJson = org.json.JSONObject()
+        defaultThemeBackgrounds.forEach { (themeKey, background) ->
+            defaultsJson.put(themeKey, org.json.JSONObject(background))
+        }
         val backgroundsJson = org.json.JSONObject()
         themeBackgrounds.forEach { (themeKey, backgrounds) ->
             val itemsJson = org.json.JSONArray()
@@ -1200,6 +1248,7 @@ object FirebaseService {
             .put("appearanceOverrideLocalTheme", overrideLocalTheme)
             .put("appearanceTheme", theme)
             .put("appearanceMode", appearanceMode)
+            .put("appearanceDefaultThemeBackgrounds", defaultsJson)
             .put("appearanceThemeBackgrounds", backgroundsJson)
             .put("appearanceConsultationBackgrounds", consultationJson)
             .put("appearanceOfferBanners", offerBannersJson)
@@ -1279,12 +1328,34 @@ object FirebaseService {
             appearanceMode = root.optString("appearanceMode")
                 .takeIf { it in setOf("system", "light", "dark") }
                 ?: "system",
+            defaultThemeBackgrounds = parseDefaultThemeBackgroundsJson(root.optJSONObject("appearanceDefaultThemeBackgrounds")),
             themeBackgrounds = parseThemeBackgroundsJson(root.optJSONObject("appearanceThemeBackgrounds")),
             consultationBackgrounds = parseConsultationBackgroundsJson(root.optJSONArray("appearanceConsultationBackgrounds")),
             offerBanners = parseOfferBannersJson(root.optJSONObject("appearanceOfferBanners")),
             revision = root.optLong("appearanceRevision", 0L)
         )
     }.getOrNull()
+
+    private fun parseDefaultThemeBackgroundsJson(raw: org.json.JSONObject?): Map<String, ThemeBackground> {
+        if (raw == null) return emptyMap()
+        return SupportedThemeKeys.mapNotNull { themeKey ->
+            val item = raw.optJSONObject(themeKey) ?: return@mapNotNull null
+            val url = item.optString("url").trim()
+            if (url.isNotBlank() && !url.startsWith("https://") && !url.startsWith("http://")) {
+                return@mapNotNull null
+            }
+            themeKey to ThemeBackground(
+                id = "default-$themeKey",
+                label = item.optString("label").trim().ifBlank { "Banner padrão" },
+                url = url,
+                imageScale = item.optDouble("imageScale", 1.0).toFloat().coerceIn(0.5f, 3f),
+                imageOffsetX = item.optDouble("imageOffsetX", 0.0).toFloat().coerceIn(-1f, 1f),
+                imageOffsetY = item.optDouble("imageOffsetY", 0.0).toFloat().coerceIn(-1f, 1f),
+                imageStretchX = item.optDouble("imageStretchX", 1.0).toFloat().coerceIn(0.5f, 2.5f),
+                imageStretchY = item.optDouble("imageStretchY", 1.0).toFloat().coerceIn(0.5f, 2.5f)
+            )
+        }.toMap()
+    }
 
     private fun parseConsultationBackgroundsJson(raw: org.json.JSONArray?): List<ThemeBackground> {
         if (raw == null) return emptyList()
