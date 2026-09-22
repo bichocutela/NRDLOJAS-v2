@@ -396,53 +396,61 @@ fun SearchScreen(
                         )
                 )
 
-                IconButton(
-                    onClick = {
-                        viewModel.clearNewProductsCount()
-                        onOpenDrawer()
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(top = 48.dp, start = 8.dp)
-                        .then(
-                            if (isGlassTheme) Modifier
-                                .glassSoftShadow(CircleShape, 4.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                                .border(1.dp, glassStyle.borderColor, CircleShape)
-                            else Modifier.background(Color.Transparent)
-                        )
-                ) {
-                    BadgedBox(
-                        badge = {
-                            if (newProductsCount > 0) {
-                                Badge { Text(newProductsCount.toString()) }
-                            }
-                        }
+                if (homeSettings.showDrawerIcon) {
+                    IconButton(
+                        onClick = {
+                            viewModel.clearNewProductsCount()
+                            onOpenDrawer()
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(top = 48.dp, start = 8.dp)
+                            .then(
+                                if (isGlassTheme) Modifier
+                                    .glassSoftShadow(CircleShape, 4.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                                    .border(1.dp, glassStyle.borderColor, CircleShape)
+                                else Modifier.background(Color.Transparent)
+                            )
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Menu",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                        BadgedBox(
+                            badge = {
+                                if (newProductsCount > 0) {
+                                    Badge { Text(newProductsCount.toString()) }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "Menu",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
-                IconButton(
-                    onClick = { showNotificationsSheet = true },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 48.dp, end = 8.dp)
-                        .then(
-                            if (isGlassTheme) Modifier
-                                .glassSoftShadow(CircleShape, 4.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                                .border(1.dp, glassStyle.borderColor, CircleShape)
-                            else Modifier
-                        )
-                ) {
-                    BadgedBox(
-                        badge = { if (unreadNotifications > 0) Badge { Text(unreadNotifications.toString()) } }
+                if (homeSettings.showNotificationIcon && unreadNotifications > 0) {
+                    IconButton(
+                        onClick = { showNotificationsSheet = true },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 48.dp, end = 8.dp)
+                            .then(
+                                if (isGlassTheme) Modifier
+                                    .glassSoftShadow(CircleShape, 4.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                                    .border(1.dp, glassStyle.borderColor, CircleShape)
+                                else Modifier
+                            )
                     ) {
-                        Icon(Icons.Default.Notifications, contentDescription = "Notificações", tint = MaterialTheme.colorScheme.primary)
+                        BadgedBox(
+                            badge = { Badge { Text(unreadNotifications.toString()) } }
+                        ) {
+                            Icon(
+                                Icons.Default.Notifications,
+                                contentDescription = "Notificações",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             }

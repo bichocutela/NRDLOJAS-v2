@@ -79,6 +79,8 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             showMostUsed = remote.showMostUsed ?: true,
             showHistory = remote.showHistory ?: true,
             showFavorites = remote.showFavorites ?: true,
+            showDrawerIcon = remote.showDrawerIcon ?: false,
+            showNotificationIcon = remote.showNotificationIcon ?: false,
             mostUsedLimit = (remote.mostUsedLimit ?: localMostUsedLimit).coerceIn(1, 50),
             carouselIntervalSeconds = (remote.carouselIntervalSeconds ?: localCarouselIntervalSeconds).coerceIn(3, 30)
         )
