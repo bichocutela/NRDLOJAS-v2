@@ -9,6 +9,7 @@ class AppearanceSettings(
     overrideLocalTheme: Boolean = false,
     val theme: String = "multicolor",
     val appearanceMode: String = "system",
+    val defaultThemeBackgrounds: Map<String, ThemeBackground> = emptyMap(),
     val themeBackgrounds: Map<String, List<ThemeBackground>> = emptyMap(),
     val consultationBackgrounds: List<ThemeBackground> = emptyList(),
     val offerBanners: Map<String, List<ThemeBackground>> = emptyMap(),
@@ -26,8 +27,9 @@ class AppearanceSettings(
         get() = false
 
     /**
-     * Retorna somente o fundo ativo/agendado pertencente ao tema escolhido
-     * localmente no aparelho.
+     * Retorna o fundo ativo/agendado pertencente ao tema escolhido localmente.
+     * Quando nenhum agendamento está vigente, usa o banner padrão publicado
+     * para o tema. Se ele ainda não foi configurado, a UI usa a arte embarcada.
      */
     fun activeBackgroundFor(
         themeKey: String,
@@ -37,6 +39,7 @@ class AppearanceSettings(
         return themeBackgrounds[normalizedTheme]
             ?.filter { it.isAvailableOn(date) }
             ?.maxByOrNull { ThemeBackground.normalizeDate(it.startDate).orEmpty() }
+            ?: defaultThemeBackgrounds[normalizedTheme]
     }
 
     /** Fundo exclusivo da aba Consultar Produtos, independente do tema da Home. */
@@ -59,6 +62,7 @@ class AppearanceSettings(
         overrideLocalTheme: Boolean = this.overrideLocalTheme,
         theme: String = this.theme,
         appearanceMode: String = this.appearanceMode,
+        defaultThemeBackgrounds: Map<String, ThemeBackground> = this.defaultThemeBackgrounds,
         themeBackgrounds: Map<String, List<ThemeBackground>> = this.themeBackgrounds,
         consultationBackgrounds: List<ThemeBackground> = this.consultationBackgrounds,
         offerBanners: Map<String, List<ThemeBackground>> = this.offerBanners,
@@ -67,6 +71,7 @@ class AppearanceSettings(
         overrideLocalTheme = overrideLocalTheme,
         theme = theme,
         appearanceMode = appearanceMode,
+        defaultThemeBackgrounds = defaultThemeBackgrounds,
         themeBackgrounds = themeBackgrounds,
         consultationBackgrounds = consultationBackgrounds,
         offerBanners = offerBanners,
@@ -79,6 +84,7 @@ class AppearanceSettings(
         return overrideLocalTheme == other.overrideLocalTheme &&
             theme == other.theme &&
             appearanceMode == other.appearanceMode &&
+            defaultThemeBackgrounds == other.defaultThemeBackgrounds &&
             themeBackgrounds == other.themeBackgrounds &&
             consultationBackgrounds == other.consultationBackgrounds &&
             offerBanners == other.offerBanners &&
@@ -89,6 +95,7 @@ class AppearanceSettings(
         var result = overrideLocalTheme.hashCode()
         result = 31 * result + theme.hashCode()
         result = 31 * result + appearanceMode.hashCode()
+        result = 31 * result + defaultThemeBackgrounds.hashCode()
         result = 31 * result + themeBackgrounds.hashCode()
         result = 31 * result + consultationBackgrounds.hashCode()
         result = 31 * result + offerBanners.hashCode()
@@ -97,7 +104,7 @@ class AppearanceSettings(
     }
 
     override fun toString(): String =
-        "AppearanceSettings(overrideLocalTheme=$overrideLocalTheme, theme=$theme, appearanceMode=$appearanceMode, themeBackgrounds=$themeBackgrounds, consultationBackgrounds=$consultationBackgrounds, offerBanners=$offerBanners, revision=$revision)"
+        "AppearanceSettings(overrideLocalTheme=$overrideLocalTheme, theme=$theme, appearanceMode=$appearanceMode, defaultThemeBackgrounds=$defaultThemeBackgrounds, themeBackgrounds=$themeBackgrounds, consultationBackgrounds=$consultationBackgrounds, offerBanners=$offerBanners, revision=$revision)"
 
     private fun normalizeThemeKey(value: String): String = when (value.trim().lowercase()) {
         "multicolor" -> "multicolor"
