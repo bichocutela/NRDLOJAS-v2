@@ -49,7 +49,8 @@ fun AppNavGraph(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val nossaGenteApi = remember { com.example.data.NossaGenteApi(context) }
+    val promotionsApi = remember { com.example.data.NossaGenteApi(context, com.example.data.NossaGenteSessionScope.PROMOTIONS) }
+    val profileApi = remember { com.example.data.NossaGenteApi(context, com.example.data.NossaGenteSessionScope.PROFILE) }
     val nossaGenteCredentialStore = remember { com.example.data.NossaGenteCredentialStore(context.applicationContext) }
     var profileEnabled by remember { mutableStateOf(nossaGenteCredentialStore.isProfileEnabled()) }
     val firebaseAuth = remember { FirebaseAuth.getInstance() }
@@ -88,7 +89,7 @@ fun AppNavGraph(
     LaunchedEffect(openPromotionsFromNotification) {
         if (openPromotionsFromNotification) {
             navController.navigate(
-                if (nossaGenteApi.hasSession()) "promotions" else "promotions_login"
+                if (promotionsApi.hasSession()) "promotions" else "promotions_login"
             ) {
                 launchSingleTop = true
             }
@@ -107,7 +108,7 @@ fun AppNavGraph(
                     viewModel = viewModel,
                     isLoggedIn = isLoggedIn,
                     userRole = userRole,
-                    showMyProfile = nossaGenteApi.hasSession() && profileEnabled,
+                    showMyProfile = profileApi.hasSession() && profileEnabled,
                     onLoginSuccess = { role ->
                         isLoggedIn = true
                         userRole = role
@@ -132,7 +133,7 @@ fun AppNavGraph(
                     },
                     onGoToPromotions = {
                         scope.launch { drawerState.close() }
-                        navController.navigate(if (nossaGenteApi.hasSession()) "promotions" else "promotions_login")
+                        navController.navigate(if (promotionsApi.hasSession()) "promotions" else "promotions_login")
                     },
                     onGoToMyPoint = {
                         scope.launch { drawerState.close() }
@@ -210,11 +211,11 @@ fun AppNavGraph(
                         ManageProductsScreen(viewModel = viewModel, onNavigateBack = { navController.popBackStack() })
                     }
                 }
-                composable("promotions_login") { PromotionsLoginScreen(nossaGenteApi, { profileEnabled = nossaGenteCredentialStore.isProfileEnabled(); navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true } }, { navController.popBackStack() }) }
-                composable("promotions") { PromotionsScreen(nossaGenteApi, { navController.popBackStack() }, { navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true } } }, { nossaGenteApi.logout(); navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true }; launchSingleTop = true } }) }
+                composable("promotions_login") { PromotionsLoginScreen(promotionsApi, { profileEnabled = nossaGenteCredentialStore.isProfileEnabled(); navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true } }, { navController.popBackStack() }) }
+                composable("promotions") { PromotionsScreen(promotionsApi, { navController.popBackStack() }, { navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true } } }, { promotionsApi.logout(); navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true }; launchSingleTop = true } }) }
                 composable("my_point_login") {
                     PromotionsLoginScreen(
-                        api = nossaGenteApi,
+                        api = profileApi,
                         onLoginSuccess = { profileEnabled = nossaGenteCredentialStore.isProfileEnabled(); navController.navigate("my_profile") { popUpTo("my_point_login") { inclusive = true }; launchSingleTop = true } },
                         onNavigateBack = { navController.popBackStack() },
                         reuseExistingSession = false,
@@ -223,11 +224,12 @@ fun AppNavGraph(
                 }
                 composable("my_profile") {
                     MyPointScreen(
-                        api = nossaGenteApi,
+                        api = profileApi,
                         onNavigateBack = { navController.popBackStack() },
                         onSignOut = {
-                            nossaGenteApi.logout()
+                            profileApi.logout()
                             profileEnabled = false
+                            nossaGenteCredentialStore.setProfileEnabled(false)
                             navController.navigate("search") { popUpTo("my_profile") { inclusive = true } }
                         }
                     )
