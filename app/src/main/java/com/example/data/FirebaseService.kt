@@ -827,6 +827,8 @@ object FirebaseService {
                         showMostUsed = snapshot?.getBoolean("homeShowMostUsed"),
                         showHistory = snapshot?.getBoolean("homeShowHistory"),
                         showFavorites = snapshot?.getBoolean("homeShowFavorites"),
+                        showDrawerIcon = snapshot?.getBoolean("homeShowDrawerIcon"),
+                        showNotificationIcon = snapshot?.getBoolean("homeShowNotificationIcon"),
                         mostUsedLimit = snapshot?.getLong("homeMostUsedLimit")?.toInt(),
                         carouselIntervalSeconds = snapshot?.getLong("homeCarouselIntervalSeconds")?.toInt()
                     )
@@ -848,6 +850,8 @@ object FirebaseService {
                         "homeShowMostUsed" to settings.showMostUsed,
                         "homeShowHistory" to settings.showHistory,
                         "homeShowFavorites" to settings.showFavorites,
+                        "homeShowDrawerIcon" to settings.showDrawerIcon,
+                        "homeShowNotificationIcon" to settings.showNotificationIcon,
                         "homeMostUsedLimit" to settings.mostUsedLimit.coerceIn(1, 50),
                         "homeCarouselIntervalSeconds" to settings.carouselIntervalSeconds.coerceIn(3, 30)
                     ),

@@ -9,6 +9,8 @@ data class RemoteHomeSettings(
     val showMostUsed: Boolean? = null,
     val showHistory: Boolean? = null,
     val showFavorites: Boolean? = null,
+    val showDrawerIcon: Boolean? = null,
+    val showNotificationIcon: Boolean? = null,
     val mostUsedLimit: Int? = null,
     val carouselIntervalSeconds: Int? = null
 )
@@ -22,6 +24,8 @@ data class HomeSettings(
     val showMostUsed: Boolean = true,
     val showHistory: Boolean = true,
     val showFavorites: Boolean = true,
+    val showDrawerIcon: Boolean = false,
+    val showNotificationIcon: Boolean = false,
     val mostUsedLimit: Int = 8,
     val carouselIntervalSeconds: Int = 5
 )
