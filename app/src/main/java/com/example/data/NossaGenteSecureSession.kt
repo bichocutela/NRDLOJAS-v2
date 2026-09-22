@@ -14,11 +14,14 @@ import javax.crypto.spec.GCMParameterSpec
  * Persiste somente o token de sessão do Nossa Gente, cifrado com uma chave AES
  * mantida pelo Android Keystore. CPF e senha nunca são gravados no aparelho.
  */
-internal class NossaGenteSecureSession(context: Context) {
+enum class NossaGenteSessionScope { PROMOTIONS, PROFILE }
+
+internal class NossaGenteSecureSession(context: Context, scope: NossaGenteSessionScope) {
     private val preferences = context.applicationContext.getSharedPreferences(
-        PREFERENCES_NAME,
+        if (scope == NossaGenteSessionScope.PROMOTIONS) PROMOTIONS_PREFERENCES_NAME else PROFILE_PREFERENCES_NAME,
         Context.MODE_PRIVATE
     )
+    private val keyAlias = if (scope == NossaGenteSessionScope.PROMOTIONS) PROMOTIONS_KEY_ALIAS else PROFILE_KEY_ALIAS
 
     fun saveToken(token: String) {
         if (token.isBlank()) {
@@ -69,12 +72,12 @@ internal class NossaGenteSecureSession(context: Context) {
 
     private fun getOrCreateSecretKey(): SecretKey {
         val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
-        (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        (keyStore.getKey(keyAlias, null) as? SecretKey)?.let { return it }
 
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER).run {
             init(
                 KeyGenParameterSpec.Builder(
-                    KEY_ALIAS,
+                    keyAlias,
                     KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
                 )
                     .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
@@ -87,9 +90,12 @@ internal class NossaGenteSecureSession(context: Context) {
     }
 
     private companion object {
-        const val PREFERENCES_NAME = "nossa_gente_secure_session"
+        // Mantém o armazenamento legado das Promoções para não desconectar quem já está logado.
+        const val PROMOTIONS_PREFERENCES_NAME = "nossa_gente_secure_session"
+        const val PROFILE_PREFERENCES_NAME = "nossa_gente_profile_secure_session"
         const val KEY_ENCRYPTED_TOKEN = "encrypted_session_token"
-        const val KEY_ALIAS = "nrd_nossa_gente_session_key_v1"
+        const val PROMOTIONS_KEY_ALIAS = "nrd_nossa_gente_session_key_v1"
+        const val PROFILE_KEY_ALIAS = "nrd_nossa_gente_profile_session_key_v1"
         const val KEYSTORE_PROVIDER = "AndroidKeyStore"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val GCM_TAG_LENGTH_BITS = 128

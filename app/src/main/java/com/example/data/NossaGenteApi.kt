@@ -20,10 +20,13 @@ import java.util.concurrent.TimeUnit
 /** Cliente mínimo para autenticar e consultar promoções da Nossa Gente.
  *  A senha é usada somente na requisição de login e nunca é persistida.
  */
-class NossaGenteApi(context: Context) {
+class NossaGenteApi(
+    context: Context,
+    sessionScope: NossaGenteSessionScope = NossaGenteSessionScope.PROMOTIONS,
+) {
     @Volatile
     private var inMemoryToken: String? = null
-    private val secureSession = NossaGenteSecureSession(context)
+    private val secureSession = NossaGenteSecureSession(context, sessionScope)
     private val credentialStore = NossaGenteCredentialStore(context.applicationContext)
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -40,7 +43,7 @@ class NossaGenteApi(context: Context) {
             return@withContext NossaGenteLoginResult.Error("Informe um CPF válido e sua senha.")
         }
 
-        try {
+        return try {
             val payload = JSONObject()
                 .put("cpf", cleanCpf)
                 .put("senha", password)
@@ -92,7 +95,7 @@ class NossaGenteApi(context: Context) {
 
     private suspend fun fetchHoursOnce(allowSavedCredentialRecovery: Boolean): NossaGenteHoursResult {
         val token = currentToken() ?: return NossaGenteHoursResult.Unauthorized
-        try {
+        return try {
             val response = authenticatedGet("/horas", token)
             if (response.code == 401 || response.code == 403) {
                 if (allowSavedCredentialRecovery && renewFromSavedCredentials()) {
