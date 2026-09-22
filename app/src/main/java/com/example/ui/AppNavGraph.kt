@@ -50,6 +50,8 @@ fun AppNavGraph(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val nossaGenteApi = remember { com.example.data.NossaGenteApi(context) }
+    val nossaGenteCredentialStore = remember { com.example.data.NossaGenteCredentialStore(context.applicationContext) }
+    var profileEnabled by remember { mutableStateOf(nossaGenteCredentialStore.isProfileEnabled()) }
     val firebaseAuth = remember { FirebaseAuth.getInstance() }
     val initialRole = remember(firebaseAuth) { managementRoleForEmail(firebaseAuth.currentUser?.email) }
     var isLoggedIn by remember { mutableStateOf(initialRole != null) }
@@ -105,6 +107,7 @@ fun AppNavGraph(
                     viewModel = viewModel,
                     isLoggedIn = isLoggedIn,
                     userRole = userRole,
+                    showMyProfile = nossaGenteApi.hasSession() && profileEnabled,
                     onLoginSuccess = { role ->
                         isLoggedIn = true
                         userRole = role
@@ -133,7 +136,7 @@ fun AppNavGraph(
                     },
                     onGoToMyPoint = {
                         scope.launch { drawerState.close() }
-                        navController.navigate("my_point_login") { launchSingleTop = true }
+                        navController.navigate("my_profile") { launchSingleTop = true }
                     },
                     onGoToSettings = { scope.launch { drawerState.close() }; navController.navigate("settings") },
                     onGoToAcp = { scope.launch { drawerState.close() }; navController.navigate("acp_consultation") { launchSingleTop = true } },
@@ -207,24 +210,29 @@ fun AppNavGraph(
                         ManageProductsScreen(viewModel = viewModel, onNavigateBack = { navController.popBackStack() })
                     }
                 }
-                composable("promotions_login") { PromotionsLoginScreen(nossaGenteApi, { navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true } }, { navController.popBackStack() }) }
+                composable("promotions_login") { PromotionsLoginScreen(nossaGenteApi, { profileEnabled = nossaGenteCredentialStore.isProfileEnabled(); navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true } }, { navController.popBackStack() }) }
                 composable("promotions") { PromotionsScreen(nossaGenteApi, { navController.popBackStack() }, { navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true } } }, { nossaGenteApi.logout(); navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true }; launchSingleTop = true } }) }
                 composable("my_point_login") {
-                    ProtectedManagementRoute(isLoggedIn, userRole, setOf("mestre"), { navController.navigateToSearch() }) {
-                        PromotionsLoginScreen(
-                            api = nossaGenteApi,
-                            onLoginSuccess = { navController.navigate("my_point") { popUpTo("my_point_login") { inclusive = true }; launchSingleTop = true } },
-                            onNavigateBack = { navController.popBackStack() },
-                            reuseExistingSession = false,
-                            title = "Acesso ao Meu Ponto"
-                        )
-                    }
+                    PromotionsLoginScreen(
+                        api = nossaGenteApi,
+                        onLoginSuccess = { profileEnabled = nossaGenteCredentialStore.isProfileEnabled(); navController.navigate("my_profile") { popUpTo("my_point_login") { inclusive = true }; launchSingleTop = true } },
+                        onNavigateBack = { navController.popBackStack() },
+                        reuseExistingSession = false,
+                        title = "Acesso ao Meu Perfil"
+                    )
                 }
-                composable("my_point") {
-                    ProtectedManagementRoute(isLoggedIn, userRole, setOf("mestre"), { navController.navigateToSearch() }) {
-                        MyPointScreen(nossaGenteApi, { navController.popBackStack() }, { nossaGenteApi.logout(); navController.navigate("my_point_login") { popUpTo("my_point") { inclusive = true } } })
-                    }
+                composable("my_profile") {
+                    MyPointScreen(
+                        api = nossaGenteApi,
+                        onNavigateBack = { navController.popBackStack() },
+                        onSignOut = {
+                            nossaGenteApi.logout()
+                            profileEnabled = false
+                            navController.navigate("search") { popUpTo("my_profile") { inclusive = true } }
+                        }
+                    )
                 }
+                composable("my_point") { LaunchedEffect(Unit) { navController.navigate("my_profile") { popUpTo("my_point") { inclusive = true } } } }
                 composable("settings") { SettingsScreen(viewModel, onNavigateBack = { navController.popBackStack() }) }
                 composable("acp_consultation") {
                     AcpConsultationScreen(canConfigure = isLoggedIn && userRole in setOf("admin", "mestre"),
@@ -256,6 +264,7 @@ fun LoginDrawerContent(
     viewModel: MainViewModel,
     isLoggedIn: Boolean,
     userRole: String,
+    showMyProfile: Boolean,
     onLoginSuccess: (String) -> Unit,
     onLogout: () -> Unit,
     onGoToAdmin: () -> Unit,
@@ -288,6 +297,15 @@ fun LoginDrawerContent(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        if (showMyProfile) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Meu Perfil", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(onClick = onGoToMyPoint, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Meu Perfil") }
+            Spacer(modifier = Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(10.dp))
+        }
         if (!isLoggedIn) {
             Spacer(modifier = Modifier.height(8.dp))
             Text("Login", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
@@ -391,10 +409,6 @@ fun LoginDrawerContent(
         Spacer(modifier = Modifier.height(8.dp))
         Button(onClick = onGoToPromotions, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Promoções") }
         Spacer(modifier = Modifier.height(8.dp))
-        if (isLoggedIn && userRole == "mestre") {
-            Button(onClick = onGoToMyPoint, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Meu Ponto") }
-            Spacer(modifier = Modifier.height(8.dp))
-        }
         Button(onClick = onGoToSettings, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Configurações") }
         Spacer(modifier = Modifier.height(8.dp))
         Button(onClick = onGoToAbout, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Sobre") }

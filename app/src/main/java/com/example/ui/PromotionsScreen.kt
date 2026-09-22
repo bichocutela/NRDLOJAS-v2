@@ -146,6 +146,7 @@ fun PromotionsLoginScreen(
     var cpf by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var saveCredentials by remember { mutableStateOf(false) }
+    var activateProfile by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -159,6 +160,7 @@ fun PromotionsLoginScreen(
             password = saved.password
             saveCredentials = true
         }
+        activateProfile = credentialStore.isProfileEnabled()
     }
 
     LaunchedEffect(api, reuseExistingSession) {
@@ -199,6 +201,34 @@ fun PromotionsLoginScreen(
                 "Use seu CPF e sua senha do Nossa Gente. Se quiser, você pode salvar o acesso neste aparelho para não precisar digitar toda vez.",
                 style = MaterialTheme.typography.bodyMedium
             )
+            Spacer(Modifier.height(4.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { activateProfile = !activateProfile },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    androidx.compose.material3.Checkbox(
+                        checked = activateProfile,
+                        onCheckedChange = { checked ->
+                            activateProfile = checked
+                            scope.launch(Dispatchers.IO) { credentialStore.setProfileEnabled(checked) }
+                        }
+                    )
+                    Column(Modifier.padding(end = 12.dp)) {
+                        Text("Ativar Meu Perfil", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Sincronizar ponto e convênio do Nossa Gente neste aparelho.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(16.dp))
             OutlinedTextField(
                 value = cpf,
@@ -259,6 +289,9 @@ fun PromotionsLoginScreen(
                                     } else {
                                         withContext(Dispatchers.IO) { credentialStore.clear() }
                                         password = ""
+                                    }
+                                    withContext(Dispatchers.IO) {
+                                        credentialStore.setProfileEnabled(activateProfile)
                                     }
                                     onLoginSuccess()
                                 } else {
