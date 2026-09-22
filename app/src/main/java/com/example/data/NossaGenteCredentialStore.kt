@@ -71,6 +71,12 @@ class NossaGenteCredentialStore(context: Context) {
         preferences.edit().putBoolean(KEY_BENEFIT_NOTIFICATIONS, enabled).apply()
     }
 
+    fun isHoursNotificationsEnabled(): Boolean = preferences.getBoolean(KEY_HOURS_NOTIFICATIONS, false)
+
+    fun setHoursNotificationsEnabled(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_HOURS_NOTIFICATIONS, enabled).apply()
+    }
+
     private fun getOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
         (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
@@ -93,6 +99,7 @@ class NossaGenteCredentialStore(context: Context) {
         const val KEY_CREDENTIALS = "credentials_v1"
         const val KEY_PROFILE_ENABLED = "profile_enabled_v1"
         const val KEY_BENEFIT_NOTIFICATIONS = "benefit_notifications_v1"
+        const val KEY_HOURS_NOTIFICATIONS = "hours_notifications_v1"
         const val KEY_ALIAS = "nrd_nossa_gente_credentials_v1"
         const val KEYSTORE_PROVIDER = "AndroidKeyStore"
         const val TRANSFORMATION = "AES/GCM/NoPadding"

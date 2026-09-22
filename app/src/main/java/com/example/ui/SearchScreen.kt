@@ -855,6 +855,7 @@ fun SearchScreen(
                                             "CODE_CHANGED" -> "CÓDIGO ALTERADO"
                                             "BENEFIT_RELEASED" -> "CONVÊNIO LIBERADO"
                                             "BENEFIT_PURCHASE" -> "COMPRA NO CONVÊNIO"
+                                            "HOURS_UPDATED" -> "BANCO DE HORAS"
                                             else -> "NOVO PRODUTO"
                                         },
                                         style = MaterialTheme.typography.labelSmall,
