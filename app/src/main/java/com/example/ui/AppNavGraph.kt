@@ -279,6 +279,7 @@ fun LoginDrawerContent(
     var password by remember { mutableStateOf("") }
     var loginStatus by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
+    var loginExpanded by remember { mutableStateOf(false) }
     val activeCategoryNames by viewModel.activeCategoryNames.collectAsState()
     var expandedCategory by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -308,13 +309,30 @@ fun LoginDrawerContent(
         }
         if (!isLoggedIn) {
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Login", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(14.dp))
-            OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text("Usuário") }, enabled = !isLoading, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Senha") }, visualTransformation = PasswordVisualTransformation(), enabled = !isLoading, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
+            TextButton(
+                onClick = { loginExpanded = !loginExpanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Login", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                    Icon(
+                        imageVector = if (loginExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (loginExpanded) "Recolher login" else "Expandir login",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            if (loginExpanded) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text("Usuário") }, enabled = !isLoading, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Senha") }, visualTransformation = PasswordVisualTransformation(), enabled = !isLoading, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
                 onClick = {
                     if (isLoading) return@Button
                     val inputUser = username.trim().lowercase()
@@ -365,8 +383,9 @@ fun LoginDrawerContent(
                 },
                 enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth().height(48.dp)
-            ) { Text(if (isLoading) "Autenticando..." else "Entrar") }
-            if (loginStatus != null) { Spacer(modifier = Modifier.height(8.dp)); Text(loginStatus!!, color = MaterialTheme.colorScheme.error) }
+                ) { Text(if (isLoading) "Autenticando..." else "Entrar") }
+                if (loginStatus != null) { Spacer(modifier = Modifier.height(8.dp)); Text(loginStatus!!, color = MaterialTheme.colorScheme.error) }
+            }
         } else {
             Spacer(modifier = Modifier.height(8.dp))
             Text(if (userRole == "mestre" || userRole == "admin") "Administrador" else "Usuário", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
