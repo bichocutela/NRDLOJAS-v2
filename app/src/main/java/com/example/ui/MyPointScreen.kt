@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -26,6 +27,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -77,6 +80,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
     var error by remember { mutableStateOf<String?>(null) }
     var showBenefitDetails by remember { mutableStateOf(false) }
     var benefitNotifications by remember { mutableStateOf(false) }
+    var hoursNotifications by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val credentialStore = remember(context) { com.example.data.NossaGenteCredentialStore(context.applicationContext) }
@@ -108,6 +112,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
 
     LaunchedEffect(Unit) {
         benefitNotifications = credentialStore.isBenefitNotificationsEnabled()
+        hoursNotifications = credentialStore.isHoursNotificationsEnabled()
         loading = false
         load()
     }
@@ -118,7 +123,30 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
             navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, "Voltar") } },
             actions = {
                 TextButton(onClick = onSignOut) { Text("Sair") }
-                IconButton(onClick = ::load, enabled = !loading) { Icon(Icons.Default.Refresh, "Atualizar") }
+                IconButton(
+                    onClick = {
+                        val enabled = !hoursNotifications
+                        hoursNotifications = enabled
+                        credentialStore.setHoursNotificationsEnabled(enabled)
+                        if (enabled) {
+                            com.example.util.HoursNotificationWorker.schedule(context, resetSnapshot = true)
+                        } else {
+                            com.example.util.HoursNotificationWorker.cancel(context)
+                        }
+                    }
+                ) {
+                    Icon(
+                        if (hoursNotifications) Icons.Default.Notifications else Icons.Default.NotificationsOff,
+                        if (hoursNotifications) "Desativar notificações do banco de horas" else "Ativar notificações do banco de horas"
+                    )
+                }
+                IconButton(onClick = ::load, enabled = !loading) {
+                    if (loading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.Refresh, "Atualizar dados do Nossa Gente")
+                    }
+                }
             }
         )
     }) { padding ->

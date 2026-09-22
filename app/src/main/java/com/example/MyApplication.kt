@@ -49,6 +49,18 @@ class MyApplication : Application() {
             Log.w("MyApplication", "Benefit notification check not scheduled in this process", e)
         }
         try {
+            val hoursNotificationsEnabled = com.example.data.NossaGenteCredentialStore(this)
+                .isHoursNotificationsEnabled()
+            if (hoursNotificationsEnabled) {
+                com.example.util.HoursNotificationWorker.schedule(this)
+                Log.d("MyApplication", "Hours notification check scheduled")
+            } else {
+                com.example.util.HoursNotificationWorker.cancel(this)
+            }
+        } catch (e: IllegalStateException) {
+            Log.w("MyApplication", "Hours notification check not scheduled in this process", e)
+        }
+        try {
             com.example.util.AcpCatalogSyncWorker.schedule(this)
             Log.d("MyApplication", "ACP catalog sync scheduled")
         } catch (e: IllegalStateException) {

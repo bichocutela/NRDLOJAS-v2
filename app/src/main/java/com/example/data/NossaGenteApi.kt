@@ -87,20 +87,22 @@ class NossaGenteApi(context: Context) {
 
     /** Banco de horas do Nossa Gente. O contrato oficial usa SALDOTOTAL e MESES. */
     suspend fun fetchHours(): NossaGenteHoursResult = withContext(Dispatchers.IO) {
-        val token = currentToken() ?: return@withContext NossaGenteHoursResult.Unauthorized
+        fetchHoursOnce(allowSavedCredentialRecovery = true)
+    }
+
+    private suspend fun fetchHoursOnce(allowSavedCredentialRecovery: Boolean): NossaGenteHoursResult {
+        val token = currentToken() ?: return NossaGenteHoursResult.Unauthorized
         try {
-            val request = Request.Builder()
-                .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/horas?_sync=${System.currentTimeMillis()}")
-                .get().header("Accept", "application/json")
-                .header("X-Requested-With", "XMLHttpRequest")
-                .header("Authorization", "Bearer $token").build()
-            client.newCall(request).execute().use { response ->
-                val body = response.body?.string().orEmpty()
-                if (response.code == 401 || response.code == 403) return@use NossaGenteHoursResult.Unauthorized
-                if (!response.isSuccessful) return@use NossaGenteHoursResult.Error("Não foi possível carregar o banco de horas agora.")
-                runCatching { NossaGenteHoursResult.Success(parseHours(body)) }
-                    .getOrElse { NossaGenteHoursResult.Error("A resposta do banco de horas não pôde ser lida.") }
+            val response = authenticatedGet("/horas", token)
+            if (response.code == 401 || response.code == 403) {
+                if (allowSavedCredentialRecovery && renewFromSavedCredentials()) {
+                    return fetchHoursOnce(allowSavedCredentialRecovery = false)
+                }
+                return NossaGenteHoursResult.Unauthorized
             }
+            if (!response.successful) return NossaGenteHoursResult.Error("Não foi possível carregar o banco de horas agora.")
+            runCatching { NossaGenteHoursResult.Success(parseHours(response.body)) }
+                .getOrElse { NossaGenteHoursResult.Error("A resposta do banco de horas não pôde ser lida.") }
         } catch (_: Exception) {
             NossaGenteHoursResult.Error("Não foi possível carregar o banco de horas. Verifique a internet.")
         }
