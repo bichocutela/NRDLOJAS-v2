@@ -10,8 +10,11 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import org.json.JSONTokener
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.text.NumberFormat
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /** Cliente mínimo para autenticar e consultar promoções da Nossa Gente.
@@ -103,25 +106,9 @@ class NossaGenteApi(context: Context) {
         }
     }
 
-    /** Convênio e compras do usuário, sincronizados com a API autenticada do Nossa Gente. */
+    /** Convênio e compras do usuário, usando os mesmos endpoints do app Nossa Gente. */
     suspend fun fetchBenefit(): NossaGenteBenefitResult = withContext(Dispatchers.IO) {
-        val token = currentToken() ?: return@withContext NossaGenteBenefitResult.Unauthorized
-        try {
-            val request = Request.Builder()
-                .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/convenio?_sync=${System.currentTimeMillis()}")
-                .get().header("Accept", "application/json")
-                .header("X-Requested-With", "XMLHttpRequest")
-                .header("Authorization", "Bearer $token").build()
-            client.newCall(request).execute().use { response ->
-                val body = response.body?.string().orEmpty()
-                if (response.code == 401 || response.code == 403) return@use NossaGenteBenefitResult.Unauthorized
-                if (!response.isSuccessful) return@use NossaGenteBenefitResult.Error("Não foi possível carregar o convênio agora.")
-                runCatching { NossaGenteBenefitResult.Success(parseBenefit(body)) }
-                    .getOrElse { NossaGenteBenefitResult.Error("A resposta do convênio não pôde ser lida.") }
-            }
-        } catch (_: Exception) {
-            NossaGenteBenefitResult.Error("Não foi possível carregar o convênio. Verifique a internet.")
-        }
+        fetchBenefitOnce(allowSavedCredentialRecovery = true)
     }
 
     private fun parseHours(raw: String): HoursSummary {
@@ -138,28 +125,110 @@ class NossaGenteApi(context: Context) {
         )
     }
 
-    private fun parseBenefit(raw: String): BenefitSummary {
-        val root = JSONObject(raw)
-        val data = firstObject(root, "data", "resultado", "result", "payload", "convenio", "beneficio") ?: root
-        val purchases = firstArray(data, "compras", "purchases", "transacoes", "transactions", "itens") ?: JSONArray()
+    private suspend fun fetchBenefitOnce(allowSavedCredentialRecovery: Boolean): NossaGenteBenefitResult {
+        val token = currentToken() ?: return NossaGenteBenefitResult.Unauthorized
+        return try {
+            val saldo = authenticatedGet("/convenios/compras/mercado/saldo", token)
+            if (saldo.code == 401 || saldo.code == 403) {
+                if (allowSavedCredentialRecovery && renewFromSavedCredentials()) {
+                    return fetchBenefitOnce(allowSavedCredentialRecovery = false)
+                }
+                return NossaGenteBenefitResult.Unauthorized
+            }
+            if (!saldo.successful) return NossaGenteBenefitResult.Error("Não foi possível carregar o convênio agora.")
+
+            val compras = authenticatedGet("/convenios/compras/mercado/itens?limit=20", token)
+            if (compras.code == 401 || compras.code == 403) {
+                if (allowSavedCredentialRecovery && renewFromSavedCredentials()) {
+                    return fetchBenefitOnce(allowSavedCredentialRecovery = false)
+                }
+                return NossaGenteBenefitResult.Unauthorized
+            }
+            if (!compras.successful) return NossaGenteBenefitResult.Error("Não foi possível carregar as compras do convênio agora.")
+
+            runCatching { NossaGenteBenefitResult.Success(parseBenefit(saldo.body, compras.body)) }
+                .getOrElse { NossaGenteBenefitResult.Error("A resposta do convênio não pôde ser lida.") }
+        } catch (_: Exception) {
+            NossaGenteBenefitResult.Error("Não foi possível carregar o convênio. Verifique a internet.")
+        }
+    }
+
+    private fun authenticatedGet(path: String, token: String): AuthenticatedResponse {
+        val separator = if (path.contains('?')) '&' else '?'
+        val request = Request.Builder()
+            .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}$path${separator}_sync=${System.currentTimeMillis()}")
+            .get()
+            .header("Accept", "application/json")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Cache-Control", "no-cache, no-store")
+            .header("Pragma", "no-cache")
+            .header("Authorization", "Bearer $token")
+            .build()
+        return client.newCall(request).execute().use { response ->
+            AuthenticatedResponse(response.code, response.isSuccessful, response.body?.string().orEmpty())
+        }
+    }
+
+    private fun parseBenefit(saldoRaw: String, comprasRaw: String): BenefitSummary {
+        val saldos = payloadArray(saldoRaw, "data", "resultado", "result", "payload", "saldos", "saldo")
+        val saldo = (0 until saldos.length()).mapNotNull(saldos::optJSONObject).firstOrNull() ?: JSONObject()
+        val purchases = payloadArray(comprasRaw, "data", "resultado", "result", "payload", "compras", "itens")
+        val limitValue = saldo.optValue("limite", "valorLimite")
+        val spentValue = saldo.optValue("valorGasto", "gasto", "valor_gasto")
+        val balanceValue = saldo.optValue("saldoDisponivel", "saldo", "valorSaldo")
+            ?: run {
+                val limit = limitValue.toDecimalOrNull()
+                val spent = spentValue.toDecimalOrNull()
+                if (limit != null && spent != null) limit.subtract(spent) else null
+            }
         return BenefitSummary(
-            period = firstNonBlank(data.optString("periodo"), data.optString("period"), data.optString("periodoAtual")),
-            updatedAt = firstNonBlank(data.optString("atualizadoEm"), data.optString("updatedAt"), data.optString("updated_at")),
-            limit = firstNonBlank(data.optString("limite"), data.optString("limit"), data.optString("valorLimite")),
-            spent = firstNonBlank(data.optString("gasto"), data.optString("spent"), data.optString("valorGasto")),
-            balance = firstNonBlank(data.optString("saldo"), data.optString("balance"), data.optString("valorSaldo")),
+            period = saldo.textValue("periodo", "referencia", "ciclo", "periodoAtual"),
+            updatedAt = saldo.textValue("atualizadoEm", "atualizado", "dataAtualizacao", "updatedAt", "dataCompra"),
+            limit = formatMoney(limitValue),
+            spent = formatMoney(spentValue),
+            balance = formatMoney(balanceValue),
             purchases = (0 until purchases.length()).mapNotNull { index ->
                 purchases.optJSONObject(index)?.let { item ->
+                    val purchaseDateTime = item.textValue("dataDaCompra", "dataCompra", "data", "dataLancamento")
                     BenefitPurchase(
-                        date = firstNonBlank(item.optString("data"), item.optString("date"), item.optString("dataCompra")),
-                        time = firstNonBlank(item.optString("hora"), item.optString("time"), item.optString("horario")),
-                        place = firstNonBlank(item.optString("local"), item.optString("place"), item.optString("loja"), item.optString("estabelecimento")),
-                        amount = firstNonBlank(item.optString("valor"), item.optString("amount"), item.optString("total")),
-                        description = firstNonBlank(item.optString("descricao"), item.optString("description"), item.optString("compra"))
+                        date = purchaseDateTime,
+                        time = item.textValue("hora", "time", "horario"),
+                        place = item.textValue("localCompra", "estabelecimento", "loja", "local"),
+                        amount = formatMoney(item.optValue("vlrPago", "valorGasto", "valor", "total")),
+                        description = item.textValue("descricao", "description", "compra", "descontaEm")
                     )
                 }
             }
         )
+    }
+
+    private fun payloadArray(raw: String, vararg wrapperKeys: String): JSONArray {
+        val parsed = JSONTokener(raw.trim()).nextValue()
+        if (parsed is JSONArray) return parsed
+        if (parsed !is JSONObject) return JSONArray()
+        wrapperKeys.forEach { key ->
+            when (val value = parsed.opt(key)) {
+                is JSONArray -> return value
+                is JSONObject -> return payloadArray(value.toString(), *wrapperKeys)
+            }
+        }
+        return JSONArray().put(parsed)
+    }
+
+    private fun JSONObject.optValue(vararg keys: String): Any? {
+        keys.forEach { key ->
+            val value = opt(key)
+            if (value != null && value != JSONObject.NULL && value.toString().isNotBlank()) return value
+        }
+        return null
+    }
+
+    private fun JSONObject.textValue(vararg keys: String): String? =
+        optValue(*keys)?.toString()?.trim()?.takeIf { it.isNotBlank() && it != "null" }
+
+    private fun formatMoney(value: Any?): String? {
+        val number = value.toDecimalOrNull() ?: return null
+        return NumberFormat.getCurrencyInstance(Locale("pt", "BR")).format(number)
     }
 
     private fun normalizeHours(value: String): String = value.trim().let {
@@ -539,6 +608,8 @@ class NossaGenteApi(context: Context) {
         val validTo: String?,
         val products: LinkedHashMap<String, PromotionProduct> = linkedMapOf()
     )
+
+    private data class AuthenticatedResponse(val code: Int, val successful: Boolean, val body: String)
 }
 
 internal fun fingerprintPromotionsForTest(promotions: List<Promotion>): String {

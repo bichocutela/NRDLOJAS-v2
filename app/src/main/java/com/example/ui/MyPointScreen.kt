@@ -121,7 +121,10 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                             }
                         }
                     }
-                    point?.let { summary ->
+                    point?.takeIf { summary ->
+                        !summary.period.isNullOrBlank() || !summary.status.isNullOrBlank() ||
+                            !summary.worked.isNullOrBlank() || !summary.balance.isNullOrBlank() || summary.records.isNotEmpty()
+                    }?.let { summary ->
                         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                                 Text(summary.period ?: "Período atual", style = MaterialTheme.typography.titleLarge)
@@ -134,6 +137,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                                 Text("Convênio", style = MaterialTheme.typography.titleLarge)
                                 summary.period?.let { Text("Período: $it") }
+                                summary.updatedAt?.let { Text("Atualizado em: $it", style = MaterialTheme.typography.bodySmall) }
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Limite: ${summary.limit ?: "—"}"); Text("Gasto: ${summary.spent ?: "—"}"); Text("Saldo: ${summary.balance ?: "—"}") }
                                 Text("Toque para ver as compras", style = MaterialTheme.typography.bodySmall)
                             }
