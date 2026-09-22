@@ -58,6 +58,11 @@ object NotificationHelper {
                 description = "Notificações de novas ofertas da loja favorita"
             }
             notificationManager.createNotificationChannel(channelPromotionUpdates)
+
+            val channelBenefitUpdates = NotificationChannel("benefit_updates", "Atualizações do convênio", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Notificações de liberação e compras realizadas no convênio"
+            }
+            notificationManager.createNotificationChannel(channelBenefitUpdates)
             
             // Legacy channel just in case
             val legacy = NotificationChannel(CHANNEL_ID, "Atualizações de Produtos", NotificationManager.IMPORTANCE_DEFAULT)
@@ -117,6 +122,7 @@ object NotificationHelper {
         "SUGGESTION_FIXED" -> "suggestion_fixed"
         "APP_UPDATE" -> "app_update"
         "PROMOTION_UPDATED" -> "promotion_updates"
+        "BENEFIT_RELEASED", "BENEFIT_PURCHASE" -> "benefit_updates"
         else -> null
     }
 

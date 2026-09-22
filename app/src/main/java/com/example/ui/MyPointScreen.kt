@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -156,16 +159,39 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
             title = { Text("Convênio") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Compras", style = MaterialTheme.typography.titleMedium)
-                    if (benefit?.purchases.isNullOrEmpty()) Text("Nenhuma compra informada pela API.")
-                    else benefit!!.purchases.forEach { purchase ->
-                        Text(listOfNotNull(purchase.date, purchase.time).joinToString(" ").ifBlank { "Data não informada" })
-                        Text("${purchase.place ?: "Local não informado"} · ${purchase.amount ?: "Valor não informado"}")
-                        purchase.description?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                    }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Notificar alterações do convênio", modifier = Modifier.weight(1f))
-                        Switch(checked = benefitNotifications, onCheckedChange = { benefitNotifications = it; credentialStore.setBenefitNotificationsEnabled(it) })
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Ative as notificações", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Quando o saldo for atualizado, o app notificará sobre Convênio Liberado e Compras no Convênio.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(
+                            checked = benefitNotifications,
+                            onCheckedChange = { enabled ->
+                                benefitNotifications = enabled
+                                credentialStore.setBenefitNotificationsEnabled(enabled)
+                                if (enabled) {
+                                    com.example.util.BenefitNotificationWorker.schedule(context, resetSnapshot = true)
+                                } else {
+                                    com.example.util.BenefitNotificationWorker.cancel(context)
+                                }
+                            }
+                        )
+                    }
+                    androidx.compose.material3.HorizontalDivider()
+                    Text("Compras", style = MaterialTheme.typography.titleMedium)
+                    Column(
+                        modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (benefit?.purchases.isNullOrEmpty()) Text("Nenhuma compra informada pela API.")
+                        else benefit!!.purchases.forEach { purchase ->
+                            Text(listOfNotNull(purchase.date, purchase.time).joinToString(" ").ifBlank { "Data não informada" })
+                            Text("${purchase.place ?: "Local não informado"} · ${purchase.amount ?: "Valor não informado"}")
+                            purchase.description?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                        }
                     }
                 }
             },

@@ -37,6 +37,18 @@ class MyApplication : Application() {
             Log.w("MyApplication", "Favorite store promotion check not scheduled in this process", e)
         }
         try {
+            val benefitNotificationsEnabled = com.example.data.NossaGenteCredentialStore(this)
+                .isBenefitNotificationsEnabled()
+            if (benefitNotificationsEnabled) {
+                com.example.util.BenefitNotificationWorker.schedule(this)
+                Log.d("MyApplication", "Benefit notification check scheduled")
+            } else {
+                com.example.util.BenefitNotificationWorker.cancel(this)
+            }
+        } catch (e: IllegalStateException) {
+            Log.w("MyApplication", "Benefit notification check not scheduled in this process", e)
+        }
+        try {
             com.example.util.AcpCatalogSyncWorker.schedule(this)
             Log.d("MyApplication", "ACP catalog sync scheduled")
         } catch (e: IllegalStateException) {
