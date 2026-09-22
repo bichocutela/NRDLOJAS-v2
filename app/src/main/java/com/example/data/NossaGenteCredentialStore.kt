@@ -59,6 +59,18 @@ class NossaGenteCredentialStore(context: Context) {
         preferences.edit().remove(KEY_CREDENTIALS).apply()
     }
 
+    fun isProfileEnabled(): Boolean = preferences.getBoolean(KEY_PROFILE_ENABLED, false)
+
+    fun setProfileEnabled(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_PROFILE_ENABLED, enabled).apply()
+    }
+
+    fun isBenefitNotificationsEnabled(): Boolean = preferences.getBoolean(KEY_BENEFIT_NOTIFICATIONS, false)
+
+    fun setBenefitNotificationsEnabled(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_BENEFIT_NOTIFICATIONS, enabled).apply()
+    }
+
     private fun getOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
         (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
@@ -79,6 +91,8 @@ class NossaGenteCredentialStore(context: Context) {
     private companion object {
         const val PREFERENCES_NAME = "nossa_gente_secure_credentials"
         const val KEY_CREDENTIALS = "credentials_v1"
+        const val KEY_PROFILE_ENABLED = "profile_enabled_v1"
+        const val KEY_BENEFIT_NOTIFICATIONS = "benefit_notifications_v1"
         const val KEY_ALIAS = "nrd_nossa_gente_credentials_v1"
         const val KEYSTORE_PROVIDER = "AndroidKeyStore"
         const val TRANSFORMATION = "AES/GCM/NoPadding"

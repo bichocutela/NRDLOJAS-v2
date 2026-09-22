@@ -103,6 +103,27 @@ class NossaGenteApi(context: Context) {
         }
     }
 
+    /** Convênio e compras do usuário, sincronizados com a API autenticada do Nossa Gente. */
+    suspend fun fetchBenefit(): NossaGenteBenefitResult = withContext(Dispatchers.IO) {
+        val token = currentToken() ?: return@withContext NossaGenteBenefitResult.Unauthorized
+        try {
+            val request = Request.Builder()
+                .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/convenio?_sync=${System.currentTimeMillis()}")
+                .get().header("Accept", "application/json")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .header("Authorization", "Bearer $token").build()
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (response.code == 401 || response.code == 403) return@use NossaGenteBenefitResult.Unauthorized
+                if (!response.isSuccessful) return@use NossaGenteBenefitResult.Error("Não foi possível carregar o convênio agora.")
+                runCatching { NossaGenteBenefitResult.Success(parseBenefit(body)) }
+                    .getOrElse { NossaGenteBenefitResult.Error("A resposta do convênio não pôde ser lida.") }
+            }
+        } catch (_: Exception) {
+            NossaGenteBenefitResult.Error("Não foi possível carregar o convênio. Verifique a internet.")
+        }
+    }
+
     private fun parseHours(raw: String): HoursSummary {
         val json = JSONObject(raw)
         val months = json.optJSONArray("MESES") ?: JSONArray()
@@ -114,6 +135,30 @@ class NossaGenteApi(context: Context) {
         return HoursSummary(
             total = normalizeHours(json.optString("SALDOTOTAL")),
             months = entries
+        )
+    }
+
+    private fun parseBenefit(raw: String): BenefitSummary {
+        val root = JSONObject(raw)
+        val data = firstObject(root, "data", "resultado", "result", "payload", "convenio", "beneficio") ?: root
+        val purchases = firstArray(data, "compras", "purchases", "transacoes", "transactions", "itens") ?: JSONArray()
+        return BenefitSummary(
+            period = firstNonBlank(data.optString("periodo"), data.optString("period"), data.optString("periodoAtual")),
+            updatedAt = firstNonBlank(data.optString("atualizadoEm"), data.optString("updatedAt"), data.optString("updated_at")),
+            limit = firstNonBlank(data.optString("limite"), data.optString("limit"), data.optString("valorLimite")),
+            spent = firstNonBlank(data.optString("gasto"), data.optString("spent"), data.optString("valorGasto")),
+            balance = firstNonBlank(data.optString("saldo"), data.optString("balance"), data.optString("valorSaldo")),
+            purchases = (0 until purchases.length()).mapNotNull { index ->
+                purchases.optJSONObject(index)?.let { item ->
+                    BenefitPurchase(
+                        date = firstNonBlank(item.optString("data"), item.optString("date"), item.optString("dataCompra")),
+                        time = firstNonBlank(item.optString("hora"), item.optString("time"), item.optString("horario")),
+                        place = firstNonBlank(item.optString("local"), item.optString("place"), item.optString("loja"), item.optString("estabelecimento")),
+                        amount = firstNonBlank(item.optString("valor"), item.optString("amount"), item.optString("total")),
+                        description = firstNonBlank(item.optString("descricao"), item.optString("description"), item.optString("compra"))
+                    )
+                }
+            }
         )
     }
 
@@ -600,10 +645,33 @@ data class PointEntry(
 data class HoursSummary(val total: String, val months: List<HoursMonth>)
 data class HoursMonth(val year: Int, val month: String, val balance: String)
 
+data class BenefitSummary(
+    val period: String? = null,
+    val updatedAt: String? = null,
+    val limit: String? = null,
+    val spent: String? = null,
+    val balance: String? = null,
+    val purchases: List<BenefitPurchase> = emptyList()
+)
+
+data class BenefitPurchase(
+    val date: String? = null,
+    val time: String? = null,
+    val place: String? = null,
+    val amount: String? = null,
+    val description: String? = null
+)
+
 sealed interface NossaGenteHoursResult {
     data class Success(val hours: HoursSummary) : NossaGenteHoursResult
     data object Unauthorized : NossaGenteHoursResult
     data class Error(val message: String) : NossaGenteHoursResult
+}
+
+sealed interface NossaGenteBenefitResult {
+    data class Success(val benefit: BenefitSummary) : NossaGenteBenefitResult
+    data object Unauthorized : NossaGenteBenefitResult
+    data class Error(val message: String) : NossaGenteBenefitResult
 }
 
 sealed interface NossaGentePointResult {
