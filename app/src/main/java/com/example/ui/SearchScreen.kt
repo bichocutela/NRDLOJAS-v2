@@ -851,7 +851,12 @@ fun SearchScreen(
                                     Text(notification.title, fontWeight = FontWeight.Bold)
                                     Text(notification.body, style = MaterialTheme.typography.bodyMedium)
                                     Text(
-                                        if (notification.type == "CODE_CHANGED") "CÓDIGO ALTERADO" else "NOVO PRODUTO",
+                                        when (notification.type) {
+                                            "CODE_CHANGED" -> "CÓDIGO ALTERADO"
+                                            "BENEFIT_RELEASED" -> "CONVÊNIO LIBERADO"
+                                            "BENEFIT_PURCHASE" -> "COMPRA NO CONVÊNIO"
+                                            else -> "NOVO PRODUTO"
+                                        },
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.primary
                                     )
