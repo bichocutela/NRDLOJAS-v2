@@ -16,7 +16,6 @@ import com.example.data.NossaGenteApi
 import com.example.data.NossaGenteBenefitResult
 import com.example.data.NossaGenteCredentialStore
 import com.example.data.NossaGenteLoginResult
-import com.example.data.NossaGenteSessionScope
 import com.example.data.UserPreferences
 import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
@@ -30,7 +29,7 @@ class BenefitNotificationWorker(
         val credentialStore = NossaGenteCredentialStore(applicationContext)
         if (!credentialStore.isBenefitNotificationsEnabled()) return Result.success()
 
-        val api = NossaGenteApi(applicationContext, NossaGenteSessionScope.PROFILE)
+        val api = NossaGenteApi(applicationContext)
         var result = api.fetchBenefit()
         if (result == NossaGenteBenefitResult.Unauthorized) {
             val credentials = credentialStore.load() ?: return Result.success()

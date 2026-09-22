@@ -15,7 +15,6 @@ import com.example.data.NossaGenteApi
 import com.example.data.NossaGenteCredentialStore
 import com.example.data.NossaGenteHoursResult
 import com.example.data.NossaGenteLoginResult
-import com.example.data.NossaGenteSessionScope
 import com.example.data.UserPreferences
 import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
@@ -30,7 +29,7 @@ class HoursNotificationWorker(
         val credentialStore = NossaGenteCredentialStore(applicationContext)
         if (!credentialStore.isHoursNotificationsEnabled()) return Result.success()
 
-        val api = NossaGenteApi(applicationContext, NossaGenteSessionScope.PROFILE)
+        val api = NossaGenteApi(applicationContext)
         var result = api.fetchHours()
         if (result == NossaGenteHoursResult.Unauthorized) {
             val credentials = credentialStore.load() ?: return Result.success()

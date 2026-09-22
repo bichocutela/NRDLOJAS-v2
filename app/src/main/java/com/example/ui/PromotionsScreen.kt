@@ -140,7 +140,6 @@ fun PromotionsLoginScreen(
     api: NossaGenteApi,
     onLoginSuccess: () -> Unit,
     onNavigateBack: () -> Unit,
-    onProfileActivationLogin: suspend (String, String) -> NossaGenteLoginResult = { _, _ -> NossaGenteLoginResult.Success },
     reuseExistingSession: Boolean = true,
     title: String = "Acesso às promoções"
 ) {
@@ -283,16 +282,6 @@ fun PromotionsLoginScreen(
                         when (val result = api.login(cpf, password)) {
                             NossaGenteLoginResult.Success -> {
                                 if (api.hasSession()) {
-                                    if (activateProfile) {
-                                        when (val profileLogin = onProfileActivationLogin(cpf, password)) {
-                                            NossaGenteLoginResult.Success -> Unit
-                                            is NossaGenteLoginResult.Error -> {
-                                                error = "Não foi possível ativar Meu Perfil: ${profileLogin.message}"
-                                                isLoading = false
-                                                return@launch
-                                            }
-                                        }
-                                    }
                                     if (saveCredentials) {
                                         withContext(Dispatchers.IO) {
                                             credentialStore.save(cpf = cpf, password = password)
@@ -337,7 +326,9 @@ fun PromotionsScreen(
     api: NossaGenteApi,
     onNavigateBack: () -> Unit,
     onRequireLogin: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    showReactivateProfile: Boolean = false,
+    onReactivateProfile: () -> Unit = {}
 ) {
     var hasPromotions by remember { mutableStateOf(false) }
     var offerGroups by remember { mutableStateOf<List<OfferGroup>>(emptyList()) }
@@ -630,6 +621,11 @@ fun PromotionsScreen(
                         }
                     ) {
                         Text("Sair")
+                    }
+                    if (showReactivateProfile) {
+                        TextButton(onClick = onReactivateProfile) {
+                            Text("Reativar Meu Perfil", maxLines = 1)
+                        }
                     }
                     IconButton(
                         onClick = ::handleRefreshClick,
