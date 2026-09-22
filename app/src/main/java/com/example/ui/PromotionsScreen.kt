@@ -140,6 +140,7 @@ fun PromotionsLoginScreen(
     api: NossaGenteApi,
     onLoginSuccess: () -> Unit,
     onNavigateBack: () -> Unit,
+    onProfileActivationLogin: suspend (String, String) -> NossaGenteLoginResult = { _, _ -> NossaGenteLoginResult.Success },
     reuseExistingSession: Boolean = true,
     title: String = "Acesso às promoções"
 ) {
@@ -282,6 +283,16 @@ fun PromotionsLoginScreen(
                         when (val result = api.login(cpf, password)) {
                             NossaGenteLoginResult.Success -> {
                                 if (api.hasSession()) {
+                                    if (activateProfile) {
+                                        when (val profileLogin = onProfileActivationLogin(cpf, password)) {
+                                            NossaGenteLoginResult.Success -> Unit
+                                            is NossaGenteLoginResult.Error -> {
+                                                error = "Não foi possível ativar Meu Perfil: ${profileLogin.message}"
+                                                isLoading = false
+                                                return@launch
+                                            }
+                                        }
+                                    }
                                     if (saveCredentials) {
                                         withContext(Dispatchers.IO) {
                                             credentialStore.save(cpf = cpf, password = password)

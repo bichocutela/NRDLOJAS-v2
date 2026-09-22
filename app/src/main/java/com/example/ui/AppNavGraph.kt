@@ -211,7 +211,17 @@ fun AppNavGraph(
                         ManageProductsScreen(viewModel = viewModel, onNavigateBack = { navController.popBackStack() })
                     }
                 }
-                composable("promotions_login") { PromotionsLoginScreen(promotionsApi, { profileEnabled = nossaGenteCredentialStore.isProfileEnabled(); navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true } }, { navController.popBackStack() }) }
+                composable("promotions_login") {
+                    PromotionsLoginScreen(
+                        api = promotionsApi,
+                        onLoginSuccess = {
+                            profileEnabled = nossaGenteCredentialStore.isProfileEnabled()
+                            navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true }
+                        },
+                        onNavigateBack = { navController.popBackStack() },
+                        onProfileActivationLogin = { cpf, password -> profileApi.login(cpf, password) },
+                    )
+                }
                 composable("promotions") { PromotionsScreen(promotionsApi, { navController.popBackStack() }, { navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true } } }, { promotionsApi.logout(); navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true }; launchSingleTop = true } }) }
                 composable("my_point_login") {
                     PromotionsLoginScreen(
