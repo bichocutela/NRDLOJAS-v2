@@ -1352,9 +1352,7 @@ private fun AcpFeaturedOfferCard(
 ) {
     OutlinedCard(
         onClick = { onOpen(item) },
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 360.dp)
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(10.dp),
