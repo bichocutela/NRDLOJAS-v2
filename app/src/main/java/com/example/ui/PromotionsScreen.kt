@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 25182)
-Total output lines: 2405
-
 package com.example.ui
 
 import androidx.compose.animation.AnimatedVisibility
@@ -919,7 +916,546 @@ private fun PromotionsHome(
         } else {
             items(categories, key = { it.first }) { (categoryName, offers) ->
                 CategoryPreviewSection(
-          …5182 tokens truncated…            fontWeight = FontWeight.Bold
+                    categoryName = categoryName,
+                    offers = offers.take(CATEGORY_PREVIEW_LIMIT),
+                    totalOffers = offers.size,
+                    onCategoryClick = onCategoryClick,
+                    onImageClick = onImageClick
+                )
+            }
+        }
+        item {
+            Text(
+                "Atualização automática a cada minuto enquanto esta tela estiver aberta.",
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+@Composable
+private fun FavoriteStoreSelector(
+    storeOptions: List<String>,
+    favoriteStoreCode: String?,
+    onFavoriteStoreChange: (String?) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val safeOptions = storeOptions.filter { it != ALL_STORES_LABEL }
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            enabled = safeOptions.isNotEmpty()
+        ) {
+            Icon(
+                imageVector = if (favoriteStoreCode.isNullOrBlank()) Icons.Default.FavoriteBorder else Icons.Default.Favorite,
+                contentDescription = if (favoriteStoreCode.isNullOrBlank()) {
+                    "Escolher loja favorita"
+                } else {
+                    "Loja favorita: ${StoreCatalog.nameFor(favoriteStoreCode)}"
+                },
+                tint = if (favoriteStoreCode.isNullOrBlank()) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.primary
+                }
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Todas as lojas") },
+                onClick = {
+                    onFavoriteStoreChange(null)
+                    expanded = false
+                }
+            )
+            safeOptions.forEach { code ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(StoreCatalog.nameFor(code))
+                            Text(code, style = MaterialTheme.typography.bodySmall)
+                        }
+                    },
+                    onClick = {
+                        onFavoriteStoreChange(code)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoreTabs(
+    storeOptions: List<String>,
+    selectedStore: String,
+    onStoreSelected: (String) -> Unit
+) {
+    val safeStores = if (storeOptions.isEmpty()) listOf(ALL_STORES_LABEL) else storeOptions
+    ScrollableTabRow(selectedTabIndex = safeStores.indexOf(selectedStore).coerceAtLeast(0)) {
+        safeStores.forEach { store ->
+            Tab(
+                selected = store == selectedStore,
+                onClick = { onStoreSelected(store) },
+                text = {
+                    Text(
+                        text = if (store == ALL_STORES_LABEL) ALL_STORES_LABEL else StoreCatalog.nameFor(store),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        singleLine = true,
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Default.Close, contentDescription = "Limpar busca")
+                }
+            }
+        },
+        placeholder = { Text("Buscar produto") },
+        shape = RoundedCornerShape(10.dp)
+    )
+}
+
+@Composable
+private fun CategoryPreviewSection(
+    categoryName: String,
+    offers: List<OfferGroup>,
+    totalOffers: Int,
+    onCategoryClick: (String) -> Unit,
+    onImageClick: (String) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 12.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onCategoryClick(categoryName) }
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(categoryName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    "$totalOffers produto(s) em oferta",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            TextButton(onClick = { onCategoryClick(categoryName) }) { Text("Ver todos") }
+        }
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(offers, key = { it.id }) { offer ->
+                CompactOfferCard(offer = offer, onImageClick = onImageClick)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactOfferCard(offer: OfferGroup, onImageClick: (String) -> Unit) {
+    val cardShape = RoundedCornerShape(12.dp)
+    Card(
+        modifier = Modifier.widthIn(min = 156.dp, max = 176.dp).glassSoftShadow(cardShape),
+        shape = cardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column {
+            ProductImage(
+                imageUrl = offer.imageUrl,
+                contentDescription = offer.name,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(136.dp),
+                onClick = onImageClick,
+                validTo = offer.validTo
+            )
+            Column(modifier = Modifier.padding(8.dp)) {
+                DiscountBadge(discount = offer.bestDiscount, compact = true)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    offer.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(3.dp))
+                PriceSummary(offer = offer, compact = true)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PromotionCategoryList(
+    innerPadding: PaddingValues,
+    categoryName: String,
+    selectedStore: String,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    sortOption: OfferSortOption,
+    onSortOptionChange: (OfferSortOption) -> Unit,
+    visibleOffers: List<OfferGroup>,
+    visibleOfferCount: Int,
+    onLoadMore: () -> Unit,
+    onImageClick: (String) -> Unit,
+    onBack: () -> Unit
+) {
+    val offersToRender = visibleOffers.take(visibleOfferCount)
+    LazyColumn(
+        modifier = Modifier.padding(innerPadding).fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Categorias")
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "$categoryName • ${visibleOffers.size}",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                OfferSortSelector(
+                    selected = sortOption,
+                    onSelected = onSortOptionChange
+                )
+            }
+        }
+        item {
+            SearchField(query = searchQuery, onQueryChange = onSearchQueryChange)
+        }
+        item {
+            Text(
+                if (selectedStore == ALL_STORES_LABEL) "Preços por loja" else "Filtrado por ${StoreCatalog.nameFor(selectedStore)}",
+                modifier = Modifier.padding(horizontal = 12.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (offersToRender.isEmpty()) {
+            item {
+                Text(
+                    "Nenhum produto encontrado para este filtro.",
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        } else {
+            items(offersToRender, key = { it.id }) { offer ->
+                DetailedOfferCard(
+                    offer = offer,
+                    selectedStore = selectedStore,
+                    onImageClick = onImageClick
+                )
+            }
+        }
+        if (visibleOfferCount < visibleOffers.size) {
+            item {
+                Button(
+                    onClick = onLoadMore,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
+                ) {
+                    Text("Carregar mais ofertas (${visibleOffers.size - visibleOfferCount} restantes)")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OfferSortSelector(
+    selected: OfferSortOption,
+    onSelected: (OfferSortOption) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(
+            onClick = { expanded = true },
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+        ) {
+            Text("Ordenar", maxLines = 1)
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                Icons.Default.ExpandMore,
+                contentDescription = "Escolher ordem das ofertas",
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            OfferSortOption.values().forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(option.label)
+                            if (option == selected) {
+                                Text("Selecionado", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    },
+                    onClick = {
+                        onSelected(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DetailedOfferCard(
+    offer: OfferGroup,
+    selectedStore: String,
+    onImageClick: (String) -> Unit
+) {
+    val cardShape = RoundedCornerShape(16.dp)
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val shareLayer = rememberGraphicsLayer()
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .drawWithContent {
+                shareLayer.record {
+                    this@drawWithContent.drawContent()
+                }
+                drawLayer(shareLayer)
+            }
+            .combinedClickable(
+                onClick = {},
+                onLongClick = {
+                    scope.launch {
+                        val copied = copyProductCardToClipboard(
+                            context = context,
+                            layer = shareLayer,
+                            productName = offer.name
+                        )
+                        android.widget.Toast.makeText(
+                            context,
+                            if (copied) "Copiado na Área de Transferência"
+                            else "Não foi possível copiar o quadradinho.",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            )
+            .glassSoftShadow(cardShape),
+        shape = cardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                ProductImage(
+                    imageUrl = offer.imageUrl,
+                    contentDescription = "Ver imagem de ${offer.name}",
+                    modifier = Modifier
+                        .size(width = 112.dp, height = 128.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp)),
+                    onClick = onImageClick,
+                    validTo = offer.validTo
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    DiscountBadge(discount = offer.bestDiscount, compact = false)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        offer.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (offer.code.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text("Código ${offer.code}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (offer.validity.isNotBlank()) {
+                        Spacer(Modifier.height(5.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(offer.validity, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    PriceSummary(offer = offer, selectedStore = selectedStore, compact = false)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            StorePriceSelector(offer = offer, selectedStore = selectedStore)
+        }
+    }
+}
+
+@Composable
+private fun StorePriceSelector(offer: OfferGroup, selectedStore: String) {
+    var expanded by remember(offer.id, selectedStore) { mutableStateOf(false) }
+    var pickedStore by remember(offer.id, selectedStore) {
+        mutableStateOf(
+            if (selectedStore != ALL_STORES_LABEL && offer.stores.any { it.storeCode == selectedStore }) {
+                selectedStore
+            } else {
+                offer.stores.firstOrNull()?.storeCode.orEmpty()
+            }
+        )
+    }
+    val pickedOffer = offer.stores.firstOrNull { it.storeCode == pickedStore } ?: offer.stores.firstOrNull()
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box {
+            OutlinedButton(
+                onClick = { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Storefront, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (pickedStore.isBlank()) "Escolher loja" else "Preço na loja: ${StoreCatalog.nameFor(pickedStore)}",
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Fechar lojas" else "Abrir lojas"
+                )
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                offer.stores.forEach { storeOffer ->
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text(StoreCatalog.nameFor(storeOffer.storeCode))
+                                Text(
+                                    storeOffer.storeCode,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    storeOffer.offerPrice ?: "Preço não informado",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        },
+                        onClick = {
+                            pickedStore = storeOffer.storeCode
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+        AnimatedVisibility(visible = pickedOffer != null) {
+            pickedOffer?.let { storeOffer ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Oferta nesta loja", style = MaterialTheme.typography.bodyMedium)
+                    Column(horizontalAlignment = Alignment.End) {
+                        storeOffer.regularPrice?.let {
+                            Text(
+                                "De $it",
+                                style = MaterialTheme.typography.bodySmall,
+                                textDecoration = TextDecoration.LineThrough,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            storeOffer.offerPrice ?: "Preço não informado",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PriceSummary(
+    offer: OfferGroup,
+    selectedStore: String? = null,
+    compact: Boolean
+) {
+    val storeOffer = if (selectedStore != null && selectedStore != ALL_STORES_LABEL) {
+        offer.stores.firstOrNull { it.storeCode == selectedStore } ?: offer.stores.firstOrNull()
+    } else {
+        offer.bestOffer
+    }
+    Column {
+        storeOffer?.regularPrice?.let {
+            Text(
+                "De $it",
+                style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                textDecoration = TextDecoration.LineThrough,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Text(
+            storeOffer?.offerPrice ?: "Preço não informado",
+            style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+private fun DiscountBadge(discount: String?, compact: Boolean) {
+    if (discount.isNullOrBlank()) return
+    Surface(
+        color = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+        shape = RoundedCornerShape(6.dp)
+    ) {
+        Text(
+            text = "-${discount.removePrefix("-")}",
+            modifier = Modifier.padding(horizontal = if (compact) 7.dp else 9.dp, vertical = 4.dp),
+            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold
         )
     }
 }
