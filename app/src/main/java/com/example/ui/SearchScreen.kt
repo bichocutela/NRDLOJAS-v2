@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -161,14 +162,16 @@ import androidx.compose.ui.graphics.ImageBitmap
 
 data class HomeTextPreferences(
     val boldOutline: Boolean = false,
-    val uppercaseBold: Boolean = false
+    val uppercaseBold: Boolean = false,
+    val largeText: Boolean = false
 )
 
 @Composable
 fun rememberHomeTextPreferences(userPreferences: com.example.data.UserPreferences): HomeTextPreferences {
     val boldOutline by userPreferences.boldOutline.collectAsStateWithLifecycle(initialValue = false)
     val uppercaseBold by userPreferences.uppercaseBold.collectAsStateWithLifecycle(initialValue = false)
-    return HomeTextPreferences(boldOutline = boldOutline, uppercaseBold = uppercaseBold)
+    val largeText by userPreferences.largeText.collectAsStateWithLifecycle(initialValue = false)
+    return HomeTextPreferences(boldOutline = boldOutline, uppercaseBold = uppercaseBold, largeText = largeText)
 }
 
 @Composable
@@ -356,6 +359,7 @@ fun SearchScreen(
                     else Modifier.background(MaterialTheme.colorScheme.background)
                 )
         ) {
+        val screenProfile = rememberNrdScreenProfile()
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val headerHeight = maxWidth / 3f
             val headerShape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
@@ -455,10 +459,10 @@ fun SearchScreen(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(if (screenProfile.veryCompact) 8.dp else 16.dp))
 
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp),
+            Column(
+            modifier = Modifier.padding(horizontal = screenProfile.horizontalPadding),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             val searchFieldShape = RoundedCornerShape(32.dp)
@@ -511,7 +515,7 @@ fun SearchScreen(
                 )
             )
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(if (screenProfile.veryCompact) 8.dp else 16.dp))
             
             val searchButtonShape = RoundedCornerShape(28.dp)
             val openProductSearch = {
@@ -557,11 +561,12 @@ fun SearchScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(if (screenProfile.veryCompact) 8.dp else 16.dp))
 
         if (searchQuery.isNotEmpty()) {
             LazyColumn(
-                contentPadding = PaddingValues(16.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentPadding = PaddingValues(horizontal = screenProfile.horizontalPadding, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (searchResults.isEmpty()) {
@@ -579,6 +584,7 @@ fun SearchScreen(
                 (homeSettings.showHistory && history.isNotEmpty()) ||
                 (homeSettings.showFavorites && favorites.isNotEmpty())
             LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f),
                 contentPadding = PaddingValues(bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -1458,8 +1464,8 @@ fun MiniProductCard(
     }
     Column(
         modifier = Modifier
-            .width(164.dp)
-            .height(140.dp)
+            .widthIn(min = 144.dp, max = 176.dp)
+            .heightIn(min = if (textPreferences.largeText) 168.dp else 132.dp)
             .glassSoftShadow(cardShape)
             .clip(cardShape)
             .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surface)

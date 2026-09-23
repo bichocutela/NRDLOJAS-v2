@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -42,6 +43,8 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storefront
@@ -78,6 +81,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.rememberGraphicsLayer
@@ -195,11 +199,12 @@ fun PromotionsLoginScreen(
                 modifier = Modifier.size(48.dp)
             )
             Spacer(Modifier.height(12.dp))
-            Text("Entre com o mesmo acesso do Nossa Gente", style = MaterialTheme.typography.titleLarge)
+            Text("Entre com o mesmo acesso do Nossa Gente", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
             Spacer(Modifier.height(8.dp))
             Text(
                 "Use seu CPF e sua senha do Nossa Gente. Se quiser, você pode salvar o acesso neste aparelho para não precisar digitar toda vez.",
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(4.dp))
             Card(
@@ -348,6 +353,7 @@ fun PromotionsScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var visibleOfferCount by rememberSaveable { mutableStateOf(INITIAL_OFFER_PAGE) }
     val context = LocalContext.current
+    val compactHeader = LocalConfiguration.current.screenWidthDp < 420
     val glassStyle = LocalGlassSoftStyle.current
     val userPreferences = remember { UserPreferences(context) }
     val promotionChangeStore = remember { PromotionChangeStore(context) }
@@ -604,29 +610,6 @@ fun PromotionsScreen(
                     }
                 },
                 actions = {
-                    FavoriteStoreSelector(
-                        storeOptions = storeOptions,
-                        favoriteStoreCode = favoriteStoreCode,
-                        onFavoriteStoreChange = { code ->
-                            favoriteStoreCode = code
-                            selectedStore = code ?: ALL_STORES_LABEL
-                            scope.launch { userPreferences.setFavoriteStoreCode(code) }
-                        }
-                    )
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                onLogout()
-                            }
-                        }
-                    ) {
-                        Text("Sair")
-                    }
-                    if (showReactivateProfile) {
-                        TextButton(onClick = onReactivateProfile) {
-                            Text("Reativar Meu Perfil", maxLines = 1)
-                        }
-                    }
                     IconButton(
                         onClick = ::handleRefreshClick,
                         enabled = !isLoading && !isChecking,
@@ -666,6 +649,81 @@ fun PromotionsScreen(
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 }
                             )
+                        }
+                    }
+                    if (compactHeader) {
+                        var profileActionsExpanded by remember { mutableStateOf(false) }
+                        IconButton(onClick = { profileActionsExpanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Mais opções da conta")
+                        }
+                        DropdownMenu(
+                            expanded = profileActionsExpanded,
+                            onDismissRequest = { profileActionsExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        favoriteStoreCode?.let { code -> "Loja favorita: $code" } ?: "Definir loja favorita",
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
+                                onClick = {
+                                    profileActionsExpanded = false
+                                    favoriteStoreCode?.let { code ->
+                                        favoriteStoreCode = null
+                                        selectedStore = ALL_STORES_LABEL
+                                        scope.launch { userPreferences.setFavoriteStoreCode(null) }
+                                    } ?: storeOptions.firstOrNull { it != ALL_STORES_LABEL }?.let { store ->
+                                        favoriteStoreCode = store
+                                        selectedStore = store
+                                        scope.launch { userPreferences.setFavoriteStoreCode(store) }
+                                    }
+                                },
+                                leadingIcon = { Icon(Icons.Default.Favorite, contentDescription = null) }
+                            )
+                            if (showReactivateProfile) {
+                                DropdownMenuItem(
+                                    text = { Text("Reativar Meu Perfil") },
+                                    onClick = {
+                                        profileActionsExpanded = false
+                                        onReactivateProfile()
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) }
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text("Sair") },
+                                onClick = {
+                                    profileActionsExpanded = false
+                                    scope.launch { onLogout() }
+                                }
+                            )
+                        }
+                    } else {
+                        FavoriteStoreSelector(
+                            storeOptions = storeOptions,
+                            favoriteStoreCode = favoriteStoreCode,
+                            onFavoriteStoreChange = { code ->
+                                favoriteStoreCode = code
+                                selectedStore = code ?: ALL_STORES_LABEL
+                                scope.launch { userPreferences.setFavoriteStoreCode(code) }
+                            }
+                        )
+                        if (showReactivateProfile) {
+                            IconButton(
+                                onClick = onReactivateProfile,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = "Reativar Meu Perfil",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        TextButton(onClick = { scope.launch { onLogout() } }) {
+                            Text("Sair")
                         }
                     }
                 }
@@ -1018,7 +1076,7 @@ private fun CategoryPreviewSection(
 private fun CompactOfferCard(offer: OfferGroup, onImageClick: (String) -> Unit) {
     val cardShape = RoundedCornerShape(12.dp)
     Card(
-        modifier = Modifier.width(176.dp).glassSoftShadow(cardShape),
+        modifier = Modifier.widthIn(min = 156.dp, max = 176.dp).glassSoftShadow(cardShape),
         shape = cardShape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {

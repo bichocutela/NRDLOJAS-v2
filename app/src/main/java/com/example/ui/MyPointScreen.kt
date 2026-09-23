@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,9 +53,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.BenefitSummary
 import com.example.data.HoursSummary
 import com.example.data.NossaGenteApi
@@ -71,6 +73,9 @@ import kotlin.math.roundToInt
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () -> Unit) {
+    val configuration = LocalConfiguration.current
+    val contentPadding = if (configuration.screenWidthDp < 360) 10.dp else 16.dp
+    val purchasesMaxHeight = (configuration.screenHeightDp * 0.42f).coerceIn(160f, 420f).dp
     var point by remember { mutableStateOf<PointSummary?>(null) }
     var hours by remember { mutableStateOf<HoursSummary?>(null) }
     // O card permanece visível mesmo quando o endpoint ainda não devolveu
@@ -122,7 +127,13 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
             title = { Text("Meu Perfil") },
             navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, "Voltar") } },
             actions = {
-                TextButton(onClick = onSignOut) { Text("Sair") }
+                IconButton(onClick = ::load, enabled = !loading) {
+                    if (loading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.Refresh, "Atualizar dados do Nossa Gente")
+                    }
+                }
                 IconButton(
                     onClick = {
                         val enabled = !hoursNotifications
@@ -140,20 +151,14 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                         if (hoursNotifications) "Desativar notificações do banco de horas" else "Ativar notificações do banco de horas"
                     )
                 }
-                IconButton(onClick = ::load, enabled = !loading) {
-                    if (loading) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Default.Refresh, "Atualizar dados do Nossa Gente")
-                    }
-                }
+                TextButton(onClick = onSignOut) { Text("Sair") }
             }
         )
     }) { padding ->
         if (loading && hours == null && point == null) {
             Column(Modifier.fillMaxSize().padding(padding), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator() }
         } else {
-            LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(contentPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item {
                     hours?.let { summary ->
                         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
@@ -161,7 +166,12 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                                 Text("Banco de horas", style = MaterialTheme.typography.titleLarge)
                                 Spacer(Modifier.height(8.dp)); Text("Saldo atual: ${summary.total}", style = MaterialTheme.typography.titleMedium)
                                 Spacer(Modifier.height(10.dp)); Text("Saldos a vencer", style = MaterialTheme.typography.titleMedium)
-                                summary.months.forEach { month -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("${month.month}/${month.year}"); Text(month.balance) } }
+                                summary.months.forEach { month ->
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("${month.month}/${month.year}", modifier = Modifier.weight(1f))
+                                        Text(month.balance)
+                                    }
+                                }
                             }
                         }
                     }
@@ -182,7 +192,11 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                                 Text("Convênio", style = MaterialTheme.typography.titleLarge)
                                 summary.period?.let { Text("Período: $it") }
                                 summary.updatedAt?.let { Text("Atualizado em: $it", style = MaterialTheme.typography.bodySmall) }
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Limite: ${summary.limit ?: "—"}"); Text("Gasto: ${summary.spent ?: "—"}"); Text("Saldo: ${summary.balance ?: "—"}") }
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("Limite: ${summary.limit ?: "—"}")
+                                    Text("Gasto: ${summary.spent ?: "—"}")
+                                    Text("Saldo: ${summary.balance ?: "—"}")
+                                }
                                 Text("Toque para ver as compras", style = MaterialTheme.typography.bodySmall)
                             }
                         }
@@ -195,11 +209,22 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
         }
     }
     if (showBenefitDetails) {
-        AlertDialog(
+        Dialog(
             onDismissRequest = { showBenefitDetails = false },
-            title = { Text("Convênio") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = contentPadding)
+                    .heightIn(max = (configuration.screenHeightDp * 0.88f).dp),
+                shape = MaterialTheme.shapes.large
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Convênio", style = MaterialTheme.typography.headlineSmall)
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Ative as notificações", style = MaterialTheme.typography.titleMedium)
@@ -223,22 +248,26 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                     }
                     androidx.compose.material3.HorizontalDivider()
                     Text("Compras", style = MaterialTheme.typography.titleMedium)
-                    BenefitPurchasesList(benefit)
+                    Box(Modifier.weight(1f, fill = false).fillMaxWidth()) {
+                        BenefitPurchasesList(benefit, maxHeight = purchasesMaxHeight)
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showBenefitDetails = false }) { Text("Fechar") }
+                    }
                 }
-            },
-            confirmButton = { TextButton(onClick = { showBenefitDetails = false }) { Text("Fechar") } }
-        )
+            }
+        }
     }
 }
 
 @Composable
-private fun BenefitPurchasesList(benefit: BenefitSummary?) {
+private fun BenefitPurchasesList(benefit: BenefitSummary?, maxHeight: androidx.compose.ui.unit.Dp) {
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val thumbHeight = 52.dp
 
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight)) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(end = 22.dp).verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(8.dp)

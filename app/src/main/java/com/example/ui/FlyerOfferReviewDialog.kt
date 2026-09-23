@@ -3,12 +3,15 @@ package com.example.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.acp.*
 import com.example.data.flyer.*
 import kotlinx.coroutines.CancellationException
@@ -137,8 +140,14 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
         }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = MaterialTheme.shapes.large) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.9f),
+            shape = MaterialTheme.shapes.large
+        ) {
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Revisar oferta do encarte", style = MaterialTheme.typography.titleLarge)
                 Text("Confira a oferta e localize o produto ACP. O vínculo só é salvo depois da sua confirmação.")

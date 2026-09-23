@@ -342,7 +342,7 @@ fun DynamicPdfBlock(url: String, title: String, modifier: Modifier = Modifier) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(620.dp),
+                    .heightIn(min = 280.dp, max = 620.dp),
                 contentAlignment = Alignment.Center
             ) {
                 when {
