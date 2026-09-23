@@ -86,12 +86,11 @@ internal fun AcpOfferPoster(
     offer: AcpOffer,
     compact: Boolean,
     productName: String? = null,
-    banner: ThemeBackground? = null
+    banner: ThemeBackground? = null,
+    validityOverride: AcpOfferValidity? = null
 ) {
-    // Compact cards are repeated in the ACP carousel/pagination. Do not open one
-    // Firestore snapshot listener per card; the full product/detail view still
-    // loads the manually confirmed validity when it is actually needed.
-    val validity = if (compact) null else rememberOfferValidity(productName, offer).value
+    // Compact result cards receive validity from one shared list subscription.
+    val validity = validityOverride ?: if (compact) null else rememberOfferValidity(productName, offer).value
     if (banner != null) {
         PersonalizedOfferBanner(productName, offer, banner, compact, validity)
         return
