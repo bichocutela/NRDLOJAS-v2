@@ -64,7 +64,6 @@ import java.util.Locale
 private enum class NrdIdentifier { BARCODE, PRODUCT_CODE }
 
 private const val AUTO_PRICE_REFRESH_MILLIS = 15_000L
-private const val FEATURED_LOAD_IDLE_DELAY_MILLIS = 1_200L
 
 private enum class AcpFeaturedSort(val label: String) {
     MAIOR_DESCONTO("Maior desconto"),
@@ -121,7 +120,8 @@ internal fun AcpProductsPanel(
     var lastExplicitQuery by remember { mutableStateOf<String?>(null) }
 
     var featuredOffers by remember { mutableStateOf<List<AcpFeaturedOffer>>(emptyList()) }
-    var featuredLoading by remember { mutableStateOf(false) }
+    var featuredLoading by remember { mutableStateOf(true) }
+    var featuredError by remember { mutableStateOf<String?>(null) }
     var featuredVisible by remember { mutableStateOf(true) }
     var featuredExpanded by remember { mutableStateOf(false) }
     var featuredSort by remember { mutableStateOf(AcpFeaturedSort.MENOR_PRECO) }
@@ -133,30 +133,31 @@ internal fun AcpProductsPanel(
         .collectAsState(initial = com.example.data.RemoteHomeSettings())
     val featuredIntervalSeconds = (remoteHomeSettings.carouselIntervalSeconds ?: 4).coerceIn(3, 30)
 
-    fun refreshFeaturedFromAcp() {
-        if (featuredRefreshJob?.isActive == true || featuredLoading) return
-        featuredRefreshJob = scope.launch {
+    fun refreshFeaturedFromAcp(): Job {
+        featuredRefreshJob?.takeIf { it.isActive }?.let { return it }
+        return scope.launch {
+            featuredLoading = true
+            featuredError = null
             try {
+                // A abertura da aba consulta o ACP agora. Substituir toda a primeira página
+                // remove promoções que saíram da ACP, mesmo quando o produto ainda existe.
                 val latest = api.featuredOffersPage(page = 0, forceFresh = true)
-                if (query.isBlank() && featuredVisible) {
-                    val refreshedKeys = latest.items.mapTo(mutableSetOf()) { "${it.product.id}|${it.offer.family}" }
-                    featuredOffers = (latest.items + featuredOffers.filterNot {
-                        "${it.product.id}|${it.offer.family}" in refreshedKeys
-                    }).distinctBy { "${it.product.id}|${it.offer.family}" }
-                    featuredHasMore = latest.hasMore || featuredServerPage > 0
-                }
+                featuredOffers = latest.items
+                featuredServerPage = 0
+                featuredHasMore = latest.hasMore
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
-                // Keep showing the last successful list; the next refresh retries.
+            } catch (failure: Exception) {
+                featuredOffers = emptyList()
+                featuredError = acpErrorMessage(failure)
             } finally {
+                featuredLoading = false
                 featuredRefreshJob = null
             }
-        }
+        }.also { featuredRefreshJob = it }
     }
 
     fun loadFeaturedPage(serverPage: Int, append: Boolean, loadAll: Boolean = false) {
-        if (append) featuredRefreshJob?.cancel()
         if (featuredLoading || serverPage < 0) return
         featuredLoading = true
         featuredJob = scope.launch {
@@ -189,17 +190,15 @@ internal fun AcpProductsPanel(
                 featuredLoading = false
                 featuredJob = null
             }
-            if (!append && !loadAll) refreshFeaturedFromAcp()
         }
     }
 
     LaunchedEffect(api) {
-        // Draw cached cards first, then silently replace them with current ACP data.
-        delay(FEATURED_LOAD_IDLE_DELAY_MILLIS)
-        loadFeaturedPage(0, append = false)
+        // Begin an authenticated read as soon as the consultation opens.
+        refreshFeaturedFromAcp().join()
         while (true) {
             delay(5 * 60 * 1000L)
-            if (query.isBlank() && featuredVisible) refreshFeaturedFromAcp()
+            refreshFeaturedFromAcp().join()
         }
     }
 
@@ -334,14 +333,14 @@ internal fun AcpProductsPanel(
             try {
                 // Confirma/reutiliza a sessão existente. Se ela expirou, AcpApi renova sem
                 // afetar o login do NRD e sem transformar o gesto em logout.
-                api.confirmAccess()
                 val clean = query.trim()
                 if (clean.isBlank()) {
-                    // Sem uma pesquisa aberta não há uma lista de preços para substituir.
-                    // Ainda assim validamos a sessão e a integração com o ACP.
-                    integration = try { api.integrationInfo() } catch (_: Exception) { null }
-                    refreshMessage = "Conexão com o ACP atualizada. Pesquise um produto para carregar o preço mais recente."
+                    // Atualizar na tela inicial também substitui as ofertas em destaque.
+                    refreshFeaturedFromAcp().join()
+                    if (featuredError != null) throw AcpFailure(featuredError!!)
+                    if (ticket == generation) refreshMessage = "Ofertas atualizadas agora pela ACP."
                 } else {
+                    api.confirmAccess()
                     val targetPage = page?.pageIndex ?: 0
                     val fresh = api.searchProductsUnifiedFresh(clean, targetPage, freshStore)
                     if (ticket != generation) return@launch
@@ -460,6 +459,18 @@ internal fun AcpProductsPanel(
         }
         detail = product
         detailTime = System.currentTimeMillis()
+        // Se a ficha individual divergir da lista de categorias, não manter o
+        // cartaz antigo: reconstruir as condições com o produto confirmado.
+        featuredOffers = featuredOffers.flatMap { item ->
+            if (item.product.id == requested.id && item.product.code == requested.code &&
+                item.product.barcode == requested.barcode) {
+                product.offers().filter { offer ->
+                    offer.family == item.offer.family && offer.price != null &&
+                        offer.referencePrice != null && offer.price < offer.referencePrice &&
+                        product.isWithinOfferValidity()
+                }.map { offer -> AcpFeaturedOffer(product, offer) }
+            } else listOf(item)
+        }.distinctBy { "${it.product.id}|${it.offer.family}" }
         page = page?.let { old ->
             old.copy(items = old.items.map { item ->
                 if (item.id == requested.id && item.code == requested.code && item.barcode == requested.barcode) product else item
@@ -547,8 +558,9 @@ internal fun AcpProductsPanel(
             }
         }
 
-        if (featuredVisible && (featuredLoading || featuredOffers.isNotEmpty())) {
+        if (featuredVisible && (featuredLoading || featuredOffers.isNotEmpty() || featuredError != null)) {
             item {
+                featuredError?.let { Text("Não foi possível atualizar as ofertas: $it", color = MaterialTheme.colorScheme.error) }
                 AcpFeaturedOffers(
                     offers = featuredOffers,
                     loading = featuredLoading,
