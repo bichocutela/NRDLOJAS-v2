@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -1655,63 +1656,65 @@ private fun PromotionDetailsDialog(
                     }
                 }
                 item {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            offer.name,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        if (offer.code.isNotBlank()) {
+                    SelectionContainer {
+                        Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                "Código ${offer.code}",
-                                style = MaterialTheme.typography.bodySmall,
+                                offer.name,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            if (offer.code.isNotBlank()) {
+                                Text(
+                                    "Código ${offer.code}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Text(
+                                offer.category,
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        }
-                        Text(
-                            offer.category,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        if (offer.validity.isNotBlank()) {
-                            Spacer(Modifier.height(8.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.CalendarToday,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(17.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    "Validade: ${offer.validity}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("A partir de", style = MaterialTheme.typography.labelMedium)
+                            if (offer.validity.isNotBlank()) {
+                                Spacer(Modifier.height(8.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.CalendarToday,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(17.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(Modifier.width(6.dp))
                                     Text(
-                                        offer.bestOffer?.offerPrice ?: "Preço não informado",
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.Bold
+                                        "Validade: ${offer.validity}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold
                                     )
                                 }
-                                DiscountBadge(discount = offer.bestDiscount, compact = false)
                             }
-                        }
+                            Spacer(Modifier.height(12.dp))
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("A partir de", style = MaterialTheme.typography.labelMedium)
+                                        Text(
+                                            offer.bestOffer?.offerPrice ?: "Preço não informado",
+                                            style = MaterialTheme.typography.headlineSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    DiscountBadge(discount = offer.bestDiscount, compact = false)
+                                }
+                            }
+                    }
                     }
                 }
                 item {
@@ -1771,19 +1774,21 @@ private fun StoreOfferDetailCard(
                     )
                 }
                 Spacer(Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        if (storeAvailable) StoreCatalog.nameFor(storeOffer.storeCode) else UNKNOWN_STORE_LABEL,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (storeAvailable) {
+                SelectionContainer(modifier = Modifier.weight(1f)) {
+                    Column {
                         Text(
-                            "Loja ${storeOffer.storeCode.padStart(4, '0')}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            if (storeAvailable) StoreCatalog.nameFor(storeOffer.storeCode) else UNKNOWN_STORE_LABEL,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
                         )
-                    }
+                        if (storeAvailable) {
+                            Text(
+                                "Loja ${storeOffer.storeCode.padStart(4, '0')}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                }
                 }
                 DiscountBadge(discount = storeOffer.discount, compact = true)
             }
@@ -1792,21 +1797,23 @@ private fun StoreOfferDetailCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Bottom
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    storeOffer.regularPrice?.let { regular ->
+                SelectionContainer(modifier = Modifier.weight(1f)) {
+                    Column {
+                        storeOffer.regularPrice?.let { regular ->
+                            Text(
+                                "De $regular",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textDecoration = TextDecoration.LineThrough
+                            )
+                        }
                         Text(
-                            "De $regular",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textDecoration = TextDecoration.LineThrough
+                            storeOffer.offerPrice ?: "Preço não informado",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                    }
-                    Text(
-                        storeOffer.offerPrice ?: "Preço não informado",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                }
                 }
                 if (storeAvailable) {
                     TextButton(onClick = { onOpenStore(storeOffer.storeCode) }) {
