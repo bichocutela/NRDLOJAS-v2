@@ -691,9 +691,9 @@ internal fun AcpProductsPanel(
                                 compact = true,
                                 productName = product.description,
                                 banner = standardBanner,
-                                validityOverride = offerValidityByKey[
-                                    AcpOfferValidityStore.keyFor(product.description, AcpOfferFamily.PRICE)
-                                ]
+                                validityOverride = product.offerValidityOr(
+                                    offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, AcpOfferFamily.PRICE)]
+                                )
                             )
                         } else {
                             Text("Sem promoção explícita identificada no cadastro do produto.", style = MaterialTheme.typography.labelSmall)
