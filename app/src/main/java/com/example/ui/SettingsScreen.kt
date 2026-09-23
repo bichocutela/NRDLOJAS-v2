@@ -104,20 +104,24 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             )
             if (appearanceExpanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text("Tamanho da Fonte", modifier = Modifier.weight(1f))
                 Slider(
                     value = fontScale,
                     onValueChange = { coroutineScope.launch { viewModel.userPreferences.setFontScale(it) } },
                     valueRange = 0.8f..2.0f,
                     steps = 11,
-                    modifier = Modifier.weight(2f).padding(horizontal = 12.dp)
+                    modifier = Modifier.weight(1.5f)
                 )
                 Text(String.format("%.1fx", fontScale))
             }
             Button(
                 onClick = { coroutineScope.launch { viewModel.userPreferences.setFontScale(1.0f) } },
-                modifier = Modifier.align(Alignment.End).height(44.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp)
             ) {
                 Text("Restaurar Padrão")
@@ -157,18 +161,18 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             }
             Text("Controla somente o título no diálogo do código de barras.", style = MaterialTheme.typography.bodySmall)
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Aumentar letras da tela inicial")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Aumentar letras da tela inicial", modifier = Modifier.weight(1f))
                 Switch(checked = largeText, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setLargeText(it) } })
             }
             
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Letras em contorno negrito")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Letras em contorno negrito", modifier = Modifier.weight(1f))
                 Switch(checked = boldOutline, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setBoldOutline(it) } })
             }
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Todas letras maiúsculas em negrito")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Todas letras maiúsculas em negrito", modifier = Modifier.weight(1f))
                 Switch(checked = uppercaseBold, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setUppercaseBold(it) } })
             }
             
@@ -438,13 +442,13 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             Text("Vibração", style = MaterialTheme.typography.titleMedium, color = getDynamicThemeColor(3, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first)
 
             
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Vibrar ao clicar no balão")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Vibrar ao clicar no balão", modifier = Modifier.weight(1f))
                 Switch(checked = vibrateOnClick, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setVibrateOnClick(it) } })
             }
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Vibrar ao achar produto")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Vibrar ao achar produto", modifier = Modifier.weight(1f))
                 Switch(checked = vibrateOnFound, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setVibrateOnFound(it) } })
             }
             
@@ -461,8 +465,8 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
 
             
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Notificações Gerais")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Notificações Gerais", modifier = Modifier.weight(1f))
                 Switch(
                     checked = notificationsEnabled,
                     onCheckedChange = { enabled ->
@@ -477,12 +481,12 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             }
             if (notificationsEnabled) {
                 Text("Preferências de notificações", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.secondary)
-                Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Código alterado")
+                Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Código alterado", modifier = Modifier.weight(1f))
                     Switch(checked = notificationsCodeChangedEnabled, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setNotificationsCodeChangedEnabled(it) } })
                 }
-                Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Produto adicionado")
+                Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Produto adicionado", modifier = Modifier.weight(1f))
                     Switch(checked = notificationsProductAddedEnabled, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setNotificationsProductAddedEnabled(it) } })
                 }
                         }
