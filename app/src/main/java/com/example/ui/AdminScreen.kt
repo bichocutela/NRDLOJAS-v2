@@ -671,7 +671,7 @@ fun AdminProductList(
                     Button(
                         onClick = { pageIndex = (currentPage - 1).coerceAtLeast(0) },
                         enabled = currentPage > 0,
-                        modifier = Modifier.width(140.dp),
+                        modifier = Modifier.weight(1f).widthIn(min = 0.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary
@@ -683,7 +683,7 @@ fun AdminProductList(
                     Button(
                         onClick = { pageIndex = (currentPage + 1).coerceAtMost(pageCount - 1) },
                         enabled = currentPage < pageCount - 1,
-                        modifier = Modifier.width(140.dp),
+                        modifier = Modifier.weight(1f).widthIn(min = 0.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary
@@ -699,7 +699,7 @@ fun AdminProductList(
                         containerColor = MaterialTheme.colorScheme.secondary,
                         contentColor = MaterialTheme.colorScheme.onSecondary
                     ),
-                    modifier = Modifier.width(220.dp)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
                         imageVector = Icons.Default.KeyboardArrowUp,
