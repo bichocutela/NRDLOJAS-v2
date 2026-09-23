@@ -620,7 +620,7 @@ internal fun AcpProductsPanel(
                 .forAutomaticDisplay()
                 .filter { offer ->
                     val saved = offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, offer.family)]
-                    product.isWithinOfferValidity(product.offerValidityOr(saved))
+                    product.isWithinOfferValidity(saved)
                 }
             val shareLayer = rememberGraphicsLayer()
             OutlinedCard(
@@ -1211,8 +1211,8 @@ private fun AcpFeaturedOffers(
         }
         offers
             .filter { item ->
-                val saved = item.product.offerValidityOr(validityByOffer[AcpOfferValidityStore.keyFor(item.product.description, item.offer.family)])
-                item.product.isWithinOfferValidity(item.product.offerValidityOr(saved))
+                val saved = validityByOffer[AcpOfferValidityStore.keyFor(item.product.description, item.offer.family)]
+                item.product.isWithinOfferValidity(saved)
             }
             .sortedWith(comparator.thenBy { it.product.description })
     }
