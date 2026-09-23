@@ -238,6 +238,16 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         return result
     }
 
+    /** Force a current ACP read for background refreshes of the visible highlights. */
+    internal suspend fun getFresh(path: String, parameters: List<Pair<String, String>>): JSONObject {
+        require(path in READ_ONLY_ENDPOINTS) { "ACP endpoint not allowed: $path" }
+        val result = authenticatedRead(path, parameters, record = true)
+        if (path in DAILY_CACHE_ENDPOINTS) {
+            withContext(Dispatchers.IO) { writeCachedResponse(path, parameters, result) }
+        }
+        return result
+    }
+
     /** Only the dedicated Clube loader currently performs this exact unfiltered batch request. */
     private fun isClubCatalogRequest(path: String, parameters: List<Pair<String, String>>): Boolean {
         if (path != "Product/all") return false
