@@ -134,14 +134,16 @@ internal fun AcpProductsPanel(
     val featuredIntervalSeconds = (remoteHomeSettings.carouselIntervalSeconds ?: 4).coerceIn(3, 30)
 
     fun refreshFeaturedFromAcp() {
-        if (featuredRefreshJob?.isActive == true) return
+        if (featuredRefreshJob?.isActive == true || featuredLoading) return
         featuredRefreshJob = scope.launch {
             try {
                 val latest = api.featuredOffersPage(page = 0, forceFresh = true)
                 if (query.isBlank() && featuredVisible) {
-                    featuredOffers = latest.items
-                    featuredServerPage = 0
-                    featuredHasMore = latest.hasMore
+                    val refreshedKeys = latest.items.mapTo(mutableSetOf()) { "${it.product.id}|${it.offer.family}" }
+                    featuredOffers = (latest.items + featuredOffers.filterNot {
+                        "${it.product.id}|${it.offer.family}" in refreshedKeys
+                    }).distinctBy { "${it.product.id}|${it.offer.family}" }
+                    featuredHasMore = latest.hasMore || featuredServerPage > 0
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -154,6 +156,7 @@ internal fun AcpProductsPanel(
     }
 
     fun loadFeaturedPage(serverPage: Int, append: Boolean, loadAll: Boolean = false) {
+        if (append) featuredRefreshJob?.cancel()
         if (featuredLoading || serverPage < 0) return
         featuredLoading = true
         featuredJob = scope.launch {
