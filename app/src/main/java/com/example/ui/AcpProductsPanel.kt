@@ -128,11 +128,35 @@ internal fun AcpProductsPanel(
     var featuredServerPage by remember { mutableIntStateOf(0) }
     var featuredHasMore by remember { mutableStateOf(true) }
     var featuredJob by remember { mutableStateOf<Job?>(null) }
+    var featuredRefreshJob by remember { mutableStateOf<Job?>(null) }
     val remoteHomeSettings by remember { FirebaseService.observeHomeSettings() }
         .collectAsState(initial = com.example.data.RemoteHomeSettings())
     val featuredIntervalSeconds = (remoteHomeSettings.carouselIntervalSeconds ?: 4).coerceIn(3, 30)
 
+    fun refreshFeaturedFromAcp() {
+        if (featuredRefreshJob?.isActive == true || featuredLoading) return
+        featuredRefreshJob = scope.launch {
+            try {
+                val latest = api.featuredOffersPage(page = 0, forceFresh = true)
+                if (query.isBlank() && featuredVisible) {
+                    val refreshedKeys = latest.items.mapTo(mutableSetOf()) { "${it.product.id}|${it.offer.family}" }
+                    featuredOffers = (latest.items + featuredOffers.filterNot {
+                        "${it.product.id}|${it.offer.family}" in refreshedKeys
+                    }).distinctBy { "${it.product.id}|${it.offer.family}" }
+                    featuredHasMore = latest.hasMore || featuredServerPage > 0
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // Keep showing the last successful list; the next refresh retries.
+            } finally {
+                featuredRefreshJob = null
+            }
+        }
+    }
+
     fun loadFeaturedPage(serverPage: Int, append: Boolean, loadAll: Boolean = false) {
+        if (append) featuredRefreshJob?.cancel()
         if (featuredLoading || serverPage < 0) return
         featuredLoading = true
         featuredJob = scope.launch {
@@ -165,14 +189,18 @@ internal fun AcpProductsPanel(
                 featuredLoading = false
                 featuredJob = null
             }
+            if (!append && !loadAll) refreshFeaturedFromAcp()
         }
     }
 
     LaunchedEffect(api) {
-        // Reuse persisted ACP pages immediately when returning to this screen.
-        // Fresh data is warmed independently in AcpApi's background scope.
+        // Draw cached cards first, then silently replace them with current ACP data.
         delay(FEATURED_LOAD_IDLE_DELAY_MILLIS)
         loadFeaturedPage(0, append = false)
+        while (true) {
+            delay(5 * 60 * 1000L)
+            if (query.isBlank() && featuredVisible) refreshFeaturedFromAcp()
+        }
     }
 
     var detail by remember { mutableStateOf<AcpProduct?>(null) }
@@ -236,6 +264,7 @@ internal fun AcpProductsPanel(
         val ticket = ++generation
         if (interactive) {
             featuredJob?.cancel()
+            featuredRefreshJob?.cancel()
             api.stopBackgroundSync()
             busy = true
             featuredVisible = false
@@ -529,6 +558,7 @@ internal fun AcpProductsPanel(
                     serverPage = featuredServerPage,
                     hasMore = featuredHasMore,
                     appearance = appearance,
+                    validityByOffer = offerValidityByKey,
                     onToggleExpanded = { featuredExpanded = !featuredExpanded },
                     onHide = { featuredVisible = false },
                     onSortChanged = { featuredSort = it },
@@ -586,7 +616,12 @@ internal fun AcpProductsPanel(
 
         itemsIndexed(result?.items.orEmpty(), key = { index, product -> "${product.id}:$index" }) { _, product ->
             val directOffers = product.offers()
-            val previewOffers = (directOffers + previewCampaignOffers[product.id].orEmpty()).forAutomaticDisplay()
+            val previewOffers = (directOffers + previewCampaignOffers[product.id].orEmpty())
+                .forAutomaticDisplay()
+                .filter { offer ->
+                    val saved = offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, offer.family)]
+                    product.isWithinOfferValidity(saved)
+                }
             val shareLayer = rememberGraphicsLayer()
             OutlinedCard(
                 modifier = Modifier
@@ -642,9 +677,9 @@ internal fun AcpProductsPanel(
                                 compact = true,
                                 productName = product.description,
                                 banner = appearance.activeOfferBanner(offer.bannerKey),
-                                validityOverride = offerValidityByKey[
-                                    AcpOfferValidityStore.keyFor(product.description, offer.family)
-                                ]
+                                validityOverride = product.offerValidityOr(
+                                    offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, offer.family)]
+                                )
                             )
                         }
                     } else {
@@ -659,9 +694,9 @@ internal fun AcpProductsPanel(
                                 compact = true,
                                 productName = product.description,
                                 banner = standardBanner,
-                                validityOverride = offerValidityByKey[
-                                    AcpOfferValidityStore.keyFor(product.description, AcpOfferFamily.PRICE)
-                                ]
+                                validityOverride = product.offerValidityOr(
+                                    offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, AcpOfferFamily.PRICE)]
+                                )
                             )
                         } else {
                             Text("Sem promoção explícita identificada no cadastro do produto.", style = MaterialTheme.typography.labelSmall)
@@ -1156,6 +1191,7 @@ private fun AcpFeaturedOffers(
     serverPage: Int,
     hasMore: Boolean,
     appearance: AppearanceSettings,
+    validityByOffer: Map<String, AcpOfferValidity>,
     onToggleExpanded: () -> Unit,
     onHide: () -> Unit,
     onSortChanged: (AcpFeaturedSort) -> Unit,
@@ -1165,9 +1201,7 @@ private fun AcpFeaturedOffers(
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val compactScreen = screenWidthDp < 420
     val featuredCardWidth = (screenWidthDp - 48).coerceIn(220, 280).dp
-    val validityByOffer by remember { AcpOfferValidityStore.observeAll() }
-        .collectAsState(initial = emptyMap())
-    val orderedOffers = remember(offers, sort) {
+    val orderedOffers = remember(offers, sort, validityByOffer) {
         val comparator = when (sort) {
             AcpFeaturedSort.MAIOR_DESCONTO -> compareByDescending<AcpFeaturedOffer> { it.discountAmount() }
             AcpFeaturedSort.MENOS_DESCONTO -> compareBy<AcpFeaturedOffer> { it.discountAmount() }
@@ -1175,7 +1209,12 @@ private fun AcpFeaturedOffers(
             AcpFeaturedSort.MENOR_PRECO -> compareBy<AcpFeaturedOffer> { it.offer.price }
             AcpFeaturedSort.MAIOR_PRECO -> compareByDescending<AcpFeaturedOffer> { it.offer.price }
         }
-        offers.sortedWith(comparator.thenBy { it.product.description })
+        offers
+            .filter { item ->
+                val saved = validityByOffer[AcpOfferValidityStore.keyFor(item.product.description, item.offer.family)]
+                item.product.isWithinOfferValidity(saved)
+            }
+            .sortedWith(comparator.thenBy { it.product.description })
     }
     var filterMenuExpanded by remember { mutableStateOf(false) }
     var expandedPage by rememberSaveable { mutableIntStateOf(0) }
@@ -1249,7 +1288,7 @@ private fun AcpFeaturedOffers(
                     AcpFeaturedOfferCard(
                         item,
                         appearance,
-                        validityByOffer[AcpOfferValidityStore.keyFor(item.product.description, item.offer.family)],
+                        item.product.offerValidityOr(validityByOffer[AcpOfferValidityStore.keyFor(item.product.description, item.offer.family)]),
                         onOpen
                     )
                 }
@@ -1299,7 +1338,7 @@ private fun AcpFeaturedOffers(
                         AcpFeaturedOfferCard(
                             item,
                             appearance,
-                            validityByOffer[AcpOfferValidityStore.keyFor(item.product.description, item.offer.family)],
+                            item.product.offerValidityOr(validityByOffer[AcpOfferValidityStore.keyFor(item.product.description, item.offer.family)]),
                             onOpen
                         )
                     }
