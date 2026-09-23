@@ -113,8 +113,8 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 Slider(
                     value = fontScale,
                     onValueChange = { coroutineScope.launch { viewModel.userPreferences.setFontScale(it) } },
-                    valueRange = 0.8f..2.0f,
-                    steps = 11,
+                    valueRange = 0.2f..2.0f,
+                    steps = 17,
                     modifier = Modifier.weight(1.5f)
                 )
                 Text(String.format("%.1fx", fontScale))
