@@ -324,10 +324,10 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                OutlinedButton(onClick = { pickingStartDate = true }, modifier = Modifier.weight(1f)) {
+                                OutlinedButton(onClick = { pickingStartDate = true }, modifier = Modifier.weight(1f).widthIn(min = 0.dp)) {
                                     Text(startAt?.let(::formatDate) ?: "Data inicial")
                                 }
-                                OutlinedButton(onClick = { pickingEndDate = true }, modifier = Modifier.weight(1f)) {
+                                OutlinedButton(onClick = { pickingEndDate = true }, modifier = Modifier.weight(1f).widthIn(min = 0.dp)) {
                                     Text(endAt?.let(::formatDate) ?: "Data final")
                                 }
                             }
