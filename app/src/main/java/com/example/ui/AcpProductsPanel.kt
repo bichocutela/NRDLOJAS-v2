@@ -128,9 +128,30 @@ internal fun AcpProductsPanel(
     var featuredServerPage by remember { mutableIntStateOf(0) }
     var featuredHasMore by remember { mutableStateOf(true) }
     var featuredJob by remember { mutableStateOf<Job?>(null) }
+    var featuredRefreshJob by remember { mutableStateOf<Job?>(null) }
     val remoteHomeSettings by remember { FirebaseService.observeHomeSettings() }
         .collectAsState(initial = com.example.data.RemoteHomeSettings())
     val featuredIntervalSeconds = (remoteHomeSettings.carouselIntervalSeconds ?: 4).coerceIn(3, 30)
+
+    fun refreshFeaturedFromAcp() {
+        if (featuredRefreshJob?.isActive == true) return
+        featuredRefreshJob = scope.launch {
+            try {
+                val latest = api.featuredOffersPage(page = 0, forceFresh = true)
+                if (query.isBlank() && featuredVisible) {
+                    featuredOffers = latest.items
+                    featuredServerPage = 0
+                    featuredHasMore = latest.hasMore
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // Keep showing the last successful list; the next refresh retries.
+            } finally {
+                featuredRefreshJob = null
+            }
+        }
+    }
 
     fun loadFeaturedPage(serverPage: Int, append: Boolean, loadAll: Boolean = false) {
         if (featuredLoading || serverPage < 0) return
@@ -165,14 +186,18 @@ internal fun AcpProductsPanel(
                 featuredLoading = false
                 featuredJob = null
             }
+            if (!append && !loadAll) refreshFeaturedFromAcp()
         }
     }
 
     LaunchedEffect(api) {
-        // Reuse persisted ACP pages immediately when returning to this screen.
-        // Fresh data is warmed independently in AcpApi's background scope.
+        // Draw cached cards first, then silently replace them with current ACP data.
         delay(FEATURED_LOAD_IDLE_DELAY_MILLIS)
         loadFeaturedPage(0, append = false)
+        while (true) {
+            delay(5 * 60 * 1000L)
+            if (query.isBlank() && featuredVisible) refreshFeaturedFromAcp()
+        }
     }
 
     var detail by remember { mutableStateOf<AcpProduct?>(null) }
@@ -236,6 +261,7 @@ internal fun AcpProductsPanel(
         val ticket = ++generation
         if (interactive) {
             featuredJob?.cancel()
+            featuredRefreshJob?.cancel()
             api.stopBackgroundSync()
             busy = true
             featuredVisible = false
