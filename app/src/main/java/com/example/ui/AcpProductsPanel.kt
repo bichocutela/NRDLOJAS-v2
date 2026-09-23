@@ -555,6 +555,7 @@ internal fun AcpProductsPanel(
                     serverPage = featuredServerPage,
                     hasMore = featuredHasMore,
                     appearance = appearance,
+                    validityByOffer = offerValidityByKey,
                     onToggleExpanded = { featuredExpanded = !featuredExpanded },
                     onHide = { featuredVisible = false },
                     onSortChanged = { featuredSort = it },
@@ -612,7 +613,12 @@ internal fun AcpProductsPanel(
 
         itemsIndexed(result?.items.orEmpty(), key = { index, product -> "${product.id}:$index" }) { _, product ->
             val directOffers = product.offers()
-            val previewOffers = (directOffers + previewCampaignOffers[product.id].orEmpty()).forAutomaticDisplay()
+            val previewOffers = (directOffers + previewCampaignOffers[product.id].orEmpty())
+                .forAutomaticDisplay()
+                .filter { offer ->
+                    val saved = offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, offer.family)]
+                    product.isWithinOfferValidity(product.offerValidityOr(saved))
+                }
             val shareLayer = rememberGraphicsLayer()
             OutlinedCard(
                 modifier = Modifier
@@ -668,9 +674,9 @@ internal fun AcpProductsPanel(
                                 compact = true,
                                 productName = product.description,
                                 banner = appearance.activeOfferBanner(offer.bannerKey),
-                                validityOverride = offerValidityByKey[
-                                    AcpOfferValidityStore.keyFor(product.description, offer.family)
-                                ]
+                                validityOverride = product.offerValidityOr(
+                                    offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, offer.family)]
+                                )
                             )
                         }
                     } else {
@@ -1182,6 +1188,7 @@ private fun AcpFeaturedOffers(
     serverPage: Int,
     hasMore: Boolean,
     appearance: AppearanceSettings,
+    validityByOffer: Map<String, AcpOfferValidity>,
     onToggleExpanded: () -> Unit,
     onHide: () -> Unit,
     onSortChanged: (AcpFeaturedSort) -> Unit,
@@ -1191,9 +1198,7 @@ private fun AcpFeaturedOffers(
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val compactScreen = screenWidthDp < 420
     val featuredCardWidth = (screenWidthDp - 48).coerceIn(220, 280).dp
-    val validityByOffer by remember { AcpOfferValidityStore.observeAll() }
-        .collectAsState(initial = emptyMap())
-    val orderedOffers = remember(offers, sort) {
+    val orderedOffers = remember(offers, sort, validityByOffer) {
         val comparator = when (sort) {
             AcpFeaturedSort.MAIOR_DESCONTO -> compareByDescending<AcpFeaturedOffer> { it.discountAmount() }
             AcpFeaturedSort.MENOS_DESCONTO -> compareBy<AcpFeaturedOffer> { it.discountAmount() }
@@ -1201,7 +1206,12 @@ private fun AcpFeaturedOffers(
             AcpFeaturedSort.MENOR_PRECO -> compareBy<AcpFeaturedOffer> { it.offer.price }
             AcpFeaturedSort.MAIOR_PRECO -> compareByDescending<AcpFeaturedOffer> { it.offer.price }
         }
-        offers.sortedWith(comparator.thenBy { it.product.description })
+        offers
+            .filter { item ->
+                val saved = item.product.offerValidityOr(validityByOffer[AcpOfferValidityStore.keyFor(item.product.description, item.offer.family)])
+                item.product.isWithinOfferValidity(item.product.offerValidityOr(saved))
+            }
+            .sortedWith(comparator.thenBy { it.product.description })
     }
     var filterMenuExpanded by remember { mutableStateOf(false) }
     var expandedPage by rememberSaveable { mutableIntStateOf(0) }
@@ -1275,7 +1285,7 @@ private fun AcpFeaturedOffers(
                     AcpFeaturedOfferCard(
                         item,
                         appearance,
-                        validityByOffer[AcpOfferValidityStore.keyFor(item.product.description, item.offer.family)],
+                        item.product.offerValidityOr(validityByOffer[AcpOfferValidityStore.keyFor(item.product.description, item.offer.family)]),
                         onOpen
                     )
                 }
@@ -1325,7 +1335,7 @@ private fun AcpFeaturedOffers(
                         AcpFeaturedOfferCard(
                             item,
                             appearance,
-                            validityByOffer[AcpOfferValidityStore.keyFor(item.product.description, item.offer.family)],
+                            item.product.offerValidityOr(validityByOffer[AcpOfferValidityStore.keyFor(item.product.description, item.offer.family)]),
                             onOpen
                         )
                     }
