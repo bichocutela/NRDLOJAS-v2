@@ -87,6 +87,8 @@ internal fun AcpProductsPanel(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val offerValidityByKey by remember { AcpOfferValidityStore.observeAll() }
+        .collectAsState(initial = emptyMap())
     val freshStore = remember(context) { AcpSecureStore(context.applicationContext) }
     val keyboard = LocalSoftwareKeyboardController.current
     val nrdCategoriesFlow = remember { FirebaseService.observeCategories() }
@@ -639,7 +641,10 @@ internal fun AcpProductsPanel(
                                 offer = offer,
                                 compact = true,
                                 productName = product.description,
-                                banner = appearance.activeOfferBanner(offer.bannerKey)
+                                banner = appearance.activeOfferBanner(offer.bannerKey),
+                                validityOverride = offerValidityByKey[
+                                    AcpOfferValidityStore.keyFor(product.description, offer.family)
+                                ]
                             )
                         }
                     } else {
@@ -653,7 +658,10 @@ internal fun AcpProductsPanel(
                                 ),
                                 compact = true,
                                 productName = product.description,
-                                banner = standardBanner
+                                banner = standardBanner,
+                                validityOverride = offerValidityByKey[
+                                    AcpOfferValidityStore.keyFor(product.description, AcpOfferFamily.PRICE)
+                                ]
                             )
                         } else {
                             Text("Sem promoção explícita identificada no cadastro do produto.", style = MaterialTheme.typography.labelSmall)
