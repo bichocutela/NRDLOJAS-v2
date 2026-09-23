@@ -3,6 +3,7 @@ package com.example.data.acp
 import org.json.JSONObject
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.util.Calendar
 import com.example.data.OFFER_BANNER_CASHBACK
 import com.example.data.OFFER_BANNER_CLUB
 import com.example.data.OFFER_BANNER_DE_POR
@@ -138,6 +139,60 @@ internal fun AcpProductPage.prioritizeExact(field: AcpSearchField, query: String
     return copy(items = items.sortedByDescending(exact))
 }
 
+private fun parseAcpDate(value: String?): Calendar? {
+    val clean = value?.trim().orEmpty()
+    if (clean.isBlank()) return null
+    val match = Regex("""(\\d{1,4})[-/](\\d{1,2})[-/](\\d{1,4})""").find(clean) ?: return null
+    val first = match.groupValues[1].toIntOrNull() ?: return null
+    val middle = match.groupValues[2].toIntOrNull() ?: return null
+    val third = match.groupValues[3].toIntOrNull() ?: return null
+    val (year, month, day) = if (match.groupValues[1].length == 4) Triple(first, middle, third) else Triple(third, middle, first)
+    return runCatching {
+        Calendar.getInstance().apply {
+            isLenient = false
+            clear()
+            set(year, month - 1, day, 0, 0, 0)
+            timeInMillis
+        }
+    }.getOrNull()
+}
+
+private fun dateKey(calendar: Calendar): Int =
+    calendar.get(Calendar.YEAR) * 10_000 + (calendar.get(Calendar.MONTH) + 1) * 100 + calendar.get(Calendar.DAY_OF_MONTH)
+
+internal fun normalizeAcpDate(value: String?): String? {
+    val date = parseAcpDate(value) ?: return null
+    return "%02d/%02d/%04d".format(
+        java.util.Locale.ROOT,
+        date.get(Calendar.DAY_OF_MONTH),
+        date.get(Calendar.MONTH) + 1,
+        date.get(Calendar.YEAR)
+    )
+}
+
+/** API dates override manually entered dates; manual values fill fields absent from the feed. */
+internal fun AcpProduct.offerValidityOr(fallback: AcpOfferValidity?): AcpOfferValidity? {
+    val start = normalizeAcpDate(validFrom)
+    val end = normalizeAcpDate(validTo)
+    if (start == null && end == null) return fallback
+    return AcpOfferValidity(start ?: fallback?.startDate.orEmpty(), end ?: fallback?.endDate.orEmpty())
+}
+
+/** Drops dated offers outside their effective window while retaining offers with no dates. */
+internal fun AcpProduct.isWithinOfferValidity(fallback: AcpOfferValidity? = null, nowMillis: Long = System.currentTimeMillis()): Boolean {
+    val today = Calendar.getInstance().apply {
+        timeInMillis = nowMillis
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    val start = parseAcpDate(validFrom ?: fallback?.startDate)
+    val end = parseAcpDate(validTo ?: fallback?.endDate)
+    val todayKey = dateKey(today)
+    return (start == null || dateKey(start) <= todayKey) && (end == null || dateKey(end) >= todayKey)
+}
+
 internal object AcpProductParser {
     fun page(root: JSONObject, requestedPage: Int): AcpProductPage {
         val array = root.optJSONArray("items") ?: throw AcpFailure("A ACP retornou produtos em um formato não reconhecido.")
@@ -257,7 +312,7 @@ internal suspend fun AcpApi.categories(): List<AcpCategory> {
  * asks for successive pages in the background and performs the final ordering locally,
  * so the 30-item UI pages are slices of one global price-sorted catalog.
  */
-internal suspend fun AcpApi.featuredOffersPage(page: Int = 0): AcpFeaturedPage {
+internal suspend fun AcpApi.featuredOffersPage(page: Int = 0, forceFresh: Boolean = false): AcpFeaturedPage {
     require(page >= 0)
     val promotionCategories = liveProductCategories().filter { category ->
         val normalized = category.description.lowercase()
@@ -280,7 +335,8 @@ internal suspend fun AcpApi.featuredOffersPage(page: Int = 0): AcpFeaturedPage {
             "pageIndex" to page.toString(),
             "productCategoryIds" to category.id
         )
-        val result = AcpProductParser.page(get("Product/all", parameters), page)
+        val response = if (forceFresh) getFresh("Product/all", parameters) else get("Product/all", parameters)
+        val result = AcpProductParser.page(response, page)
         hasMore = hasMore || page + 1 < result.totalPages
         result.items.forEach { product ->
             val key = product.id.ifBlank { "${product.code}|${product.barcode}" }
@@ -289,6 +345,7 @@ internal suspend fun AcpApi.featuredOffersPage(page: Int = 0): AcpFeaturedPage {
     }
 
     val items = deduplicated.values.asSequence()
+        .filter { product -> product.isWithinOfferValidity() }
         .flatMap { product ->
             product.offers().asSequence()
                 // Cashback is shown in the product detail, but is not an immediate price
