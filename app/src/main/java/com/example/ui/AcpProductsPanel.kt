@@ -1157,6 +1157,8 @@ private fun AcpFeaturedOffers(
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val compactScreen = screenWidthDp < 420
     val featuredCardWidth = (screenWidthDp - 48).coerceIn(220, 280).dp
+    val validityByOffer by remember { AcpOfferValidityStore.observeAll() }
+        .collectAsState(initial = emptyMap())
     val orderedOffers = remember(offers, sort) {
         val comparator = when (sort) {
             AcpFeaturedSort.MAIOR_DESCONTO -> compareByDescending<AcpFeaturedOffer> { it.discountAmount() }
@@ -1235,7 +1237,14 @@ private fun AcpFeaturedOffers(
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         } else if (expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                pages.getOrNull(displayPage).orEmpty().forEach { item -> AcpFeaturedOfferCard(item, appearance, onOpen) }
+                pages.getOrNull(displayPage).orEmpty().forEach { item ->
+                    AcpFeaturedOfferCard(
+                        item,
+                        appearance,
+                        validityByOffer[AcpOfferValidityStore.keyFor(item.product.description, item.offer.family)],
+                        onOpen
+                    )
+                }
                 if (pages.isNotEmpty()) {
                     Row(
                         modifier = Modifier
@@ -1279,7 +1288,12 @@ private fun AcpFeaturedOffers(
             ) {
                 items(carouselOffers, key = { "${it.product.id}:${it.offer.family}" }) { item ->
                     Box(modifier = Modifier.width(featuredCardWidth)) {
-                        AcpFeaturedOfferCard(item, appearance, onOpen)
+                        AcpFeaturedOfferCard(
+                            item,
+                            appearance,
+                            validityByOffer[AcpOfferValidityStore.keyFor(item.product.description, item.offer.family)],
+                            onOpen
+                        )
                     }
                 }
             }
@@ -1348,6 +1362,7 @@ private fun AcpFeaturedOffer.discountAmount(): java.math.BigDecimal {
 private fun AcpFeaturedOfferCard(
     item: AcpFeaturedOffer,
     appearance: AppearanceSettings,
+    validity: AcpOfferValidity?,
     onOpen: (AcpFeaturedOffer) -> Unit
 ) {
     OutlinedCard(
@@ -1376,7 +1391,8 @@ private fun AcpFeaturedOfferCard(
                 offer = item.offer,
                 compact = true,
                 productName = item.product.description,
-                banner = appearance.activeOfferBanner(item.offer.bannerKey)
+                banner = appearance.activeOfferBanner(item.offer.bannerKey),
+                validityOverride = validity
             )
             Text("Toque para ver todas as condições", style = MaterialTheme.typography.labelSmall)
         }

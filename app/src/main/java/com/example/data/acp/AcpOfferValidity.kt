@@ -19,11 +19,29 @@ internal object AcpOfferValidityStore {
     private const val DOCUMENT = "acpOfferValidity"
     private const val MASTER_EMAIL = "mestre@nrdlojas.com"
 
-    private fun key(productName: String, family: AcpOfferFamily): String {
+    internal fun keyFor(productName: String, family: AcpOfferFamily): String {
         val raw = productName.trim().lowercase() + "|" + family.name
         return MessageDigest.getInstance("SHA-256")
             .digest(raw.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }
+
+    /** One subscription for all offer dates shown in the consultation results. */
+    fun observeAll(): Flow<Map<String, AcpOfferValidity>> = callbackFlow {
+        val registration = FirebaseFirestore.getInstance()
+            .collection(COLLECTION)
+            .document(DOCUMENT)
+            .addSnapshotListener { snapshot, _ ->
+                val values = snapshot?.data.orEmpty().mapNotNull { (field, value) ->
+                    val raw = value as? Map<*, *> ?: return@mapNotNull null
+                    field to AcpOfferValidity(
+                        startDate = raw["startDate"] as? String ?: "",
+                        endDate = raw["endDate"] as? String ?: ""
+                    )
+                }.toMap()
+                trySend(values)
+            }
+        awaitClose { registration.remove() }
     }
 
     private fun requireMaster() {
@@ -32,7 +50,7 @@ internal object AcpOfferValidityStore {
     }
 
     fun observe(productName: String, family: AcpOfferFamily): Flow<AcpOfferValidity?> = callbackFlow {
-        val field = key(productName, family)
+        val field = keyFor(productName, family)
         val registration = FirebaseFirestore.getInstance()
             .collection(COLLECTION)
             .document(DOCUMENT)
@@ -52,7 +70,7 @@ internal object AcpOfferValidityStore {
 
     suspend fun save(productName: String, family: AcpOfferFamily, startDate: String, endDate: String) {
         requireMaster()
-        val field = key(productName, family)
+        val field = keyFor(productName, family)
         FirebaseFirestore.getInstance()
             .collection(COLLECTION)
             .document(DOCUMENT)
