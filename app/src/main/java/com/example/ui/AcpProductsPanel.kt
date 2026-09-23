@@ -36,11 +36,13 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.CategoryDefinition
 import com.example.data.AppearanceSettings
@@ -1152,6 +1154,9 @@ private fun AcpFeaturedOffers(
     onLoadNextServerPage: () -> Unit,
     onOpen: (AcpFeaturedOffer) -> Unit
 ) {
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val compactScreen = screenWidthDp < 420
+    val featuredCardWidth = (screenWidthDp - 48).coerceIn(220, 280).dp
     val orderedOffers = remember(offers, sort) {
         val comparator = when (sort) {
             AcpFeaturedSort.MAIOR_DESCONTO -> compareByDescending<AcpFeaturedOffer> { it.discountAmount() }
@@ -1183,45 +1188,46 @@ private fun AcpFeaturedOffers(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (compactScreen) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 Text("Ofertas em destaque", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text("Condições promocionais informadas pela ACP", style = MaterialTheme.typography.bodySmall)
             }
             if (offers.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Box {
-                        TextButton(onClick = { filterMenuExpanded = true }) {
-                            Text("Filtro")
-                        }
-                        DropdownMenu(
-                            expanded = filterMenuExpanded,
-                            onDismissRequest = { filterMenuExpanded = false }
-                        ) {
-                            AcpFeaturedSort.values().forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option.label) },
-                                    onClick = {
-                                        onSortChanged(option)
-                                        filterMenuExpanded = false
-                                    },
-                                    trailingIcon = if (option == sort) {
-                                        { Text("✓") }
-                                    } else null
-                                )
-                            }
-                        }
-                    }
-                    TextButton(onClick = onHide) {
-                        Text("Ocultar")
-                    }
-                    TextButton(onClick = onToggleExpanded) {
-                        Text(if (expanded) "Ver menos" else "Ver todos")
-                    }
+                AcpFeaturedOfferActions(
+                    sort = sort,
+                    expanded = expanded,
+                    onSortChanged = onSortChanged,
+                    onHide = onHide,
+                    onToggleExpanded = onToggleExpanded,
+                    filterMenuExpanded = filterMenuExpanded,
+                    onFilterMenuExpandedChange = { filterMenuExpanded = it }
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Ofertas em destaque", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Condições promocionais informadas pela ACP", style = MaterialTheme.typography.bodySmall)
+                }
+                if (offers.isNotEmpty()) {
+                    AcpFeaturedOfferActions(
+                        modifier = Modifier.widthIn(max = 240.dp),
+                        sort = sort,
+                        expanded = expanded,
+                        onSortChanged = onSortChanged,
+                        onHide = onHide,
+                        onToggleExpanded = onToggleExpanded,
+                        filterMenuExpanded = filterMenuExpanded,
+                        onFilterMenuExpandedChange = { filterMenuExpanded = it }
+                    )
                 }
             }
         }
@@ -1272,12 +1278,63 @@ private fun AcpFeaturedOffers(
                 contentPadding = PaddingValues(horizontal = 2.dp)
             ) {
                 items(carouselOffers, key = { "${it.product.id}:${it.offer.family}" }) { item ->
-                    Box(modifier = Modifier.width(280.dp)) {
+                    Box(modifier = Modifier.width(featuredCardWidth)) {
                         AcpFeaturedOfferCard(item, appearance, onOpen)
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AcpFeaturedOfferActions(
+    modifier: Modifier = Modifier,
+    sort: AcpFeaturedSort,
+    expanded: Boolean,
+    onSortChanged: (AcpFeaturedSort) -> Unit,
+    onHide: () -> Unit,
+    onToggleExpanded: () -> Unit,
+    filterMenuExpanded: Boolean,
+    onFilterMenuExpandedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Box(modifier = Modifier.weight(1f)) {
+            TextButton(
+                onClick = { onFilterMenuExpandedChange(true) },
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 4.dp)
+            ) { Text("Filtro", maxLines = 1) }
+            DropdownMenu(
+                expanded = filterMenuExpanded,
+                onDismissRequest = { onFilterMenuExpandedChange(false) }
+            ) {
+                AcpFeaturedSort.values().forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option.label) },
+                        onClick = {
+                            onSortChanged(option)
+                            onFilterMenuExpandedChange(false)
+                        },
+                        trailingIcon = if (option == sort) ({ Text("✓") }) else null
+                    )
+                }
+            }
+        }
+        TextButton(
+            onClick = onHide,
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(horizontal = 4.dp)
+        ) { Text("Ocultar", maxLines = 1) }
+        TextButton(
+            onClick = onToggleExpanded,
+            modifier = Modifier.weight(1.2f),
+            contentPadding = PaddingValues(horizontal = 4.dp)
+        ) { Text(if (expanded) "Ver menos" else "Ver todos", maxLines = 1) }
     }
 }
 
@@ -1313,7 +1370,8 @@ private fun AcpFeaturedOfferCard(
                 "Código: ${item.product.code.ifBlank { "não informado" }}" +
                     item.product.barcode.takeIf { it.isNotBlank() }?.let { " • EAN: $it" }.orEmpty(),
                 style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 20.dp)
             )
             AcpOfferPoster(
