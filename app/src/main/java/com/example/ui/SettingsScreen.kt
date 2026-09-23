@@ -51,7 +51,9 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val notificationsEnabled by viewModel.userPreferences.notificationsEnabled.collectAsState(initial = true)
     val notificationsProductAddedEnabled by viewModel.userPreferences.notificationsProductAddedEnabled.collectAsState(initial = true)
     val notificationsCodeChangedEnabled by viewModel.userPreferences.notificationsCodeChangedEnabled.collectAsState(initial = true)
-
+    val appearanceExpanded by viewModel.userPreferences.settingsAppearanceExpanded.collectAsState(initial = false)
+    val notificationsExpanded by viewModel.userPreferences.settingsNotificationsExpanded.collectAsState(initial = false)
+    val feedbackExpanded by viewModel.userPreferences.settingsFeedbackExpanded.collectAsState(initial = false)
 
     var showSuggestionDialog by remember { mutableStateOf(false) }
     var suggestionText by remember { mutableStateOf("") }
@@ -59,9 +61,6 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     var selectedCorrectedSuggestion by remember { mutableStateOf<com.example.data.ProductSuggestion?>(null) }
     var suggestionPendingDeletion by remember { mutableStateOf<com.example.data.ProductSuggestion?>(null) }
     var deletingSuggestion by remember { mutableStateOf(false) }
-    var appearanceExpanded by remember { mutableStateOf(true) }
-    var notificationsExpanded by remember { mutableStateOf(false) }
-    var feedbackExpanded by remember { mutableStateOf(false) }
     val installationId by produceState(initialValue = "") {
         value = viewModel.userPreferences.getOrCreateInstallationId()
     }
@@ -100,7 +99,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 title = "Aparência",
                 summary = "Fonte, temas, modo de aparência e vibração",
                 expanded = appearanceExpanded,
-                onToggle = { appearanceExpanded = !appearanceExpanded }
+                onToggle = { coroutineScope.launch { viewModel.userPreferences.setSettingsAppearanceExpanded(!appearanceExpanded) } }
             )
             if (appearanceExpanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -459,7 +458,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 title = "Notificações",
                 summary = if (notificationsEnabled) "Ativadas" else "Desativadas",
                 expanded = notificationsExpanded,
-                onToggle = { notificationsExpanded = !notificationsExpanded }
+                onToggle = { coroutineScope.launch { viewModel.userPreferences.setSettingsNotificationsExpanded(!notificationsExpanded) } }
             )
             if (notificationsExpanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -498,7 +497,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 title = "Ajuda e feedback",
                 summary = "Enviar sugestões e consultar o histórico",
                 expanded = feedbackExpanded,
-                onToggle = { feedbackExpanded = !feedbackExpanded }
+                onToggle = { coroutineScope.launch { viewModel.userPreferences.setSettingsFeedbackExpanded(!feedbackExpanded) } }
             )
             if (feedbackExpanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
