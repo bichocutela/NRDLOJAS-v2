@@ -47,6 +47,15 @@ class UserPreferences(private val context: Context) {
     val fontScale: Flow<Float> = context.dataStore.data.map { preferences ->
         preferences[FONT_SCALE] ?: 1.0f
     }
+    val settingsAppearanceExpanded: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[SETTINGS_APPEARANCE_EXPANDED] ?: false
+    }
+    val settingsNotificationsExpanded: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[SETTINGS_NOTIFICATIONS_EXPANDED] ?: false
+    }
+    val settingsFeedbackExpanded: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[SETTINGS_FEEDBACK_EXPANDED] ?: false
+    }
     val barcodeNumberScale: Flow<Float> = context.dataStore.data.map { preferences ->
         preferences[BARCODE_NUMBER_SCALE] ?: 1.0f
     }
@@ -122,6 +131,15 @@ class UserPreferences(private val context: Context) {
     }
     suspend fun setFontScale(scale: Float) {
         context.dataStore.edit { it[FONT_SCALE] = scale }
+    }
+    suspend fun setSettingsAppearanceExpanded(expanded: Boolean) {
+        context.dataStore.edit { it[SETTINGS_APPEARANCE_EXPANDED] = expanded }
+    }
+    suspend fun setSettingsNotificationsExpanded(expanded: Boolean) {
+        context.dataStore.edit { it[SETTINGS_NOTIFICATIONS_EXPANDED] = expanded }
+    }
+    suspend fun setSettingsFeedbackExpanded(expanded: Boolean) {
+        context.dataStore.edit { it[SETTINGS_FEEDBACK_EXPANDED] = expanded }
     }
     suspend fun setBarcodeNumberScale(scale: Float) {
         context.dataStore.edit { it[BARCODE_NUMBER_SCALE] = scale.coerceIn(0.8f, 1.6f) }
@@ -241,6 +259,9 @@ class UserPreferences(private val context: Context) {
         val NOTIFICATIONS_PRODUCT_ADDED_ENABLED = booleanPreferencesKey("notifications_product_added_enabled")
         val NOTIFICATIONS_CODE_CHANGED_ENABLED = booleanPreferencesKey("notifications_code_changed_enabled")
         val FONT_SCALE = floatPreferencesKey("font_scale")
+        val SETTINGS_APPEARANCE_EXPANDED = booleanPreferencesKey("settings_appearance_expanded")
+        val SETTINGS_NOTIFICATIONS_EXPANDED = booleanPreferencesKey("settings_notifications_expanded")
+        val SETTINGS_FEEDBACK_EXPANDED = booleanPreferencesKey("settings_feedback_expanded")
         val BARCODE_NUMBER_SCALE = floatPreferencesKey("barcode_number_scale")
         val BARCODE_TITLE_SCALE = floatPreferencesKey("barcode_title_scale")
         val MOST_USED_LIMIT = intPreferencesKey("most_used_limit")
