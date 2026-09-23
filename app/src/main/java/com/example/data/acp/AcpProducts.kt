@@ -142,7 +142,7 @@ internal fun AcpProductPage.prioritizeExact(field: AcpSearchField, query: String
 private fun parseAcpDate(value: String?): Calendar? {
     val clean = value?.trim().orEmpty()
     if (clean.isBlank()) return null
-    val match = Regex("""(\\d{1,4})[-/](\\d{1,2})[-/](\\d{1,4})""").find(clean) ?: return null
+    val match = Regex("""(\d{1,4})[-/](\d{1,2})[-/](\d{1,4})""").find(clean) ?: return null
     val first = match.groupValues[1].toIntOrNull() ?: return null
     val middle = match.groupValues[2].toIntOrNull() ?: return null
     val third = match.groupValues[3].toIntOrNull() ?: return null
@@ -187,8 +187,8 @@ internal fun AcpProduct.isWithinOfferValidity(fallback: AcpOfferValidity? = null
         set(Calendar.SECOND, 0)
         set(Calendar.MILLISECOND, 0)
     }
-    val start = parseAcpDate(validFrom ?: fallback?.startDate)
-    val end = parseAcpDate(validTo ?: fallback?.endDate)
+    val start = parseAcpDate(validFrom) ?: parseAcpDate(fallback?.startDate)
+    val end = parseAcpDate(validTo) ?: parseAcpDate(fallback?.endDate)
     val todayKey = dateKey(today)
     return (start == null || dateKey(start) <= todayKey) && (end == null || dateKey(end) >= todayKey)
 }
