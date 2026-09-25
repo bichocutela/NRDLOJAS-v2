@@ -15,6 +15,7 @@ import com.google.zxing.BarcodeFormat
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Android
@@ -37,6 +38,9 @@ import kotlinx.coroutines.delay
 import java.util.Calendar
 import com.example.R
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.expressiveShadow
 
 private const val IPHONE_PWA_URL = "https://bichocutela.github.io"
 
@@ -46,11 +50,20 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
     val uriHandler = LocalUriHandler.current
     val currentYear = Calendar.getInstance().get(Calendar.YEAR)
     val copyrightYear = if (currentYear <= 2026) "2026" else "2026-$currentYear"
+    val expressive = LocalExpressiveStyle.current.enabled
+    val glassStyle = LocalGlassSoftStyle.current
+    val screenProfile = rememberNrdScreenProfile()
 
     Scaffold(
+        containerColor = if (expressive || glassStyle.enabled) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Sobre") },
+                title = {
+                    Text(
+                        "Sobre",
+                        fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -58,7 +71,12 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                             contentDescription = "Voltar"
                         )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = if (expressive || glassStyle.enabled) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground
+                )
             )
         }
     ) { innerPadding ->
@@ -67,12 +85,36 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                 .padding(innerPadding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .padding(
+                    horizontal = if (screenProfile.compact) 10.dp else 14.dp,
+                    vertical = if (screenProfile.compact) 8.dp else 12.dp
+                )
         ) {
-            Text(
-                text = "Sobre o Aplicativo\n\nEste aplicativo foi desenvolvido por Alessandro P., Operador de Caixa, com o objetivo de auxiliar os colaboradores da Frente de Loja na consulta rápida de códigos correlatos, contribuindo para mais agilidade, precisão e eficiência no atendimento aos clientes.\n\nEste projeto nasceu da vivência diária na operação de caixa e da necessidade de tornar a rotina de trabalho mais prática, oferecendo uma ferramenta de apoio aos profissionais da equipe.\n\nRegistro meu sincero agradecimento aos Fiscais de Caixa, pela confiança, incentivo e apoio durante o desenvolvimento desta iniciativa, bem como aos colegas de trabalho, que compartilharam sugestões, experiências e conhecimentos que contribuíram para o aprimoramento do aplicativo.\n\nEste aplicativo foi desenvolvido exclusivamente como uma ferramenta de apoio operacional interno e não substitui os procedimentos, normas, orientações ou sistemas oficiais da empresa.\n\nTodas as marcas, nomes, logotipos, códigos, informações e demais conteúdos relacionados ao Supermercado Nordestão pertencem aos seus respectivos proprietários. Todos os direitos são reservados à empresa. O desenvolvedor não reivindica qualquer direito de propriedade sobre essas informações, utilizando-as unicamente para fins de apoio às atividades internas dos colaboradores.\n\n© $copyrightYear Alessandro P. Todos os direitos do aplicativo são reservados ao autor. O conteúdo institucional e as informações pertencentes ao Supermercado Nordestão permanecem de propriedade exclusiva da empresa.\n\nVersão: ${com.example.BuildConfig.VERSION_NAME}\nDesenvolvedor: Alessandro Paulo\n@bichocutela @haydendanex",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            if (expressive) {
+                val infoShape = RoundedCornerShape(if (screenProfile.compact) 22.dp else 28.dp)
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .expressiveShadow(infoShape, 6.dp),
+                    shape = infoShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ) {
+                    Text(
+                        text = "Sobre o Aplicativo\n\nEste aplicativo foi desenvolvido por Alessandro P., Operador de Caixa, com o objetivo de auxiliar os colaboradores da Frente de Loja na consulta rápida de códigos correlatos, contribuindo para mais agilidade, precisão e eficiência no atendimento aos clientes.\n\nEste projeto nasceu da vivência diária na operação de caixa e da necessidade de tornar a rotina de trabalho mais prática, oferecendo uma ferramenta de apoio aos profissionais da equipe.\n\nRegistro meu sincero agradecimento aos Fiscais de Caixa, pela confiança, incentivo e apoio durante o desenvolvimento desta iniciativa, bem como aos colegas de trabalho, que compartilharam sugestões, experiências e conhecimentos que contribuíram para o aprimoramento do aplicativo.\n\nEste aplicativo foi desenvolvido exclusivamente como uma ferramenta de apoio operacional interno e não substitui os procedimentos, normas, orientações ou sistemas oficiais da empresa.\n\nTodas as marcas, nomes, logotipos, códigos, informações e demais conteúdos relacionados ao Supermercado Nordestão pertencem aos seus respectivos proprietários. Todos os direitos são reservados à empresa. O desenvolvedor não reivindica qualquer direito de propriedade sobre essas informações, utilizando-as unicamente para fins de apoio às atividades internas dos colaboradores.\n\n© $copyrightYear Alessandro P. Todos os direitos do aplicativo são reservados ao autor. O conteúdo institucional e as informações pertencentes ao Supermercado Nordestão permanecem de propriedade exclusiva da empresa.\n\nVersão: ${com.example.BuildConfig.VERSION_NAME}\nDesenvolvedor: Alessandro Paulo\n@bichocutela @haydendanex",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+
+                }
+            } else {
+                Text(
+                    text = "Sobre o Aplicativo\n\nEste aplicativo foi desenvolvido por Alessandro P., Operador de Caixa, com o objetivo de auxiliar os colaboradores da Frente de Loja na consulta rápida de códigos correlatos, contribuindo para mais agilidade, precisão e eficiência no atendimento aos clientes.\n\nEste projeto nasceu da vivência diária na operação de caixa e da necessidade de tornar a rotina de trabalho mais prática, oferecendo uma ferramenta de apoio aos profissionais da equipe.\n\nRegistro meu sincero agradecimento aos Fiscais de Caixa, pela confiança, incentivo e apoio durante o desenvolvimento desta iniciativa, bem como aos colegas de trabalho, que compartilharam sugestões, experiências e conhecimentos que contribuíram para o aprimoramento do aplicativo.\n\nEste aplicativo foi desenvolvido exclusivamente como uma ferramenta de apoio operacional interno e não substitui os procedimentos, normas, orientações ou sistemas oficiais da empresa.\n\nTodas as marcas, nomes, logotipos, códigos, informações e demais conteúdos relacionados ao Supermercado Nordestão pertencem aos seus respectivos proprietários. Todos os direitos são reservados à empresa. O desenvolvedor não reivindica qualquer direito de propriedade sobre essas informações, utilizando-as unicamente para fins de apoio às atividades internas dos colaboradores.\n\n© $copyrightYear Alessandro P. Todos os direitos do aplicativo são reservados ao autor. O conteúdo institucional e as informações pertencentes ao Supermercado Nordestão permanecem de propriedade exclusiva da empresa.\n\nVersão: ${com.example.BuildConfig.VERSION_NAME}\nDesenvolvedor: Alessandro Paulo\n@bichocutela @haydendanex",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+
+            }
 
             Spacer(modifier = Modifier.height(10.dp))
             
@@ -272,7 +314,10 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
             if (updateAvailable) {
                 val updateCardShape = MaterialTheme.shapes.large
                 Card(
-                    modifier = Modifier.fillMaxWidth().glassSoftShadow(updateCardShape),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .glassSoftShadow(updateCardShape)
+                        .expressiveShadow(updateCardShape, 7.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                     shape = updateCardShape
                 ) {
