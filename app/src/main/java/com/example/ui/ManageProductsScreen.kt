@@ -15,7 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.ui.theme.getDynamicThemeColor
 import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.expressiveShadow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.data.Product
@@ -28,6 +30,8 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val activeCategoryNames by viewModel.activeCategoryNames.collectAsState()
     val appTheme by viewModel.userPreferences.appTheme.collectAsState(initial = "multicolor")
     val glassStyle = LocalGlassSoftStyle.current
+    val expressive = LocalExpressiveStyle.current.enabled
+    val screenProfile = rememberNrdScreenProfile()
     val coroutineScope = rememberCoroutineScope()
     var showDialog by remember { mutableStateOf(false) }
     var editingProduct by remember { mutableStateOf<Product?>(null) }
@@ -41,11 +45,16 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     var imageUrl by remember { mutableStateOf("") }
 
     Scaffold(
+        containerColor = if (expressive || glassStyle.enabled) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text("Gerenciar produtos", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            "Gerenciar produtos",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = if (expressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal
+                        )
                         Text("Gerencie produtos e inventário", style = MaterialTheme.typography.labelMedium)
                     }
                 },
@@ -53,7 +62,12 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = if (expressive || glassStyle.enabled) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground
+                )
             )
         }
     ) { innerPadding ->
@@ -61,8 +75,11 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            contentPadding = PaddingValues(
+                horizontal = if (screenProfile.compact) 10.dp else 14.dp,
+                vertical = if (screenProfile.compact) 6.dp else 10.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(if (screenProfile.compact) 6.dp else 8.dp)
         ) {
             itemsIndexed(products) { index, product ->
                 val dynColors = getDynamicThemeColor(
@@ -71,14 +88,23 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     MaterialTheme.colorScheme.primaryContainer,
                     MaterialTheme.colorScheme.onPrimaryContainer
                 )
-                val productCardShape = RoundedCornerShape(18.dp)
+                val productCardShape = RoundedCornerShape(
+                    if (expressive && screenProfile.compact) 20.dp
+                    else if (expressive) 24.dp
+                    else 18.dp
+                )
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .glassSoftShadow(productCardShape),
+                        .glassSoftShadow(productCardShape)
+                        .expressiveShadow(productCardShape, 5.dp),
                     border = androidx.compose.foundation.BorderStroke(
                         1.dp,
-                        if (glassStyle.enabled) glassStyle.borderColor else dynColors.first
+                        when {
+                            glassStyle.enabled -> glassStyle.borderColor
+                            expressive -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f)
+                            else -> dynColors.first
+                        }
                     ),
                     shape = productCardShape,
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
