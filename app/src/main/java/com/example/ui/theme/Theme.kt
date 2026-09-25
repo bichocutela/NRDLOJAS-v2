@@ -30,6 +30,25 @@ private val GlassSoftShapes = Shapes(
     extraLarge = RoundedCornerShape(32.dp)
 )
 
+private val ExpressiveShapes = Shapes(
+    extraSmall = RoundedCornerShape(14.dp),
+    small = RoundedCornerShape(18.dp),
+    medium = RoundedCornerShape(24.dp),
+    large = RoundedCornerShape(30.dp),
+    extraLarge = RoundedCornerShape(36.dp)
+)
+
+@Immutable
+data class ExpressiveStyle(
+    val enabled: Boolean = false,
+    val variant: String = "solid"
+) {
+    val isGlass: Boolean
+        get() = enabled && variant == "glass"
+}
+
+val LocalExpressiveStyle = staticCompositionLocalOf { ExpressiveStyle() }
+
 @Immutable
 data class GlassSoftStyle(
     val enabled: Boolean = false,
@@ -297,6 +316,60 @@ private val SessionMulticolorPalette: List<Pair<Color, Color>> by lazy {
     MulticolorPalette.shuffled()
 }
 
+private fun expressiveColorScheme(darkTheme: Boolean) = if (darkTheme) {
+    DefaultDarkColorScheme.copy(
+        primary = Color(0xFFFF8A8C),
+        onPrimary = Color(0xFF4B0005),
+        primaryContainer = Color(0xFF64151A),
+        onPrimaryContainer = Color(0xFFFFDADB),
+        secondary = Color(0xFF91C3FF),
+        onSecondary = Color(0xFF00315A),
+        secondaryContainer = Color(0xFF123D66),
+        onSecondaryContainer = Color(0xFFD7E9FF),
+        tertiary = Color(0xFF8EDC91),
+        onTertiary = Color(0xFF00390B),
+        tertiaryContainer = Color(0xFF164A23),
+        onTertiaryContainer = Color(0xFFD1F8D2),
+        background = Color(0xFF111013),
+        onBackground = Color(0xFFF5F0F3),
+        surface = Color(0xFF18161A),
+        onSurface = Color(0xFFF5F0F3),
+        surfaceVariant = Color(0xFF262227),
+        onSurfaceVariant = Color(0xFFD3C7CD),
+        surfaceContainerLow = Color(0xFF1D1A1E),
+        surfaceContainer = Color(0xFF211E22),
+        surfaceContainerHigh = Color(0xFF29252A),
+        surfaceContainerHighest = Color(0xFF302B31),
+        outline = Color(0xFF9C8D94)
+    )
+} else {
+    DefaultLightColorScheme.copy(
+        primary = Color(0xFFE62325),
+        onPrimary = Color.White,
+        primaryContainer = Color(0xFFFFDADB),
+        onPrimaryContainer = Color(0xFF3B0710),
+        secondary = Color(0xFF1976D2),
+        onSecondary = Color.White,
+        secondaryContainer = Color(0xFFD9E9FF),
+        onSecondaryContainer = Color(0xFF082E55),
+        tertiary = Color(0xFF388E3C),
+        onTertiary = Color.White,
+        tertiaryContainer = Color(0xFFD8F2D8),
+        onTertiaryContainer = Color(0xFF103B16),
+        background = Color(0xFFFFF9FB),
+        onBackground = Color(0xFF241E21),
+        surface = Color(0xFFFFFBFC),
+        onSurface = Color(0xFF241E21),
+        surfaceVariant = Color(0xFFF7F0F3),
+        onSurfaceVariant = Color(0xFF5B5156),
+        surfaceContainerLow = Color(0xFFFFF5F8),
+        surfaceContainer = Color(0xFFFBEFF3),
+        surfaceContainerHigh = Color(0xFFF5E9ED),
+        surfaceContainerHighest = Color(0xFFEFE3E7),
+        outline = Color(0xFF8E7F86)
+    )
+}
+
 private fun getThemeColorScheme(themeName: String, darkTheme: Boolean) = when (themeName) {
     "multicolor" -> {
         val primary = SessionMulticolorPalette[0]
@@ -406,6 +479,7 @@ fun MyApplicationTheme(
     glassAccentColor: String = "multicolor",
     glassTransparency: Float = 0.55f,
     glassType: String = "soft",
+    expressiveStyle: String = "solid",
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (appearanceMode) {
@@ -413,14 +487,46 @@ fun MyApplicationTheme(
         "dark" -> true
         else -> isSystemInDarkTheme()
     }
+    val normalizedExpressiveStyle = expressiveStyle.takeIf { it in setOf("solid", "glass") } ?: "solid"
+    val isExpressive = appTheme == "expressive"
     val isGlassSoft = appTheme == "glass"
-    val style = resolveGlassSoftStyle(isGlassSoft, glassType, glassTransparency, glassAccentColor, darkTheme)
-    val colorScheme = if (isGlassSoft) glassSoftColorScheme(style) else getThemeColorScheme(appTheme, darkTheme)
-    CompositionLocalProvider(LocalGlassSoftStyle provides style) {
+    val isExpressiveGlass = isExpressive && normalizedExpressiveStyle == "glass"
+
+    val glassStyle = when {
+        isGlassSoft -> resolveGlassSoftStyle(true, glassType, glassTransparency, glassAccentColor, darkTheme)
+        isExpressiveGlass -> resolveGlassSoftStyle(
+            enabled = true,
+            type = "crystal",
+            transparency = 0.68f,
+            accentName = "multicolor",
+            isDark = darkTheme
+        ).copy(
+            accent = if (darkTheme) Color(0xFFFF8A8C) else Color(0xFFE62325),
+            secondaryAccent = if (darkTheme) Color(0xFF91C3FF) else Color(0xFF1976D2),
+            tertiaryAccent = if (darkTheme) Color(0xFF8EDC91) else Color(0xFF388E3C)
+        )
+        else -> GlassSoftStyle()
+    }
+    val expressive = ExpressiveStyle(enabled = isExpressive, variant = normalizedExpressiveStyle)
+    val colorScheme = when {
+        isGlassSoft || isExpressiveGlass -> glassSoftColorScheme(glassStyle)
+        isExpressive -> expressiveColorScheme(darkTheme)
+        else -> getThemeColorScheme(appTheme, darkTheme)
+    }
+    val shapes = when {
+        isExpressive -> ExpressiveShapes
+        isGlassSoft -> GlassSoftShapes
+        else -> MaterialTheme.shapes
+    }
+
+    CompositionLocalProvider(
+        LocalGlassSoftStyle provides glassStyle,
+        LocalExpressiveStyle provides expressive
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,
-            shapes = if (isGlassSoft) GlassSoftShapes else MaterialTheme.shapes,
+            shapes = shapes,
             content = content
         )
     }

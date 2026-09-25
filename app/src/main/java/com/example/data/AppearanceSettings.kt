@@ -114,6 +114,7 @@ class AppearanceSettings(
         "blue" -> "blue"
         "orange" -> "orange"
         "glass" -> "glass"
+        "expressive" -> "expressive"
         else -> "multicolor"
     }
 }

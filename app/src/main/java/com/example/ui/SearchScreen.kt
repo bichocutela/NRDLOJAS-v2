@@ -87,6 +87,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.ui.theme.getDynamicThemeColor
 import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.glassSoftShadow
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material.icons.filled.NewReleases
@@ -247,16 +248,18 @@ fun SearchScreen(
     val remoteAppearance by FirebaseService.observeAppearanceSettings()
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
     val glassStyle = LocalGlassSoftStyle.current
+    val expressiveStyle = LocalExpressiveStyle.current
     val isGlassTheme = glassStyle.enabled
-    val appTheme = if (isGlassTheme) "glass" else localAppTheme
+    val isStandaloneGlassTheme = isGlassTheme && !expressiveStyle.enabled
+    val appTheme = if (isStandaloneGlassTheme) "glass" else localAppTheme
     val glassActionBrush = remember(glassStyle.accent, glassStyle.secondaryAccent) {
         Brush.verticalGradient(
             listOf(glassStyle.accent, glassStyle.secondaryAccent)
         )
     }
-    val normalizedTheme = remember(localAppTheme, isGlassTheme) {
-        if (isGlassTheme) "multicolor" else when (localAppTheme.trim().lowercase()) {
-            "multicolor" -> "multicolor"
+    val normalizedTheme = remember(localAppTheme) {
+        when (localAppTheme.trim().lowercase()) {
+            "multicolor", "glass", "expressive" -> "multicolor"
             "gold" -> "gold"
             "green" -> "green"
             "blue" -> "blue"
@@ -264,9 +267,17 @@ fun SearchScreen(
             else -> "red"
         }
     }
-    val activeThemeBackground = remoteAppearance.activeBackgroundFor(
-        if (isGlassTheme) "glass" else normalizedTheme
-    )
+    val backgroundThemeKey = remember(localAppTheme, isStandaloneGlassTheme) {
+        if (isStandaloneGlassTheme) {
+            "glass"
+        } else {
+            when (localAppTheme.trim().lowercase()) {
+                "multicolor", "red", "gold", "green", "blue", "orange", "expressive" -> localAppTheme.trim().lowercase()
+                else -> "multicolor"
+            }
+        }
+    }
+    val activeThemeBackground = remoteAppearance.activeBackgroundFor(backgroundThemeKey)
 
 
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
@@ -378,7 +389,7 @@ fun SearchScreen(
                     )
             ) {
                 MaskedThemeBanner(
-                    appTheme = if (isGlassTheme) "glass" else normalizedTheme,
+                    appTheme = if (isStandaloneGlassTheme) "glass" else normalizedTheme,
                     backgroundUrl = activeThemeBackground?.url,
                     imageScale = activeThemeBackground?.imageScale ?: 1f,
                     imageOffsetX = activeThemeBackground?.imageOffsetX ?: 0f,
@@ -392,7 +403,7 @@ fun SearchScreen(
                                 Modifier.combinedClickable(
                                     onClick = {},
                                     onDoubleClick = {
-                                        onQuickEditBanner(if (isGlassTheme) "glass" else normalizedTheme)
+                                        onQuickEditBanner(backgroundThemeKey)
                                     }
                                 )
                             } else {
@@ -1781,7 +1792,7 @@ fun ThemeBanner(
     modifier: Modifier = Modifier
 ) {
     val normalizedTheme = when (appTheme.trim().lowercase()) {
-        "multicolor", "glass" -> "multicolor"
+        "multicolor", "glass", "expressive" -> "multicolor"
         "gold" -> "gold"
         "green" -> "green"
         "blue" -> "blue"

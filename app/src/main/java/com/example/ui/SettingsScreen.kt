@@ -46,6 +46,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val glassAccentColor by viewModel.userPreferences.glassAccentColor.collectAsState(initial = "multicolor")
     val glassTransparency by viewModel.userPreferences.glassTransparency.collectAsState(initial = 0.55f)
     val glassType by viewModel.userPreferences.glassType.collectAsState(initial = "soft")
+    val expressiveStyle by viewModel.userPreferences.expressiveStyle.collectAsState(initial = "solid")
     val glassStyle = LocalGlassSoftStyle.current
     
     val notificationsEnabled by viewModel.userPreferences.notificationsEnabled.collectAsState(initial = true)
@@ -79,9 +80,9 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (appTheme == "glass") MaterialTheme.colorScheme.surface else getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first,
-                    titleContentColor = if (appTheme == "glass") MaterialTheme.colorScheme.onSurface else getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second,
-                    navigationIconContentColor = if (appTheme == "glass") MaterialTheme.colorScheme.onSurface else getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second
+                    containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface else getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first,
+                    titleContentColor = if (glassStyle.enabled) MaterialTheme.colorScheme.onSurface else getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second,
+                    navigationIconContentColor = if (glassStyle.enabled) MaterialTheme.colorScheme.onSurface else getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second
                 )
             )
         }
@@ -187,7 +188,8 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 "green" to "Verde",
                 "blue" to "Azul",
                 "orange" to "Laranja",
-                "glass" to "Glass Soft"
+                "glass" to "Glass Soft",
+                "expressive" to "Expressivo"
             )
             
             ExposedDropdownMenuBox(
@@ -217,6 +219,70 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         )
                     }
                 }
+            }
+
+            if (appTheme == "expressive") {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Variação do tema",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        "solid" to "Sólido",
+                        "glass" to "Glass"
+                    ).forEach { (styleKey, styleLabel) ->
+                        val selected = expressiveStyle == styleKey
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    coroutineScope.launch {
+                                        viewModel.userPreferences.setExpressiveStyle(styleKey)
+                                    }
+                                },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (selected) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                },
+                                contentColor = if (selected) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            ),
+                            border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                            shape = MaterialTheme.shapes.large
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    styleLabel,
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            }
+                        }
+                    }
+                }
+                Text(
+                    if (expressiveStyle == "glass") {
+                        "Glass mantém a estrutura do NRD e aplica superfícies translúcidas usando o motor de vidro já existente no app."
+                    } else {
+                        "Sólido é o padrão do Expressivo: cores vivas, formas mais marcantes e superfícies opacas."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             if (appTheme == "glass") {
