@@ -131,21 +131,25 @@ jobs:
       env:
         FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       run: |
+        set -euo pipefail
         if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
-          echo "::warning::FIREBASE_SERVICE_ACCOUNT não está configurado no GitHub Actions; regras do Firestore não foram publicadas."
-          exit 0
+          echo "::error::FIREBASE_SERVICE_ACCOUNT não está configurado no GitHub Actions."
+          exit 1
         fi
+
         printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
-        cat > firebase.json <<'EOF'
-        {
-          "firestore": {
-            "rules": "firestore.rules"
-          }
-        }
-        EOF
-        export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-service-account.json"
-        npm install -g firebase-tools
-        firebase deploy --only firestore:rules --project appcodigo-7f245 --non-interactive
+        gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-service-account.json" --quiet
+        ACCESS_TOKEN="$(gcloud auth print-access-token)"
+
+        RULESET_PAYLOAD="$(jq -Rs '{source:{files:[{name:"firestore.rules",content:.}]}}' firestore.rules)"
+        RULESET_RESPONSE="$(curl --fail --silent --show-error           -X POST "https://firebaserules.googleapis.com/v1/projects/appcodigo-7f245/rulesets"           -H "Authorization: Bearer $ACCESS_TOKEN"           -H "Content-Type: application/json"           --data "$RULESET_PAYLOAD")"
+        RULESET_NAME="$(jq -er '.name' <<< "$RULESET_RESPONSE")"
+
+        RELEASE_PAYLOAD="$(jq -nc           --arg name "projects/appcodigo-7f245/releases/cloud.firestore"           --arg ruleset "$RULESET_NAME"           '{name:$name,rulesetName:$ruleset}')"
+
+        curl --fail --silent --show-error           -X PATCH "https://firebaserules.googleapis.com/v1/projects/appcodigo-7f245/releases/cloud.firestore"           -H "Authorization: Bearer $ACCESS_TOKEN"           -H "Content-Type: application/json"           --data "$RELEASE_PAYLOAD" >/dev/null
+
+        echo "Firestore rules published successfully: $RULESET_NAME"
 
     - name: Verify APK Signature
       run: |
