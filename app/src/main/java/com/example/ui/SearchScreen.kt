@@ -676,8 +676,8 @@ fun SearchScreen(
                     onClick = openProductSearch,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(
-                            when {
+                        .heightIn(
+                            min = when {
                                 compactExpressive -> 54.dp
                                 isExpressiveTheme -> 58.dp
                                 else -> 56.dp
@@ -708,8 +708,8 @@ fun SearchScreen(
                     shape = searchButtonShape,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(
-                            when {
+                        .heightIn(
+                            min = when {
                                 compactExpressive -> 54.dp
                                 isExpressiveTheme -> 58.dp
                                 else -> 56.dp
