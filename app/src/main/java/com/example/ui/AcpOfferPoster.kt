@@ -4,6 +4,7 @@ import android.app.DatePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -56,8 +57,15 @@ private fun OfferHeader(
     background: Color,
     compact: Boolean
 ) {
+    val endDate = validity?.endDate?.takeIf { it.isNotBlank() }
     Row(
-        modifier = Modifier.fillMaxWidth().background(background).padding(horizontal = if (compact) 10.dp else 12.dp, vertical = if (compact) 7.dp else 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(background)
+            .padding(
+                horizontal = if (compact) 12.dp else 14.dp,
+                vertical = if (compact) 8.dp else 12.dp
+            ),
         horizontalArrangement = Arrangement.spacedBy(7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -65,9 +73,10 @@ private fun OfferHeader(
             text = label,
             color = Color.White,
             fontWeight = FontWeight.Black,
-            style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium
+            style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+            modifier = if (endDate != null) Modifier.weight(1f) else Modifier
         )
-        validity?.endDate?.takeIf { it.isNotBlank() }?.let { end ->
+        endDate?.let { end ->
             Surface(shape = MaterialTheme.shapes.small, color = Color(0xFF0D6FB8), contentColor = Color.White) {
                 Text(
                     "Válido até ${shortValidity(end)}",
@@ -99,13 +108,14 @@ internal fun AcpOfferPoster(
     val red = Color(0xFFB90012)
     val blue = Color(0xFF005A9C)
     val club = offer.title == "Clube de Vantagens"
-    val bodyHorizontal = if (compact) 10.dp else 14.dp
-    val bodyVertical = if (compact) 8.dp else 14.dp
+    val bodyHorizontal = if (compact) 12.dp else 14.dp
+    val bodyVertical = if (compact) 10.dp else 14.dp
     val bodySpacing = if (compact) 4.dp else 8.dp
 
+    val posterShape = RoundedCornerShape(if (compact) 18.dp else 22.dp)
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
+        shape = posterShape,
         color = yellow,
         contentColor = Color.Black
     ) {

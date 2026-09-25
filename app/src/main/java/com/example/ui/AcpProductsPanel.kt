@@ -42,7 +42,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.CategoryDefinition
 import com.example.data.AppearanceSettings
@@ -97,6 +96,7 @@ internal fun AcpProductsPanel(
     val expressiveStyle = LocalExpressiveStyle.current
     val glassStyle = LocalGlassSoftStyle.current
     val isExpressive = expressiveStyle.enabled
+    val screenProfile = rememberNrdScreenProfile()
     val offerValidityByKey by remember { AcpOfferValidityStore.observeAll() }
         .collectAsState(initial = emptyMap())
     val freshStore = remember(context) { AcpSecureStore(context.applicationContext) }
@@ -663,7 +663,17 @@ internal fun AcpProductsPanel(
                     product.isWithinOfferValidity(saved)
                 }
             val shareLayer = rememberGraphicsLayer()
-            val resultCardShape = if (isExpressive) RoundedCornerShape(30.dp) else MaterialTheme.shapes.medium
+            val resultCardShape = if (isExpressive) {
+                RoundedCornerShape(
+                    when {
+                        screenProfile.veryCompact -> 22.dp
+                        screenProfile.compact -> 24.dp
+                        else -> 30.dp
+                    }
+                )
+            } else {
+                MaterialTheme.shapes.medium
+            }
             OutlinedCard(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -704,8 +714,21 @@ internal fun AcpProductsPanel(
                 )
             ) {
                 Column(
-                    Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = if (isExpressive) {
+                                if (screenProfile.compact) 14.dp else 16.dp
+                            } else {
+                                10.dp
+                            },
+                            vertical = if (isExpressive) {
+                                if (screenProfile.compact) 13.dp else 15.dp
+                            } else {
+                                10.dp
+                            }
+                        ),
+                    verticalArrangement = Arrangement.spacedBy(if (isExpressive) 6.dp else 4.dp)
                 ) {
                     Text(
                         product.description,
@@ -718,7 +741,11 @@ internal fun AcpProductsPanel(
                     }
                     Text(identifiers, style = MaterialTheme.typography.bodySmall)
                     Surface(
-                        shape = if (isExpressive) RoundedCornerShape(18.dp) else MaterialTheme.shapes.small,
+                        shape = if (isExpressive) {
+                            RoundedCornerShape(if (screenProfile.compact) 14.dp else 18.dp)
+                        } else {
+                            MaterialTheme.shapes.small
+                        },
                         color = if (isExpressive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0f),
                         contentColor = if (isExpressive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                     ) {
@@ -727,8 +754,16 @@ internal fun AcpProductsPanel(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = if (isExpressive) FontWeight.ExtraBold else FontWeight.Normal,
                             modifier = Modifier.padding(
-                                horizontal = if (isExpressive) 12.dp else 0.dp,
-                                vertical = if (isExpressive) 7.dp else 0.dp
+                                horizontal = if (isExpressive) {
+                                    if (screenProfile.compact) 11.dp else 12.dp
+                                } else {
+                                    0.dp
+                                },
+                                vertical = if (isExpressive) {
+                                    if (screenProfile.compact) 8.dp else 9.dp
+                                } else {
+                                    0.dp
+                                }
                             )
                         )
                     }
@@ -1449,7 +1484,7 @@ private fun AcpFeaturedOfferActions(
                 onClick = { onFilterMenuExpandedChange(true) },
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(horizontal = 4.dp)
-            ) { Text("Filtro", maxLines = 1) }
+            ) { Text("Filtro") }
             DropdownMenu(
                 expanded = filterMenuExpanded,
                 onDismissRequest = { onFilterMenuExpandedChange(false) }
@@ -1470,12 +1505,12 @@ private fun AcpFeaturedOfferActions(
             onClick = onHide,
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(horizontal = 4.dp)
-        ) { Text("Ocultar", maxLines = 1) }
+        ) { Text("Ocultar") }
         TextButton(
             onClick = onToggleExpanded,
             modifier = Modifier.weight(1.2f),
             contentPadding = PaddingValues(horizontal = 4.dp)
-        ) { Text(if (expanded) "Ver menos" else "Ver todos", maxLines = 1) }
+        ) { Text(if (expanded) "Ver menos" else "Ver todos") }
     }
 }
 
@@ -1494,7 +1529,18 @@ private fun AcpFeaturedOfferCard(
 ) {
     val expressive = LocalExpressiveStyle.current.enabled
     val glassStyle = LocalGlassSoftStyle.current
-    val cardShape = if (expressive) RoundedCornerShape(28.dp) else MaterialTheme.shapes.medium
+    val profile = rememberNrdScreenProfile()
+    val cardShape = if (expressive) {
+        RoundedCornerShape(
+            when {
+                profile.veryCompact -> 20.dp
+                profile.compact -> 22.dp
+                else -> 28.dp
+            }
+        )
+    } else {
+        MaterialTheme.shapes.medium
+    }
     OutlinedCard(
         onClick = { onOpen(item) },
         modifier = Modifier
@@ -1511,23 +1557,37 @@ private fun AcpFeaturedOfferCard(
         )
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = if (expressive) {
+                        if (profile.compact) 13.dp else 15.dp
+                    } else {
+                        10.dp
+                    },
+                    vertical = if (expressive) {
+                        if (profile.compact) 12.dp else 14.dp
+                    } else {
+                        10.dp
+                    }
+                ),
+            verticalArrangement = Arrangement.spacedBy(if (expressive) 7.dp else 5.dp)
         ) {
             Text(
                 item.product.description,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal,
-                maxLines = 2,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = if (expressive) 44.dp else 40.dp)
             )
             Text(
                 "Código: ${item.product.code.ifBlank { "não informado" }}" +
                     item.product.barcode.takeIf { it.isNotBlank() }?.let { " • EAN: $it" }.orEmpty(),
                 style = MaterialTheme.typography.bodySmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 20.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 20.dp)
             )
             AcpOfferPoster(
                 offer = item.offer,
