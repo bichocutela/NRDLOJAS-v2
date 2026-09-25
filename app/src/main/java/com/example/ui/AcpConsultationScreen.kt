@@ -132,8 +132,9 @@ fun AcpConsultationScreen(
                     Modifier
                         .fillMaxWidth()
                         .padding(
-                            horizontal = if (isExpressive) 12.dp else 0.dp,
-                            top = if (isExpressive) 6.dp else 0.dp
+                            start = if (isExpressive) 12.dp else 0.dp,
+                            top = if (isExpressive) 6.dp else 0.dp,
+                            end = if (isExpressive) 12.dp else 0.dp
                         ),
                     contentAlignment = Alignment.TopCenter
                 ) {
