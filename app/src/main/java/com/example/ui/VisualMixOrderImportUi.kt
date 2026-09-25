@@ -36,7 +36,7 @@ internal fun VisualMixOrderImportButton(onClick: () -> Unit) {
 
     OutlinedButton(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().height(50.dp)
+        modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp)
     ) {
         Icon(Icons.Default.UploadFile, contentDescription = null)
         Spacer(Modifier.width(8.dp))
