@@ -276,11 +276,19 @@ class NossaGenteApi(context: Context) {
     }
 
     private fun EmployeeProfile.withComputedTenure(rawAdmission: String? = null): EmployeeProfile {
+        val admission = rawAdmission ?: admissionDate
+        val exact = formatExactTenure(admission)
+        if (!exact.isNullOrBlank()) {
+            return copy(
+                tenure = exact,
+                tenureYears = calculateTenureParts(admission)?.first ?: tenureYears
+            )
+        }
         if (!tenure.isNullOrBlank()) return this
-        val years = tenureYears ?: calculateTenureYears(rawAdmission ?: admissionDate)
+        val years = tenureYears
         val label = when (years) {
             null -> null
-            0 -> "Menos de 1 ano"
+            0 -> "0 meses"
             1 -> "1 ano"
             else -> "$years anos"
         }
@@ -308,7 +316,12 @@ class NossaGenteApi(context: Context) {
         return value.substringBefore("T").substringBefore(" 00:00:00")
     }
 
-    private fun calculateTenureYears(raw: String?): Int? {
+    private fun calculateTenureYears(raw: String?): Int? = calculateTenureParts(raw)?.first
+
+    private fun calculateTenureParts(
+        raw: String?,
+        now: java.util.Calendar = java.util.Calendar.getInstance()
+    ): Pair<Int, Int>? {
         val value = raw?.trim() ?: return null
         val iso = Regex("""^(\d{4})-(\d{2})-(\d{2})""").find(value)
         val br = Regex("""^(\d{2})/(\d{2})/(\d{4})""").find(value)
@@ -328,12 +341,36 @@ class NossaGenteApi(context: Context) {
             }
             else -> return null
         }
-        val now = java.util.Calendar.getInstance()
-        var years = now.get(java.util.Calendar.YEAR) - year
-        val currentMonth = now.get(java.util.Calendar.MONTH) + 1
-        val currentDay = now.get(java.util.Calendar.DAY_OF_MONTH)
-        if (currentMonth < month || (currentMonth == month && currentDay < day)) years--
-        return years.takeIf { it >= 0 }
+
+        var totalMonths =
+            (now.get(java.util.Calendar.YEAR) - year) * 12 +
+                ((now.get(java.util.Calendar.MONTH) + 1) - month)
+        if (now.get(java.util.Calendar.DAY_OF_MONTH) < day) totalMonths--
+        if (totalMonths < 0) return null
+        return (totalMonths / 12) to (totalMonths % 12)
+    }
+
+    private fun formatExactTenure(
+        raw: String?,
+        now: java.util.Calendar = java.util.Calendar.getInstance()
+    ): String? {
+        val (years, months) = calculateTenureParts(raw, now) ?: return null
+        val yearLabel = when (years) {
+            0 -> null
+            1 -> "1 ano"
+            else -> "$years anos"
+        }
+        val monthLabel = when (months) {
+            0 -> null
+            1 -> "1 mês"
+            else -> "$months meses"
+        }
+        return listOfNotNull(yearLabel, monthLabel).joinToString(" e ").ifBlank { "0 meses" }
+    }
+
+    internal fun formatExactTenureForTest(raw: String?, nowMillis: Long): String? {
+        val calendar = java.util.Calendar.getInstance().apply { timeInMillis = nowMillis }
+        return formatExactTenure(raw, calendar)
     }
 
     private fun Any?.toIntOrNullSafe(): Int? = when (this) {

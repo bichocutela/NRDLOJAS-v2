@@ -61,6 +61,19 @@ class NossaGenteApiTest {
     }
 
     @Test
+    fun formatsExactTenureInYearsAndMonths() {
+        val api = NossaGenteApi(ApplicationProvider.getApplicationContext())
+        val now = java.util.Calendar.getInstance().apply {
+            set(2026, java.util.Calendar.SEPTEMBER, 25, 12, 0, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+
+        assertEquals("8 meses", api.formatExactTenureForTest("22/01/2026", now.timeInMillis))
+        assertEquals("1 ano e 9 meses", api.formatExactTenureForTest("25/12/2024", now.timeInMillis))
+        assertEquals("15 anos e 3 meses", api.formatExactTenureForTest("25/06/2011", now.timeInMillis))
+    }
+
+    @Test
     fun fingerprintIgnoresOrderOfEquivalentProducts() {
         val first = Promotion(
             id = "higiene-123",
