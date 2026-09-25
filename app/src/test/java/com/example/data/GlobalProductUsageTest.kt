@@ -5,17 +5,17 @@ import org.junit.Test
 
 class GlobalProductUsageTest {
     @Test
-    fun largerGlobalTotalAlwaysRanksFirst() {
+    fun recentUsageRanksBeforeOlderHighCount() {
         val now = 1_800_000_000_000L
         val staleLeader = usage("old", count = 1_000, lastViewedAt = now - 70L * DAY)
-        val routineLeader = usage("recent", count = 12, lastViewedAt = now)
+        val recent = usage("recent", count = 12, lastViewedAt = now)
 
         val ranked = rankGloballyMostUsedProducts(
-            listOf(staleLeader, routineLeader),
+            listOf(staleLeader, recent),
             nowMillis = now
         )
 
-        assertEquals(listOf("old", "recent"), ranked.map { it.code })
+        assertEquals(listOf("recent", "old"), ranked.map { it.code })
     }
 
     @Test
@@ -44,33 +44,25 @@ class GlobalProductUsageTest {
     }
 
     @Test
-    fun rankingStaysStableInsideSameHourAndRefreshesNextHour() {
+    fun rankingRefreshesImmediatelyWhenRecencyChanges() {
         val now = 1_800_000_000_000L + 3L * HOUR
         val initial = rankGloballyMostUsedProducts(
             listOf(
                 usage("leader", count = 20, lastViewedAt = now),
-                usage("challenger", count = 10, lastViewedAt = now)
+                usage("challenger", count = 10, lastViewedAt = now - 1_000L)
             ),
             nowMillis = now
         )
-        val sameHour = rankGloballyMostUsedProducts(
+        val refreshed = rankGloballyMostUsedProducts(
             listOf(
                 usage("leader", count = 20, lastViewedAt = now),
-                usage("challenger", count = 100, lastViewedAt = now + 1_000L)
+                usage("challenger", count = 11, lastViewedAt = now + 1_000L)
             ),
-            nowMillis = now + 30L * 60L * 1000L
-        )
-        val nextHour = rankGloballyMostUsedProducts(
-            listOf(
-                usage("leader", count = 20, lastViewedAt = now),
-                usage("challenger", count = 100, lastViewedAt = now + HOUR)
-            ),
-            nowMillis = now + HOUR
+            nowMillis = now + 2_000L
         )
 
         assertEquals(listOf("leader", "challenger"), initial.map { it.code })
-        assertEquals(listOf("leader", "challenger"), sameHour.map { it.code })
-        assertEquals(listOf("challenger", "leader"), nextHour.map { it.code })
+        assertEquals(listOf("challenger", "leader"), refreshed.map { it.code })
     }
 
     @Test
