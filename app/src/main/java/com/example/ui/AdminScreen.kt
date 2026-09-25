@@ -463,17 +463,49 @@ private fun AdminPanelSectionHeader(
     title: String,
     description: String
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 3.dp)
-    ) {
-        Text(title, style = MaterialTheme.typography.headlineSmall)
-        Text(
-            description,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    if (expressive) {
+        val shape = RoundedCornerShape(if (profile.compact) 20.dp else 24.dp)
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .expressiveShadow(shape, 4.dp),
+            shape = shape,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ) {
+            Column(
+                modifier = Modifier.padding(
+                    horizontal = if (profile.compact) 12.dp else 15.dp,
+                    vertical = if (profile.compact) 10.dp else 12.dp
+                )
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold
+                )
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 3.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.headlineSmall)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
