@@ -44,7 +44,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.ui.theme.getDynamicThemeColor
 import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.expressiveShadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -126,7 +128,9 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
 
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
     val appTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
-
+    val expressive = LocalExpressiveStyle.current.enabled
+    val glassStyle = LocalGlassSoftStyle.current
+    val screenProfile = rememberNrdScreenProfile()
 
     LaunchedEffect(Unit) {
         viewModel.syncMessage.collect { message ->
@@ -134,6 +138,7 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
         }
     }
     Scaffold(
+        containerColor = if (expressive || glassStyle.enabled) Color.Transparent else MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
@@ -144,13 +149,21 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 },
                 title = {
                     Column {
-                        Text("Painel Administrativo", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            "Painel Administrativo",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = if (expressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal
+                        )
                         Text("Gerencie produtos e inventário", style = MaterialTheme.typography.labelMedium)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = when {
+                        expressive || glassStyle.enabled -> Color.Transparent
+                        else -> MaterialTheme.colorScheme.primaryContainer
+                    },
+                    titleContentColor = if (expressive || glassStyle.enabled) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onPrimaryContainer,
+                    navigationIconContentColor = if (expressive || glassStyle.enabled) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
         }
@@ -159,7 +172,10 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .padding(
+                    horizontal = if (screenProfile.compact) 10.dp else 14.dp,
+                    vertical = if (screenProfile.compact) 8.dp else 12.dp
+                )
                 .verticalScroll(adminScrollState),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -182,8 +198,10 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             exportProducts()
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .expressiveShadow(if (expressive) RoundedCornerShape(22.dp) else RoundedCornerShape(16.dp), 6.dp),
+                    shape = if (expressive) RoundedCornerShape(22.dp) else RoundedCornerShape(16.dp)
                 ) {
                     Icon(Icons.Default.Save, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -499,7 +517,13 @@ fun AdminProductList(
         modifier = Modifier.fillMaxWidth(),
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Pesquisar") },
         placeholder = { Text("Pesquisar por nome, código ou categoria") },
-        shape = RoundedCornerShape(16.dp)
+        shape = if (LocalExpressiveStyle.current.enabled) RoundedCornerShape(22.dp) else RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .expressiveShadow(
+                if (LocalExpressiveStyle.current.enabled) RoundedCornerShape(22.dp) else RoundedCornerShape(16.dp),
+                4.dp
+            )
     )
     Spacer(modifier = Modifier.height(8.dp))
     Row(
