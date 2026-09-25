@@ -1026,28 +1026,45 @@ fun SectionHeader(
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null
 ) {
+    val expressive = LocalExpressiveStyle.current.enabled
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp),
+            .padding(horizontal = 16.dp, vertical = if (expressive) 5.dp else 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         StylizedText(
             text = title,
-            baseStyle = MaterialTheme.typography.labelMedium,
+            baseStyle = if (expressive) {
+                MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.4.sp
+                )
+            } else {
+                MaterialTheme.typography.labelMedium
+            },
             boldOutline = textPreferences.boldOutline,
             uppercaseBold = textPreferences.uppercaseBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = if (expressive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
         )
         if (actionLabel != null && onAction != null) {
-            TextButton(onClick = onAction) {
+            TextButton(
+                onClick = onAction,
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.textButtonColors(
+                    containerColor = if (expressive) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                    contentColor = if (expressive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
+                )
+            ) {
                 StylizedText(
                     text = actionLabel,
-                    baseStyle = MaterialTheme.typography.labelSmall,
+                    baseStyle = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = if (expressive) FontWeight.Bold else FontWeight.Normal
+                    ),
                     boldOutline = textPreferences.boldOutline,
                     uppercaseBold = textPreferences.uppercaseBold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = if (expressive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -1056,10 +1073,13 @@ fun SectionHeader(
 
 @Composable
 private fun SearchEmptyState(onClear: () -> Unit) {
-    val shape = RoundedCornerShape(20.dp)
+    val expressive = LocalExpressiveStyle.current.enabled
+    val shape = if (expressive) RoundedCornerShape(28.dp) else RoundedCornerShape(20.dp)
     Card(
         modifier = Modifier.fillMaxWidth().glassSoftShadow(shape),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceVariant
+        ),
         shape = shape
     ) {
         Column(
@@ -1096,6 +1116,7 @@ fun CategorySection(
     onCategoryClick: (String) -> Unit = {}
 ) {
     val glass = rememberGlassVisualStyle()
+    val expressive = LocalExpressiveStyle.current.enabled
     val categoryColors = listOf(
         MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer,
         MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer,
@@ -1115,8 +1136,12 @@ fun CategorySection(
             val dynamicColors = homeDynamicColors(index, appTheme, colors.first, colors.second)
             val categoryGlassFill = if (glass.enabled) glass.fill.copy(alpha = glass.alpha)
             else dynamicColors.first
-            val categoryGlassBorder = if (glass.enabled) glass.border else Color.Transparent
-            val categoryShape = RoundedCornerShape(16.dp)
+            val categoryGlassBorder = when {
+                glass.enabled && expressive -> dynamicColors.first.copy(alpha = 0.72f)
+                glass.enabled -> glass.border
+                else -> Color.Transparent
+            }
+            val categoryShape = if (expressive) RoundedCornerShape(22.dp) else RoundedCornerShape(16.dp)
 
             Box(
 
@@ -1126,15 +1151,26 @@ fun CategorySection(
                     .background(categoryGlassFill)
                     .border(1.dp, categoryGlassBorder, categoryShape)
                     .clickable { onCategoryClick(category) }
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    .padding(
+                        horizontal = if (expressive) 18.dp else 16.dp,
+                        vertical = if (expressive) 11.dp else 10.dp
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 StylizedText(
                     text = category,
-                    baseStyle = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    baseStyle = if (expressive) {
+                        MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold)
+                    } else {
+                        MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                    },
                     boldOutline = textPreferences.boldOutline,
                     uppercaseBold = true,
-                    color = if (glass.enabled) MaterialTheme.colorScheme.onSurface else dynamicColors.second
+                    color = when {
+                        glass.enabled && expressive -> dynamicColors.second
+                        glass.enabled -> MaterialTheme.colorScheme.onSurface
+                        else -> dynamicColors.second
+                    }
                 )
             }
         }
@@ -1201,16 +1237,18 @@ fun ProductCard(
     onProductClick: ((Product) -> Unit)? = null
 ) {
     val glass = rememberGlassVisualStyle()
-    val cardShape = RoundedCornerShape(24.dp)
+    val expressive = LocalExpressiveStyle.current.enabled
+    val cardShape = if (expressive) RoundedCornerShape(30.dp) else RoundedCornerShape(24.dp)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val shareLayer = rememberGraphicsLayer()
-    val shareAccentColor = homeDynamicColors(
+    val cardAccent = homeDynamicColors(
         index,
         appTheme,
         MaterialTheme.colorScheme.primaryContainer,
         MaterialTheme.colorScheme.onPrimaryContainer
-    ).first.toArgb()
+    )
+    val shareAccentColor = cardAccent.first.toArgb()
     val shareCodeColor = MaterialTheme.colorScheme.primary.toArgb()
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
@@ -1232,10 +1270,20 @@ fun ProductCard(
             .fillMaxWidth()
             .glassSoftShadow(cardShape)
             .clip(cardShape)
-            .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surface)
+            .background(
+                when {
+                    glass.enabled -> glass.fill.copy(alpha = glass.alpha)
+                    expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                    else -> MaterialTheme.colorScheme.surface
+                }
+            )
             .border(
                 1.dp,
-                if (glass.enabled) glass.border else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                when {
+                    glass.enabled -> glass.border
+                    expressive -> MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)
+                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                },
                 cardShape
             )
             .drawWithContent {
@@ -1284,11 +1332,11 @@ fun ProductCard(
                     .clip(CircleShape)
             )
         } else {
-            val dynColors = homeDynamicColors(index, appTheme, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+            val dynColors = cardAccent
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .clip(CircleShape)
+                    .clip(if (expressive) RoundedCornerShape(16.dp) else CircleShape)
                     .background(dynColors.first),
                 contentAlignment = Alignment.Center
             ) {
@@ -1333,21 +1381,24 @@ fun ProductCard(
 
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.primaryContainer)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .clip(if (expressive) RoundedCornerShape(20.dp) else RoundedCornerShape(16.dp))
+                .background(if (expressive) cardAccent.first else MaterialTheme.colorScheme.primaryContainer)
+                .padding(
+                    horizontal = if (expressive) 18.dp else 16.dp,
+                    vertical = if (expressive) 10.dp else 8.dp
+                ),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = product.code,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = if (expressive) cardAccent.second else MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
                     text = product.unit.uppercase(),
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Black),
-                    color = MaterialTheme.colorScheme.primary
+                    color = if (expressive) cardAccent.second.copy(alpha = 0.78f) else MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -1537,7 +1588,14 @@ fun MiniProductCard(
     onProductClick: ((Product) -> Unit)? = null
 ) {
     val glass = rememberGlassVisualStyle()
-    val cardShape = RoundedCornerShape(24.dp)
+    val expressive = LocalExpressiveStyle.current.enabled
+    val cardShape = if (expressive) RoundedCornerShape(28.dp) else RoundedCornerShape(24.dp)
+    val cardAccent = homeDynamicColors(
+        index,
+        appTheme,
+        MaterialTheme.colorScheme.primaryContainer,
+        MaterialTheme.colorScheme.onPrimaryContainer
+    )
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(
@@ -1558,10 +1616,20 @@ fun MiniProductCard(
             .heightIn(min = if (textPreferences.largeText) 168.dp else 132.dp)
             .glassSoftShadow(cardShape)
             .clip(cardShape)
-            .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surface)
+            .background(
+                when {
+                    glass.enabled -> glass.fill.copy(alpha = glass.alpha)
+                    expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                    else -> MaterialTheme.colorScheme.surface
+                }
+            )
             .border(
                 1.dp,
-                if (glass.enabled) glass.border else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                when {
+                    glass.enabled -> glass.border
+                    expressive -> MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
+                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                },
                 cardShape
             )
             .vibrateClickable(viewModel) {
@@ -1593,11 +1661,11 @@ fun MiniProductCard(
                         .clip(CircleShape)
                 )
             } else {
-                val dynColors = homeDynamicColors(index, appTheme, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+                val dynColors = cardAccent
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
+                        .size(if (expressive) 36.dp else 32.dp)
+                        .clip(if (expressive) RoundedCornerShape(12.dp) else CircleShape)
                         .background(dynColors.first),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1623,7 +1691,7 @@ fun MiniProductCard(
                 Text(
                     text = product.unit.uppercase(),
                     style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp),
-                    color = MaterialTheme.colorScheme.primary
+                    color = if (expressive) dynColors.second else MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -1657,7 +1725,7 @@ fun MiniProductCard(
             Text(
                 text = product.code,
                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
-                color = MaterialTheme.colorScheme.primary,
+                color = if (expressive) cardAccent.second else MaterialTheme.colorScheme.primary,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
@@ -1674,7 +1742,8 @@ fun HistoryItem(
     textPreferences: HomeTextPreferences = HomeTextPreferences()
 ) {
     val glass = rememberGlassVisualStyle()
-    val itemShape = RoundedCornerShape(16.dp)
+    val expressive = LocalExpressiveStyle.current.enabled
+    val itemShape = if (expressive) RoundedCornerShape(24.dp) else RoundedCornerShape(16.dp)
     var showDialog by remember { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(
@@ -1695,8 +1764,22 @@ fun HistoryItem(
             .fillMaxWidth()
             .glassSoftShadow(itemShape)
             .clip(itemShape)
-            .background(if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
-            .border(1.dp, if (glass.enabled) glass.border else dynColors.first, itemShape)
+            .background(
+                when {
+                    glass.enabled -> glass.fill.copy(alpha = glass.alpha)
+                    expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                    else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                }
+            )
+            .border(
+                1.dp,
+                when {
+                    glass.enabled && expressive -> dynColors.first.copy(alpha = 0.72f)
+                    glass.enabled -> glass.border
+                    else -> dynColors.first
+                },
+                itemShape
+            )
             .vibrateClickable(viewModel) {
                 viewModel.onProductSearched(product)
                 showDialog = true
@@ -1706,17 +1789,38 @@ fun HistoryItem(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Default.History,
-                contentDescription = "Histórico",
-                tint = dynColors.first,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(16.dp))
+            if (expressive) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(dynColors.first),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.History,
+                        contentDescription = "Histórico",
+                        tint = dynColors.second,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+            } else {
+                Icon(
+                    imageVector = Icons.Default.History,
+                    contentDescription = "Histórico",
+                    tint = dynColors.first,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+            }
             Column {
                 StylizedText(
                     text = product.name,
-                    baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
+                    baseStyle = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 14.sp,
+                        fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal
+                    ),
                     boldOutline = textPreferences.boldOutline,
                     uppercaseBold = textPreferences.uppercaseBold,
                     color = MaterialTheme.colorScheme.onBackground
