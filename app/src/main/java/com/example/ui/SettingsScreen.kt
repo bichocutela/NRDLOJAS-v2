@@ -52,6 +52,25 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val expressiveStyle by viewModel.userPreferences.expressiveStyle.collectAsState(initial = "solid")
     val glassStyle = LocalGlassSoftStyle.current
     val isExpressive = LocalExpressiveStyle.current.enabled
+    val expressiveSliderColors = SliderDefaults.colors(
+        thumbColor = MaterialTheme.colorScheme.primary,
+        activeTrackColor = MaterialTheme.colorScheme.primary,
+        activeTickColor = MaterialTheme.colorScheme.onPrimary,
+        inactiveTrackColor = if (isExpressive) {
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer
+        },
+        inactiveTickColor = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    val expressiveSwitchColors = SwitchDefaults.colors(
+        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+        checkedTrackColor = MaterialTheme.colorScheme.primary,
+        checkedBorderColor = MaterialTheme.colorScheme.primary,
+        uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        uncheckedBorderColor = MaterialTheme.colorScheme.outline
+    )
     
     val notificationsEnabled by viewModel.userPreferences.notificationsEnabled.collectAsState(initial = true)
     val notificationsProductAddedEnabled by viewModel.userPreferences.notificationsProductAddedEnabled.collectAsState(initial = true)
@@ -136,6 +155,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     },
                     valueRange = 0.75f..1.30f,
                     steps = 10,
+                    colors = expressiveSliderColors,
                     modifier = Modifier.weight(1f)
                 )
                 Text(
@@ -165,6 +185,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     onValueChange = { coroutineScope.launch { viewModel.userPreferences.setBarcodeNumberScale(it) } },
                     valueRange = 0.8f..1.6f,
                     steps = 7,
+                    colors = expressiveSliderColors,
                     modifier = Modifier.weight(1f)
                 )
                 Text(String.format("%.1fx", barcodeNumberScale), style = MaterialTheme.typography.labelLarge)
@@ -182,6 +203,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     onValueChange = { coroutineScope.launch { viewModel.userPreferences.setBarcodeTitleScale(it) } },
                     valueRange = 0.8f..1.5f,
                     steps = 6,
+                    colors = expressiveSliderColors,
                     modifier = Modifier.weight(1f)
                 )
                 Text(String.format("%.1fx", barcodeTitleScale), style = MaterialTheme.typography.labelLarge)
@@ -190,17 +212,17 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Aumentar letras da tela inicial", modifier = Modifier.weight(1f))
-                Switch(checked = largeText, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setLargeText(it) } })
+                Switch(checked = largeText, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setLargeText(it) } }, colors = expressiveSwitchColors)
             }
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Letras em contorno negrito", modifier = Modifier.weight(1f))
-                Switch(checked = boldOutline, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setBoldOutline(it) } })
+                Switch(checked = boldOutline, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setBoldOutline(it) } }, colors = expressiveSwitchColors)
             }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Todas letras maiúsculas em negrito", modifier = Modifier.weight(1f))
-                Switch(checked = uppercaseBold, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setUppercaseBold(it) } })
+                Switch(checked = uppercaseBold, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setUppercaseBold(it) } }, colors = expressiveSwitchColors)
             }
             
             HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
@@ -332,7 +354,11 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 Text(
                                     if (styleKey == "solid") "Superfícies sólidas" else "Vidro translúcido",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (selected) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.82f)
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
                                 )
                             }
                         }
@@ -459,7 +485,8 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             value = glassTransparency,
                             onValueChange = { coroutineScope.launch { viewModel.userPreferences.setGlassTransparency(it) } },
                             valueRange = 0.20f..0.90f,
-                            steps = 13
+                            steps = 13,
+                            colors = expressiveSliderColors
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -574,12 +601,12 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Vibrar ao clicar no balão", modifier = Modifier.weight(1f))
-                Switch(checked = vibrateOnClick, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setVibrateOnClick(it) } })
+                Switch(checked = vibrateOnClick, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setVibrateOnClick(it) } }, colors = expressiveSwitchColors)
             }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Vibrar ao achar produto", modifier = Modifier.weight(1f))
-                Switch(checked = vibrateOnFound, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setVibrateOnFound(it) } })
+                Switch(checked = vibrateOnFound, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setVibrateOnFound(it) } }, colors = expressiveSwitchColors)
             }
             
                             }
@@ -599,6 +626,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 Text("Notificações Gerais", modifier = Modifier.weight(1f))
                 Switch(
                     checked = notificationsEnabled,
+                    colors = expressiveSwitchColors,
                     onCheckedChange = { enabled ->
                         coroutineScope.launch {
                             viewModel.userPreferences.setNotificationsEnabled(enabled)
@@ -613,11 +641,11 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 Text("Preferências de notificações", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.secondary)
                 Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Código alterado", modifier = Modifier.weight(1f))
-                    Switch(checked = notificationsCodeChangedEnabled, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setNotificationsCodeChangedEnabled(it) } })
+                    Switch(checked = notificationsCodeChangedEnabled, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setNotificationsCodeChangedEnabled(it) } }, colors = expressiveSwitchColors)
                 }
                 Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Produto adicionado", modifier = Modifier.weight(1f))
-                    Switch(checked = notificationsProductAddedEnabled, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setNotificationsProductAddedEnabled(it) } })
+                    Switch(checked = notificationsProductAddedEnabled, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setNotificationsProductAddedEnabled(it) } }, colors = expressiveSwitchColors)
                 }
                         }
                 }
