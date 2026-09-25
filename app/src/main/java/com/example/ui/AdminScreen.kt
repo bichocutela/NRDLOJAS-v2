@@ -54,7 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 
-private fun adminClipboardHttpUrl(context: android.content.Context): String? {
+internal fun adminClipboardHttpUrl(context: android.content.Context): String? {
     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
         as? android.content.ClipboardManager ?: return null
     val clip = clipboard.primaryClip ?: return null
@@ -76,7 +76,7 @@ private fun adminClipboardHttpUrl(context: android.content.Context): String? {
     return null
 }
 
-private fun adminIsGoogleSearchPage(url: String): Boolean {
+internal fun adminIsGoogleSearchPage(url: String): Boolean {
     return try {
         val parsed = android.net.Uri.parse(url)
         val host = parsed.host?.lowercase().orEmpty()
