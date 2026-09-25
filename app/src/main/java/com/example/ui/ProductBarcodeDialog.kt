@@ -41,7 +41,9 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.data.Product
 import com.example.data.UserPreferences
 import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.expressiveShadow
 import com.example.util.ImageUrlHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +74,8 @@ fun ProductBarcodeDialog(
     val boldOutline by userPreferences.boldOutline.collectAsState(initial = false)
     val uppercaseBold by userPreferences.uppercaseBold.collectAsState(initial = false)
     val glassSoftStyle = LocalGlassSoftStyle.current
+    val expressiveStyle = LocalExpressiveStyle.current
+    val isExpressive = expressiveStyle.enabled
     var photoUrl by remember(product.code, product.imageUrl) {
         mutableStateOf(
             product.imageUrl
@@ -202,10 +206,21 @@ fun ProductBarcodeDialog(
                 enter = fadeIn(tween(140)),
                 exit = fadeOut(tween(100))
             ) {
-                val dialogShape = RoundedCornerShape(32.dp)
+                val dialogShape = RoundedCornerShape(
+                    when {
+                        isExpressive && screenProfile.veryCompact -> 24.dp
+                        isExpressive && screenProfile.compact -> 28.dp
+                        isExpressive -> 36.dp
+                        else -> 32.dp
+                    }
+                )
                 Surface(
                     shape = dialogShape,
-                    color = MaterialTheme.colorScheme.surface,
+                    color = when {
+                        glassSoftStyle.enabled -> MaterialTheme.colorScheme.surface
+                        isExpressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                        else -> MaterialTheme.colorScheme.surface
+                    },
                     border = if (highlightedFromNotification) {
                         BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                     } else if (glassSoftStyle.enabled) {
@@ -233,6 +248,7 @@ fun ProductBarcodeDialog(
                             }
                         )
                         .glassSoftShadow(dialogShape)
+                        .expressiveShadow(dialogShape, if (screenProfile.compact) 7.dp else 10.dp)
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -293,7 +309,7 @@ fun ProductBarcodeDialog(
                                     baseStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                     boldOutline = boldOutline,
                                     uppercaseBold = true,
-                                    color = MaterialTheme.colorScheme.secondary,
+                                    color = if (isExpressive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
@@ -431,6 +447,7 @@ fun ProductBarcodeDialog(
                                     Button(
                                         onClick = { scannerProfile = profile },
                                         modifier = Modifier.weight(1f),
+                                        shape = if (isExpressive) RoundedCornerShape(18.dp) else MaterialTheme.shapes.small,
                                         contentPadding = PaddingValues(0.dp)
                                     ) {
                                         Text(profile, fontSize = if (screenProfile.veryCompact) 10.sp else 12.sp, maxLines = 1)
@@ -439,6 +456,7 @@ fun ProductBarcodeDialog(
                                     OutlinedButton(
                                         onClick = { scannerProfile = profile },
                                         modifier = Modifier.weight(1f),
+                                        shape = if (isExpressive) RoundedCornerShape(18.dp) else MaterialTheme.shapes.small,
                                         contentPadding = PaddingValues(0.dp)
                                     ) {
                                         Text(profile, fontSize = if (screenProfile.veryCompact) 10.sp else 12.sp, maxLines = 1)
@@ -480,7 +498,13 @@ fun ProductBarcodeDialog(
                         Spacer(modifier = Modifier.height(if (screenProfile.compact) 10.dp else 14.dp))
                         Button(
                             onClick = { closeDialog() },
-                            modifier = Modifier.fillMaxWidth().height(if (screenProfile.compact) 50.dp else 54.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(if (screenProfile.compact) 50.dp else 54.dp)
+                                .expressiveShadow(
+                                    if (isExpressive) RoundedCornerShape(24.dp) else RoundedCornerShape(24.dp),
+                                    6.dp
+                                ),
                             shape = RoundedCornerShape(24.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
