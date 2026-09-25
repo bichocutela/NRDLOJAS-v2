@@ -1298,11 +1298,11 @@ fun CategorySection(
                     if (expressive) {
                         Icon(
                             painter = painterResource(id = categoryExpressiveIconRes(category)),
-                            contentDescription = null,
+                            contentDescription = category,
                             tint = if (glass.enabled) strongColors.first else strongColors.second,
-                            modifier = Modifier.size(if (compactExpressive) 16.dp else 19.dp)
+                            modifier = Modifier.size(if (compactExpressive) 18.dp else 20.dp)
                         )
-                        Spacer(Modifier.width(if (compactExpressive) 5.dp else 7.dp))
+                        Spacer(Modifier.width(if (compactExpressive) 6.dp else 8.dp))
                     }
                     StylizedText(
                         text = category,
