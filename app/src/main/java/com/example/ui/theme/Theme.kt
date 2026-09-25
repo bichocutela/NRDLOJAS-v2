@@ -26,9 +26,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.drawOutline
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -406,6 +406,13 @@ fun Modifier.expressiveLiquidGlass(
             .clip(shape)
             .drawWithCache {
                 val outline = shape.createOutline(size, layoutDirection, this)
+                val outlinePath = Path().apply {
+                    when (outline) {
+                        is androidx.compose.ui.graphics.Outline.Rectangle -> addRect(outline.rect)
+                        is androidx.compose.ui.graphics.Outline.Rounded -> addRoundRect(outline.roundRect)
+                        is androidx.compose.ui.graphics.Outline.Generic -> addPath(outline.path)
+                    }
+                }
                 val maxDimension = maxOf(size.width, size.height).coerceAtLeast(1f)
                 val baseBrush = Brush.linearGradient(
                     colors = listOf(
@@ -465,18 +472,18 @@ fun Modifier.expressiveLiquidGlass(
                 )
 
                 onDrawWithContent {
-                    drawOutline(outline = outline, brush = baseBrush)
-                    drawOutline(outline = outline, brush = topLens)
-                    drawOutline(outline = outline, brush = lowerRefraction)
-                    drawOutline(outline = outline, brush = innerGleam)
+                    drawPath(path = outlinePath, brush = baseBrush)
+                    drawPath(path = outlinePath, brush = topLens)
+                    drawPath(path = outlinePath, brush = lowerRefraction)
+                    drawPath(path = outlinePath, brush = innerGleam)
                     drawContent()
-                    drawOutline(
-                        outline = outline,
+                    drawPath(
+                        path = outlinePath,
                         brush = specularEdge,
                         style = Stroke(width = borderWidthDp.dp.toPx())
                     )
-                    drawOutline(
-                        outline = outline,
+                    drawPath(
+                        path = outlinePath,
                         color = Color.White.copy(alpha = (0.18f + 0.16f * fluidity) * safeIntensity),
                         style = Stroke(width = 0.65.dp.toPx())
                     )
