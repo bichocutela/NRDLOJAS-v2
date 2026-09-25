@@ -45,6 +45,10 @@ import com.example.data.BannerMaskSettings
 import com.example.data.CategoryDefinition
 import com.example.data.CatalogSnapshot
 import com.example.data.CatalogHistoryBackend
+import com.example.data.DeviceInstallationSummary
+import com.example.data.DeviceInstallationSummaryResult
+import com.example.data.DeviceInstallationTracker
+import com.example.data.UserPreferences
 import com.example.data.ThemeBackground
 import com.example.data.SupportedOfferBannerKeys
 import com.example.data.FirebaseService
@@ -193,6 +197,9 @@ fun MestreScreen(
     var quickPreviewOpened by remember(quickEditThemeKey) { mutableStateOf(false) }
     var maintenanceSummary by remember { mutableStateOf<MaintenanceSummary?>(null) }
     var isLoadingMaintenance by remember { mutableStateOf(false) }
+    var installationSummary by remember { mutableStateOf<DeviceInstallationSummary?>(null) }
+    var installationSummaryError by remember { mutableStateOf<String?>(null) }
+    var isLoadingInstallationSummary by remember { mutableStateOf(false) }
     var snapshotToRestore by remember { mutableStateOf<CatalogSnapshot?>(null) }
     var showAllCatalogBackups by rememberSaveable { mutableStateOf(false) }
     var editingCategory by remember { mutableStateOf<CategoryDefinition?>(null) }
@@ -202,6 +209,9 @@ fun MestreScreen(
     val suggestions by FirebaseService.observeSuggestions().collectAsStateWithLifecycle(initialValue = emptyList())
     val coroutineScope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val masterPreferences = remember(context) { UserPreferences(context.applicationContext) }
+    val installationNotificationsEnabled by masterPreferences.masterInstallationNotificationsEnabled
+        .collectAsStateWithLifecycle(initialValue = false)
     val expressive = LocalExpressiveStyle.current.enabled
     val glassStyle = LocalGlassSoftStyle.current
     val screenProfile = rememberNrdScreenProfile()
@@ -357,6 +367,15 @@ fun MestreScreen(
 
     LaunchedEffect(currentPage) {
         panelScrollState.scrollTo(0)
+        if (currentPage == MestrePanelPage.ADVANCED) {
+            isLoadingInstallationSummary = true
+            installationSummaryError = null
+            when (val result = DeviceInstallationTracker.fetchSummary()) {
+                is DeviceInstallationSummaryResult.Success -> installationSummary = result.summary
+                is DeviceInstallationSummaryResult.Error -> installationSummaryError = result.message
+            }
+            isLoadingInstallationSummary = false
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -474,6 +493,10 @@ fun MestreScreen(
                     isLoadingMaintenance = isLoadingMaintenance,
                     isLoadingCatalogHistory = isLoadingCatalogHistory,
                     isSyncing = isSyncing,
+                    installationSummary = installationSummary,
+                    installationSummaryError = installationSummaryError,
+                    isLoadingInstallationSummary = isLoadingInstallationSummary,
+                    installationNotificationsEnabled = installationNotificationsEnabled,
                     catalogSnapshots = catalogSnapshots,
                     showAllCatalogBackups = showAllCatalogBackups,
                     onShowAllCatalogBackupsChange = { showAllCatalogBackups = it },
@@ -493,6 +516,39 @@ fun MestreScreen(
                                 }
                             } finally {
                                 isLoadingMaintenance = false
+                            }
+                        }
+                    },
+                    onRefreshInstallations = {
+                        coroutineScope.launch {
+                            isLoadingInstallationSummary = true
+                            installationSummaryError = null
+                            when (val result = DeviceInstallationTracker.fetchSummary()) {
+                                is DeviceInstallationSummaryResult.Success -> installationSummary = result.summary
+                                is DeviceInstallationSummaryResult.Error -> installationSummaryError = result.message
+                            }
+                            isLoadingInstallationSummary = false
+                        }
+                    },
+                    onInstallationNotificationsChange = { enabled ->
+                        coroutineScope.launch {
+                            if (enabled) {
+                                val baseline = when (val result = DeviceInstallationTracker.fetchSummary()) {
+                                    is DeviceInstallationSummaryResult.Success -> {
+                                        installationSummary = result.summary
+                                        result.summary.lastInstallationAt ?: System.currentTimeMillis()
+                                    }
+                                    is DeviceInstallationSummaryResult.Error -> {
+                                        installationSummaryError = result.message
+                                        System.currentTimeMillis()
+                                    }
+                                }
+                                masterPreferences.setMasterInstallationNotificationBaseline(baseline)
+                                masterPreferences.setMasterInstallationNotificationsEnabled(true)
+                                com.example.util.InstallationNotificationWorker.schedule(context.applicationContext)
+                            } else {
+                                masterPreferences.setMasterInstallationNotificationsEnabled(false)
+                                com.example.util.InstallationNotificationWorker.cancel(context.applicationContext)
                             }
                         }
                     },

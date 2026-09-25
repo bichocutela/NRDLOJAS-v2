@@ -9,9 +9,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -21,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -30,6 +34,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import com.example.data.CatalogSnapshot
 import com.example.data.CategoryCount
+import com.example.data.DeviceInstallationSummary
 import com.example.data.MaintenanceSummary
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.glassSoftShadow
@@ -44,10 +49,16 @@ internal fun MestreAdvancedSection(
     isLoadingMaintenance: Boolean,
     isLoadingCatalogHistory: Boolean,
     isSyncing: Boolean,
+    installationSummary: DeviceInstallationSummary?,
+    installationSummaryError: String?,
+    isLoadingInstallationSummary: Boolean,
+    installationNotificationsEnabled: Boolean,
     catalogSnapshots: List<CatalogSnapshot>,
     showAllCatalogBackups: Boolean,
     onShowAllCatalogBackupsChange: (Boolean) -> Unit,
     onUpdateMaintenance: () -> Unit,
+    onRefreshInstallations: () -> Unit,
+    onInstallationNotificationsChange: (Boolean) -> Unit,
     onCreateCatalogSnapshot: () -> Unit,
     onRefreshCatalogHistory: () -> Unit,
     onRestoreSnapshot: (CatalogSnapshot) -> Unit
@@ -138,6 +149,114 @@ internal fun MestreAdvancedSection(
     Spacer(modifier = Modifier.height(16.dp))
 
     MestreSectionHeader(
+        title = "Instalações do aplicativo",
+        description = "Acompanhe aparelhos únicos e atividade recente do NRD V2"
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    val installationShape = if (expressive) {
+        RoundedCornerShape(if (profile.compact) 22.dp else 26.dp)
+    } else {
+        MaterialTheme.shapes.medium
+    }
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(installationShape)
+            .expressiveShadow(installationShape, 6.dp),
+        shape = installationShape
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                AdvancedInstallationMetricCard(
+                    modifier = Modifier.weight(1f),
+                    label = "Aparelhos instalados",
+                    value = installationSummary?.totalCount?.toString() ?: "—",
+                    icon = Icons.Default.PhoneAndroid
+                )
+                AdvancedInstallationMetricCard(
+                    modifier = Modifier.weight(1f),
+                    label = "Ativos em 7 dias",
+                    value = installationSummary?.activeCount?.toString() ?: "—",
+                    icon = Icons.Default.Sync
+                )
+            }
+
+            installationSummary?.lastInstallationAt?.let { timestamp ->
+                Text(
+                    "Última instalação nova: " + advancedFormatCatalogHistoryDate(timestamp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (!installationSummaryError.isNullOrBlank()) {
+                Text(
+                    installationSummaryError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                androidx.compose.material3.Icon(
+                    Icons.Default.NotificationsActive,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Notificar nova instalação",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                    )
+                    Text(
+                        "Avisa o Mestre quando surgir um aparelho novo. Reinstalar no mesmo aparelho não conta novamente.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = installationNotificationsEnabled,
+                    onCheckedChange = onInstallationNotificationsChange
+                )
+            }
+
+            OutlinedButton(
+                onClick = onRefreshInstallations,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isLoadingInstallationSummary
+            ) {
+                if (isLoadingInstallationSummary) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Atualizando...")
+                } else {
+                    androidx.compose.material3.Icon(Icons.Default.Sync, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Atualizar instalações")
+                }
+            }
+
+            Text(
+                "Ativo = aparelho que abriu o NRD V2 nos últimos 7 dias. A contagem usa um identificador criptográfico; o ANDROID_ID bruto não é enviado.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(16.dp))
+
+    MestreSectionHeader(
         title = "Segurança operacional",
         description = "Crie pontos de retorno do catálogo antes de mudanças importantes"
     )
@@ -215,6 +334,44 @@ internal fun MestreAdvancedSection(
         }
     }
     Spacer(modifier = Modifier.height(16.dp))
+}
+
+@Composable
+private fun AdvancedInstallationMetricCard(
+    modifier: Modifier,
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            androidx.compose.material3.Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp)
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold
+            )
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }
 
 @Composable
