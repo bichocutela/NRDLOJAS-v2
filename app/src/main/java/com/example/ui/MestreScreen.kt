@@ -249,7 +249,8 @@ fun MestreScreen(
         "green" to "Verde",
         "blue" to "Azul",
         "orange" to "Laranja",
-        "glass" to "Glass Soft"
+        "glass" to "Glass Soft",
+        "expressive" to "Expressivo"
     )
     val appearanceModeOptions = listOf(
         "system" to "Seguir sistema",
