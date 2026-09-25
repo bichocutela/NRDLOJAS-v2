@@ -1691,7 +1691,7 @@ fun MiniProductCard(
                 Text(
                     text = product.unit.uppercase(),
                     style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp),
-                    color = if (expressive) dynColors.second else MaterialTheme.colorScheme.primary
+                    color = if (expressive) cardAccent.second else MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -1841,8 +1841,10 @@ fun HistoryItem(
                 }
                 Text(
                     text = "Código: ${product.code}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = if (expressive) FontWeight.SemiBold else FontWeight.Normal
+                    ),
+                    color = if (expressive) dynColors.second else MaterialTheme.colorScheme.primary
                 )
             }
         }
