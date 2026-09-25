@@ -1,5 +1,37 @@
 package com.example.ui
 
+internal const val MIN_INTERFACE_SCALE = 0.75f
+internal const val MAX_INTERFACE_SCALE = 1.30f
+
+internal fun normalizedInterfaceScale(value: Float): Float =
+    value.coerceIn(MIN_INTERFACE_SCALE, MAX_INTERFACE_SCALE)
+
+/**
+ * Redimensiona a estrutura sem deixar alvos de toque e cards encolherem na mesma
+ * proporção agressiva da tipografia. A fonte acompanha toda a escala; a geometria
+ * acompanha metade da variação em relação a 1x.
+ */
+internal fun interfaceLayoutScale(value: Float): Float {
+    val safe = normalizedInterfaceScale(value)
+    return 1f + ((safe - 1f) * 0.5f)
+}
+
+/**
+ * O Expressivo usa formas e hierarquia visual maiores por natureza. Em telefones
+ * compactos aplicamos uma correção automática para manter a mesma composição do
+ * mockup sem provocar sensação de zoom ou cortes.
+ */
+internal fun expressiveResponsiveScale(widthDp: Int, enabled: Boolean): Float {
+    if (!enabled) return 1f
+    return when {
+        widthDp < 360 -> 0.84f
+        widthDp < 390 -> 0.88f
+        widthDp < 430 -> 0.92f
+        widthDp < 480 -> 0.96f
+        else -> 1f
+    }
+}
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
