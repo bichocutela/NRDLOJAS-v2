@@ -26,6 +26,7 @@ import kotlinx.coroutines.tasks.await
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -915,11 +916,11 @@ fun CategoryItem(category: String, viewModel: MainViewModel, isExpanded: Boolean
                         contentColor = MaterialTheme.colorScheme.secondary
                     ) {
                         Icon(
-                            Icons.Default.Category,
-                            contentDescription = null,
+                            painter = painterResource(id = expressiveCategoryIconRes(category)),
+                            contentDescription = category,
                             modifier = Modifier
                                 .padding(6.dp)
-                                .size(if (profile.compact) 15.dp else 17.dp)
+                                .size(if (profile.compact) 17.dp else 19.dp)
                         )
                     }
                     Spacer(Modifier.width(8.dp))

@@ -1297,7 +1297,7 @@ fun CategorySection(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (expressive) {
                         Icon(
-                            painter = painterResource(id = categoryExpressiveIconRes(category)),
+                            painter = painterResource(id = expressiveCategoryIconRes(category)),
                             contentDescription = category,
                             tint = if (glass.enabled) strongColors.first else strongColors.second,
                             modifier = Modifier.size(if (compactExpressive) 18.dp else 20.dp)
@@ -2277,16 +2277,6 @@ fun LogoCircle(color: Color, icon: androidx.compose.ui.graphics.vector.ImageVect
             modifier = Modifier.size(16.dp)
         )
     }
-}
-
-private fun categoryExpressiveIconRes(category: String): Int = when (category.lowercase()) {
-    "açougue", "acougue" -> R.drawable.ic_expressive_meat
-    "cafeteria" -> R.drawable.ic_expressive_cafe
-    "frios" -> R.drawable.ic_expressive_cheese
-    "hortifruti" -> R.drawable.ic_expressive_carrot
-    "mercearia" -> R.drawable.ic_expressive_basket
-    "padaria" -> R.drawable.ic_expressive_bread
-    else -> R.drawable.ic_expressive_basket
 }
 
 fun getCategoryIcon(category: String): String {
