@@ -114,6 +114,18 @@ class UserPreferences(private val context: Context) {
         preferences[EXPRESSIVE_STYLE] ?: "solid"
     }
 
+    val expressiveGlassAccentColor: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[EXPRESSIVE_GLASS_ACCENT_COLOR] ?: "multicolor"
+    }
+
+    val expressiveGlassTransparency: Flow<Float> = context.dataStore.data.map { preferences ->
+        (preferences[EXPRESSIVE_GLASS_TRANSPARENCY] ?: 0.58f).coerceIn(0.20f, 0.90f)
+    }
+
+    val expressiveGlassFluidity: Flow<Float> = context.dataStore.data.map { preferences ->
+        (preferences[EXPRESSIVE_GLASS_FLUIDITY] ?: 0.68f).coerceIn(0f, 1f)
+    }
+
     val onboardingShown: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[ONBOARDING_SHOWN] ?: false
     }
@@ -246,6 +258,21 @@ class UserPreferences(private val context: Context) {
         context.dataStore.edit { it[EXPRESSIVE_STYLE] = safe }
     }
 
+    suspend fun setExpressiveGlassAccentColor(color: String) {
+        val safe = color.takeIf {
+            it in setOf("multicolor", "red", "green", "orange", "blue", "gold")
+        } ?: "multicolor"
+        context.dataStore.edit { it[EXPRESSIVE_GLASS_ACCENT_COLOR] = safe }
+    }
+
+    suspend fun setExpressiveGlassTransparency(value: Float) {
+        context.dataStore.edit { it[EXPRESSIVE_GLASS_TRANSPARENCY] = value.coerceIn(0.20f, 0.90f) }
+    }
+
+    suspend fun setExpressiveGlassFluidity(value: Float) {
+        context.dataStore.edit { it[EXPRESSIVE_GLASS_FLUIDITY] = value.coerceIn(0f, 1f) }
+    }
+
     suspend fun setOnboardingShown(shown: Boolean) {
         context.dataStore.edit { it[ONBOARDING_SHOWN] = shown }
     }
@@ -287,6 +314,9 @@ class UserPreferences(private val context: Context) {
         val GLASS_TRANSPARENCY = floatPreferencesKey("glass_transparency")
         val GLASS_TYPE = stringPreferencesKey("glass_type")
         val EXPRESSIVE_STYLE = stringPreferencesKey("expressive_style")
+        val EXPRESSIVE_GLASS_ACCENT_COLOR = stringPreferencesKey("expressive_glass_accent_color")
+        val EXPRESSIVE_GLASS_TRANSPARENCY = floatPreferencesKey("expressive_glass_transparency")
+        val EXPRESSIVE_GLASS_FLUIDITY = floatPreferencesKey("expressive_glass_fluidity")
         val ONBOARDING_SHOWN = booleanPreferencesKey("onboarding_shown")
         val INSTALLATION_ID = stringPreferencesKey("installation_id")
     }

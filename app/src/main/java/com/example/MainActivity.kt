@@ -170,6 +170,9 @@ class MainActivity : ComponentActivity() {
             val glassTransparency by userPreferences.glassTransparency.collectAsState(initial = 0.55f)
             val glassType by userPreferences.glassType.collectAsState(initial = "soft")
             val expressiveStyle by userPreferences.expressiveStyle.collectAsState(initial = "solid")
+            val expressiveGlassAccentColor by userPreferences.expressiveGlassAccentColor.collectAsState(initial = "multicolor")
+            val expressiveGlassTransparency by userPreferences.expressiveGlassTransparency.collectAsState(initial = 0.58f)
+            val expressiveGlassFluidity by userPreferences.expressiveGlassFluidity.collectAsState(initial = 0.68f)
             val hasLocalThemeChoice by applicationContext.dataStore.data
                 .map { preferences -> preferences[UserPreferences.APP_THEME] != null }
                 .collectAsState(initial = false)
@@ -225,7 +228,10 @@ class MainActivity : ComponentActivity() {
                     glassAccentColor = glassAccentColor,
                     glassTransparency = glassTransparency,
                     glassType = glassType,
-                    expressiveStyle = expressiveStyle
+                    expressiveStyle = expressiveStyle,
+                    expressiveGlassAccentColor = expressiveGlassAccentColor,
+                    expressiveGlassTransparency = expressiveGlassTransparency,
+                    expressiveGlassFluidity = expressiveGlassFluidity
                 ) {
 
                 var showSplash by remember { mutableStateOf(true) }

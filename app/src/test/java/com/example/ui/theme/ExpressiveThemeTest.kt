@@ -43,6 +43,32 @@ class ExpressiveThemeTest {
     }
 
     @Test
+    fun `expressive glass exposes six independent colors and fluid controls`() {
+        assertEquals(
+            listOf("multicolor", "red", "green", "orange", "blue", "gold"),
+            ExpressiveGlassAccentNames
+        )
+        val dense = resolveExpressiveGlassStyle(
+            enabled = true,
+            isDark = false,
+            accentName = "red",
+            transparency = 0.20f,
+            fluidity = 0.10f
+        )
+        val liquid = resolveExpressiveGlassStyle(
+            enabled = true,
+            isDark = false,
+            accentName = "blue",
+            transparency = 0.90f,
+            fluidity = 0.90f
+        )
+        assertTrue(dense.surfaceAlpha > liquid.surfaceAlpha)
+        assertTrue(liquid.shadowElevation > dense.shadowElevation)
+        assertNotEquals(dense.accent, liquid.accent)
+        assertTrue(expressiveGlassBackgroundColors("gold", false) != glassSoftBackgroundColors("orange", false))
+    }
+
+    @Test
     fun `expressive glass owns its visual engine independently from glass soft`() {
         val expressiveGlass = resolveExpressiveGlassStyle(enabled = true, isDark = false)
         val glassSoft = resolveGlassSoftStyle(

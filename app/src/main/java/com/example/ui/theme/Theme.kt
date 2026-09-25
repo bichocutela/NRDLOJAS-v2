@@ -52,6 +52,9 @@ val LocalExpressiveStyle = staticCompositionLocalOf { ExpressiveStyle() }
 @Immutable
 data class ExpressiveGlassStyle(
     val enabled: Boolean = false,
+    val accentName: String = "multicolor",
+    val transparency: Float = 0.58f,
+    val fluidity: Float = 0.68f,
     val accent: Color = Color(0xFFC89300),
     val secondaryAccent: Color = Color(0xFF1976D2),
     val tertiaryAccent: Color = Color(0xFF2F9A50),
@@ -69,19 +72,81 @@ data class ExpressiveGlassStyle(
 
 val LocalExpressiveGlassStyle = staticCompositionLocalOf { ExpressiveGlassStyle() }
 
-internal fun resolveExpressiveGlassStyle(enabled: Boolean, isDark: Boolean): ExpressiveGlassStyle {
+internal val ExpressiveGlassAccentNames = listOf("multicolor", "red", "green", "orange", "blue", "gold")
+
+private fun normalizeExpressiveGlassAccentName(name: String): String =
+    name.trim().lowercase().takeIf { it in ExpressiveGlassAccentNames } ?: "multicolor"
+
+private fun expressiveGlassActionColors(name: String, isDark: Boolean): List<Color> {
+    val normalized = normalizeExpressiveGlassAccentName(name)
+    val light = mapOf(
+        "multicolor" to listOf(Color(0xFFE7333F), Color(0xFF1976D2), Color(0xFFF2B705)),
+        "red" to listOf(Color(0xFFE7333F), Color(0xFFFF7A59), Color(0xFFC2185B)),
+        "green" to listOf(Color(0xFF1E9C55), Color(0xFF44C79A), Color(0xFF0F7A68)),
+        "orange" to listOf(Color(0xFFF57C00), Color(0xFFFFB24A), Color(0xFFE94E1B)),
+        "blue" to listOf(Color(0xFF1976D2), Color(0xFF42A5F5), Color(0xFF4B5FD6)),
+        "gold" to listOf(Color(0xFFB8860B), Color(0xFFE6B93D), Color(0xFFFFD76A))
+    )
+    val dark = mapOf(
+        "multicolor" to listOf(Color(0xFFFF7882), Color(0xFF78B9FF), Color(0xFFFFD76A)),
+        "red" to listOf(Color(0xFFFF7882), Color(0xFFFFA083), Color(0xFFFF7FB5)),
+        "green" to listOf(Color(0xFF72E2A5), Color(0xFF7CE5C6), Color(0xFF6FD6CB)),
+        "orange" to listOf(Color(0xFFFFB567), Color(0xFFFFCA7A), Color(0xFFFF8A66)),
+        "blue" to listOf(Color(0xFF79B8FF), Color(0xFF8FD3FF), Color(0xFFA6AEFF)),
+        "gold" to listOf(Color(0xFFFFD76A), Color(0xFFFFE49B), Color(0xFFEAB84D))
+    )
+    return (if (isDark) dark else light).getValue(normalized)
+}
+
+internal fun expressiveGlassBackgroundColors(name: String, isDark: Boolean): List<Color> {
+    val normalized = normalizeExpressiveGlassAccentName(name)
+    val light = mapOf(
+        "multicolor" to listOf(Color(0xFFFFE4E7), Color(0xFFE8F3FF), Color(0xFFFFF2CA), Color(0xFFE8F8F0), Color(0xFFF1E8FF)),
+        "red" to listOf(Color(0xFFFFE4E7), Color(0xFFFFD9D5), Color(0xFFFFE9F1), Color(0xFFFFF1E8)),
+        "green" to listOf(Color(0xFFDFF7E8), Color(0xFFD9F7EF), Color(0xFFE4F3FF), Color(0xFFF0F9E6)),
+        "orange" to listOf(Color(0xFFFFE8D0), Color(0xFFFFF0D5), Color(0xFFFFE1D6), Color(0xFFFFF6E8)),
+        "blue" to listOf(Color(0xFFDDEEFF), Color(0xFFE5F6FF), Color(0xFFE8E5FF), Color(0xFFE2F7F3)),
+        "gold" to listOf(Color(0xFFFFF0BE), Color(0xFFFFE6A2), Color(0xFFFFF6D6), Color(0xFFF7ECD0))
+    )
+    val dark = mapOf(
+        "multicolor" to listOf(Color(0xFF190F18), Color(0xFF0E1C30), Color(0xFF2B2110), Color(0xFF0F291F), Color(0xFF21172F)),
+        "red" to listOf(Color(0xFF2A1116), Color(0xFF35161B), Color(0xFF2E1423), Color(0xFF2B1A12)),
+        "green" to listOf(Color(0xFF10241A), Color(0xFF0E2D25), Color(0xFF102638), Color(0xFF1A2913)),
+        "orange" to listOf(Color(0xFF2B1A0E), Color(0xFF3B2812), Color(0xFF321713), Color(0xFF2A2217)),
+        "blue" to listOf(Color(0xFF0D1B2C), Color(0xFF102C42), Color(0xFF171A38), Color(0xFF102B2A)),
+        "gold" to listOf(Color(0xFF2B220E), Color(0xFF3B2D11), Color(0xFF2A2619), Color(0xFF221D12))
+    )
+    return (if (isDark) dark else light).getValue(normalized)
+}
+
+internal fun resolveExpressiveGlassStyle(
+    enabled: Boolean,
+    isDark: Boolean,
+    accentName: String = "multicolor",
+    transparency: Float = 0.58f,
+    fluidity: Float = 0.68f
+): ExpressiveGlassStyle {
     if (!enabled) return ExpressiveGlassStyle()
+    val safeTransparency = transparency.coerceIn(0.20f, 0.90f)
+    val safeFluidity = fluidity.coerceIn(0f, 1f)
+    val progress = ((safeTransparency - 0.20f) / 0.70f).coerceIn(0f, 1f)
+    val actions = expressiveGlassActionColors(accentName, isDark)
+    val surfaceAlpha = 0.82f - (0.28f * progress)
+    val normalized = normalizeExpressiveGlassAccentName(accentName)
     return ExpressiveGlassStyle(
         enabled = true,
-        accent = if (isDark) Color(0xFFFFD76A) else Color(0xFFC89300),
-        secondaryAccent = if (isDark) Color(0xFF8FC5FF) else Color(0xFF1976D2),
-        tertiaryAccent = if (isDark) Color(0xFF8DDB9B) else Color(0xFF2F9A50),
-        onAccent = if (isDark) Color(0xFF17202A) else Color.White,
-        surfaceAlpha = if (isDark) 0.54f else 0.60f,
-        strongSurfaceAlpha = if (isDark) 0.64f else 0.70f,
-        borderColor = if (isDark) Color.White.copy(alpha = 0.46f) else Color.White.copy(alpha = 0.84f),
-        shadowElevation = 11f,
-        shadowAlpha = if (isDark) 0.28f else 0.16f,
+        accentName = normalized,
+        transparency = safeTransparency,
+        fluidity = safeFluidity,
+        accent = actions[0],
+        secondaryAccent = actions[1],
+        tertiaryAccent = actions[2],
+        onAccent = if (isDark || normalized in setOf("gold", "orange")) Color(0xFF17202A) else Color.White,
+        surfaceAlpha = surfaceAlpha,
+        strongSurfaceAlpha = (surfaceAlpha + 0.10f).coerceAtMost(0.92f),
+        borderColor = Color.White.copy(alpha = (0.62f + 0.24f * safeFluidity).coerceAtMost(0.90f)),
+        shadowElevation = 9f + (5f * safeFluidity),
+        shadowAlpha = (if (isDark) 0.24f else 0.12f) + (0.08f * safeFluidity),
         isDark = isDark
     )
 }
@@ -355,21 +420,10 @@ fun NrdAppBackground(
     when {
         glass.enabled -> GlassSoftBackground(modifier = modifier, content = content)
         expressiveGlass.enabled -> {
-            val colors = if (expressiveGlass.isDark) {
-                listOf(
-                    Color(0xFF0A111B),
-                    Color(0xFF18243A),
-                    Color(0xFF2A2212),
-                    Color(0xFF102C22)
-                )
-            } else {
-                listOf(
-                    Color(0xFFE7F4FF),
-                    Color(0xFFFFF4D6),
-                    Color(0xFFEAF8EF),
-                    Color(0xFFF1EAFE)
-                )
-            }
+            val colors = expressiveGlassBackgroundColors(
+                expressiveGlass.accentName,
+                expressiveGlass.isDark
+            )
             Box(
                 modifier = modifier
                     .fillMaxSize()
@@ -664,6 +718,9 @@ fun MyApplicationTheme(
     glassTransparency: Float = 0.55f,
     glassType: String = "soft",
     expressiveStyle: String = "solid",
+    expressiveGlassAccentColor: String = "multicolor",
+    expressiveGlassTransparency: Float = 0.58f,
+    expressiveGlassFluidity: Float = 0.68f,
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (appearanceMode) {
@@ -683,7 +740,13 @@ fun MyApplicationTheme(
         GlassSoftStyle()
     }
     val expressive = ExpressiveStyle(enabled = isExpressive, variant = normalizedExpressiveStyle)
-    val expressiveGlassStyle = resolveExpressiveGlassStyle(isExpressiveGlass, darkTheme)
+    val expressiveGlassStyle = resolveExpressiveGlassStyle(
+        enabled = isExpressiveGlass,
+        isDark = darkTheme,
+        accentName = expressiveGlassAccentColor,
+        transparency = expressiveGlassTransparency,
+        fluidity = expressiveGlassFluidity
+    )
     val colorScheme = when {
         isGlassSoft -> glassSoftColorScheme(glassStyle)
         isExpressiveGlass -> expressiveGlassColorScheme(expressiveGlassStyle, darkTheme)

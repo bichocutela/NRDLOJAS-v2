@@ -602,10 +602,18 @@ fun SearchScreen(
             modifier = Modifier.padding(horizontal = screenProfile.horizontalPadding),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            val searchFieldShape = if (isExpressiveTheme) {
-                RoundedCornerShape(30.dp)
-            } else {
-                RoundedCornerShape(32.dp)
+            val searchFieldShape = when {
+                isExpressiveGlassTheme -> {
+                    val water = expressiveGlassStyle.fluidity
+                    RoundedCornerShape(
+                        topStart = (30f + 8f * water).dp,
+                        topEnd = (22f + 10f * water).dp,
+                        bottomEnd = (32f + 8f * water).dp,
+                        bottomStart = (24f + 12f * water).dp
+                    )
+                }
+                isExpressiveTheme -> RoundedCornerShape(30.dp)
+                else -> RoundedCornerShape(32.dp)
             }
             TextField(
                 value = searchQuery,
@@ -698,10 +706,18 @@ fun SearchScreen(
             
             Spacer(modifier = Modifier.height(if (screenProfile.veryCompact) 8.dp else 16.dp))
             
-            val searchButtonShape = if (isExpressiveTheme) {
-                RoundedCornerShape(30.dp)
-            } else {
-                RoundedCornerShape(28.dp)
+            val searchButtonShape = when {
+                isExpressiveGlassTheme -> {
+                    val water = expressiveGlassStyle.fluidity
+                    RoundedCornerShape(
+                        topStart = (30f + 10f * water).dp,
+                        topEnd = (20f + 14f * water).dp,
+                        bottomEnd = (34f + 8f * water).dp,
+                        bottomStart = (22f + 16f * water).dp
+                    )
+                }
+                isExpressiveTheme -> RoundedCornerShape(30.dp)
+                else -> RoundedCornerShape(28.dp)
             }
             val openProductSearch = {
                 keyboardController?.hide()
