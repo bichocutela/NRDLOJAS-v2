@@ -14,10 +14,15 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawOutline
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -351,6 +356,113 @@ fun Modifier.glassSoftShadow(
     }
 }
 
+
+fun Modifier.expressiveLiquidGlass(
+    shape: Shape,
+    accent: Color? = null,
+    intensity: Float = 1f,
+    elevation: Dp? = null
+): Modifier = composed {
+    val style = LocalExpressiveGlassStyle.current
+    if (!style.enabled) {
+        this
+    } else {
+        val safeIntensity = intensity.coerceIn(0.45f, 1.40f)
+        val fluidity = style.fluidity.coerceIn(0f, 1f)
+        val tint = accent ?: style.accent
+        val refraction = style.secondaryAccent
+        val highlightAlpha = (0.46f + 0.30f * fluidity) * safeIntensity
+        val borderWidthDp = 1.25f + 1.55f * fluidity
+
+        this
+            .shadow(
+                elevation = elevation ?: style.shadowElevation.dp,
+                shape = shape,
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = style.shadowAlpha * 0.72f),
+                spotColor = tint.copy(alpha = (style.shadowAlpha + 0.10f).coerceAtMost(0.34f))
+            )
+            .clip(shape)
+            .drawWithCache {
+                val outline = shape.createOutline(size, layoutDirection, this)
+                val maxDimension = maxOf(size.width, size.height).coerceAtLeast(1f)
+                val baseBrush = Brush.linearGradient(
+                    colors = listOf(
+                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.93f).coerceIn(0f, 1f)),
+                        tint.copy(alpha = (0.08f + 0.10f * fluidity) * safeIntensity),
+                        style.surfaceBase.copy(alpha = (style.surfaceAlpha * 0.88f).coerceIn(0f, 1f)),
+                        refraction.copy(alpha = (0.05f + 0.07f * fluidity) * safeIntensity),
+                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.84f).coerceIn(0f, 1f))
+                    ),
+                    start = Offset.Zero,
+                    end = Offset(size.width, size.height)
+                )
+                val topLens = Brush.radialGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = highlightAlpha.coerceAtMost(0.82f)),
+                        Color.White.copy(alpha = 0.16f * safeIntensity),
+                        Color.Transparent
+                    ),
+                    center = Offset(
+                        x = size.width * (0.16f + 0.10f * fluidity),
+                        y = size.height * (0.02f + 0.08f * fluidity)
+                    ),
+                    radius = maxDimension * (0.58f + 0.12f * fluidity)
+                )
+                val lowerRefraction = Brush.radialGradient(
+                    colors = listOf(
+                        tint.copy(alpha = (0.18f + 0.12f * fluidity) * safeIntensity),
+                        refraction.copy(alpha = (0.08f + 0.08f * fluidity) * safeIntensity),
+                        Color.Transparent
+                    ),
+                    center = Offset(
+                        x = size.width * (0.82f - 0.08f * fluidity),
+                        y = size.height * (0.90f - 0.08f * fluidity)
+                    ),
+                    radius = maxDimension * (0.46f + 0.16f * fluidity)
+                )
+                val specularEdge = Brush.linearGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = (0.90f * safeIntensity).coerceAtMost(0.96f)),
+                        Color.White.copy(alpha = 0.18f),
+                        tint.copy(alpha = (0.28f + 0.12f * fluidity) * safeIntensity),
+                        Color.White.copy(alpha = 0.46f),
+                        refraction.copy(alpha = (0.24f + 0.12f * fluidity) * safeIntensity),
+                        Color.White.copy(alpha = (0.82f * safeIntensity).coerceAtMost(0.92f))
+                    ),
+                    start = Offset(0f, size.height * 0.08f),
+                    end = Offset(size.width, size.height * 0.92f)
+                )
+                val innerGleam = Brush.linearGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.26f * safeIntensity),
+                        Color.Transparent,
+                        Color.White.copy(alpha = 0.10f * safeIntensity)
+                    ),
+                    start = Offset(size.width * 0.10f, 0f),
+                    end = Offset(size.width * 0.90f, size.height)
+                )
+
+                onDrawWithContent {
+                    drawOutline(outline = outline, brush = baseBrush)
+                    drawOutline(outline = outline, brush = topLens)
+                    drawOutline(outline = outline, brush = lowerRefraction)
+                    drawOutline(outline = outline, brush = innerGleam)
+                    drawContent()
+                    drawOutline(
+                        outline = outline,
+                        brush = specularEdge,
+                        style = Stroke(width = borderWidthDp.dp.toPx())
+                    )
+                    drawOutline(
+                        outline = outline,
+                        color = Color.White.copy(alpha = (0.18f + 0.16f * fluidity) * safeIntensity),
+                        style = Stroke(width = 0.65.dp.toPx())
+                    )
+                }
+            }
+    }
+}
 
 fun Modifier.expressiveShadow(
     shape: Shape,

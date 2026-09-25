@@ -95,6 +95,7 @@ import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.LocalExpressiveGlassStyle
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.expressiveLiquidGlass
 import com.example.ui.theme.expressiveShadow
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material.icons.filled.NewReleases
@@ -333,9 +334,9 @@ fun SearchScreen(
     ) {
         Brush.linearGradient(
             listOf(
-                expressiveGlassStyle.accent,
-                expressiveGlassStyle.secondaryAccent,
-                expressiveGlassStyle.tertiaryAccent
+                expressiveGlassStyle.accent.copy(alpha = 0.50f),
+                expressiveGlassStyle.secondaryAccent.copy(alpha = 0.26f),
+                expressiveGlassStyle.tertiaryAccent.copy(alpha = 0.34f)
             )
         )
     }
@@ -524,9 +525,12 @@ fun SearchScreen(
                                     .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                     .border(1.dp, glassStyle.borderColor, CircleShape)
                                 else if (isExpressiveGlassTheme) Modifier
-                                    .expressiveShadow(CircleShape, 7.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                                    .border(1.dp, expressiveGlassStyle.borderColor, CircleShape)
+                                    .expressiveLiquidGlass(
+                                        shape = CircleShape,
+                                        accent = expressiveGlassStyle.accent,
+                                        intensity = 0.92f,
+                                        elevation = 7.dp
+                                    )
                                 else if (isExpressiveTheme) Modifier
                                     .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                                 else Modifier.background(Color.Transparent)
@@ -563,9 +567,12 @@ fun SearchScreen(
                                     .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                     .border(1.dp, glassStyle.borderColor, CircleShape)
                                 else if (isExpressiveGlassTheme) Modifier
-                                    .expressiveShadow(CircleShape, 7.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                                    .border(1.dp, expressiveGlassStyle.borderColor, CircleShape)
+                                    .expressiveLiquidGlass(
+                                        shape = CircleShape,
+                                        accent = expressiveGlassStyle.accent,
+                                        intensity = 0.92f,
+                                        elevation = 7.dp
+                                    )
                                 else if (isExpressiveTheme) Modifier
                                     .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                                 else Modifier
@@ -666,14 +673,25 @@ fun SearchScreen(
                             else -> 56.dp
                         }
                     )
-                    .glassSoftShadow(searchFieldShape)
-                    .expressiveShadow(searchFieldShape, 8.dp)
+                    .then(
+                        when {
+                            isExpressiveGlassTheme -> Modifier.expressiveLiquidGlass(
+                                shape = searchFieldShape,
+                                accent = expressiveGlassStyle.accent,
+                                intensity = 1.05f,
+                                elevation = 9.dp
+                            )
+                            isGlassSoftTheme -> Modifier.glassSoftShadow(searchFieldShape)
+                            isExpressiveTheme -> Modifier.expressiveShadow(searchFieldShape, 8.dp)
+                            else -> Modifier
+                        }
+                    )
                     .clip(searchFieldShape)
                     .border(
                         1.dp,
                         when {
+                            isExpressiveGlassTheme -> Color.Transparent
                             isGlassSoftTheme -> glassStyle.borderColor
-                            isExpressiveGlassTheme -> expressiveGlassStyle.borderColor
                             isExpressiveTheme -> MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
                             else -> MaterialTheme.colorScheme.outline
                         },
@@ -684,16 +702,19 @@ fun SearchScreen(
                 keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = when {
+                        isExpressiveGlassTheme -> Color.Transparent
                         isGlassSoftTheme -> MaterialTheme.colorScheme.surface
                         isExpressiveTheme -> MaterialTheme.colorScheme.surface
                         else -> MaterialTheme.colorScheme.surfaceVariant
                     },
                     unfocusedContainerColor = when {
+                        isExpressiveGlassTheme -> Color.Transparent
                         isGlassSoftTheme -> MaterialTheme.colorScheme.surface
                         isExpressiveTheme -> MaterialTheme.colorScheme.surface
                         else -> MaterialTheme.colorScheme.surfaceVariant
                     },
                     disabledContainerColor = when {
+                        isExpressiveGlassTheme -> Color.Transparent
                         isGlassSoftTheme -> MaterialTheme.colorScheme.surface
                         isExpressiveTheme -> MaterialTheme.colorScheme.surfaceContainerHigh
                         else -> MaterialTheme.colorScheme.surfaceVariant
@@ -765,11 +786,16 @@ fun SearchScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(expressiveGlassSearchButtonHeight)
-                        .expressiveShadow(searchButtonShape, 10.dp),
+                        .expressiveLiquidGlass(
+                            shape = searchButtonShape,
+                            accent = expressiveGlassStyle.accent,
+                            intensity = 1.22f,
+                            elevation = 11.dp
+                        ),
                     shape = searchButtonShape,
                     color = Color.Transparent,
                     contentColor = expressiveGlassStyle.onAccent,
-                    border = BorderStroke(1.dp, expressiveGlassStyle.borderColor)
+                    border = null
                 ) {
                     Row(
                         modifier = Modifier
@@ -1404,25 +1430,29 @@ fun CategorySection(
                 expressive -> RoundedCornerShape(if (compactExpressive) 18.dp else 22.dp)
                 else -> RoundedCornerShape(16.dp)
             }
-            val categoryBrush = Brush.linearGradient(
-                listOf(
-                    expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.strongSurfaceAlpha),
-                    expressiveGlass.accent.copy(alpha = 0.10f + 0.10f * expressiveGlass.fluidity),
-                    expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.surfaceAlpha),
-                    Color.White.copy(alpha = if (expressiveGlass.isDark) 0.05f else 0.18f)
-                )
-            )
-
             Box(
                 modifier = Modifier
                     .glassSoftShadow(categoryShape)
                     .expressiveShadow(categoryShape, 6.dp)
                     .clip(categoryShape)
                     .then(
-                        if (isExpressiveGlass) Modifier.background(categoryBrush)
-                        else Modifier.background(categoryGlassFill)
+                        if (isExpressiveGlass) {
+                            Modifier.expressiveLiquidGlass(
+                                shape = categoryShape,
+                                accent = when (index % 3) {
+                                    1 -> expressiveGlass.secondaryAccent
+                                    2 -> expressiveGlass.tertiaryAccent
+                                    else -> expressiveGlass.accent
+                                },
+                                intensity = 0.90f,
+                                elevation = 6.dp
+                            )
+                        } else {
+                            Modifier
+                                .background(categoryGlassFill)
+                                .border(1.dp, categoryGlassBorder, categoryShape)
+                        }
                     )
-                    .border(1.dp, categoryGlassBorder, categoryShape)
                     .clickable { onCategoryClick(category) }
                     .padding(
                         horizontal = when {
@@ -1589,14 +1619,6 @@ fun ProductCard(
             MaterialTheme.colorScheme.onPrimaryContainer
         )
     }
-    val productLiquidBrush = Brush.linearGradient(
-        listOf(
-            expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.strongSurfaceAlpha),
-            cardAccent.first.copy(alpha = 0.10f + 0.12f * expressiveGlass.fluidity),
-            expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.surfaceAlpha),
-            Color.White.copy(alpha = if (expressiveGlass.isDark) 0.05f else 0.20f)
-        )
-    )
     val shareAccentColor = cardAccent.first.toArgb()
     val shareCodeColor = MaterialTheme.colorScheme.primary.toArgb()
     var showDialog by remember(product.code) { mutableStateOf(false) }
@@ -1621,26 +1643,31 @@ fun ProductCard(
             .clip(cardShape)
             .then(
                 if (isExpressiveGlass) {
-                    Modifier.background(productLiquidBrush)
-                } else {
-                    Modifier.background(
-                        when {
-                            glass.enabled -> glass.fill.copy(alpha = glass.alpha)
-                            expressive -> MaterialTheme.colorScheme.surfaceContainerLow
-                            else -> MaterialTheme.colorScheme.surface
-                        }
+                    Modifier.expressiveLiquidGlass(
+                        shape = cardShape,
+                        accent = cardAccent.first,
+                        intensity = 0.92f,
+                        elevation = 7.dp
                     )
+                } else {
+                    Modifier
+                        .background(
+                            when {
+                                glass.enabled -> glass.fill.copy(alpha = glass.alpha)
+                                expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                                else -> MaterialTheme.colorScheme.surface
+                            }
+                        )
+                        .border(
+                            1.dp,
+                            when {
+                                glass.enabled -> glass.border
+                                expressive -> MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)
+                                else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                            },
+                            cardShape
+                        )
                 }
-            )
-            .border(
-                1.dp,
-                when {
-                    isExpressiveGlass -> expressiveGlass.borderColor
-                    glass.enabled -> glass.border
-                    expressive -> MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)
-                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
-                },
-                cardShape
             )
             .drawWithContent {
                 shareLayer.record {
@@ -1992,14 +2019,6 @@ fun MiniProductCard(
         )
     }
     val strongAccent = if (isExpressiveGlass) cardAccent else homeStrongColors(index)
-    val miniLiquidBrush = Brush.linearGradient(
-        listOf(
-            expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.strongSurfaceAlpha),
-            cardAccent.first.copy(alpha = 0.09f + 0.12f * expressiveGlass.fluidity),
-            expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.surfaceAlpha),
-            Color.White.copy(alpha = if (expressiveGlass.isDark) 0.05f else 0.18f)
-        )
-    )
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(
@@ -2041,26 +2060,31 @@ fun MiniProductCard(
             .clip(cardShape)
             .then(
                 if (isExpressiveGlass) {
-                    Modifier.background(miniLiquidBrush)
-                } else {
-                    Modifier.background(
-                        when {
-                            glass.enabled -> glass.fill.copy(alpha = glass.alpha)
-                            expressive -> MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
-                            else -> MaterialTheme.colorScheme.surface
-                        }
+                    Modifier.expressiveLiquidGlass(
+                        shape = cardShape,
+                        accent = cardAccent.first,
+                        intensity = 0.88f,
+                        elevation = 7.dp
                     )
+                } else {
+                    Modifier
+                        .background(
+                            when {
+                                glass.enabled -> glass.fill.copy(alpha = glass.alpha)
+                                expressive -> MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
+                                else -> MaterialTheme.colorScheme.surface
+                            }
+                        )
+                        .border(
+                            1.dp,
+                            when {
+                                glass.enabled -> glass.border
+                                expressive -> MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
+                                else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                            },
+                            cardShape
+                        )
                 }
-            )
-            .border(
-                1.dp,
-                when {
-                    isExpressiveGlass -> expressiveGlass.borderColor
-                    glass.enabled -> glass.border
-                    expressive -> MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
-                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
-                },
-                cardShape
             )
             .vibrateClickable(viewModel) {
                 if (onProductClick != null) {
@@ -2296,14 +2320,6 @@ fun HistoryItem(
         )
     }
     val strongColors = if (isExpressiveGlass) dynColors else homeStrongColors(index)
-    val historyLiquidBrush = Brush.linearGradient(
-        listOf(
-            expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.strongSurfaceAlpha),
-            dynColors.first.copy(alpha = 0.08f + 0.12f * expressiveGlass.fluidity),
-            expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.surfaceAlpha),
-            Color.White.copy(alpha = if (expressiveGlass.isDark) 0.05f else 0.20f)
-        )
-    )
 
     if (expressive) {
         Row(
@@ -2315,19 +2331,19 @@ fun HistoryItem(
                 .clip(itemShape)
                 .then(
                     when {
-                        isExpressiveGlass -> Modifier.background(historyLiquidBrush)
-                        glass.enabled -> Modifier.background(glass.fill.copy(alpha = glass.alpha))
-                        else -> Modifier.background(dynColors.first.copy(alpha = 0.62f))
+                        isExpressiveGlass -> Modifier.expressiveLiquidGlass(
+                            shape = itemShape,
+                            accent = dynColors.first,
+                            intensity = 0.94f,
+                            elevation = 6.dp
+                        )
+                        glass.enabled -> Modifier
+                            .background(glass.fill.copy(alpha = glass.alpha))
+                            .border(1.dp, strongColors.first.copy(alpha = 0.42f), itemShape)
+                        else -> Modifier
+                            .background(dynColors.first.copy(alpha = 0.62f))
+                            .border(1.dp, strongColors.first.copy(alpha = 0.52f), itemShape)
                     }
-                )
-                .border(
-                    1.dp,
-                    when {
-                        isExpressiveGlass -> expressiveGlass.borderColor
-                        glass.enabled -> strongColors.first.copy(alpha = 0.42f)
-                        else -> strongColors.first.copy(alpha = 0.52f)
-                    },
-                    itemShape
                 )
                 .vibrateClickable(viewModel) {
                     viewModel.onProductSearched(product)
