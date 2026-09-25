@@ -259,12 +259,22 @@ fun Modifier.expressiveShadow(
     if (!expressive.enabled || glass.enabled) {
         this
     } else {
+        val bg = MaterialTheme.colorScheme.background
+        val dark = ((bg.red + bg.green + bg.blue) / 3f) < 0.35f
         shadow(
             elevation = elevation,
             shape = shape,
             clip = false,
-            ambientColor = Color(0xFF49627D).copy(alpha = 0.10f),
-            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+            ambientColor = if (dark) {
+                Color.Black.copy(alpha = 0.34f)
+            } else {
+                Color(0xFF49627D).copy(alpha = 0.10f)
+            },
+            spotColor = if (dark) {
+                Color.Black.copy(alpha = 0.24f)
+            } else {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+            }
         )
     }
 }
@@ -375,29 +385,39 @@ private val SessionMulticolorPalette: List<Pair<Color, Color>> by lazy {
 
 private fun expressiveColorScheme(darkTheme: Boolean) = if (darkTheme) {
     DefaultDarkColorScheme.copy(
-        primary = Color(0xFFFFD76A),
-        onPrimary = Color(0xFF3D2F00),
-        primaryContainer = Color(0xFF564300),
-        onPrimaryContainer = Color(0xFFFFEFB7),
-        secondary = Color(0xFF8FC5FF),
-        onSecondary = Color(0xFF003259),
-        secondaryContainer = Color(0xFF113D63),
-        onSecondaryContainer = Color(0xFFD8EAFF),
-        tertiary = Color(0xFF8DDB9B),
-        onTertiary = Color(0xFF003914),
-        tertiaryContainer = Color(0xFF174A28),
-        onTertiaryContainer = Color(0xFFD2F8D9),
-        background = Color(0xFF0D1420),
-        onBackground = Color(0xFFF4F7FF),
-        surface = Color(0xFF151D29),
-        onSurface = Color(0xFFF4F7FF),
-        surfaceVariant = Color(0xFF202A38),
-        onSurfaceVariant = Color(0xFFC8D2E1),
-        surfaceContainerLow = Color(0xFF131B27),
-        surfaceContainer = Color(0xFF182230),
-        surfaceContainerHigh = Color(0xFF202B39),
-        surfaceContainerHighest = Color(0xFF293544),
-        outline = Color(0xFF7F8A99)
+        primary = Color(0xFFFFD45C),
+        onPrimary = Color(0xFF2E2200),
+        primaryContainer = Color(0xFF473700),
+        onPrimaryContainer = Color(0xFFFFF0B4),
+        secondary = Color(0xFF8FC7FF),
+        onSecondary = Color(0xFF002B4D),
+        secondaryContainer = Color(0xFF153A5C),
+        onSecondaryContainer = Color(0xFFDCEEFF),
+        tertiary = Color(0xFF88DEA3),
+        onTertiary = Color(0xFF00391A),
+        tertiaryContainer = Color(0xFF174A2C),
+        onTertiaryContainer = Color(0xFFD5F8DE),
+        background = Color(0xFF090F17),
+        onBackground = Color(0xFFF4F7FC),
+        surface = Color(0xFF101721),
+        onSurface = Color(0xFFF4F7FC),
+        surfaceVariant = Color(0xFF1A2430),
+        onSurfaceVariant = Color(0xFFD2DCE9),
+        surfaceDim = Color(0xFF0B1119),
+        surfaceBright = Color(0xFF2A3542),
+        surfaceContainerLowest = Color(0xFF080D14),
+        surfaceContainerLow = Color(0xFF0E151F),
+        surfaceContainer = Color(0xFF141D28),
+        surfaceContainerHigh = Color(0xFF1B2632),
+        surfaceContainerHighest = Color(0xFF24313F),
+        outline = Color(0xFF91A0B1),
+        outlineVariant = Color(0xFF44515F),
+        inverseSurface = Color(0xFFE9EEF5),
+        inverseOnSurface = Color(0xFF17202A),
+        error = Color(0xFFFFB4AB),
+        onError = Color(0xFF690005),
+        errorContainer = Color(0xFF93000A),
+        onErrorContainer = Color(0xFFFFDAD6)
     )
 } else {
     DefaultLightColorScheme.copy(
