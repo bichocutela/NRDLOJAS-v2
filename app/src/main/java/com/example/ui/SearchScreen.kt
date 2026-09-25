@@ -436,18 +436,19 @@ fun SearchScreen(
                 )
         ) {
         val screenProfile = rememberNrdScreenProfile()
+        val compactExpressive = isExpressiveTheme && screenProfile.compact
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
-                    start = if (isExpressiveTheme) 12.dp else 0.dp,
-                    top = if (isExpressiveTheme) 6.dp else 0.dp,
-                    end = if (isExpressiveTheme) 12.dp else 0.dp
+                    start = if (compactExpressive) 8.dp else if (isExpressiveTheme) 12.dp else 0.dp,
+                    top = if (compactExpressive) 4.dp else if (isExpressiveTheme) 6.dp else 0.dp,
+                    end = if (compactExpressive) 8.dp else if (isExpressiveTheme) 12.dp else 0.dp
                 )
         ) {
             val headerHeight = maxWidth / 3f
             val headerShape = if (isExpressiveTheme) {
-                RoundedCornerShape(28.dp)
+                RoundedCornerShape(if (compactExpressive) 24.dp else 28.dp)
             } else {
                 RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
             }
@@ -497,7 +498,7 @@ fun SearchScreen(
                         },
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(top = 48.dp, start = 8.dp)
+                            .padding(top = if (compactExpressive) 34.dp else 48.dp, start = 8.dp)
                             .then(
                                 if (isGlassTheme) Modifier
                                     .glassSoftShadow(CircleShape, 4.dp)
@@ -532,7 +533,7 @@ fun SearchScreen(
                         onClick = { showNotificationsSheet = true },
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(top = 48.dp, end = 8.dp)
+                            .padding(top = if (compactExpressive) 34.dp else 48.dp, end = 8.dp)
                             .then(
                                 if (isGlassTheme) Modifier
                                     .glassSoftShadow(CircleShape, 4.dp)
@@ -560,7 +561,15 @@ fun SearchScreen(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(if (screenProfile.veryCompact) 8.dp else 16.dp))
+        Spacer(
+            modifier = Modifier.height(
+                when {
+                    compactExpressive -> 10.dp
+                    screenProfile.veryCompact -> 8.dp
+                    else -> 16.dp
+                }
+            )
+        )
 
             Column(
             modifier = Modifier.padding(horizontal = screenProfile.horizontalPadding),
@@ -576,7 +585,13 @@ fun SearchScreen(
                 onValueChange = viewModel::updateSearchQuery,
                 singleLine = true,
                 placeholder = { Text("Pesquisar produto...", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Pesquisar", modifier = Modifier.size(28.dp)) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = "Pesquisar",
+                        modifier = Modifier.size(if (compactExpressive) 24.dp else 28.dp)
+                    )
+                },
                 trailingIcon = {
                     Row {
                         if (searchQuery.isNotEmpty()) {
@@ -600,7 +615,13 @@ fun SearchScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = if (isExpressiveTheme) 64.dp else 56.dp)
+                    .heightIn(
+                        min = when {
+                            compactExpressive -> 56.dp
+                            isExpressiveTheme -> 60.dp
+                            else -> 56.dp
+                        }
+                    )
                     .glassSoftShadow(searchFieldShape)
                     .expressiveShadow(searchFieldShape, 8.dp)
                     .clip(searchFieldShape)
@@ -655,7 +676,13 @@ fun SearchScreen(
                     onClick = openProductSearch,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (isExpressiveTheme) 60.dp else 56.dp)
+                        .height(
+                            when {
+                                compactExpressive -> 54.dp
+                                isExpressiveTheme -> 58.dp
+                                else -> 56.dp
+                            }
+                        )
                         .glassSoftShadow(searchButtonShape)
                         .expressiveShadow(searchButtonShape, 9.dp),
                     shape = searchButtonShape,
@@ -681,7 +708,13 @@ fun SearchScreen(
                     shape = searchButtonShape,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (isExpressiveTheme) 60.dp else 56.dp)
+                        .height(
+                            when {
+                                compactExpressive -> 54.dp
+                                isExpressiveTheme -> 58.dp
+                                else -> 56.dp
+                            }
+                        )
                         .expressiveShadow(searchButtonShape, 9.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
@@ -1068,6 +1101,8 @@ fun SectionHeader(
     onAction: (() -> Unit)? = null
 ) {
     val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    val compactExpressive = expressive && profile.compact
     val sectionIcon = when {
         title.contains("Mais Utilizados", ignoreCase = true) -> Icons.Default.BarChart
         title.contains("Últimos", ignoreCase = true) -> Icons.Default.NewReleases
@@ -1078,7 +1113,10 @@ fun SectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = if (expressive) 7.dp else 2.dp),
+            .padding(
+                horizontal = if (compactExpressive) 12.dp else 16.dp,
+                vertical = if (compactExpressive) 4.dp else if (expressive) 7.dp else 2.dp
+            ),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1089,8 +1127,8 @@ fun SectionHeader(
             if (expressive) {
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .size(if (compactExpressive) 30.dp else 34.dp)
+                        .clip(RoundedCornerShape(if (compactExpressive) 10.dp else 12.dp))
                         .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1098,15 +1136,15 @@ fun SectionHeader(
                         sectionIcon,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(if (compactExpressive) 18.dp else 20.dp)
                     )
                 }
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(if (compactExpressive) 7.dp else 10.dp))
             }
             StylizedText(
                 text = title,
                 baseStyle = if (expressive) {
-                    MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp)
+                    MaterialTheme.typography.titleLarge.copy(fontSize = if (compactExpressive) 17.sp else 19.sp)
                 } else {
                     MaterialTheme.typography.labelMedium
                 },
@@ -1119,7 +1157,10 @@ fun SectionHeader(
             TextButton(
                 onClick = onAction,
                 shape = RoundedCornerShape(18.dp),
-                contentPadding = PaddingValues(horizontal = if (expressive) 8.dp else 12.dp, vertical = 6.dp),
+                contentPadding = PaddingValues(
+                    horizontal = if (compactExpressive) 5.dp else if (expressive) 8.dp else 12.dp,
+                    vertical = if (compactExpressive) 4.dp else 6.dp
+                ),
                 colors = ButtonDefaults.textButtonColors(
                     containerColor = Color.Transparent,
                     contentColor = MaterialTheme.colorScheme.primary
@@ -1139,7 +1180,7 @@ fun SectionHeader(
                     Icon(
                         Icons.Default.ChevronRight,
                         contentDescription = null,
-                        modifier = Modifier.size(17.dp)
+                        modifier = Modifier.size(if (compactExpressive) 15.dp else 17.dp)
                     )
                 }
             }
@@ -1193,6 +1234,8 @@ fun CategorySection(
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    val compactExpressive = expressive && profile.compact
     val categoryColors = listOf(
         MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer,
         MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer,
@@ -1203,8 +1246,8 @@ fun CategorySection(
     )
 
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = if (compactExpressive) 12.dp else 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (compactExpressive) 6.dp else 8.dp),
         modifier = Modifier.padding(bottom = 2.dp)
     ) {
         itemsIndexed(categories) { index, category ->
@@ -1222,7 +1265,11 @@ fun CategorySection(
                 glass.enabled -> glass.border
                 else -> Color.Transparent
             }
-            val categoryShape = if (expressive) RoundedCornerShape(22.dp) else RoundedCornerShape(16.dp)
+            val categoryShape = if (expressive) {
+                RoundedCornerShape(if (compactExpressive) 18.dp else 22.dp)
+            } else {
+                RoundedCornerShape(16.dp)
+            }
 
             Box(
 
@@ -1234,8 +1281,16 @@ fun CategorySection(
                     .border(1.dp, categoryGlassBorder, categoryShape)
                     .clickable { onCategoryClick(category) }
                     .padding(
-                        horizontal = if (expressive) 18.dp else 16.dp,
-                        vertical = if (expressive) 11.dp else 10.dp
+                        horizontal = when {
+                            compactExpressive -> 13.dp
+                            expressive -> 18.dp
+                            else -> 16.dp
+                        },
+                        vertical = when {
+                            compactExpressive -> 8.dp
+                            expressive -> 11.dp
+                            else -> 10.dp
+                        }
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -1245,9 +1300,9 @@ fun CategorySection(
                             painter = painterResource(id = categoryExpressiveIconRes(category)),
                             contentDescription = null,
                             tint = if (glass.enabled) strongColors.first else strongColors.second,
-                            modifier = Modifier.size(19.dp)
+                            modifier = Modifier.size(if (compactExpressive) 16.dp else 19.dp)
                         )
-                        Spacer(Modifier.width(7.dp))
+                        Spacer(Modifier.width(if (compactExpressive) 5.dp else 7.dp))
                     }
                     StylizedText(
                         text = category,
@@ -1332,7 +1387,13 @@ fun ProductCard(
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
-    val cardShape = if (expressive) RoundedCornerShape(30.dp) else RoundedCornerShape(24.dp)
+    val profile = rememberNrdScreenProfile()
+    val compactExpressive = expressive && profile.compact
+    val cardShape = if (expressive) {
+        RoundedCornerShape(if (compactExpressive) 24.dp else 30.dp)
+    } else {
+        RoundedCornerShape(24.dp)
+    }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val shareLayer = rememberGraphicsLayer()
@@ -1413,7 +1474,7 @@ fun ProductCard(
                     showDialog = true
                 }
             }
-            .padding(16.dp),
+            .padding(if (compactExpressive) 12.dp else 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (product.imageUrl != null) {
@@ -1422,15 +1483,18 @@ fun ProductCard(
                 contentDescription = product.name,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(if (compactExpressive) 42.dp else 48.dp)
                     .clip(CircleShape)
             )
         } else {
             val dynColors = cardAccent
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(if (expressive) RoundedCornerShape(16.dp) else CircleShape)
+                    .size(if (compactExpressive) 42.dp else 48.dp)
+                    .clip(
+                        if (expressive) RoundedCornerShape(if (compactExpressive) 14.dp else 16.dp)
+                        else CircleShape
+                    )
                     .background(dynColors.first),
                 contentAlignment = Alignment.Center
             ) {
@@ -1444,7 +1508,7 @@ fun ProductCard(
             }
         }
 
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(if (compactExpressive) 11.dp else 16.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             StylizedText(
@@ -1478,8 +1542,16 @@ fun ProductCard(
                 .clip(if (expressive) RoundedCornerShape(20.dp) else RoundedCornerShape(16.dp))
                 .background(if (expressive) cardAccent.first else MaterialTheme.colorScheme.primaryContainer)
                 .padding(
-                    horizontal = if (expressive) 18.dp else 16.dp,
-                    vertical = if (expressive) 10.dp else 8.dp
+                    horizontal = when {
+                        compactExpressive -> 12.dp
+                        expressive -> 18.dp
+                        else -> 16.dp
+                    },
+                    vertical = when {
+                        compactExpressive -> 7.dp
+                        expressive -> 10.dp
+                        else -> 8.dp
+                    }
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -1683,7 +1755,13 @@ fun MiniProductCard(
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
-    val cardShape = if (expressive) RoundedCornerShape(26.dp) else RoundedCornerShape(24.dp)
+    val profile = rememberNrdScreenProfile()
+    val compactExpressive = expressive && profile.compact
+    val cardShape = if (expressive) {
+        RoundedCornerShape(if (compactExpressive) 22.dp else 26.dp)
+    } else {
+        RoundedCornerShape(24.dp)
+    }
     val cardAccent = homeDynamicColors(
         index,
         appTheme,
@@ -1707,8 +1785,26 @@ fun MiniProductCard(
     }
     Column(
         modifier = Modifier
-            .widthIn(min = if (expressive) 154.dp else 144.dp, max = if (expressive) 184.dp else 176.dp)
-            .heightIn(min = if (expressive) 176.dp else if (textPreferences.largeText) 168.dp else 132.dp)
+            .widthIn(
+                min = when {
+                    compactExpressive -> 138.dp
+                    expressive -> 154.dp
+                    else -> 144.dp
+                },
+                max = when {
+                    compactExpressive -> 164.dp
+                    expressive -> 184.dp
+                    else -> 176.dp
+                }
+            )
+            .heightIn(
+                min = when {
+                    compactExpressive -> 154.dp
+                    expressive -> 176.dp
+                    textPreferences.largeText -> 168.dp
+                    else -> 132.dp
+                }
+            )
             .glassSoftShadow(cardShape)
             .expressiveShadow(cardShape, 7.dp)
             .clip(cardShape)
@@ -1737,8 +1833,20 @@ fun MiniProductCard(
                     showDialog = true
                 }
             }
-            .padding(if (expressive) 12.dp else 10.dp),
-        verticalArrangement = Arrangement.spacedBy(if (expressive) 7.dp else 5.dp)
+            .padding(
+                when {
+                    compactExpressive -> 9.dp
+                    expressive -> 12.dp
+                    else -> 10.dp
+                }
+            ),
+        verticalArrangement = Arrangement.spacedBy(
+            when {
+                compactExpressive -> 5.dp
+                expressive -> 7.dp
+                else -> 5.dp
+            }
+        )
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1754,15 +1862,33 @@ fun MiniProductCard(
                     contentDescription = product.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(if (expressive) 54.dp else 32.dp)
-                        .clip(if (expressive) RoundedCornerShape(17.dp) else CircleShape)
+                        .size(
+                            when {
+                                compactExpressive -> 46.dp
+                                expressive -> 54.dp
+                                else -> 32.dp
+                            }
+                        )
+                        .clip(
+                            if (expressive) RoundedCornerShape(if (compactExpressive) 14.dp else 17.dp)
+                            else CircleShape
+                        )
                         .background(cardAccent.first)
                 )
             } else {
                 Box(
                     modifier = Modifier
-                        .size(if (expressive) 54.dp else 32.dp)
-                        .clip(if (expressive) RoundedCornerShape(17.dp) else CircleShape)
+                        .size(
+                            when {
+                                compactExpressive -> 46.dp
+                                expressive -> 54.dp
+                                else -> 32.dp
+                            }
+                        )
+                        .clip(
+                            if (expressive) RoundedCornerShape(if (compactExpressive) 14.dp else 17.dp)
+                            else CircleShape
+                        )
                         .background(cardAccent.first),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1811,7 +1937,11 @@ fun MiniProductCard(
         StylizedText(
             text = product.name,
             baseStyle = MaterialTheme.typography.titleMedium.copy(
-                fontSize = if (expressive) 15.sp else 14.sp,
+                fontSize = when {
+                    compactExpressive -> 14.sp
+                    expressive -> 15.sp
+                    else -> 14.sp
+                },
                 fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Bold
             ),
             boldOutline = textPreferences.boldOutline,
@@ -1851,7 +1981,11 @@ fun MiniProductCard(
                 text = product.code,
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Black,
-                    fontSize = if (expressive) 18.sp else 16.sp
+                    fontSize = when {
+                        compactExpressive -> 16.sp
+                        expressive -> 18.sp
+                        else -> 16.sp
+                    }
                 ),
                 color = MaterialTheme.colorScheme.primary,
                 maxLines = 1,
@@ -1866,7 +2000,9 @@ fun MiniProductCard(
                     Icon(
                         Icons.Default.ChevronRight,
                         contentDescription = "Abrir produto",
-                        modifier = Modifier.padding(7.dp).size(18.dp)
+                        modifier = Modifier
+                            .padding(if (compactExpressive) 5.dp else 7.dp)
+                            .size(if (compactExpressive) 16.dp else 18.dp)
                     )
                 }
             }
@@ -1884,7 +2020,13 @@ fun HistoryItem(
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
-    val itemShape = if (expressive) RoundedCornerShape(24.dp) else RoundedCornerShape(16.dp)
+    val profile = rememberNrdScreenProfile()
+    val compactExpressive = expressive && profile.compact
+    val itemShape = if (expressive) {
+        RoundedCornerShape(if (compactExpressive) 20.dp else 24.dp)
+    } else {
+        RoundedCornerShape(16.dp)
+    }
     var showDialog by remember { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(
@@ -1911,7 +2053,7 @@ fun HistoryItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 84.dp)
+                .heightIn(min = if (compactExpressive) 72.dp else 84.dp)
                 .glassSoftShadow(itemShape)
                 .expressiveShadow(itemShape, 6.dp)
                 .clip(itemShape)
@@ -1929,13 +2071,16 @@ fun HistoryItem(
                     viewModel.onProductSearched(product)
                     showDialog = true
                 }
-                .padding(horizontal = 10.dp, vertical = 9.dp),
+                .padding(
+                    horizontal = if (compactExpressive) 8.dp else 10.dp,
+                    vertical = if (compactExpressive) 7.dp else 9.dp
+                ),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(46.dp)
-                    .clip(RoundedCornerShape(15.dp))
+                    .size(if (compactExpressive) 38.dp else 46.dp)
+                    .clip(RoundedCornerShape(if (compactExpressive) 12.dp else 15.dp))
                     .background(strongColors.first),
                 contentAlignment = Alignment.Center
             ) {
@@ -1943,10 +2088,10 @@ fun HistoryItem(
                     imageVector = Icons.Default.History,
                     contentDescription = "Histórico",
                     tint = strongColors.second,
-                    modifier = Modifier.size(23.dp)
+                    modifier = Modifier.size(if (compactExpressive) 19.dp else 23.dp)
                 )
             }
-            Spacer(modifier = Modifier.width(9.dp))
+            Spacer(modifier = Modifier.width(if (compactExpressive) 7.dp else 9.dp))
             if (product.imageUrl != null) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
@@ -1956,17 +2101,17 @@ fun HistoryItem(
                     contentDescription = product.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(54.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .size(if (compactExpressive) 46.dp else 54.dp)
+                        .clip(RoundedCornerShape(if (compactExpressive) 13.dp else 16.dp))
                         .background(MaterialTheme.colorScheme.surface)
                 )
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(if (compactExpressive) 7.dp else 10.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
                 StylizedText(
                     text = product.name,
                     baseStyle = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 14.sp,
+                        fontSize = if (compactExpressive) 13.sp else 14.sp,
                         fontWeight = FontWeight.ExtraBold
                     ),
                     boldOutline = textPreferences.boldOutline,
@@ -2006,7 +2151,7 @@ fun HistoryItem(
                 Icons.Default.ChevronRight,
                 contentDescription = "Abrir produto",
                 tint = strongColors.first,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(if (compactExpressive) 20.dp else 24.dp)
             )
         }
         return

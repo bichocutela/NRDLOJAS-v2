@@ -45,7 +45,7 @@ class UserPreferences(private val context: Context) {
         preferences[UPPERCASE_BOLD] ?: false
     }
     val fontScale: Flow<Float> = context.dataStore.data.map { preferences ->
-        preferences[FONT_SCALE] ?: 1.0f
+        (preferences[FONT_SCALE] ?: 1.0f).coerceIn(0.75f, 1.30f)
     }
     val settingsAppearanceExpanded: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[SETTINGS_APPEARANCE_EXPANDED] ?: false
@@ -134,7 +134,7 @@ class UserPreferences(private val context: Context) {
         context.dataStore.edit { it[UPPERCASE_BOLD] = enabled }
     }
     suspend fun setFontScale(scale: Float) {
-        context.dataStore.edit { it[FONT_SCALE] = scale }
+        context.dataStore.edit { it[FONT_SCALE] = scale.coerceIn(0.75f, 1.30f) }
     }
     suspend fun setSettingsAppearanceExpanded(expanded: Boolean) {
         context.dataStore.edit { it[SETTINGS_APPEARANCE_EXPANDED] = expanded }
