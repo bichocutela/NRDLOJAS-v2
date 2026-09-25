@@ -20,6 +20,9 @@ on:
       - 'app/src/main/java/com/example/ui/PromotionsScreen.kt'
       - 'app/src/main/java/com/example/ui/MyPointScreen.kt'
       - 'app/src/main/java/com/example/ui/theme/Theme.kt'
+      - 'app/src/main/java/com/example/ui/theme/Type.kt'
+      - 'app/src/main/java/com/example/ui/SettingsScreen.kt'
+      - 'app/src/main/java/com/example/MainActivity.kt'
       - '.github/workflows/validate_banners.yml'
   pull_request:
     branches: [ main ]
@@ -40,6 +43,9 @@ on:
       - 'app/src/main/java/com/example/ui/PromotionsScreen.kt'
       - 'app/src/main/java/com/example/ui/MyPointScreen.kt'
       - 'app/src/main/java/com/example/ui/theme/Theme.kt'
+      - 'app/src/main/java/com/example/ui/theme/Type.kt'
+      - 'app/src/main/java/com/example/ui/SettingsScreen.kt'
+      - 'app/src/main/java/com/example/MainActivity.kt'
       - '.github/workflows/validate_banners.yml'
   workflow_dispatch:
 
