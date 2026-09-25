@@ -421,8 +421,8 @@ fun Modifier.expressiveLiquidGlass(
             0.36f
         }
         val refraction = secondaryTint
-        val highlightAlpha = (0.46f + 0.30f * fluidity) * safeIntensity
-        val borderWidthDp = 1.25f + 1.55f * fluidity
+        val highlightAlpha = (0.54f + 0.30f * fluidity) * safeIntensity
+        val borderWidthDp = 1.85f + 1.85f * fluidity
 
         this
             .shadow(
@@ -443,13 +443,14 @@ fun Modifier.expressiveLiquidGlass(
                     }
                 }
                 val maxDimension = maxOf(size.width, size.height).coerceAtLeast(1f)
+                val minDimension = minOf(size.width, size.height).coerceAtLeast(1f)
                 val baseBrush = Brush.linearGradient(
                     colors = listOf(
-                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.93f).coerceIn(0f, 1f)),
-                        tint.copy(alpha = (0.08f + 0.10f * fluidity) * safeIntensity),
-                        style.surfaceBase.copy(alpha = (style.surfaceAlpha * 0.88f).coerceIn(0f, 1f)),
-                        refraction.copy(alpha = (0.05f + 0.07f * fluidity) * safeIntensity),
-                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.84f).coerceIn(0f, 1f))
+                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.78f).coerceIn(0f, 1f)),
+                        tint.copy(alpha = (0.18f + 0.16f * fluidity) * safeIntensity),
+                        style.surfaceBase.copy(alpha = (style.surfaceAlpha * 0.66f).coerceIn(0f, 1f)),
+                        refraction.copy(alpha = (0.12f + 0.12f * fluidity) * safeIntensity),
+                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.70f).coerceIn(0f, 1f))
                     ),
                     start = Offset.Zero,
                     end = Offset(size.width, size.height)
@@ -457,7 +458,7 @@ fun Modifier.expressiveLiquidGlass(
                 val topLens = Brush.radialGradient(
                     colors = listOf(
                         Color.White.copy(alpha = highlightAlpha.coerceAtMost(0.82f)),
-                        Color.White.copy(alpha = 0.16f * safeIntensity),
+                        Color.White.copy(alpha = 0.22f * safeIntensity),
                         Color.Transparent
                     ),
                     center = Offset(
@@ -502,8 +503,8 @@ fun Modifier.expressiveLiquidGlass(
                 // Difusão óptica suave: cria a leitura de backdrop blur/frost sem borrar o conteúdo.
                 val diffusionA = Brush.radialGradient(
                     colors = listOf(
-                        style.surfaceBase.copy(alpha = (0.22f + 0.10f * fluidity) * safeIntensity),
-                        Color.White.copy(alpha = if (style.isDark) 0.035f else 0.12f),
+                        style.surfaceBase.copy(alpha = (0.12f + 0.08f * fluidity) * safeIntensity),
+                        Color.White.copy(alpha = if (style.isDark) 0.025f else 0.07f),
                         Color.Transparent
                     ),
                     center = Offset(
@@ -514,8 +515,8 @@ fun Modifier.expressiveLiquidGlass(
                 )
                 val diffusionB = Brush.radialGradient(
                     colors = listOf(
-                        refraction.copy(alpha = (0.055f + 0.055f * fluidity) * safeIntensity),
-                        style.surfaceBase.copy(alpha = (0.10f + 0.05f * fluidity) * safeIntensity),
+                        refraction.copy(alpha = (0.085f + 0.075f * fluidity) * safeIntensity),
+                        style.surfaceBase.copy(alpha = (0.065f + 0.04f * fluidity) * safeIntensity),
                         Color.Transparent
                     ),
                     center = Offset(
@@ -571,20 +572,20 @@ fun Modifier.expressiveLiquidGlass(
                 }
                 val liquidWaveBrush = Brush.horizontalGradient(
                     colors = listOf(
-                        tint.copy(alpha = if (waves) (0.20f + 0.10f * fluidity) * safeIntensity else 0f),
-                        Color.White.copy(alpha = if (waves) (0.18f + 0.10f * fluidity) * safeIntensity else 0f),
-                        refraction.copy(alpha = if (waves) (0.22f + 0.10f * fluidity) * safeIntensity else 0f),
-                        Color.White.copy(alpha = if (waves) 0.12f * safeIntensity else 0f),
-                        tint.copy(alpha = if (waves) 0.16f * safeIntensity else 0f)
+                        tint.copy(alpha = if (waves) (0.32f + 0.12f * fluidity) * safeIntensity else 0f),
+                        Color.White.copy(alpha = if (waves) (0.24f + 0.10f * fluidity) * safeIntensity else 0f),
+                        refraction.copy(alpha = if (waves) (0.34f + 0.12f * fluidity) * safeIntensity else 0f),
+                        Color.White.copy(alpha = if (waves) 0.16f * safeIntensity else 0f),
+                        tint.copy(alpha = if (waves) 0.24f * safeIntensity else 0f)
                     )
                 )
                 val upperCausticBrush = Brush.horizontalGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = if (waves) (0.30f + 0.18f * fluidity) * safeIntensity else 0f),
-                        tint.copy(alpha = if (waves) 0.10f * safeIntensity else 0f),
+                        Color.White.copy(alpha = if (waves) (0.42f + 0.18f * fluidity) * safeIntensity else 0f),
+                        tint.copy(alpha = if (waves) 0.16f * safeIntensity else 0f),
                         Color.Transparent,
-                        refraction.copy(alpha = if (waves) 0.12f * safeIntensity else 0f),
-                        Color.White.copy(alpha = if (waves) 0.22f * safeIntensity else 0f)
+                        refraction.copy(alpha = if (waves) 0.18f * safeIntensity else 0f),
+                        Color.White.copy(alpha = if (waves) 0.30f * safeIntensity else 0f)
                     )
                 )
                 val waveA = Brush.radialGradient(
@@ -618,8 +619,9 @@ fun Modifier.expressiveLiquidGlass(
                     x = size.width * (0.84f - 0.05f * ((bubbleSeed % 4 + 4) % 4)),
                     y = size.height * (0.34f + 0.06f * ((bubbleSeed % 3 + 3) % 3))
                 )
-                val bubbleRadius1 = maxDimension * (0.022f + 0.015f * fluidity)
-                val bubbleRadius2 = maxDimension * (0.012f + 0.010f * fluidity)
+                // Gotas pequenas: antes usávamos a largura do card e em cards largos viravam círculos gigantes.
+                val bubbleRadius1 = minDimension * (0.055f + 0.020f * fluidity)
+                val bubbleRadius2 = minDimension * (0.030f + 0.012f * fluidity)
 
                 onDrawWithContent {
                     drawPath(path = outlinePath, brush = baseBrush)
@@ -636,19 +638,29 @@ fun Modifier.expressiveLiquidGlass(
                     drawPath(path = outlinePath, brush = innerGleam)
                     if (waves) {
                         drawCircle(
-                            color = Color.White.copy(alpha = (0.26f + 0.18f * fluidity) * safeIntensity),
+                            color = Color.White.copy(alpha = (0.62f + 0.18f * fluidity) * safeIntensity),
                             radius = bubbleRadius1,
+                            center = bubble1,
+                            style = Stroke(width = (1.05f + 0.55f * fluidity).dp.toPx())
+                        )
+                        drawCircle(
+                            color = tint.copy(alpha = (0.26f + 0.12f * fluidity) * safeIntensity),
+                            radius = bubbleRadius1 * 0.58f,
                             center = bubble1
                         )
                         drawCircle(
-                            color = tint.copy(alpha = (0.18f + 0.12f * fluidity) * safeIntensity),
-                            radius = bubbleRadius1 * 0.62f,
-                            center = bubble1
-                        )
-                        drawCircle(
-                            color = Color.White.copy(alpha = (0.32f + 0.14f * fluidity) * safeIntensity),
+                            color = Color.White.copy(alpha = (0.72f + 0.12f * fluidity) * safeIntensity),
                             radius = bubbleRadius2,
-                            center = bubble2
+                            center = bubble2,
+                            style = Stroke(width = (0.85f + 0.40f * fluidity).dp.toPx())
+                        )
+                        drawCircle(
+                            color = Color.White.copy(alpha = 0.72f * safeIntensity),
+                            radius = bubbleRadius2 * 0.22f,
+                            center = Offset(
+                                bubble2.x - bubbleRadius2 * 0.34f,
+                                bubble2.y - bubbleRadius2 * 0.34f
+                            )
                         )
                     }
                     drawContent()
@@ -659,13 +671,13 @@ fun Modifier.expressiveLiquidGlass(
                     )
                     drawPath(
                         path = outlinePath,
-                        color = refraction.copy(alpha = (0.15f + 0.18f * fluidity) * safeIntensity),
-                        style = Stroke(width = (1.0f + 0.65f * fluidity).dp.toPx())
+                        color = refraction.copy(alpha = (0.22f + 0.20f * fluidity) * safeIntensity),
+                        style = Stroke(width = (1.25f + 0.85f * fluidity).dp.toPx())
                     )
                     drawPath(
                         path = outlinePath,
-                        color = Color.White.copy(alpha = (0.28f + 0.22f * fluidity) * safeIntensity),
-                        style = Stroke(width = 0.72.dp.toPx())
+                        color = Color.White.copy(alpha = (0.48f + 0.24f * fluidity) * safeIntensity),
+                        style = Stroke(width = 0.92.dp.toPx())
                     )
                 }
             }
