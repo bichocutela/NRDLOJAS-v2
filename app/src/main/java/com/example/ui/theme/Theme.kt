@@ -50,6 +50,43 @@ data class ExpressiveStyle(
 val LocalExpressiveStyle = staticCompositionLocalOf { ExpressiveStyle() }
 
 @Immutable
+data class ExpressiveGlassStyle(
+    val enabled: Boolean = false,
+    val accent: Color = Color(0xFFC89300),
+    val secondaryAccent: Color = Color(0xFF1976D2),
+    val tertiaryAccent: Color = Color(0xFF2F9A50),
+    val onAccent: Color = Color.White,
+    val surfaceAlpha: Float = 0.58f,
+    val strongSurfaceAlpha: Float = 0.68f,
+    val borderColor: Color = Color.White.copy(alpha = 0.82f),
+    val shadowElevation: Float = 11f,
+    val shadowAlpha: Float = 0.20f,
+    val isDark: Boolean = false
+) {
+    val surfaceBase: Color
+        get() = if (isDark) Color(0xFF101721) else Color.White
+}
+
+val LocalExpressiveGlassStyle = staticCompositionLocalOf { ExpressiveGlassStyle() }
+
+internal fun resolveExpressiveGlassStyle(enabled: Boolean, isDark: Boolean): ExpressiveGlassStyle {
+    if (!enabled) return ExpressiveGlassStyle()
+    return ExpressiveGlassStyle(
+        enabled = true,
+        accent = if (isDark) Color(0xFFFFD76A) else Color(0xFFC89300),
+        secondaryAccent = if (isDark) Color(0xFF8FC5FF) else Color(0xFF1976D2),
+        tertiaryAccent = if (isDark) Color(0xFF8DDB9B) else Color(0xFF2F9A50),
+        onAccent = if (isDark) Color(0xFF17202A) else Color.White,
+        surfaceAlpha = if (isDark) 0.54f else 0.60f,
+        strongSurfaceAlpha = if (isDark) 0.64f else 0.70f,
+        borderColor = if (isDark) Color.White.copy(alpha = 0.46f) else Color.White.copy(alpha = 0.84f),
+        shadowElevation = 11f,
+        shadowAlpha = if (isDark) 0.28f else 0.16f,
+        isDark = isDark
+    )
+}
+
+@Immutable
 data class GlassSoftStyle(
     val enabled: Boolean = false,
     val type: String = "soft",
@@ -255,9 +292,17 @@ fun Modifier.expressiveShadow(
     elevation: Dp = 7.dp
 ): Modifier = composed {
     val expressive = LocalExpressiveStyle.current
-    val glass = LocalGlassSoftStyle.current
-    if (!expressive.enabled || glass.enabled) {
+    val expressiveGlass = LocalExpressiveGlassStyle.current
+    if (!expressive.enabled) {
         this
+    } else if (expressiveGlass.enabled) {
+        shadow(
+            elevation = maxOf(elevation.value, expressiveGlass.shadowElevation).dp,
+            shape = shape,
+            clip = false,
+            ambientColor = Color.Black.copy(alpha = expressiveGlass.shadowAlpha),
+            spotColor = expressiveGlass.accent.copy(alpha = (expressiveGlass.shadowAlpha + 0.08f).coerceAtMost(0.34f))
+        )
     } else {
         val bg = MaterialTheme.colorScheme.background
         val dark = ((bg.red + bg.green + bg.blue) / 3f) < 0.35f
@@ -306,8 +351,32 @@ fun NrdAppBackground(
 ) {
     val glass = LocalGlassSoftStyle.current
     val expressive = LocalExpressiveStyle.current
+    val expressiveGlass = LocalExpressiveGlassStyle.current
     when {
         glass.enabled -> GlassSoftBackground(modifier = modifier, content = content)
+        expressiveGlass.enabled -> {
+            val colors = if (expressiveGlass.isDark) {
+                listOf(
+                    Color(0xFF0A111B),
+                    Color(0xFF18243A),
+                    Color(0xFF2A2212),
+                    Color(0xFF102C22)
+                )
+            } else {
+                listOf(
+                    Color(0xFFE7F4FF),
+                    Color(0xFFFFF4D6),
+                    Color(0xFFEAF8EF),
+                    Color(0xFFF1EAFE)
+                )
+            }
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(Brush.linearGradient(colors)),
+                content = { content() }
+            )
+        }
         expressive.enabled -> {
             val dark = MaterialTheme.colorScheme.background.red < 0.2f
             val colors = if (dark) {
@@ -447,6 +516,44 @@ private fun expressiveColorScheme(darkTheme: Boolean) = if (darkTheme) {
     )
 }
 
+internal fun expressiveGlassColorScheme(style: ExpressiveGlassStyle, darkTheme: Boolean): androidx.compose.material3.ColorScheme {
+    val base = expressiveColorScheme(darkTheme)
+    val onSurface = if (darkTheme) Color(0xFFF4F7FC) else Color(0xFF16203B)
+    val onSurfaceVariant = if (darkTheme) Color(0xFFD2DCE9) else Color(0xFF536174)
+    val surface = style.surfaceBase
+    val containerAlpha = if (darkTheme) 0.24f else 0.18f
+    return base.copy(
+        primary = style.accent,
+        onPrimary = style.onAccent,
+        primaryContainer = style.accent.copy(alpha = containerAlpha),
+        onPrimaryContainer = onSurface,
+        secondary = style.secondaryAccent,
+        onSecondary = style.onAccent,
+        secondaryContainer = style.secondaryAccent.copy(alpha = containerAlpha),
+        onSecondaryContainer = onSurface,
+        tertiary = style.tertiaryAccent,
+        onTertiary = style.onAccent,
+        tertiaryContainer = style.tertiaryAccent.copy(alpha = containerAlpha),
+        onTertiaryContainer = onSurface,
+        background = Color.Transparent,
+        onBackground = onSurface,
+        surface = surface.copy(alpha = style.surfaceAlpha),
+        onSurface = onSurface,
+        surfaceVariant = surface.copy(alpha = style.strongSurfaceAlpha),
+        onSurfaceVariant = onSurfaceVariant,
+        surfaceDim = surface.copy(alpha = style.strongSurfaceAlpha),
+        surfaceBright = surface.copy(alpha = style.surfaceAlpha),
+        surfaceContainerLowest = surface.copy(alpha = (style.surfaceAlpha - 0.08f).coerceAtLeast(0.42f)),
+        surfaceContainerLow = surface.copy(alpha = style.surfaceAlpha),
+        surfaceContainer = surface.copy(alpha = style.surfaceAlpha),
+        surfaceContainerHigh = surface.copy(alpha = style.strongSurfaceAlpha),
+        surfaceContainerHighest = surface.copy(alpha = (style.strongSurfaceAlpha + 0.05f).coerceAtMost(0.94f)),
+        outline = style.accent.copy(alpha = if (darkTheme) 0.62f else 0.52f),
+        outlineVariant = style.borderColor,
+        surfaceTint = Color.Transparent
+    )
+}
+
 private fun getThemeColorScheme(themeName: String, darkTheme: Boolean) = when (themeName) {
     "multicolor" -> {
         val primary = SessionMulticolorPalette[0]
@@ -569,24 +676,17 @@ fun MyApplicationTheme(
     val isGlassSoft = appTheme == "glass"
     val isExpressiveGlass = isExpressive && normalizedExpressiveStyle == "glass"
 
-    val glassStyle = when {
-        isGlassSoft -> resolveGlassSoftStyle(true, glassType, glassTransparency, glassAccentColor, darkTheme)
-        isExpressiveGlass -> resolveGlassSoftStyle(
-            enabled = true,
-            type = "crystal",
-            transparency = 0.68f,
-            accentName = "multicolor",
-            isDark = darkTheme
-        ).copy(
-            accent = if (darkTheme) Color(0xFFFFD76A) else Color(0xFFC89300),
-            secondaryAccent = if (darkTheme) Color(0xFF8FC5FF) else Color(0xFF1976D2),
-            tertiaryAccent = if (darkTheme) Color(0xFF8DDB9B) else Color(0xFF2F9A50)
-        )
-        else -> GlassSoftStyle()
+    // Glass Soft e Glass Expressivo são independentes.
+    val glassStyle = if (isGlassSoft) {
+        resolveGlassSoftStyle(true, glassType, glassTransparency, glassAccentColor, darkTheme)
+    } else {
+        GlassSoftStyle()
     }
     val expressive = ExpressiveStyle(enabled = isExpressive, variant = normalizedExpressiveStyle)
+    val expressiveGlassStyle = resolveExpressiveGlassStyle(isExpressiveGlass, darkTheme)
     val colorScheme = when {
-        isGlassSoft || isExpressiveGlass -> glassSoftColorScheme(glassStyle)
+        isGlassSoft -> glassSoftColorScheme(glassStyle)
+        isExpressiveGlass -> expressiveGlassColorScheme(expressiveGlassStyle, darkTheme)
         isExpressive -> expressiveColorScheme(darkTheme)
         else -> getThemeColorScheme(appTheme, darkTheme)
     }
@@ -598,7 +698,8 @@ fun MyApplicationTheme(
 
     CompositionLocalProvider(
         LocalGlassSoftStyle provides glassStyle,
-        LocalExpressiveStyle provides expressive
+        LocalExpressiveStyle provides expressive,
+        LocalExpressiveGlassStyle provides expressiveGlassStyle
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

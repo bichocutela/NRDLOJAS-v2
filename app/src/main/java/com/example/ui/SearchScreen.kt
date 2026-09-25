@@ -93,6 +93,7 @@ import androidx.compose.ui.Modifier
 import com.example.ui.theme.getDynamicThemeColor
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.LocalExpressiveGlassStyle
 import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.expressiveShadow
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -314,13 +315,28 @@ fun SearchScreen(
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
     val glassStyle = LocalGlassSoftStyle.current
     val expressiveStyle = LocalExpressiveStyle.current
+    val expressiveGlassStyle = LocalExpressiveGlassStyle.current
     val isExpressiveTheme = expressiveStyle.enabled
-    val isGlassTheme = glassStyle.enabled
-    val isStandaloneGlassTheme = isGlassTheme && !expressiveStyle.enabled
+    val isGlassSoftTheme = glassStyle.enabled
+    val isExpressiveGlassTheme = expressiveGlassStyle.enabled
+    val isStandaloneGlassTheme = isGlassSoftTheme
     val appTheme = if (isStandaloneGlassTheme) "glass" else localAppTheme
     val glassActionBrush = remember(glassStyle.accent, glassStyle.secondaryAccent) {
         Brush.verticalGradient(
             listOf(glassStyle.accent, glassStyle.secondaryAccent)
+        )
+    }
+    val expressiveGlassActionBrush = remember(
+        expressiveGlassStyle.accent,
+        expressiveGlassStyle.secondaryAccent,
+        expressiveGlassStyle.tertiaryAccent
+    ) {
+        Brush.linearGradient(
+            listOf(
+                expressiveGlassStyle.accent,
+                expressiveGlassStyle.secondaryAccent,
+                expressiveGlassStyle.tertiaryAccent
+            )
         )
     }
     val normalizedTheme = remember(localAppTheme) {
@@ -434,7 +450,7 @@ fun SearchScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .then(
-                    if (isGlassTheme || isExpressiveTheme) Modifier.background(Color.Transparent)
+                    if (isGlassSoftTheme || isExpressiveTheme) Modifier.background(Color.Transparent)
                     else Modifier.background(MaterialTheme.colorScheme.background)
                 )
         ) {
@@ -464,7 +480,7 @@ fun SearchScreen(
                     .expressiveShadow(headerShape, 8.dp)
                     .clip(headerShape)
                     .background(
-                        if (isGlassTheme) {
+                        if (isGlassSoftTheme) {
                             Color.Transparent
                         } else Color.Transparent
                     )
@@ -503,10 +519,14 @@ fun SearchScreen(
                             .align(Alignment.TopStart)
                             .padding(top = if (compactExpressive) 34.dp else 48.dp, start = 8.dp)
                             .then(
-                                if (isGlassTheme) Modifier
+                                if (isGlassSoftTheme) Modifier
                                     .glassSoftShadow(CircleShape, 4.dp)
                                     .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                     .border(1.dp, glassStyle.borderColor, CircleShape)
+                                else if (isExpressiveGlassTheme) Modifier
+                                    .expressiveShadow(CircleShape, 7.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                                    .border(1.dp, expressiveGlassStyle.borderColor, CircleShape)
                                 else if (isExpressiveTheme) Modifier
                                     .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                                 else Modifier.background(Color.Transparent)
@@ -522,10 +542,10 @@ fun SearchScreen(
                             Icon(
                                 imageVector = Icons.Default.Menu,
                                 contentDescription = "Menu",
-                                tint = if (isExpressiveTheme && !isGlassTheme) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.primary
+                                tint = when {
+                                    isExpressiveGlassTheme -> expressiveGlassStyle.accent
+                                    isExpressiveTheme -> MaterialTheme.colorScheme.onPrimaryContainer
+                                    else -> MaterialTheme.colorScheme.primary
                                 }
                             )
                         }
@@ -538,10 +558,14 @@ fun SearchScreen(
                             .align(Alignment.TopEnd)
                             .padding(top = if (compactExpressive) 34.dp else 48.dp, end = 8.dp)
                             .then(
-                                if (isGlassTheme) Modifier
+                                if (isGlassSoftTheme) Modifier
                                     .glassSoftShadow(CircleShape, 4.dp)
                                     .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                     .border(1.dp, glassStyle.borderColor, CircleShape)
+                                else if (isExpressiveGlassTheme) Modifier
+                                    .expressiveShadow(CircleShape, 7.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                                    .border(1.dp, expressiveGlassStyle.borderColor, CircleShape)
                                 else if (isExpressiveTheme) Modifier
                                     .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                                 else Modifier
@@ -553,10 +577,10 @@ fun SearchScreen(
                             Icon(
                                 Icons.Default.Notifications,
                                 contentDescription = "Notificações",
-                                tint = if (isExpressiveTheme && !isGlassTheme) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.primary
+                                tint = when {
+                                    isExpressiveGlassTheme -> expressiveGlassStyle.accent
+                                    isExpressiveTheme -> MaterialTheme.colorScheme.onPrimaryContainer
+                                    else -> MaterialTheme.colorScheme.primary
                                 }
                             )
                         }
@@ -640,7 +664,8 @@ fun SearchScreen(
                     .border(
                         1.dp,
                         when {
-                            isGlassTheme -> glassStyle.borderColor
+                            isGlassSoftTheme -> glassStyle.borderColor
+                            isExpressiveGlassTheme -> expressiveGlassStyle.borderColor
                             isExpressiveTheme -> MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
                             else -> MaterialTheme.colorScheme.outline
                         },
@@ -651,17 +676,17 @@ fun SearchScreen(
                 keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = when {
-                        isGlassTheme -> MaterialTheme.colorScheme.surface
+                        isGlassSoftTheme -> MaterialTheme.colorScheme.surface
                         isExpressiveTheme -> MaterialTheme.colorScheme.surface
                         else -> MaterialTheme.colorScheme.surfaceVariant
                     },
                     unfocusedContainerColor = when {
-                        isGlassTheme -> MaterialTheme.colorScheme.surface
+                        isGlassSoftTheme -> MaterialTheme.colorScheme.surface
                         isExpressiveTheme -> MaterialTheme.colorScheme.surface
                         else -> MaterialTheme.colorScheme.surfaceVariant
                     },
                     disabledContainerColor = when {
-                        isGlassTheme -> MaterialTheme.colorScheme.surface
+                        isGlassSoftTheme -> MaterialTheme.colorScheme.surface
                         isExpressiveTheme -> MaterialTheme.colorScheme.surfaceContainerHigh
                         else -> MaterialTheme.colorScheme.surfaceVariant
                     },
@@ -683,7 +708,7 @@ fun SearchScreen(
                 sheetQuery = searchQuery
                 showProductSearchSheet = true
             }
-            if (isGlassTheme) {
+            if (isGlassSoftTheme) {
                 val glassSearchButtonHeight = when {
                     compactExpressive -> 54.dp
                     isExpressiveTheme -> 58.dp
@@ -706,6 +731,35 @@ fun SearchScreen(
                             .fillMaxWidth()
                             .height(glassSearchButtonHeight)
                             .background(glassActionBrush),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Pesquisar", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                }
+            } else if (isExpressiveGlassTheme) {
+                val expressiveGlassSearchButtonHeight = when {
+                    compactExpressive -> 54.dp
+                    else -> 58.dp
+                }
+                Surface(
+                    onClick = openProductSearch,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(expressiveGlassSearchButtonHeight)
+                        .expressiveShadow(searchButtonShape, 10.dp),
+                    shape = searchButtonShape,
+                    color = Color.Transparent,
+                    contentColor = expressiveGlassStyle.onAccent,
+                    border = BorderStroke(1.dp, expressiveGlassStyle.borderColor)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(expressiveGlassSearchButtonHeight)
+                            .background(expressiveGlassActionBrush),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -957,7 +1011,7 @@ fun SearchScreen(
             val sheetResults by sheetResultsFlow.collectAsState(initial = emptyList())
             ModalBottomSheet(
                 onDismissRequest = { showProductSearchSheet = false },
-                containerColor = if (isGlassTheme) MaterialTheme.colorScheme.surfaceContainerHigh
+                containerColor = if (isGlassSoftTheme || isExpressiveGlassTheme) MaterialTheme.colorScheme.surfaceContainerHigh
                 else MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(
@@ -991,7 +1045,7 @@ fun SearchScreen(
         if (showMostUsedSheet) {
             ModalBottomSheet(
                 onDismissRequest = { showMostUsedSheet = false },
-                containerColor = if (isGlassTheme) MaterialTheme.colorScheme.surfaceContainerHigh
+                containerColor = if (isGlassSoftTheme || isExpressiveGlassTheme) MaterialTheme.colorScheme.surfaceContainerHigh
                 else MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
@@ -1028,7 +1082,7 @@ fun SearchScreen(
         if (showNotificationsSheet) {
             ModalBottomSheet(
                 onDismissRequest = { showNotificationsSheet = false },
-                containerColor = if (isGlassTheme) MaterialTheme.colorScheme.surfaceContainerHigh
+                containerColor = if (isGlassSoftTheme || isExpressiveGlassTheme) MaterialTheme.colorScheme.surfaceContainerHigh
                 else MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {

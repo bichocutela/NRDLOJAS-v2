@@ -5,6 +5,7 @@ import com.example.data.SupportedThemeKeys
 import com.example.data.ThemeBackground
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -39,5 +40,24 @@ class ExpressiveThemeTest {
         assertFalse(ExpressiveStyle(enabled = true, variant = "solid").isGlass)
         assertTrue(ExpressiveStyle(enabled = true, variant = "glass").isGlass)
         assertFalse(ExpressiveStyle(enabled = false, variant = "glass").isGlass)
+    }
+
+    @Test
+    fun `expressive glass owns its visual engine independently from glass soft`() {
+        val expressiveGlass = resolveExpressiveGlassStyle(enabled = true, isDark = false)
+        val glassSoft = resolveGlassSoftStyle(
+            enabled = true,
+            type = "soft",
+            transparency = 0.55f,
+            accentName = "multicolor",
+            isDark = false
+        )
+
+        assertTrue(expressiveGlass.enabled)
+        assertTrue(glassSoft.enabled)
+        assertNotEquals(expressiveGlass.accent, glassSoft.accent)
+        assertTrue(kotlin.math.abs(expressiveGlass.surfaceAlpha - glassSoft.surfaceAlpha) > 0.001f)
+        assertFalse(GlassSoftStyle().enabled)
+        assertFalse(ExpressiveGlassStyle().enabled)
     }
 }

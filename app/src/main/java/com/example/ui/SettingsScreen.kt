@@ -51,7 +51,9 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val glassType by viewModel.userPreferences.glassType.collectAsState(initial = "soft")
     val expressiveStyle by viewModel.userPreferences.expressiveStyle.collectAsState(initial = "solid")
     val glassStyle = LocalGlassSoftStyle.current
-    val isExpressive = LocalExpressiveStyle.current.enabled
+    val currentExpressiveStyle = LocalExpressiveStyle.current
+    val isExpressive = currentExpressiveStyle.enabled
+    val isExpressiveGlass = currentExpressiveStyle.isGlass
     val expressiveSliderColors = SliderDefaults.colors(
         thumbColor = MaterialTheme.colorScheme.primary,
         activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -293,7 +295,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 ) {
                     listOf(
                         "solid" to "Sólido",
-                        "glass" to "Glass"
+                        "glass" to "Glass Expressivo"
                     ).forEach { (styleKey, styleLabel) ->
                         val selected = expressiveStyle == styleKey
                         val previewShape = RoundedCornerShape(28.dp)
@@ -308,7 +310,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 },
                             colors = CardDefaults.cardColors(
                                 containerColor = when {
-                                    styleKey == "glass" && glassStyle.enabled -> MaterialTheme.colorScheme.surface
+                                    styleKey == "glass" && isExpressiveGlass -> MaterialTheme.colorScheme.surface
                                     selected -> MaterialTheme.colorScheme.primaryContainer
                                     else -> MaterialTheme.colorScheme.surfaceContainerLow
                                 },
@@ -367,7 +369,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     if (expressiveStyle == "glass") {
-                        "Glass usa a mesma identidade Expressiva com transparência e profundidade do motor de vidro já existente."
+                        "Glass Expressivo tem transparência, cores, bordas e profundidade próprias. Ele não usa nem altera as configurações do Glass Soft."
                     } else {
                         "Sólido é o padrão: multicolorido, vibrante, com hierarquia forte e superfícies definidas."
                     },
@@ -396,7 +398,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     ) {
                         Text("Personalizar Glass Soft", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "Esses ajustes aparecem somente neste tema.",
+                            "Esses ajustes aparecem somente no Glass Soft e não alteram o Glass Expressivo.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
