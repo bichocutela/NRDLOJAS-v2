@@ -260,7 +260,9 @@ fun AdminScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().glassSoftShadow(formCardShape),
                     shape = formCardShape,
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    colors = CardDefaults.cardColors(
+            containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceVariant
+        )
                 ) {
                     Column(
                         modifier = Modifier.padding(12.dp)
@@ -546,7 +548,6 @@ fun AdminProductList(
         value = searchQuery,
         onValueChange = { searchQuery = it },
         label = { Text("Pesquisar produto ou categoria") },
-        modifier = Modifier.fillMaxWidth(),
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Pesquisar") },
         placeholder = { Text("Pesquisar por nome, código ou categoria") },
         shape = if (LocalExpressiveStyle.current.enabled) RoundedCornerShape(22.dp) else RoundedCornerShape(16.dp),
@@ -854,7 +855,13 @@ fun AdminProductItem(
     isSelected: Boolean,
     onSelectionChanged: (Boolean) -> Unit
 ) {
-    val productCardShape = RoundedCornerShape(18.dp)
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    val productCardShape = RoundedCornerShape(
+        if (expressive && profile.compact) 20.dp
+        else if (expressive) 24.dp
+        else 18.dp
+    )
     var isEditing by remember { mutableStateOf(false) }
     var editCode by remember(product.code) { mutableStateOf(product.code) }
     var editName by remember(product.name) { mutableStateOf(product.name) }
@@ -885,7 +892,8 @@ fun AdminProductItem(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 3.dp)
-            .glassSoftShadow(productCardShape),
+            .glassSoftShadow(productCardShape)
+            .expressiveShadow(productCardShape, 5.dp),
         shape = productCardShape,
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
