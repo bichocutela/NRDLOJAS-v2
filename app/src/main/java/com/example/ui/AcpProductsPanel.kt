@@ -506,12 +506,14 @@ internal fun AcpProductsPanel(
     }
 
     val result = page
+    val resultsListState = rememberLazyListState()
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = { refreshFromAcp() },
         modifier = Modifier.fillMaxSize()
     ) {
     LazyColumn(
+        state = resultsListState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -821,12 +823,18 @@ internal fun AcpProductsPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(
-                        onClick = { search(result.pageIndex - 1) },
+                        onClick = {
+                            search(result.pageIndex - 1)
+                            scope.launch { resultsListState.animateScrollToItem(0) }
+                        },
                         enabled = !busy && result.pageIndex > 0
                     ) { Text("Anterior") }
                     Text("${result.pageIndex + 1} / ${result.totalPages}", style = MaterialTheme.typography.labelLarge)
                     TextButton(
-                        onClick = { search(result.pageIndex + 1) },
+                        onClick = {
+                            search(result.pageIndex + 1)
+                            scope.launch { resultsListState.animateScrollToItem(0) }
+                        },
                         enabled = !busy && result.pageIndex + 1 < result.totalPages
                     ) { Text("Próxima") }
                 }
