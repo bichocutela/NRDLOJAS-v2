@@ -1,5 +1,11 @@
 package com.example.ui.theme
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -361,7 +367,8 @@ fun Modifier.expressiveLiquidGlass(
     shape: Shape,
     accent: Color? = null,
     intensity: Float = 1f,
-    elevation: Dp? = null
+    elevation: Dp? = null,
+    animated: Boolean = false
 ): Modifier = composed {
     val style = LocalExpressiveGlassStyle.current
     if (!style.enabled) {
@@ -370,6 +377,20 @@ fun Modifier.expressiveLiquidGlass(
         val safeIntensity = intensity.coerceIn(0.45f, 1.40f)
         val fluidity = style.fluidity.coerceIn(0f, 1f)
         val tint = accent ?: style.accent
+        val motion = if (animated) {
+            val transition = rememberInfiniteTransition(label = "expressive-liquid-glass")
+            transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 6200, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "liquid-refraction"
+            ).value
+        } else {
+            0.36f
+        }
         val refraction = style.secondaryAccent
         val highlightAlpha = (0.46f + 0.30f * fluidity) * safeIntensity
         val borderWidthDp = 1.25f + 1.55f * fluidity
@@ -404,8 +425,8 @@ fun Modifier.expressiveLiquidGlass(
                         Color.Transparent
                     ),
                     center = Offset(
-                        x = size.width * (0.16f + 0.10f * fluidity),
-                        y = size.height * (0.02f + 0.08f * fluidity)
+                        x = size.width * (0.12f + 0.18f * motion + 0.06f * fluidity),
+                        y = size.height * (0.02f + 0.07f * fluidity + 0.04f * motion)
                     ),
                     radius = maxDimension * (0.58f + 0.12f * fluidity)
                 )
@@ -416,8 +437,8 @@ fun Modifier.expressiveLiquidGlass(
                         Color.Transparent
                     ),
                     center = Offset(
-                        x = size.width * (0.82f - 0.08f * fluidity),
-                        y = size.height * (0.90f - 0.08f * fluidity)
+                        x = size.width * (0.88f - 0.16f * motion - 0.06f * fluidity),
+                        y = size.height * (0.92f - 0.07f * fluidity - 0.05f * motion)
                     ),
                     radius = maxDimension * (0.46f + 0.16f * fluidity)
                 )
@@ -430,8 +451,8 @@ fun Modifier.expressiveLiquidGlass(
                         refraction.copy(alpha = (0.24f + 0.12f * fluidity) * safeIntensity),
                         Color.White.copy(alpha = (0.82f * safeIntensity).coerceAtMost(0.92f))
                     ),
-                    start = Offset(0f, size.height * 0.08f),
-                    end = Offset(size.width, size.height * 0.92f)
+                    start = Offset(size.width * (0.04f + 0.08f * motion), size.height * 0.04f),
+                    end = Offset(size.width * (0.96f - 0.06f * motion), size.height * 0.96f)
                 )
                 val innerGleam = Brush.linearGradient(
                     colors = listOf(

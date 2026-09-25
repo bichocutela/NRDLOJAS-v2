@@ -679,7 +679,8 @@ fun SearchScreen(
                                 shape = searchFieldShape,
                                 accent = expressiveGlassStyle.accent,
                                 intensity = 1.05f,
-                                elevation = 9.dp
+                                elevation = 9.dp,
+                                animated = true
                             )
                             isGlassSoftTheme -> Modifier.glassSoftShadow(searchFieldShape)
                             isExpressiveTheme -> Modifier.expressiveShadow(searchFieldShape, 8.dp)
@@ -790,7 +791,8 @@ fun SearchScreen(
                             shape = searchButtonShape,
                             accent = expressiveGlassStyle.accent,
                             intensity = 1.22f,
-                            elevation = 11.dp
+                            elevation = 11.dp,
+                            animated = true
                         ),
                     shape = searchButtonShape,
                     color = Color.Transparent,
