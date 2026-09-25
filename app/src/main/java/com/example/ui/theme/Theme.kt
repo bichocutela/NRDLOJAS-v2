@@ -167,7 +167,7 @@ internal fun resolveExpressiveGlassStyle(
     val safeFluidity = fluidity.coerceIn(0f, 1f)
     val progress = ((safeTransparency - 0.20f) / 0.70f).coerceIn(0f, 1f)
     val actions = expressiveGlassActionColors(accentName, isDark)
-    val surfaceAlpha = 0.82f - (0.28f * progress)
+    val surfaceAlpha = 0.76f - (0.34f * progress)
     val normalized = normalizeExpressiveGlassAccentName(accentName)
     return ExpressiveGlassStyle(
         enabled = true,
@@ -179,7 +179,7 @@ internal fun resolveExpressiveGlassStyle(
         tertiaryAccent = actions[2],
         onAccent = if (isDark || normalized in setOf("gold", "orange")) Color(0xFF17202A) else Color.White,
         surfaceAlpha = surfaceAlpha,
-        strongSurfaceAlpha = (surfaceAlpha + 0.10f).coerceAtMost(0.92f),
+        strongSurfaceAlpha = (surfaceAlpha + 0.12f).coerceAtMost(0.90f),
         borderColor = Color.White.copy(alpha = (0.62f + 0.24f * safeFluidity).coerceAtMost(0.90f)),
         shadowElevation = 9f + (5f * safeFluidity),
         shadowAlpha = (if (isDark) 0.24f else 0.12f) + (0.08f * safeFluidity),
@@ -492,12 +492,100 @@ fun Modifier.expressiveLiquidGlass(
                 )
                 val innerGleam = Brush.linearGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = 0.26f * safeIntensity),
+                        Color.White.copy(alpha = 0.30f * safeIntensity),
                         Color.Transparent,
-                        Color.White.copy(alpha = 0.10f * safeIntensity)
+                        Color.White.copy(alpha = 0.12f * safeIntensity)
                     ),
                     start = Offset(size.width * 0.10f, 0f),
                     end = Offset(size.width * 0.90f, size.height)
+                )
+                // Difusão óptica suave: cria a leitura de backdrop blur/frost sem borrar o conteúdo.
+                val diffusionA = Brush.radialGradient(
+                    colors = listOf(
+                        style.surfaceBase.copy(alpha = (0.22f + 0.10f * fluidity) * safeIntensity),
+                        Color.White.copy(alpha = if (style.isDark) 0.035f else 0.12f),
+                        Color.Transparent
+                    ),
+                    center = Offset(
+                        size.width * (0.42f + 0.08f * motion),
+                        size.height * (0.36f - 0.05f * motion)
+                    ),
+                    radius = maxDimension * (0.42f + 0.12f * fluidity)
+                )
+                val diffusionB = Brush.radialGradient(
+                    colors = listOf(
+                        refraction.copy(alpha = (0.055f + 0.055f * fluidity) * safeIntensity),
+                        style.surfaceBase.copy(alpha = (0.10f + 0.05f * fluidity) * safeIntensity),
+                        Color.Transparent
+                    ),
+                    center = Offset(
+                        size.width * (0.66f - 0.08f * motion),
+                        size.height * (0.64f + 0.04f * motion)
+                    ),
+                    radius = maxDimension * (0.36f + 0.10f * fluidity)
+                )
+                val distortionHeight = size.height * (0.12f + 0.14f * fluidity)
+                val bottomLiquidPath = Path().apply {
+                    moveTo(0f, size.height - distortionHeight * (0.72f + 0.10f * motion))
+                    cubicTo(
+                        size.width * 0.18f,
+                        size.height - distortionHeight * (1.36f - 0.16f * motion),
+                        size.width * 0.34f,
+                        size.height - distortionHeight * (0.34f + 0.12f * motion),
+                        size.width * 0.52f,
+                        size.height - distortionHeight * (0.86f - 0.08f * motion)
+                    )
+                    cubicTo(
+                        size.width * 0.68f,
+                        size.height - distortionHeight * (1.42f - 0.12f * motion),
+                        size.width * 0.84f,
+                        size.height - distortionHeight * (0.18f + 0.10f * motion),
+                        size.width,
+                        size.height - distortionHeight * (0.64f + 0.08f * motion)
+                    )
+                    lineTo(size.width, size.height)
+                    lineTo(0f, size.height)
+                    close()
+                }
+                val upperLiquidPath = Path().apply {
+                    moveTo(0f, distortionHeight * (0.42f + 0.08f * motion))
+                    cubicTo(
+                        size.width * 0.24f,
+                        distortionHeight * (0.04f + 0.10f * motion),
+                        size.width * 0.48f,
+                        distortionHeight * (0.84f - 0.14f * motion),
+                        size.width * 0.70f,
+                        distortionHeight * (0.30f + 0.06f * motion)
+                    )
+                    cubicTo(
+                        size.width * 0.82f,
+                        distortionHeight * 0.04f,
+                        size.width * 0.92f,
+                        distortionHeight * (0.66f - 0.08f * motion),
+                        size.width,
+                        distortionHeight * 0.24f
+                    )
+                    lineTo(size.width, 0f)
+                    lineTo(0f, 0f)
+                    close()
+                }
+                val liquidWaveBrush = Brush.horizontalGradient(
+                    colors = listOf(
+                        tint.copy(alpha = if (waves) (0.20f + 0.10f * fluidity) * safeIntensity else 0f),
+                        Color.White.copy(alpha = if (waves) (0.18f + 0.10f * fluidity) * safeIntensity else 0f),
+                        refraction.copy(alpha = if (waves) (0.22f + 0.10f * fluidity) * safeIntensity else 0f),
+                        Color.White.copy(alpha = if (waves) 0.12f * safeIntensity else 0f),
+                        tint.copy(alpha = if (waves) 0.16f * safeIntensity else 0f)
+                    )
+                )
+                val upperCausticBrush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = if (waves) (0.30f + 0.18f * fluidity) * safeIntensity else 0f),
+                        tint.copy(alpha = if (waves) 0.10f * safeIntensity else 0f),
+                        Color.Transparent,
+                        refraction.copy(alpha = if (waves) 0.12f * safeIntensity else 0f),
+                        Color.White.copy(alpha = if (waves) 0.22f * safeIntensity else 0f)
+                    )
                 )
                 val waveA = Brush.radialGradient(
                     colors = listOf(
@@ -535,8 +623,14 @@ fun Modifier.expressiveLiquidGlass(
 
                 onDrawWithContent {
                     drawPath(path = outlinePath, brush = baseBrush)
+                    drawPath(path = outlinePath, brush = diffusionA)
+                    drawPath(path = outlinePath, brush = diffusionB)
                     drawPath(path = outlinePath, brush = topLens)
                     drawPath(path = outlinePath, brush = lowerRefraction)
+                    if (waves) {
+                        drawPath(path = upperLiquidPath, brush = upperCausticBrush)
+                        drawPath(path = bottomLiquidPath, brush = liquidWaveBrush)
+                    }
                     drawPath(path = outlinePath, brush = waveA)
                     drawPath(path = outlinePath, brush = waveB)
                     drawPath(path = outlinePath, brush = innerGleam)
@@ -565,8 +659,13 @@ fun Modifier.expressiveLiquidGlass(
                     )
                     drawPath(
                         path = outlinePath,
-                        color = Color.White.copy(alpha = (0.18f + 0.16f * fluidity) * safeIntensity),
-                        style = Stroke(width = 0.65.dp.toPx())
+                        color = refraction.copy(alpha = (0.15f + 0.18f * fluidity) * safeIntensity),
+                        style = Stroke(width = (1.0f + 0.65f * fluidity).dp.toPx())
+                    )
+                    drawPath(
+                        path = outlinePath,
+                        color = Color.White.copy(alpha = (0.28f + 0.22f * fluidity) * safeIntensity),
+                        style = Stroke(width = 0.72.dp.toPx())
                     )
                 }
             }
