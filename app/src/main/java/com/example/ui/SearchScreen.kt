@@ -436,18 +436,19 @@ fun SearchScreen(
                 )
         ) {
         val screenProfile = rememberNrdScreenProfile()
+        val compactExpressive = isExpressiveTheme && screenProfile.compact
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
-                    start = if (isExpressiveTheme) 12.dp else 0.dp,
-                    top = if (isExpressiveTheme) 6.dp else 0.dp,
-                    end = if (isExpressiveTheme) 12.dp else 0.dp
+                    start = if (compactExpressive) 8.dp else if (isExpressiveTheme) 12.dp else 0.dp,
+                    top = if (compactExpressive) 4.dp else if (isExpressiveTheme) 6.dp else 0.dp,
+                    end = if (compactExpressive) 8.dp else if (isExpressiveTheme) 12.dp else 0.dp
                 )
         ) {
             val headerHeight = maxWidth / 3f
             val headerShape = if (isExpressiveTheme) {
-                RoundedCornerShape(28.dp)
+                RoundedCornerShape(if (compactExpressive) 24.dp else 28.dp)
             } else {
                 RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
             }
@@ -497,7 +498,7 @@ fun SearchScreen(
                         },
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(top = 48.dp, start = 8.dp)
+                            .padding(top = if (compactExpressive) 34.dp else 48.dp, start = 8.dp)
                             .then(
                                 if (isGlassTheme) Modifier
                                     .glassSoftShadow(CircleShape, 4.dp)
@@ -532,7 +533,7 @@ fun SearchScreen(
                         onClick = { showNotificationsSheet = true },
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(top = 48.dp, end = 8.dp)
+                            .padding(top = if (compactExpressive) 34.dp else 48.dp, end = 8.dp)
                             .then(
                                 if (isGlassTheme) Modifier
                                     .glassSoftShadow(CircleShape, 4.dp)
@@ -560,7 +561,15 @@ fun SearchScreen(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(if (screenProfile.veryCompact) 8.dp else 16.dp))
+        Spacer(
+            modifier = Modifier.height(
+                when {
+                    compactExpressive -> 10.dp
+                    screenProfile.veryCompact -> 8.dp
+                    else -> 16.dp
+                }
+            )
+        )
 
             Column(
             modifier = Modifier.padding(horizontal = screenProfile.horizontalPadding),
@@ -576,7 +585,13 @@ fun SearchScreen(
                 onValueChange = viewModel::updateSearchQuery,
                 singleLine = true,
                 placeholder = { Text("Pesquisar produto...", style = MaterialTheme.typography.bodyLarge) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Pesquisar", modifier = Modifier.size(28.dp)) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = "Pesquisar",
+                        modifier = Modifier.size(if (compactExpressive) 24.dp else 28.dp)
+                    )
+                },
                 trailingIcon = {
                     Row {
                         if (searchQuery.isNotEmpty()) {
@@ -600,7 +615,13 @@ fun SearchScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = if (isExpressiveTheme) 64.dp else 56.dp)
+                    .heightIn(
+                        min = when {
+                            compactExpressive -> 56.dp
+                            isExpressiveTheme -> 60.dp
+                            else -> 56.dp
+                        }
+                    )
                     .glassSoftShadow(searchFieldShape)
                     .expressiveShadow(searchFieldShape, 8.dp)
                     .clip(searchFieldShape)
@@ -655,7 +676,13 @@ fun SearchScreen(
                     onClick = openProductSearch,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (isExpressiveTheme) 60.dp else 56.dp)
+                        .height(
+                            when {
+                                compactExpressive -> 54.dp
+                                isExpressiveTheme -> 58.dp
+                                else -> 56.dp
+                            }
+                        )
                         .glassSoftShadow(searchButtonShape)
                         .expressiveShadow(searchButtonShape, 9.dp),
                     shape = searchButtonShape,
@@ -681,7 +708,13 @@ fun SearchScreen(
                     shape = searchButtonShape,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (isExpressiveTheme) 60.dp else 56.dp)
+                        .height(
+                            when {
+                                compactExpressive -> 54.dp
+                                isExpressiveTheme -> 58.dp
+                                else -> 56.dp
+                            }
+                        )
                         .expressiveShadow(searchButtonShape, 9.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
