@@ -220,6 +220,7 @@ fun AppNavGraph(
                         notificationProductCode = productCodeFromNotification,
                         onOpenDrawer = { scope.launch { drawerState.open() } },
                         canQuickEditBanner = isLoggedIn && userRole == "mestre",
+                        canQuickAddProduct = isLoggedIn && userRole == "mestre",
                         onQuickEditBanner = { themeKey ->
                             navController.navigate("mestre/banner/$themeKey") { launchSingleTop = true }
                         }
