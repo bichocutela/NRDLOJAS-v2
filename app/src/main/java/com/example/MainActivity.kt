@@ -52,8 +52,9 @@ import com.example.ui.AppNavGraph
 import com.example.ui.MainViewModel
 import com.example.ui.MainViewModelFactory
 import com.example.ui.theme.MyApplicationTheme
-import com.example.ui.theme.GlassSoftBackground
+import com.example.ui.theme.NrdAppBackground
 import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.LocalExpressiveStyle
 
 import com.example.util.FcmTopicSubscription
 import com.example.util.NotificationHelper
@@ -220,10 +221,13 @@ class MainActivity : ComponentActivity() {
                     showSplash = false
                 }
                 
-                GlassSoftBackground(modifier = Modifier.fillMaxSize()) {
+                NrdAppBackground(modifier = Modifier.fillMaxSize()) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
-                        color = if (LocalGlassSoftStyle.current.enabled) Color.Transparent else MaterialTheme.colorScheme.background
+                        color = if (
+                            LocalGlassSoftStyle.current.enabled ||
+                            LocalExpressiveStyle.current.enabled
+                        ) Color.Transparent else MaterialTheme.colorScheme.background
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
                         if (!showSplash) {
