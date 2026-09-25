@@ -85,6 +85,44 @@ class NossaGenteApi(context: Context) {
         fetchPointOnce(limit.coerceIn(1, 100), allowSavedCredentialRecovery = true)
     }
 
+    /** Perfil autenticado do colaborador. O APK oficial usa GET /me e /tempo-casa. */
+    suspend fun fetchEmployeeProfile(): NossaGenteProfileResult = withContext(Dispatchers.IO) {
+        fetchEmployeeProfileOnce(allowSavedCredentialRecovery = true)
+    }
+
+    private suspend fun fetchEmployeeProfileOnce(allowSavedCredentialRecovery: Boolean): NossaGenteProfileResult {
+        val token = currentToken() ?: return NossaGenteProfileResult.Unauthorized
+        return try {
+            val meResponse = authenticatedGet("/me", token)
+            if (meResponse.code == 401 || meResponse.code == 403) {
+                if (allowSavedCredentialRecovery && renewFromSavedCredentials()) {
+                    return fetchEmployeeProfileOnce(allowSavedCredentialRecovery = false)
+                }
+                return NossaGenteProfileResult.Unauthorized
+            }
+            if (!meResponse.successful) {
+                return NossaGenteProfileResult.Error("Não foi possível carregar os dados do perfil agora.")
+            }
+
+            var profile = parseEmployeeProfile(meResponse.body)
+            if (profile.name.isNullOrBlank() && profile.admissionDate.isNullOrBlank()) {
+                return NossaGenteProfileResult.Error("O Nossa Gente não retornou os dados do colaborador.")
+            }
+
+            runCatching {
+                val tenureResponse = authenticatedGet("/tempo-casa?limit=100&page=1", token)
+                if (tenureResponse.successful) {
+                    profile = mergeTenureProfile(profile, tenureResponse.body)
+                }
+            }
+
+            profile = profile.withComputedTenure()
+            NossaGenteProfileResult.Success(profile)
+        } catch (_: Exception) {
+            NossaGenteProfileResult.Error("Não foi possível carregar os dados do perfil. Verifique a internet.")
+        }
+    }
+
     /** Banco de horas do Nossa Gente. O contrato oficial usa SALDOTOTAL e MESES. */
     suspend fun fetchHours(): NossaGenteHoursResult = withContext(Dispatchers.IO) {
         fetchHoursOnce(allowSavedCredentialRecovery = true)
@@ -169,6 +207,139 @@ class NossaGenteApi(context: Context) {
         return client.newCall(request).execute().use { response ->
             AuthenticatedResponse(response.code, response.isSuccessful, response.body?.string().orEmpty())
         }
+    }
+
+    private fun parseEmployeeProfile(raw: String): EmployeeProfile {
+        val trimmed = raw.trim()
+        if (trimmed.isBlank()) return EmployeeProfile()
+        val root = runCatching { JSONObject(trimmed) }.getOrNull() ?: return EmployeeProfile()
+        val level1 = firstObject(root, "data", "user", "usuario", "profile", "perfil", "colaborador", "funcionario", "employee") ?: root
+        val source = firstObject(level1, "user", "usuario", "profile", "perfil", "colaborador", "funcionario", "employee") ?: level1
+        val admissionRaw = source.textValue(
+            "dataAdmissao", "data_admissao", "dtAdmissao", "dt_admissao",
+            "admissao", "admissionDate", "hireDate"
+        )
+        val tenureYears = source.optValue(
+            "tempoAnos", "tempoCasaAnos", "tempo_casa_anos", "anos", "years"
+        ).toIntOrNullSafe()
+        val tenureText = source.textValue("tempo", "tempoCasa", "tempo_casa", "tempoEmpresa", "tempo_empresa")
+        return EmployeeProfile(
+            name = source.textValue("nome", "NOME", "name", "nomeCompleto", "nome_completo", "fullName"),
+            admissionDate = formatAdmissionDate(admissionRaw),
+            tenure = normalizeTenureLabel(tenureText, tenureYears),
+            tenureYears = tenureYears,
+            employeeId = source.textValue("id", "codigoUsuario", "codigo_usuario", "userId", "usuarioId"),
+            registration = source.textValue("matricula", "MATRICULA", "registro", "registration")
+        ).withComputedTenure(admissionRaw)
+    }
+
+    private fun mergeTenureProfile(base: EmployeeProfile, raw: String): EmployeeProfile {
+        val array = runCatching {
+            payloadArray(
+                raw, "data", "resultado", "result", "payload", "items",
+                "tempoCasa", "tempo_casa", "colaboradores", "employees"
+            )
+        }.getOrElse { JSONArray() }
+        val candidates = (0 until array.length()).mapNotNull(array::optJSONObject)
+        if (candidates.isEmpty()) return base
+
+        fun JSONObject.matchesBase(): Boolean {
+            val id = textValue("id", "codigoUsuario", "codigo_usuario", "userId", "usuarioId")
+            val registration = textValue("matricula", "MATRICULA", "registro", "registration")
+            val name = textValue("nome", "NOME", "name", "nomeCompleto", "nome_completo", "fullName")
+            return when {
+                !base.employeeId.isNullOrBlank() && !id.isNullOrBlank() -> base.employeeId == id
+                !base.registration.isNullOrBlank() && !registration.isNullOrBlank() -> base.registration == registration
+                !base.name.isNullOrBlank() && !name.isNullOrBlank() -> base.name.equals(name, ignoreCase = true)
+                else -> false
+            }
+        }
+
+        val candidate = candidates.firstOrNull { it.matchesBase() } ?: candidates.singleOrNull() ?: return base
+        val admissionRaw = candidate.textValue(
+            "dataAdmissao", "data_admissao", "dtAdmissao", "dt_admissao",
+            "admissao", "admissionDate", "hireDate"
+        )
+        val tenureYears = candidate.optValue(
+            "tempoAnos", "tempoCasaAnos", "tempo_casa_anos", "anos", "years"
+        ).toIntOrNullSafe()
+        val tenureText = candidate.textValue("tempo", "tempoCasa", "tempo_casa", "tempoEmpresa", "tempo_empresa")
+
+        return base.copy(
+            name = base.name ?: candidate.textValue("nome", "NOME", "name", "nomeCompleto", "nome_completo", "fullName"),
+            admissionDate = base.admissionDate ?: formatAdmissionDate(admissionRaw),
+            tenure = normalizeTenureLabel(tenureText, tenureYears) ?: base.tenure,
+            tenureYears = tenureYears ?: base.tenureYears,
+            employeeId = base.employeeId ?: candidate.textValue("id", "codigoUsuario", "codigo_usuario", "userId", "usuarioId"),
+            registration = base.registration ?: candidate.textValue("matricula", "MATRICULA", "registro", "registration")
+        ).withComputedTenure(admissionRaw)
+    }
+
+    private fun EmployeeProfile.withComputedTenure(rawAdmission: String? = null): EmployeeProfile {
+        if (!tenure.isNullOrBlank()) return this
+        val years = tenureYears ?: calculateTenureYears(rawAdmission ?: admissionDate)
+        val label = when (years) {
+            null -> null
+            0 -> "Menos de 1 ano"
+            1 -> "1 ano"
+            else -> "$years anos"
+        }
+        return copy(tenure = label, tenureYears = years)
+    }
+
+    private fun normalizeTenureLabel(raw: String?, years: Int?): String? {
+        raw?.trim()?.takeIf { it.isNotBlank() && it != "null" }?.let { value ->
+            if (value.matches(Regex("""\d+"""))) {
+                val n = value.toIntOrNull()
+                if (n != null) return if (n == 1) "1 ano" else "$n anos"
+            }
+            return value
+        }
+        return years?.let { if (it == 1) "1 ano" else "$it anos" }
+    }
+
+    private fun formatAdmissionDate(raw: String?): String? {
+        val value = raw?.trim()?.takeIf { it.isNotBlank() && it != "null" } ?: return null
+        Regex("""^(\d{4})-(\d{2})-(\d{2})""").find(value)?.let { match ->
+            val (year, month, day) = match.destructured
+            return "$day/$month/$year"
+        }
+        Regex("""^(\d{2})/(\d{2})/(\d{4})""").find(value)?.let { return it.value }
+        return value.substringBefore("T").substringBefore(" 00:00:00")
+    }
+
+    private fun calculateTenureYears(raw: String?): Int? {
+        val value = raw?.trim() ?: return null
+        val iso = Regex("""^(\d{4})-(\d{2})-(\d{2})""").find(value)
+        val br = Regex("""^(\d{2})/(\d{2})/(\d{4})""").find(value)
+        val year: Int
+        val month: Int
+        val day: Int
+        when {
+            iso != null -> {
+                year = iso.groupValues[1].toIntOrNull() ?: return null
+                month = iso.groupValues[2].toIntOrNull() ?: return null
+                day = iso.groupValues[3].toIntOrNull() ?: return null
+            }
+            br != null -> {
+                day = br.groupValues[1].toIntOrNull() ?: return null
+                month = br.groupValues[2].toIntOrNull() ?: return null
+                year = br.groupValues[3].toIntOrNull() ?: return null
+            }
+            else -> return null
+        }
+        val now = java.util.Calendar.getInstance()
+        var years = now.get(java.util.Calendar.YEAR) - year
+        val currentMonth = now.get(java.util.Calendar.MONTH) + 1
+        val currentDay = now.get(java.util.Calendar.DAY_OF_MONTH)
+        if (currentMonth < month || (currentMonth == month && currentDay < day)) years--
+        return years.takeIf { it >= 0 }
+    }
+
+    private fun Any?.toIntOrNullSafe(): Int? = when (this) {
+        is Number -> toInt()
+        is String -> trim().toIntOrNull()
+        else -> null
     }
 
     private fun parseBenefit(saldoRaw: String, comprasRaw: String): BenefitSummary {
@@ -426,6 +597,7 @@ class NossaGenteApi(context: Context) {
     }
 
     internal fun parsePromotionsForTest(raw: String): List<Promotion> = parsePromotions(raw)
+    internal fun parseEmployeeProfileForTest(raw: String): EmployeeProfile = parseEmployeeProfile(raw)
 
     /** Assinatura estável do conteúdo comercial; a ordem da resposta não altera o resultado. */
     private fun fingerprintPromotions(promotions: List<Promotion>): String = fingerprintPromotionsForTest(promotions)
@@ -714,6 +886,15 @@ data class PointEntry(
 data class HoursSummary(val total: String, val months: List<HoursMonth>)
 data class HoursMonth(val year: Int, val month: String, val balance: String)
 
+data class EmployeeProfile(
+    val name: String? = null,
+    val admissionDate: String? = null,
+    val tenure: String? = null,
+    val tenureYears: Int? = null,
+    val employeeId: String? = null,
+    val registration: String? = null
+)
+
 data class BenefitSummary(
     val period: String? = null,
     val updatedAt: String? = null,
@@ -730,6 +911,12 @@ data class BenefitPurchase(
     val amount: String? = null,
     val description: String? = null
 )
+
+sealed interface NossaGenteProfileResult {
+    data class Success(val profile: EmployeeProfile) : NossaGenteProfileResult
+    data object Unauthorized : NossaGenteProfileResult
+    data class Error(val message: String) : NossaGenteProfileResult
+}
 
 sealed interface NossaGenteHoursResult {
     data class Success(val hours: HoursSummary) : NossaGenteHoursResult

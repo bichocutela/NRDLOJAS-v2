@@ -36,6 +36,31 @@ class NossaGenteApiTest {
     }
 
     @Test
+    fun parsesAuthenticatedEmployeeProfileWithAdmissionAndTenure() {
+        val api = NossaGenteApi(ApplicationProvider.getApplicationContext())
+        val json = """
+            {
+              "data": {
+                "id": 42,
+                "matricula": "001234",
+                "nome": "COLABORADOR TESTE",
+                "dataAdmissao": "2019-03-14",
+                "tempoAnos": 7
+              }
+            }
+        """.trimIndent()
+
+        val profile = api.parseEmployeeProfileForTest(json)
+
+        assertEquals("COLABORADOR TESTE", profile.name)
+        assertEquals("14/03/2019", profile.admissionDate)
+        assertEquals("7 anos", profile.tenure)
+        assertEquals(7, profile.tenureYears)
+        assertEquals("42", profile.employeeId)
+        assertEquals("001234", profile.registration)
+    }
+
+    @Test
     fun fingerprintIgnoresOrderOfEquivalentProducts() {
         val first = Promotion(
             id = "higiene-123",

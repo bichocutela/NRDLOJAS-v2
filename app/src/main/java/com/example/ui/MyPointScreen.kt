@@ -27,6 +27,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
@@ -53,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
@@ -62,15 +65,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.BenefitSummary
+import com.example.data.EmployeeProfile
 import com.example.data.HoursSummary
 import com.example.data.NossaGenteApi
 import com.example.data.NossaGenteBenefitResult
 import com.example.data.NossaGenteHoursResult
 import com.example.data.NossaGentePointResult
+import com.example.data.NossaGenteProfileResult
 import com.example.data.PointEntry
 import com.example.data.PointSummary
 import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.LocalExpressiveGlassStyle
 import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.expressiveLiquidGlass
 import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.expressiveShadow
 import kotlinx.coroutines.launch
@@ -81,10 +88,12 @@ import kotlin.math.roundToInt
 fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () -> Unit) {
     val configuration = LocalConfiguration.current
     val expressiveStyle = LocalExpressiveStyle.current
+    val expressiveGlassStyle = LocalExpressiveGlassStyle.current
     val glassStyle = LocalGlassSoftStyle.current
     val isExpressive = expressiveStyle.enabled
     val contentPadding = if (configuration.screenWidthDp < 360) 10.dp else 16.dp
     val purchasesMaxHeight = (configuration.screenHeightDp * 0.42f).coerceIn(160f, 420f).dp
+    var employeeProfile by remember { mutableStateOf<EmployeeProfile?>(null) }
     var point by remember { mutableStateOf<PointSummary?>(null) }
     var hours by remember { mutableStateOf<HoursSummary?>(null) }
     // O card permanece visível mesmo quando o endpoint ainda não devolveu
@@ -105,6 +114,15 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
         loading = true
         error = null
         scope.launch {
+            when (val result = api.fetchEmployeeProfile()) {
+                is NossaGenteProfileResult.Success -> employeeProfile = result.profile
+                NossaGenteProfileResult.Unauthorized -> {
+                    onSignOut()
+                    loading = false
+                    return@launch
+                }
+                is NossaGenteProfileResult.Error -> if (error == null) error = result.message
+            }
             when (val result = api.fetchHours()) {
                 is NossaGenteHoursResult.Success -> hours = result.hours
                 NossaGenteHoursResult.Unauthorized -> onSignOut()
@@ -197,6 +215,15 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
         } else {
             LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(contentPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item {
+                    employeeProfile?.let { profile ->
+                        EmployeeProfileCard(
+                            profile = profile,
+                            isExpressive = isExpressive,
+                            glassEnabled = glassStyle.enabled,
+                            expressiveGlassEnabled = expressiveGlassStyle.enabled
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
                     hours?.let { summary ->
                         val hoursShape = if (isExpressive) RoundedCornerShape(30.dp) else MaterialTheme.shapes.medium
                         Card(
@@ -351,6 +378,141 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun EmployeeProfileCard(
+    profile: EmployeeProfile,
+    isExpressive: Boolean,
+    glassEnabled: Boolean,
+    expressiveGlassEnabled: Boolean
+) {
+    val expressiveGlass = LocalExpressiveGlassStyle.current
+    val shape = if (isExpressive) {
+        RoundedCornerShape(topStart = 34.dp, topEnd = 24.dp, bottomEnd = 32.dp, bottomStart = 26.dp)
+    } else {
+        MaterialTheme.shapes.large
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                when {
+                    expressiveGlassEnabled -> Modifier.expressiveLiquidGlass(
+                        shape = shape,
+                        accent = expressiveGlass.accent,
+                        secondaryAccent = expressiveGlass.secondaryAccent,
+                        intensity = 0.96f,
+                        elevation = 8.dp,
+                        waves = true,
+                        bubbleSeed = profile.name.orEmpty().hashCode()
+                    )
+                    else -> Modifier
+                        .glassSoftShadow(shape, if (isExpressive) 4.dp else 0.dp)
+                        .expressiveShadow(shape, 7.dp)
+                }
+            ),
+        shape = shape,
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                expressiveGlassEnabled -> Color.Transparent
+                glassEnabled -> MaterialTheme.colorScheme.surface
+                else -> MaterialTheme.colorScheme.primaryContainer
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(if (isExpressive) 18.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(if (isExpressive) 52.dp else 48.dp)
+                        .clip(RoundedCornerShape(if (isExpressive) 18.dp else 16.dp))
+                        .background(
+                            if (expressiveGlassEnabled) MaterialTheme.colorScheme.surface.copy(alpha = 0.46f)
+                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(if (isExpressive) 28.dp else 26.dp)
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Nome do usuário",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        profile.name ?: "—",
+                        style = if (isExpressive) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        "Dados sincronizados com o Nossa Gente",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ProfileMetric(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.AccessTime,
+                    label = "Tempo de Casa",
+                    value = profile.tenure ?: "—",
+                    isExpressive = isExpressive
+                )
+                ProfileMetric(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.CalendarToday,
+                    label = "Admissão",
+                    value = profile.admissionDate ?: "—",
+                    isExpressive = isExpressive
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileMetric(
+    modifier: Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    isExpressive: Boolean
+) {
+    val shape = RoundedCornerShape(if (isExpressive) 20.dp else 16.dp)
+    Column(
+        modifier = modifier
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isExpressive) 0.62f else 0.78f))
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(
+            value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
