@@ -684,17 +684,16 @@ fun SearchScreen(
                 showProductSearchSheet = true
             }
             if (isGlassTheme) {
+                val glassSearchButtonHeight = when {
+                    compactExpressive -> 54.dp
+                    isExpressiveTheme -> 58.dp
+                    else -> 56.dp
+                }
                 Surface(
                     onClick = openProductSearch,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(
-                            min = when {
-                                compactExpressive -> 54.dp
-                                isExpressiveTheme -> 58.dp
-                                else -> 56.dp
-                            }
-                        )
+                        .height(glassSearchButtonHeight)
                         .glassSoftShadow(searchButtonShape)
                         .expressiveShadow(searchButtonShape, 9.dp),
                     shape = searchButtonShape,
@@ -704,7 +703,8 @@ fun SearchScreen(
                 ) {
                     Row(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxWidth()
+                            .height(glassSearchButtonHeight)
                             .background(glassActionBrush),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
