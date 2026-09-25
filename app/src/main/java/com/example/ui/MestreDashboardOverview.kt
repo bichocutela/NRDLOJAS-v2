@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddBox
 import androidx.compose.material.icons.filled.Backup
@@ -43,7 +44,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.GeminiMasterService
+import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.expressiveShadow
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -62,8 +66,13 @@ internal fun MestreDashboardOverview(
     onManageTabs: () -> Unit,
     onImportProducts: () -> Unit
 ) {
-    rememberNrdScreenProfile()
-    Text("Visão geral", style = MaterialTheme.typography.titleLarge)
+    val profile = rememberNrdScreenProfile()
+    val expressive = LocalExpressiveStyle.current.enabled
+    Text(
+        "Visão geral",
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal
+    )
     Text(
         "Acompanhe o aplicativo e acesse as tarefas mais usadas.",
         style = MaterialTheme.typography.bodySmall,
@@ -109,10 +118,15 @@ private fun MestreGeminiConnectionCard() {
     var resultText by remember { mutableStateOf<String?>(null) }
     var isError by remember { mutableStateOf(false) }
 
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    val geminiShape = if (expressive) RoundedCornerShape(if (profile.compact) 22.dp else 26.dp) else MaterialTheme.shapes.medium
     OutlinedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .glassSoftShadow(MaterialTheme.shapes.medium)
+            .glassSoftShadow(geminiShape)
+            .expressiveShadow(geminiShape, 6.dp),
+        shape = geminiShape
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -226,7 +240,14 @@ internal fun MestreContentHub(
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
     Spacer(modifier = Modifier.height(6.dp))
-    OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
+    val contentShape = if (LocalExpressiveStyle.current.enabled) RoundedCornerShape(24.dp) else MaterialTheme.shapes.medium
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(contentShape)
+            .expressiveShadow(contentShape, 5.dp),
+        shape = contentShape
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -332,10 +353,15 @@ private fun DashboardMetricCard(
     icon: ImageVector,
     modifier: Modifier = Modifier
 ) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    val shape = if (expressive) RoundedCornerShape(if (profile.compact) 20.dp else 24.dp) else MaterialTheme.shapes.medium
     ElevatedCard(
         modifier = modifier
-            .heightIn(min = 84.dp)
-            .glassSoftShadow(MaterialTheme.shapes.medium)
+            .heightIn(min = if (expressive && profile.compact) 76.dp else 84.dp)
+            .glassSoftShadow(shape)
+            .expressiveShadow(shape, 6.dp),
+        shape = shape
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Icon(
@@ -364,12 +390,17 @@ private fun DashboardQuickAction(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    val shape = if (expressive) RoundedCornerShape(if (profile.compact) 20.dp else 24.dp) else MaterialTheme.shapes.medium
     OutlinedCard(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
-            .heightIn(min = 78.dp)
-            .glassSoftShadow(MaterialTheme.shapes.medium)
+            .heightIn(min = if (expressive && profile.compact) 72.dp else 78.dp)
+            .glassSoftShadow(shape)
+            .expressiveShadow(shape, 5.dp),
+        shape = shape
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -402,10 +433,17 @@ private fun PanelAreaCard(
     onClick: () -> Unit,
     enabled: Boolean = true
 ) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    val shape = if (expressive) RoundedCornerShape(if (profile.compact) 20.dp else 24.dp) else MaterialTheme.shapes.medium
     OutlinedCard(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(shape)
+            .expressiveShadow(shape, 5.dp),
+        shape = shape
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
