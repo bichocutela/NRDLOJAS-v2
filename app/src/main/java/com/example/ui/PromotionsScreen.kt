@@ -110,6 +110,7 @@ import com.example.data.StoreCatalog
 import com.example.data.UserPreferences
 import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.LocalExpressiveStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -157,6 +158,7 @@ fun PromotionsLoginScreen(
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val expressive = LocalExpressiveStyle.current.enabled
     val credentialStore = remember(context) { NossaGenteCredentialStore(context.applicationContext) }
 
     LaunchedEffect(credentialStore) {
@@ -176,9 +178,15 @@ fun PromotionsLoginScreen(
     }
 
     Scaffold(
+        containerColor = if (glassStyle.enabled) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text(title) },
+                title = {
+                    Text(
+                        title,
+                        fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
@@ -211,7 +219,11 @@ fun PromotionsLoginScreen(
             Spacer(Modifier.height(4.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                shape = if (expressive) RoundedCornerShape(28.dp) else MaterialTheme.shapes.medium,
+                colors = CardDefaults.cardColors(
+                    containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow
+                    else MaterialTheme.colorScheme.surfaceVariant
+                )
             ) {
                 Row(
                     modifier = Modifier
@@ -243,7 +255,8 @@ fun PromotionsLoginScreen(
                 label = { Text("CPF") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                shape = if (expressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraSmall
             )
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
@@ -252,7 +265,8 @@ fun PromotionsLoginScreen(
                 label = { Text("Senha") },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                shape = if (expressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraSmall
             )
             Spacer(Modifier.height(8.dp))
             Row(
@@ -311,7 +325,10 @@ fun PromotionsLoginScreen(
                     }
                 },
                 enabled = !isLoading && cpf.length == 11 && password.isNotBlank(),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(if (expressive) 54.dp else 48.dp),
+                shape = if (expressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.small
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -357,6 +374,7 @@ fun PromotionsScreen(
     val context = LocalContext.current
     val compactHeader = LocalConfiguration.current.screenWidthDp < 420
     val glassStyle = LocalGlassSoftStyle.current
+    val expressive = LocalExpressiveStyle.current.enabled
     val userPreferences = remember { UserPreferences(context) }
     val promotionChangeStore = remember { PromotionChangeStore(context) }
     val sortOption = OfferSortOption.values().firstOrNull { it.name == sortOptionName }
@@ -586,6 +604,7 @@ fun PromotionsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = if (selectedCategory == null) "Promoção" else selectedCategory.orEmpty(),
+                            fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
@@ -622,6 +641,8 @@ fun PromotionsScreen(
                                     MaterialTheme.colorScheme.primaryContainer
                                 } else if (glassStyle.enabled) {
                                     MaterialTheme.colorScheme.surface
+                                } else if (expressive) {
+                                    MaterialTheme.colorScheme.primaryContainer
                                 } else {
                                     MaterialTheme.colorScheme.surface.copy(alpha = 0f)
                                 },
@@ -647,6 +668,8 @@ fun PromotionsScreen(
                                 },
                                 tint = if (pendingUpdate != null) {
                                     MaterialTheme.colorScheme.primary
+                                } else if (expressive) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
                                 } else {
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 }
@@ -999,7 +1022,11 @@ private fun StoreTabs(
     onStoreSelected: (String) -> Unit
 ) {
     val safeStores = if (storeOptions.isEmpty()) listOf(ALL_STORES_LABEL) else storeOptions
-    ScrollableTabRow(selectedTabIndex = safeStores.indexOf(selectedStore).coerceAtLeast(0)) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    ScrollableTabRow(
+        selectedTabIndex = safeStores.indexOf(selectedStore).coerceAtLeast(0),
+        containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surface
+    ) {
         safeStores.forEach { store ->
             Tab(
                 selected = store == selectedStore,
@@ -1018,6 +1045,7 @@ private fun StoreTabs(
 
 @Composable
 private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
+    val expressive = LocalExpressiveStyle.current.enabled
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
@@ -1032,7 +1060,7 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
             }
         },
         placeholder = { Text("Buscar produto") },
-        shape = RoundedCornerShape(10.dp)
+        shape = if (expressive) RoundedCornerShape(24.dp) else RoundedCornerShape(10.dp)
     )
 }
 
@@ -1044,8 +1072,22 @@ private fun CategoryPreviewSection(
     onCategoryClick: (String) -> Unit,
     onImageClick: (String) -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 12.dp))
+    val expressive = LocalExpressiveStyle.current.enabled
+    val sectionShape = if (expressive) RoundedCornerShape(30.dp) else RoundedCornerShape(0.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = if (expressive) 8.dp else 0.dp)
+            .then(
+                if (expressive) Modifier
+                    .clip(sectionShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                else Modifier
+            )
+    ) {
+        if (!expressive) {
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 12.dp))
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1054,7 +1096,11 @@ private fun CategoryPreviewSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(categoryName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    categoryName,
+                    style = if (expressive) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
+                    fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Bold
+                )
                 Text(
                     "$totalOffers produto(s) em oferta",
                     style = MaterialTheme.typography.bodySmall,
@@ -1076,11 +1122,15 @@ private fun CategoryPreviewSection(
 
 @Composable
 private fun CompactOfferCard(offer: OfferGroup, onImageClick: (String) -> Unit) {
-    val cardShape = RoundedCornerShape(12.dp)
+    val expressive = LocalExpressiveStyle.current.enabled
+    val cardShape = if (expressive) RoundedCornerShape(26.dp) else RoundedCornerShape(12.dp)
     Card(
         modifier = Modifier.widthIn(min = 156.dp, max = 176.dp).glassSoftShadow(cardShape),
         shape = cardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(
+            containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerHigh
+            else MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
         Column {
             ProductImage(
@@ -1245,7 +1295,8 @@ private fun DetailedOfferCard(
     selectedStore: String,
     onImageClick: (String) -> Unit
 ) {
-    val cardShape = RoundedCornerShape(16.dp)
+    val expressive = LocalExpressiveStyle.current.enabled
+    val cardShape = if (expressive) RoundedCornerShape(30.dp) else RoundedCornerShape(16.dp)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val shareLayer = rememberGraphicsLayer()
@@ -1279,7 +1330,10 @@ private fun DetailedOfferCard(
             )
             .glassSoftShadow(cardShape),
         shape = cardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(
+            containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow
+            else MaterialTheme.colorScheme.surface
+        )
     ) {
         Column(modifier = Modifier.padding(10.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
@@ -1288,7 +1342,11 @@ private fun DetailedOfferCard(
                     contentDescription = "Ver imagem de ${offer.name}",
                     modifier = Modifier
                         .size(width = 112.dp, height = 128.dp)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp)),
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant,
+                            if (expressive) RoundedCornerShape(18.dp) else RoundedCornerShape(10.dp)
+                        ),
                     onClick = onImageClick,
                     validTo = offer.validTo
                 )
@@ -1448,10 +1506,11 @@ private fun PriceSummary(
 @Composable
 private fun DiscountBadge(discount: String?, compact: Boolean) {
     if (discount.isNullOrBlank()) return
+    val expressive = LocalExpressiveStyle.current.enabled
     Surface(
-        color = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
-        shape = RoundedCornerShape(6.dp)
+        color = if (expressive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.primary,
+        contentColor = if (expressive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onPrimary,
+        shape = if (expressive) RoundedCornerShape(16.dp) else RoundedCornerShape(6.dp)
     ) {
         Text(
             text = "-${discount.removePrefix("-")}",
@@ -1469,11 +1528,12 @@ private fun ValidityBadge(
     compact: Boolean = true
 ) {
     val label = validTo.toExpiryLabel() ?: return
+    val expressive = LocalExpressiveStyle.current.enabled
     Surface(
         modifier = modifier,
-        color = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
-        shape = CircleShape,
+        color = if (expressive) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primary,
+        contentColor = if (expressive) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimary,
+        shape = if (expressive) RoundedCornerShape(16.dp) else CircleShape,
         tonalElevation = 2.dp
     ) {
         Text(
@@ -1497,7 +1557,8 @@ private fun ProductImage(
     onClick: (String) -> Unit,
     validTo: String? = null
 ) {
-    val shape = RoundedCornerShape(10.dp)
+    val expressive = LocalExpressiveStyle.current.enabled
+    val shape = if (expressive) RoundedCornerShape(20.dp) else RoundedCornerShape(10.dp)
     Box(
         modifier = modifier
             .clip(shape)
@@ -1750,12 +1811,16 @@ private fun StoreOfferDetailCard(
     storeOffer: StoreOffer,
     onOpenStore: (String) -> Unit
 ) {
+    val expressive = LocalExpressiveStyle.current.enabled
     val storeAvailable = storeOffer.storeCode.isNotBlank() && storeOffer.storeCode != UNKNOWN_STORE_LABEL
-    val shape = RoundedCornerShape(14.dp)
+    val shape = if (expressive) RoundedCornerShape(24.dp) else RoundedCornerShape(14.dp)
     Card(
         modifier = Modifier.fillMaxWidth().glassSoftShadow(shape, 2.dp),
         shape = shape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(
+            containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerHigh
+            else MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
             Row(
@@ -2047,10 +2112,13 @@ private fun NewOffersButton(
     onClick: () -> Unit
 ) {
     val glassStyle = LocalGlassSoftStyle.current
+    val expressive = LocalExpressiveStyle.current.enabled
     val containerColor = if (highlighted) {
         MaterialTheme.colorScheme.primaryContainer
     } else if (glassStyle.enabled) {
         MaterialTheme.colorScheme.surface
+    } else if (expressive) {
+        MaterialTheme.colorScheme.surfaceContainerHigh
     } else {
         MaterialTheme.colorScheme.surface.copy(alpha = 0f)
     }
@@ -2059,7 +2127,7 @@ private fun NewOffersButton(
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val buttonShape = RoundedCornerShape(14.dp)
+    val buttonShape = if (expressive) RoundedCornerShape(20.dp) else RoundedCornerShape(14.dp)
     Surface(
         modifier = Modifier.glassSoftShadow(buttonShape, 4.dp),
         onClick = onClick,
@@ -2254,7 +2322,8 @@ private fun PromotionChangeCard(
     canOpen: Boolean,
     onOfferClick: (PromotionChange) -> Unit
 ) {
-    val cardShape = RoundedCornerShape(14.dp)
+    val expressive = LocalExpressiveStyle.current.enabled
+    val cardShape = if (expressive) RoundedCornerShape(24.dp) else RoundedCornerShape(14.dp)
     val oldValidity = listOfNotNull(
         change.oldValidFrom.toDisplayDate(),
         change.oldValidTo.toDisplayDate()
@@ -2304,7 +2373,10 @@ private fun PromotionChangeCard(
             .fillMaxWidth()
             .glassSoftShadow(cardShape)
             .then(if (canOpen) Modifier.clickable { onOfferClick(change) } else Modifier),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow
+            else MaterialTheme.colorScheme.surfaceVariant
+        ),
         shape = cardShape
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.Top) {
