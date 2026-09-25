@@ -18,6 +18,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.DynamicPageBlock
 import com.example.data.DynamicTab
+import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.expressiveShadow
 
 private data class CourseLesson(
     val id: String,
@@ -52,6 +55,9 @@ fun DynamicCourseContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val expressive = LocalExpressiveStyle.current.enabled
+    val glassStyle = LocalGlassSoftStyle.current
+    val profile = rememberNrdScreenProfile()
     val modules = remember(blocks) { parseCourseStructure(blocks) }
     val allLessons = remember(modules) { modules.flatMap { it.lessons } }
     val progressKey = remember(tab.id) { "course_${tab.id}_completed" }
@@ -94,15 +100,29 @@ fun DynamicCourseContent(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(
+            horizontal = if (profile.compact) 10.dp else 14.dp,
+            vertical = if (profile.compact) 8.dp else 12.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(if (profile.compact) 10.dp else 12.dp)
     ) {
         item {
+            val heroShape = RoundedCornerShape(
+                if (expressive && profile.compact) 24.dp
+                else if (expressive) 30.dp
+                else 20.dp
+            )
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .expressiveShadow(heroShape, 8.dp),
+                shape = heroShape,
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = when {
+                        glassStyle.enabled -> MaterialTheme.colorScheme.surface
+                        expressive -> MaterialTheme.colorScheme.primaryContainer
+                        else -> MaterialTheme.colorScheme.primaryContainer
+                    }
                 )
             ) {
                 Column(
@@ -199,7 +219,14 @@ fun DynamicCourseContent(
 
         if (modules.isEmpty()) {
             item {
-                Card(modifier = Modifier.fillMaxWidth()) {
+                val emptyShape = if (expressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.medium
+                Card(
+                    modifier = Modifier.fillMaxWidth().expressiveShadow(emptyShape, 4.dp),
+                    shape = emptyShape,
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surface
+                    )
+                ) {
                     Text(
                         "Nenhuma aula foi adicionada a este curso.",
                         modifier = Modifier.padding(16.dp),
@@ -211,9 +238,19 @@ fun DynamicCourseContent(
 
         items(modules, key = { it.id }) { module ->
             val moduleExpanded = module.id in expandedModuleIds
+            val moduleShape = RoundedCornerShape(
+                if (expressive && profile.compact) 20.dp
+                else if (expressive) 24.dp
+                else 18.dp
+            )
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .expressiveShadow(moduleShape, if (moduleExpanded) 6.dp else 4.dp),
+                shape = moduleShape,
+                colors = CardDefaults.cardColors(
+                    containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surface
+                )
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(

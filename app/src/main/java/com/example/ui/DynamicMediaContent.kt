@@ -30,6 +30,9 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.expressiveShadow
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
@@ -43,8 +46,35 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 @Composable
+private fun DynamicMediaCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    val glassStyle = LocalGlassSoftStyle.current
+    val profile = rememberNrdScreenProfile()
+    val shape = RoundedCornerShape(
+        if (expressive && profile.compact) 20.dp
+        else if (expressive) 24.dp
+        else 12.dp
+    )
+    Card(
+        modifier = modifier.expressiveShadow(shape, if (expressive) 6.dp else 0.dp),
+        shape = shape,
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                glassStyle.enabled -> MaterialTheme.colorScheme.surface
+                expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                else -> MaterialTheme.colorScheme.surface
+            }
+        ),
+        content = content
+    )
+}
+
+@Composable
 fun DynamicImageBlock(url: String, title: String, modifier: Modifier = Modifier) {
-    Card(modifier = modifier.fillMaxWidth()) {
+    DynamicMediaCard(modifier = modifier.fillMaxWidth()) {
         AsyncImage(
             model = normalizeRemoteMediaUrl(url),
             contentDescription = title,
@@ -104,7 +134,7 @@ fun DynamicVideoBlock(url: String, title: String, modifier: Modifier = Modifier)
         }
     }
 
-    Card(modifier = modifier.fillMaxWidth()) {
+    DynamicMediaCard(modifier = modifier.fillMaxWidth()) {
         Column {
             Text(
                 text = title,
@@ -255,7 +285,7 @@ fun DynamicAudioBlock(url: String, title: String, modifier: Modifier = Modifier)
         }
     }
 
-    Card(modifier = modifier.fillMaxWidth()) {
+    DynamicMediaCard(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -332,7 +362,7 @@ fun DynamicPdfBlock(url: String, title: String, modifier: Modifier = Modifier) {
         loading = false
     }
 
-    Card(modifier = modifier.fillMaxWidth()) {
+    DynamicMediaCard(modifier = modifier.fillMaxWidth()) {
         Column {
             Text(
                 title,
