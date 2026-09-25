@@ -40,10 +40,17 @@ internal fun VisualMixOrderImportButton(
     if (!isMaster) return
 
     var open by remember { mutableStateOf(false) }
+    var pendingSharedPdf by remember { mutableStateOf<Uri?>(null) }
+    var pendingSharedPdfRequestKey by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(externalPdfUri, externalPdfRequestKey, isMaster) {
         if (isMaster && externalPdfUri != null) {
+            pendingSharedPdf = Uri.parse(externalPdfUri)
+            pendingSharedPdfRequestKey = externalPdfRequestKey
             open = true
+            // Snapshot the shared URI locally before clearing the activity-level pending state.
+            // This keeps the import dialog alive even when the parent recomposes.
+            onExternalPdfConsumed()
         }
     }
 
@@ -59,9 +66,9 @@ internal fun VisualMixOrderImportButton(
     if (open) {
         VisualMixOrderImportDialog(
             api = api,
-            initialPdfUri = externalPdfUri?.let(Uri::parse),
-            initialPdfRequestKey = externalPdfRequestKey,
-            onInitialPdfConsumed = onExternalPdfConsumed,
+            initialPdfUri = pendingSharedPdf,
+            initialPdfRequestKey = pendingSharedPdfRequestKey,
+            onInitialPdfConsumed = { pendingSharedPdf = null },
             onDismiss = { open = false }
         )
     }
@@ -132,6 +139,8 @@ private fun VisualMixOrderImportDialog(
                 try {
                     analysis = FlyerImportEngine.analyzeUri(context, uri)
                     confirmedKeys = VisualMixReviewStore.confirmedKeys(context)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
                 } catch (failure: Exception) {
                     error = failure.message ?: "Não foi possível ler a ordem do Visual Mix."
                 } finally {
@@ -141,7 +150,7 @@ private fun VisualMixOrderImportDialog(
         }
     }
 
-    LaunchedEffect(initialPdfUri, initialPdfRequestKey) {
+    LaunchedEffect(initialPdfRequestKey) {
         val uri = initialPdfUri ?: return@LaunchedEffect
         if (busy) return@LaunchedEffect
 
@@ -155,6 +164,8 @@ private fun VisualMixOrderImportDialog(
             analysis = FlyerImportEngine.analyzeUri(context, uri)
             confirmedKeys = VisualMixReviewStore.confirmedKeys(context)
             draftMessage = "PDF recebido e carregado automaticamente."
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (failure: Exception) {
             error = failure.message ?: "Não foi possível ler a ordem compartilhada."
             draftMessage = null
