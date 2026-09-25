@@ -19,7 +19,10 @@ import com.example.data.DynamicPageBlock
 import com.example.data.DynamicPageCodec
 import com.example.data.DynamicPageDocument
 import com.example.data.DynamicTab
+import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.expressiveShadow
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -33,6 +36,9 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val expressive = LocalExpressiveStyle.current.enabled
+    val glassStyle = LocalGlassSoftStyle.current
+    val screenProfile = rememberNrdScreenProfile()
 
     var showEditor by remember { mutableStateOf(false) }
     var editingTab by remember { mutableStateOf<DynamicTab?>(null) }
@@ -112,14 +118,25 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     }
 
     Scaffold(
+        containerColor = if (expressive || glassStyle.enabled) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Páginas e Cursos") },
+                title = {
+                    Text(
+                        "Páginas e Cursos",
+                        fontWeight = if (expressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = if (expressive || glassStyle.enabled) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground
+                )
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -172,8 +189,11 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     modifier = Modifier
                         .padding(innerPadding)
                         .fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    contentPadding = PaddingValues(
+                        horizontal = if (screenProfile.compact) 10.dp else 14.dp,
+                        vertical = if (screenProfile.compact) 7.dp else 10.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(if (screenProfile.compact) 7.dp else 9.dp)
                 ) {
                     items(
                         tabs.sortedWith(compareBy<DynamicTab> { it.displayOrder }.thenBy { it.id }),
@@ -183,10 +203,16 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         val tabBlocks = DynamicPageCodec.blocksFor(tab)
                         val isVisibleNow = DynamicPageCodec.isVisible(tab)
                         val isDraft = document?.enabled == false
+                        val tabShape = if (expressive) RoundedCornerShape(if (screenProfile.compact) 20.dp else 24.dp) else MaterialTheme.shapes.medium
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .glassSoftShadow(MaterialTheme.shapes.medium)
+                                .glassSoftShadow(tabShape)
+                                .expressiveShadow(tabShape, 5.dp),
+                            shape = tabShape,
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surface
+                            )
                         ) {
                             Row(
                                 modifier = Modifier
@@ -248,8 +274,8 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 modifier = Modifier
                     .padding(innerPadding)
                     .fillMaxSize(),
-                contentPadding = PaddingValues(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                contentPadding = PaddingValues(if (screenProfile.compact) 10.dp else 14.dp),
+                verticalArrangement = Arrangement.spacedBy(if (screenProfile.compact) 8.dp else 10.dp)
             ) {
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
