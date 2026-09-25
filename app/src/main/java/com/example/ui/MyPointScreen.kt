@@ -72,6 +72,7 @@ import com.example.data.PointSummary
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.expressiveShadow
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -131,7 +132,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
     }
 
     Scaffold(
-        containerColor = if (glassStyle.enabled) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
+        containerColor = if (glassStyle.enabled || isExpressive) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
         TopAppBar(
             title = {
@@ -185,7 +186,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = when {
                     glassStyle.enabled -> MaterialTheme.colorScheme.surface.copy(alpha = glassStyle.surfaceAlpha)
-                    isExpressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                    isExpressive -> androidx.compose.ui.graphics.Color.Transparent
                     else -> MaterialTheme.colorScheme.surface
                 }
             )
@@ -201,7 +202,8 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .glassSoftShadow(hoursShape, if (isExpressive) 4.dp else 0.dp),
+                                .glassSoftShadow(hoursShape, if (isExpressive) 4.dp else 0.dp)
+                                .expressiveShadow(hoursShape, 7.dp),
                             shape = hoursShape,
                             colors = CardDefaults.cardColors(
                                 containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface
@@ -233,7 +235,8 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .glassSoftShadow(pointShape, if (isExpressive) 3.dp else 0.dp),
+                                .glassSoftShadow(pointShape, if (isExpressive) 3.dp else 0.dp)
+                                .expressiveShadow(pointShape, 6.dp),
                             shape = pointShape,
                             colors = CardDefaults.cardColors(
                                 containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface
@@ -256,7 +259,8 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                             onClick = { showBenefitDetails = true },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .glassSoftShadow(benefitShape, if (isExpressive) 4.dp else 0.dp),
+                                .glassSoftShadow(benefitShape, if (isExpressive) 4.dp else 0.dp)
+                                .expressiveShadow(benefitShape, 7.dp),
                             shape = benefitShape,
                             colors = CardDefaults.cardColors(
                                 containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface
@@ -298,7 +302,8 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                     .fillMaxWidth()
                     .padding(horizontal = contentPadding)
                     .heightIn(max = (configuration.screenHeightDp * 0.88f).dp)
-                    .glassSoftShadow(dialogShape, if (isExpressive) 6.dp else 0.dp),
+                    .glassSoftShadow(dialogShape, if (isExpressive) 6.dp else 0.dp)
+                    .expressiveShadow(dialogShape, 9.dp),
                 shape = dialogShape,
                 colors = CardDefaults.cardColors(
                     containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface
@@ -451,7 +456,8 @@ private fun PointEntryCard(entry: PointEntry) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .glassSoftShadow(cardShape, if (expressive) 3.dp else 0.dp),
+            .glassSoftShadow(cardShape, if (expressive) 3.dp else 0.dp)
+            .expressiveShadow(cardShape, 6.dp),
         shape = cardShape,
         colors = CardDefaults.cardColors(
             containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface
