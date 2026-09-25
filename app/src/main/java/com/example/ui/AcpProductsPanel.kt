@@ -42,7 +42,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.CategoryDefinition
 import com.example.data.AppearanceSettings
@@ -1485,7 +1484,7 @@ private fun AcpFeaturedOfferActions(
                 onClick = { onFilterMenuExpandedChange(true) },
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(horizontal = 4.dp)
-            ) { Text("Filtro", maxLines = 1) }
+            ) { Text("Filtro") }
             DropdownMenu(
                 expanded = filterMenuExpanded,
                 onDismissRequest = { onFilterMenuExpandedChange(false) }
@@ -1506,12 +1505,12 @@ private fun AcpFeaturedOfferActions(
             onClick = onHide,
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(horizontal = 4.dp)
-        ) { Text("Ocultar", maxLines = 1) }
+        ) { Text("Ocultar") }
         TextButton(
             onClick = onToggleExpanded,
             modifier = Modifier.weight(1.2f),
             contentPadding = PaddingValues(horizontal = 4.dp)
-        ) { Text(if (expanded) "Ver menos" else "Ver todos", maxLines = 1) }
+        ) { Text(if (expanded) "Ver menos" else "Ver todos") }
     }
 }
 
