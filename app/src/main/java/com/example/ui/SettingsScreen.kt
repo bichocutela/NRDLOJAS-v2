@@ -39,6 +39,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val vibrateOnFound by viewModel.userPreferences.vibrateOnFound.collectAsState(initial = true)
     val largeText by viewModel.userPreferences.largeText.collectAsState(initial = false)
     val fontScale by viewModel.userPreferences.fontScale.collectAsState(initial = 1.0f)
+    var interfaceScaleDraft by remember(fontScale) { mutableFloatStateOf(fontScale) }
     val barcodeNumberScale by viewModel.userPreferences.barcodeNumberScale.collectAsState(initial = 1.0f)
     val barcodeTitleScale by viewModel.userPreferences.barcodeTitleScale.collectAsState(initial = 1.0f)
     val boldOutline by viewModel.userPreferences.boldOutline.collectAsState(initial = false)
@@ -111,23 +112,42 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             )
             if (appearanceExpanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                "Escala da interface",
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                "Ajusta em conjunto letras, espaçamentos, cards, ícones e botões para manter tudo enquadrado.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Tamanho da Fonte", modifier = Modifier.weight(1f))
                 Slider(
-                    value = fontScale,
-                    onValueChange = { coroutineScope.launch { viewModel.userPreferences.setFontScale(it) } },
-                    valueRange = 0.2f..2.0f,
-                    steps = 17,
-                    modifier = Modifier.weight(1.5f)
+                    value = interfaceScaleDraft,
+                    onValueChange = { interfaceScaleDraft = it },
+                    onValueChangeFinished = {
+                        coroutineScope.launch {
+                            viewModel.userPreferences.setFontScale(interfaceScaleDraft)
+                        }
+                    },
+                    valueRange = 0.75f..1.30f,
+                    steps = 10,
+                    modifier = Modifier.weight(1f)
                 )
-                Text(String.format("%.1fx", fontScale))
+                Text(
+                    String.format("%.2fx", interfaceScaleDraft),
+                    style = MaterialTheme.typography.labelLarge
+                )
             }
             Button(
-                onClick = { coroutineScope.launch { viewModel.userPreferences.setFontScale(1.0f) } },
+                onClick = {
+                    interfaceScaleDraft = 1.0f
+                    coroutineScope.launch { viewModel.userPreferences.setFontScale(1.0f) }
+                },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp)
             ) {
