@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FilterList
@@ -41,7 +42,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.launch
+import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.expressiveShadow
 
 private const val SUGGESTIONS_PAGE_SIZE = 10
 private const val MAX_SUGGESTIONS_IN_PANEL = 200
@@ -70,7 +73,16 @@ internal fun MestreSuggestionsSection(
         )
         Spacer(modifier = Modifier.height(6.dp))
     }
-    OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    val panelShape = if (expressive) RoundedCornerShape(if (profile.compact) 22.dp else 26.dp) else MaterialTheme.shapes.medium
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(panelShape)
+            .expressiveShadow(panelShape, 6.dp),
+        shape = panelShape
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -218,7 +230,16 @@ internal fun MestreSuggestionsPreview(
         description = "Acompanhe as solicitações que precisam da sua atenção"
     )
     Spacer(modifier = Modifier.height(6.dp))
-    OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
+    val previewExpressive = LocalExpressiveStyle.current.enabled
+    val previewProfile = rememberNrdScreenProfile()
+    val previewShape = if (previewExpressive) RoundedCornerShape(if (previewProfile.compact) 22.dp else 26.dp) else MaterialTheme.shapes.medium
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(previewShape)
+            .expressiveShadow(previewShape, 6.dp),
+        shape = previewShape
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -261,9 +282,18 @@ internal fun MestreSuggestionsPreview(
 
 @Composable
 private fun SuggestionPreviewItem(suggestion: ProductSuggestion) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    val shape = if (expressive) RoundedCornerShape(if (profile.compact) 18.dp else 22.dp) else MaterialTheme.shapes.medium
     Card(
-        modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(shape)
+            .expressiveShadow(shape, 4.dp),
+        shape = shape,
+        colors = CardDefaults.cardColors(
+            containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
         Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
             Text(
@@ -292,9 +322,18 @@ private fun SuggestionManagementItem(
 ) {
     val dateText = formatSuggestionDate(suggestion.createdAt)
     val isFixed = suggestion.status == ProductSuggestion.STATUS_FIXED
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    val shape = if (expressive) RoundedCornerShape(if (profile.compact) 18.dp else 22.dp) else MaterialTheme.shapes.medium
     Card(
-        modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(shape)
+            .expressiveShadow(shape, 4.dp),
+        shape = shape,
+        colors = CardDefaults.cardColors(
+            containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
         Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
             Text(suggestion.text, style = MaterialTheme.typography.bodyLarge)
