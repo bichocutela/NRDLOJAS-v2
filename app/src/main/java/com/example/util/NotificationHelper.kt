@@ -68,6 +68,11 @@ object NotificationHelper {
                 description = "Notificações de alterações no banco de horas"
             }
             notificationManager.createNotificationChannel(channelHoursUpdates)
+
+            val channelInstallations = NotificationChannel("installation_updates", "Novas instalações", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Notificações exclusivas do Mestre quando o NRD V2 é instalado em um aparelho novo"
+            }
+            notificationManager.createNotificationChannel(channelInstallations)
             
             // Legacy channel just in case
             val legacy = NotificationChannel(CHANNEL_ID, "Atualizações de Produtos", NotificationManager.IMPORTANCE_DEFAULT)
@@ -129,6 +134,7 @@ object NotificationHelper {
         "PROMOTION_UPDATED" -> "promotion_updates"
         "BENEFIT_RELEASED", "BENEFIT_PURCHASE" -> "benefit_updates"
         "HOURS_UPDATED" -> "hours_updates"
+        "NEW_INSTALLATION" -> "installation_updates"
         else -> null
     }
 

@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import java.util.Locale
 
 class MyApplication : Application() {
@@ -20,6 +21,9 @@ class MyApplication : Application() {
         try {
             com.example.data.FirebaseService.initialize(this)
             Log.d("MyApplication", "Firebase initialized manually")
+            applicationScope.launch {
+                com.example.data.DeviceInstallationTracker.register(this@MyApplication)
+            }
             scheduleCatalogCodeMigration()
         } catch (e: Exception) {
             Log.e("MyApplication", "Firebase initialization failed", e)
@@ -59,6 +63,19 @@ class MyApplication : Application() {
             }
         } catch (e: IllegalStateException) {
             Log.w("MyApplication", "Hours notification check not scheduled in this process", e)
+        }
+        applicationScope.launch {
+            try {
+                val enabled = com.example.data.UserPreferences(this@MyApplication)
+                    .masterInstallationNotificationsEnabled.first()
+                if (enabled) {
+                    com.example.util.InstallationNotificationWorker.schedule(this@MyApplication)
+                } else {
+                    com.example.util.InstallationNotificationWorker.cancel(this@MyApplication)
+                }
+            } catch (e: Exception) {
+                Log.w("MyApplication", "Installation notification check not scheduled", e)
+            }
         }
         try {
             com.example.util.AcpCatalogSyncWorker.schedule(this)

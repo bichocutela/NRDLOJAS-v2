@@ -104,6 +104,47 @@ service cloud.firestore {
       );
     }
 
+    // Um documento por aparelho. O Android envia somente um SHA-256 derivado
+    // do ANDROID_ID; o identificador bruto nunca é salvo na nuvem.
+    match /app_installations/{deviceId} {
+      // Necessário para a transação descobrir se este aparelho já foi registrado.
+      // Não permite enumerar a coleção.
+      allow get: if true;
+      allow list: if isManager();
+
+      allow create: if
+        request.resource.data.keys().hasOnly([
+          'deviceIdHash',
+          'firstSeenAt',
+          'lastSeenAt',
+          'appVersion',
+          'appVersionCode',
+          'platform'
+        ]) &&
+        request.resource.data.deviceIdHash == deviceId &&
+        request.resource.data.deviceIdHash is string &&
+        request.resource.data.deviceIdHash.size() == 64 &&
+        request.resource.data.firstSeenAt == request.time &&
+        request.resource.data.lastSeenAt == request.time &&
+        request.resource.data.appVersion is string &&
+        request.resource.data.appVersion.size() <= 64 &&
+        request.resource.data.appVersionCode is int &&
+        request.resource.data.platform == 'android';
+
+      allow update: if
+        request.resource.data.deviceIdHash == resource.data.deviceIdHash &&
+        request.resource.data.firstSeenAt == resource.data.firstSeenAt &&
+        request.resource.data.platform == resource.data.platform &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['lastSeenAt', 'appVersion', 'appVersionCode']) &&
+        request.resource.data.lastSeenAt == request.time &&
+        request.resource.data.appVersion is string &&
+        request.resource.data.appVersion.size() <= 64 &&
+        request.resource.data.appVersionCode is int;
+
+      allow delete: if isManager();
+    }
+
     // Qualquer coleção não declarada acima permanece bloqueada por padrão.
     match /{document=**} {
       allow read, write: if false;
