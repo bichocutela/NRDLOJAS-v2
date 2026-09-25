@@ -621,7 +621,7 @@ fun NrdAppBackground(
                 expressiveGlass.isDark
             )
             val transition = rememberInfiniteTransition(label = "expressive-liquid-background")
-            val drift by transition.animateFloat(
+            val drift = transition.animateFloat(
                 initialValue = 0f,
                 targetValue = 1f,
                 animationSpec = infiniteRepeatable(
@@ -629,7 +629,7 @@ fun NrdAppBackground(
                     repeatMode = RepeatMode.Reverse
                 ),
                 label = "expressive-background-drift"
-            )
+            ).value
             Box(
                 modifier = modifier
                     .fillMaxSize()
