@@ -124,6 +124,27 @@ jobs:
           -Pandroid.injected.signing.key.password=$KEY_PASSWORD \
           --stacktrace
 
+    - name: Deploy Firestore rules for installation telemetry
+      if: github.ref == 'refs/heads/main'
+      env:
+        FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      run: |
+        if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+          echo "::warning::FIREBASE_SERVICE_ACCOUNT não está configurado no GitHub Actions; regras do Firestore não foram publicadas."
+          exit 0
+        fi
+        printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+        cat > firebase.json <<'EOF'
+        {
+          "firestore": {
+            "rules": "firestore.rules"
+          }
+        }
+        EOF
+        export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-service-account.json"
+        npm install -g firebase-tools
+        firebase deploy --only firestore:rules --project appcodigo-7f245 --non-interactive
+
     - name: Verify APK Signature
       run: |
         APK_PATH="app/build/outputs/apk/release/app-release.apk"
