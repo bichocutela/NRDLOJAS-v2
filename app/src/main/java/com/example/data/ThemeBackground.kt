@@ -58,7 +58,7 @@ data class ThemeBackground(
     }
 }
 
-val SupportedThemeKeys = listOf("multicolor", "red", "gold", "green", "blue", "orange", "glass")
+val SupportedThemeKeys = listOf("multicolor", "red", "gold", "green", "blue", "orange", "glass", "expressive")
 
 const val OFFER_BANNER_STANDARD = "standard"
 const val OFFER_BANNER_CLUB = "club"
