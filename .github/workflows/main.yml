@@ -142,12 +142,50 @@ jobs:
         ACCESS_TOKEN="$(gcloud auth print-access-token)"
 
         RULESET_PAYLOAD="$(jq -Rs '{source:{files:[{name:"firestore.rules",content:.}]}}' firestore.rules)"
-        RULESET_RESPONSE="$(curl --fail --silent --show-error           -X POST "https://firebaserules.googleapis.com/v1/projects/appcodigo-7f245/rulesets"           -H "Authorization: Bearer $ACCESS_TOKEN"           -H "Content-Type: application/json"           --data "$RULESET_PAYLOAD")"
-        RULESET_NAME="$(jq -er '.name' <<< "$RULESET_RESPONSE")"
 
-        RELEASE_PAYLOAD="$(jq -nc           --arg name "projects/appcodigo-7f245/releases/cloud.firestore"           --arg ruleset "$RULESET_NAME"           '{name:$name,rulesetName:$ruleset}')"
+        TEST_RESPONSE="$(curl --silent --show-error \
+          -X POST "https://firebaserules.googleapis.com/v1/projects/appcodigo-7f245:test" \
+          -H "Authorization: Bearer $ACCESS_TOKEN" \
+          -H "Content-Type: application/json" \
+          --data "$RULESET_PAYLOAD")"
+        RULE_ERRORS="$(jq '[.issues[]? | select(.severity == "ERROR")] | length' <<< "$TEST_RESPONSE")"
+        if [ "$RULE_ERRORS" -gt 0 ]; then
+          echo "::error::As regras do Firestore têm erros de compilação:"
+          jq -r '.issues[]? | select(.severity == "ERROR") | "- linha \(.sourcePosition.line // "?"): \(.description)"' <<< "$TEST_RESPONSE"
+          exit 1
+        fi
 
-        curl --fail --silent --show-error           -X PATCH "https://firebaserules.googleapis.com/v1/projects/appcodigo-7f245/releases/cloud.firestore"           -H "Authorization: Bearer $ACCESS_TOKEN"           -H "Content-Type: application/json"           --data "$RELEASE_PAYLOAD" >/dev/null
+        CREATE_BODY="$(mktemp)"
+        CREATE_STATUS="$(curl --silent --show-error \
+          -o "$CREATE_BODY" -w '%{http_code}' \
+          -X POST "https://firebaserules.googleapis.com/v1/projects/appcodigo-7f245/rulesets" \
+          -H "Authorization: Bearer $ACCESS_TOKEN" \
+          -H "Content-Type: application/json" \
+          --data "$RULESET_PAYLOAD")"
+        if [ "$CREATE_STATUS" -lt 200 ] || [ "$CREATE_STATUS" -ge 300 ]; then
+          echo "::error::Falha ao criar Ruleset (HTTP $CREATE_STATUS)."
+          jq -r '.error.message // .' "$CREATE_BODY"
+          exit 1
+        fi
+        RULESET_NAME="$(jq -er '.name' "$CREATE_BODY")"
+
+        RELEASE_PAYLOAD="$(jq -nc \
+          --arg name "projects/appcodigo-7f245/releases/cloud.firestore" \
+          --arg ruleset "$RULESET_NAME" \
+          '{release:{name:$name,rulesetName:$ruleset},updateMask:"rulesetName"}')"
+
+        PATCH_BODY="$(mktemp)"
+        PATCH_STATUS="$(curl --silent --show-error \
+          -o "$PATCH_BODY" -w '%{http_code}' \
+          -X PATCH "https://firebaserules.googleapis.com/v1/projects/appcodigo-7f245/releases/cloud.firestore" \
+          -H "Authorization: Bearer $ACCESS_TOKEN" \
+          -H "Content-Type: application/json" \
+          --data "$RELEASE_PAYLOAD")"
+        if [ "$PATCH_STATUS" -lt 200 ] || [ "$PATCH_STATUS" -ge 300 ]; then
+          echo "::error::Falha ao liberar Ruleset (HTTP $PATCH_STATUS)."
+          jq -r '.error.message // .' "$PATCH_BODY"
+          exit 1
+        fi
 
         echo "Firestore rules published successfully: $RULESET_NAME"
 
