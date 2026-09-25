@@ -249,6 +249,26 @@ fun Modifier.glassSoftShadow(
     }
 }
 
+
+fun Modifier.expressiveShadow(
+    shape: Shape,
+    elevation: Dp = 7.dp
+): Modifier = composed {
+    val expressive = LocalExpressiveStyle.current
+    val glass = LocalGlassSoftStyle.current
+    if (!expressive.enabled || glass.enabled) {
+        this
+    } else {
+        shadow(
+            elevation = elevation,
+            shape = shape,
+            clip = false,
+            ambientColor = Color(0xFF49627D).copy(alpha = 0.10f),
+            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+        )
+    }
+}
+
 @Composable
 fun GlassSoftBackground(
     modifier: Modifier = Modifier,
