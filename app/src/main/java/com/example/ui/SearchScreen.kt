@@ -357,9 +357,10 @@ fun SearchScreen(
     ) {
         Brush.linearGradient(
             listOf(
-                expressiveGlassStyle.accent.copy(alpha = 0.50f),
-                expressiveGlassStyle.secondaryAccent.copy(alpha = 0.26f),
-                expressiveGlassStyle.tertiaryAccent.copy(alpha = 0.34f)
+                expressiveGlassStyle.accent.copy(alpha = 0.64f),
+                expressiveGlassStyle.secondaryAccent.copy(alpha = 0.34f),
+                expressiveGlassStyle.tertiaryAccent.copy(alpha = 0.46f),
+                expressiveGlassStyle.accent.copy(alpha = 0.56f)
             )
         )
     }
@@ -651,38 +652,114 @@ fun SearchScreen(
                 singleLine = true,
                 placeholder = { Text("Pesquisar produto...", style = MaterialTheme.typography.bodyLarge) },
                 leadingIcon = {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = "Pesquisar",
-                        modifier = Modifier.size(if (compactExpressive) 24.dp else 28.dp)
-                    )
+                    if (isExpressiveGlassTheme) {
+                        Box(
+                            modifier = Modifier
+                                .size(if (compactExpressive) 38.dp else 42.dp)
+                                .expressiveLiquidGlass(
+                                    shape = CircleShape,
+                                    accent = expressiveGlassStyle.accent,
+                                    secondaryAccent = expressiveGlassStyle.secondaryAccent,
+                                    intensity = 0.92f,
+                                    elevation = 5.dp,
+                                    waves = true,
+                                    bubbleSeed = 41
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = "Pesquisar",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(if (compactExpressive) 21.dp else 23.dp)
+                            )
+                        }
+                    } else {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "Pesquisar",
+                            modifier = Modifier.size(if (compactExpressive) 24.dp else 28.dp)
+                        )
+                    }
                 },
                 trailingIcon = {
                     Row {
                         if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Limpar")
+                            IconButton(
+                                onClick = { viewModel.updateSearchQuery("") },
+                                modifier = Modifier.then(
+                                    if (isExpressiveGlassTheme) {
+                                        Modifier.expressiveLiquidGlass(
+                                            shape = CircleShape,
+                                            accent = expressiveGlassStyle.secondaryAccent,
+                                            intensity = 0.88f,
+                                            elevation = 4.dp,
+                                            waves = true,
+                                            bubbleSeed = 43
+                                        )
+                                    } else Modifier
+                                )
+                            ) {
+                                Icon(
+                                    Icons.Default.Clear,
+                                    contentDescription = "Limpar",
+                                    tint = if (isExpressiveGlassTheme) MaterialTheme.colorScheme.onSurface else LocalContentColor.current
+                                )
                             }
 
                         } else {
                             if (canQuickAddProduct) {
-                                IconButton(onClick = { showQuickAddProduct = true }) {
+                                IconButton(
+                                    onClick = { showQuickAddProduct = true },
+                                    modifier = Modifier.then(
+                                        if (isExpressiveGlassTheme) {
+                                            Modifier.expressiveLiquidGlass(
+                                                shape = CircleShape,
+                                                accent = expressiveGlassStyle.accent,
+                                                secondaryAccent = expressiveGlassStyle.tertiaryAccent,
+                                                intensity = 0.96f,
+                                                elevation = 5.dp,
+                                                waves = true,
+                                                bubbleSeed = 47
+                                            )
+                                        } else Modifier
+                                    )
+                                ) {
                                     Icon(
                                         Icons.Default.Add,
                                         contentDescription = "Adicionar produto",
-                                        tint = MaterialTheme.colorScheme.primary
+                                        tint = if (isExpressiveGlassTheme) expressiveGlassStyle.accent else MaterialTheme.colorScheme.primary
                                     )
                                 }
                             }
-                            IconButton(onClick = {
-                                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
-                                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Diga o nome ou código do produto")
-                                }
-                                voiceLauncher.launch(intent)
-                            }) {
-                                Icon(Icons.Default.Mic, contentDescription = "Pesquisar por voz", tint = MaterialTheme.colorScheme.primary)
+                            IconButton(
+                                onClick = {
+                                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                        putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
+                                        putExtra(RecognizerIntent.EXTRA_PROMPT, "Diga o nome ou código do produto")
+                                    }
+                                    voiceLauncher.launch(intent)
+                                },
+                                modifier = Modifier.then(
+                                    if (isExpressiveGlassTheme) {
+                                        Modifier.expressiveLiquidGlass(
+                                            shape = CircleShape,
+                                            accent = expressiveGlassStyle.tertiaryAccent,
+                                            secondaryAccent = expressiveGlassStyle.accent,
+                                            intensity = 0.96f,
+                                            elevation = 5.dp,
+                                            waves = true,
+                                            bubbleSeed = 53
+                                        )
+                                    } else Modifier
+                                )
+                            ) {
+                                Icon(
+                                    Icons.Default.Mic,
+                                    contentDescription = "Pesquisar por voz",
+                                    tint = if (isExpressiveGlassTheme) expressiveGlassStyle.tertiaryAccent else MaterialTheme.colorScheme.primary
+                                )
                             }
                         }
                     }
@@ -701,9 +778,12 @@ fun SearchScreen(
                             isExpressiveGlassTheme -> Modifier.expressiveLiquidGlass(
                                 shape = searchFieldShape,
                                 accent = expressiveGlassStyle.accent,
-                                intensity = 1.05f,
-                                elevation = 9.dp,
-                                animated = true
+                                secondaryAccent = expressiveGlassStyle.secondaryAccent,
+                                intensity = 1.18f,
+                                elevation = 10.dp,
+                                animated = true,
+                                waves = true,
+                                bubbleSeed = 59
                             )
                             isGlassSoftTheme -> Modifier.glassSoftShadow(searchFieldShape)
                             isExpressiveTheme -> Modifier.expressiveShadow(searchFieldShape, 8.dp)
@@ -795,9 +875,27 @@ fun SearchScreen(
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Search, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Pesquisar", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .expressiveLiquidGlass(
+                                    shape = CircleShape,
+                                    accent = expressiveGlassStyle.accent,
+                                    intensity = 0.88f,
+                                    elevation = 3.dp,
+                                    waves = true,
+                                    bubbleSeed = 67
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Pesquisar", fontWeight = FontWeight.Black, fontSize = 17.sp)
                     }
                 }
             } else if (isExpressiveGlassTheme) {
@@ -813,9 +911,12 @@ fun SearchScreen(
                         .expressiveLiquidGlass(
                             shape = searchButtonShape,
                             accent = expressiveGlassStyle.accent,
-                            intensity = 1.22f,
-                            elevation = 11.dp,
-                            animated = true
+                            secondaryAccent = expressiveGlassStyle.tertiaryAccent,
+                            intensity = 1.34f,
+                            elevation = 13.dp,
+                            animated = true,
+                            waves = true,
+                            bubbleSeed = 61
                         ),
                     shape = searchButtonShape,
                     color = Color.Transparent,
