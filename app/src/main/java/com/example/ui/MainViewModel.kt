@@ -249,7 +249,18 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     }
 
     fun toggleFavorite(product: Product) {
-        viewModelScope.launch { repository.toggleFavorite(product) }
+        val favorite = !product.isFavorite
+        viewModelScope.launch {
+            repository.toggleFavorite(product)
+            _globalMostUsed.value = _globalMostUsed.value.copy(
+                products = _globalMostUsed.value.products.map { item ->
+                    if (item.code == product.code) item.copy(isFavorite = favorite) else item
+                }
+            )
+            _latestAdded.value = _latestAdded.value.map { item ->
+                if (item.code == product.code) item.copy(isFavorite = favorite) else item
+            }
+        }
     }
 
     fun getProductsByCategory(category: String) = repository.getProductsByCategory(category)

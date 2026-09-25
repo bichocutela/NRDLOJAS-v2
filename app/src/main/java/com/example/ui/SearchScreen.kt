@@ -746,7 +746,7 @@ fun SearchScreen(
                 (homeSettings.showMostUsed && mostUsed.isNotEmpty()) ||
                 latestAdded.isNotEmpty() ||
                 (homeSettings.showHistory && history.isNotEmpty()) ||
-                (homeSettings.showFavorites && favorites.isNotEmpty())
+                homeSettings.showFavorites
             LazyColumn(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentPadding = PaddingValues(bottom = 12.dp),
@@ -817,15 +817,46 @@ fun SearchScreen(
                     }
                 }
 
-                if (homeSettings.showFavorites && favorites.isNotEmpty()) {
+                if (homeSettings.showFavorites) {
                     item {
                         SectionHeader("Meus Favoritos", textPreferences)
-                        Column(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            favorites.forEachIndexed { index, product ->
-                                ProductCard(product, viewModel, index, appTheme, textPreferences)
+                        if (favorites.isEmpty()) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                shape = RoundedCornerShape(if (isExpressiveTheme) 22.dp else 16.dp),
+                                color = if (isExpressiveTheme) {
+                                    MaterialTheme.colorScheme.surfaceContainerLow
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.FavoriteBorder,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        "Toque no coração de um produto para adicioná-lo aos seus favoritos.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        } else {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                favorites.forEachIndexed { index, product ->
+                                    ProductCard(product, viewModel, index, appTheme, textPreferences)
+                                }
                             }
                         }
                     }
@@ -1377,6 +1408,25 @@ private fun normalizeNotificationText(value: String): String =
         .trim()
 
 @Composable
+private fun FavoriteToggleButton(
+    product: Product,
+    viewModel: MainViewModel,
+    compact: Boolean = false
+) {
+    IconButton(
+        onClick = { viewModel.toggleFavorite(product) },
+        modifier = Modifier.size(if (compact) 34.dp else 38.dp)
+    ) {
+        Icon(
+            imageVector = if (product.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+            contentDescription = if (product.isFavorite) "Remover dos favoritos" else "Adicionar aos favoritos",
+            tint = if (product.isFavorite) Color(0xFFEF4E56) else MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(if (compact) 19.dp else 21.dp)
+        )
+    }
+}
+
+@Composable
 fun ProductCard(
     product: Product,
     viewModel: MainViewModel,
@@ -1535,37 +1585,40 @@ fun ProductCard(
             }
         }
 
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(if (compactExpressive) 8.dp else 12.dp))
 
-        Box(
-            modifier = Modifier
-                .clip(if (expressive) RoundedCornerShape(20.dp) else RoundedCornerShape(16.dp))
-                .background(if (expressive) cardAccent.first else MaterialTheme.colorScheme.primaryContainer)
-                .padding(
-                    horizontal = when {
-                        compactExpressive -> 12.dp
-                        expressive -> 18.dp
-                        else -> 16.dp
-                    },
-                    vertical = when {
-                        compactExpressive -> 7.dp
-                        expressive -> 10.dp
-                        else -> 8.dp
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = product.code,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
-                    color = if (expressive) cardAccent.second else MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                Text(
-                    text = product.unit.uppercase(),
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Black),
-                    color = if (expressive) cardAccent.second.copy(alpha = 0.78f) else MaterialTheme.colorScheme.primary
-                )
+        Column(horizontalAlignment = Alignment.End) {
+            FavoriteToggleButton(product, viewModel, compact = compactExpressive)
+            Box(
+                modifier = Modifier
+                    .clip(if (expressive) RoundedCornerShape(20.dp) else RoundedCornerShape(16.dp))
+                    .background(if (expressive) cardAccent.first else MaterialTheme.colorScheme.primaryContainer)
+                    .padding(
+                        horizontal = when {
+                            compactExpressive -> 12.dp
+                            expressive -> 18.dp
+                            else -> 16.dp
+                        },
+                        vertical = when {
+                            compactExpressive -> 7.dp
+                            expressive -> 10.dp
+                            else -> 8.dp
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = product.code,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
+                        color = if (expressive) cardAccent.second else MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = product.unit.uppercase(),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Black),
+                        color = if (expressive) cardAccent.second.copy(alpha = 0.78f) else MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
 
@@ -1903,15 +1956,7 @@ fun MiniProductCard(
             }
 
             Column(horizontalAlignment = Alignment.End) {
-                if (product.isFavorite) {
-                    Icon(
-                        imageVector = Icons.Default.Favorite,
-                        contentDescription = "Favorito",
-                        tint = Color(0xFFEF4E56),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.height(3.dp))
-                }
+                FavoriteToggleButton(product, viewModel, compact = compactExpressive)
                 if (expressive) {
                     Surface(
                         shape = RoundedCornerShape(14.dp),
@@ -2146,7 +2191,8 @@ fun HistoryItem(
                     color = MaterialTheme.colorScheme.primary
                 )
             }
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            FavoriteToggleButton(product, viewModel, compact = compactExpressive)
             Icon(
                 Icons.Default.ChevronRight,
                 contentDescription = "Abrir produto",
@@ -2220,6 +2266,7 @@ fun HistoryItem(
                 )
             }
         }
+        FavoriteToggleButton(product, viewModel, compact = true)
     }
 }
 
