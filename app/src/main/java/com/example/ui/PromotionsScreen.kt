@@ -159,6 +159,7 @@ fun PromotionsLoginScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val expressive = LocalExpressiveStyle.current.enabled
+    val glassStyle = LocalGlassSoftStyle.current
     val credentialStore = remember(context) { NossaGenteCredentialStore(context.applicationContext) }
 
     LaunchedEffect(credentialStore) {
@@ -598,6 +599,7 @@ fun PromotionsScreen(
     }
 
     Scaffold(
+        containerColor = if (glassStyle.enabled) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
