@@ -1,5 +1,6 @@
 name: Android CI
 # Publicação acionada manualmente após correções de Consultar Produtos.
+# Reexecução para publicar regras de telemetria após configurar FIREBASE_SERVICE_ACCOUNT.
 
 on:
   push:
