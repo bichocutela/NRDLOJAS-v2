@@ -104,6 +104,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.graphicsLayer
@@ -234,6 +235,39 @@ fun rememberGlassVisualStyle(): GlassVisualStyle {
     )
 }
 
+
+@Composable
+private fun homeDynamicColors(
+    index: Int,
+    appTheme: String,
+    defaultColor: Color,
+    defaultOnColor: Color
+): Pair<Color, Color> {
+    if (appTheme != "expressive") {
+        return getDynamicThemeColor(index, appTheme, defaultColor, defaultOnColor)
+    }
+
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val palette = if (isDark) {
+        listOf(
+            Color(0xFF64151A) to Color(0xFFFFDADB),
+            Color(0xFF123D66) to Color(0xFFD7E9FF),
+            Color(0xFF164A23) to Color(0xFFD1F8D2),
+            Color(0xFF5D3510) to Color(0xFFFFDDBB),
+            Color(0xFF59470A) to Color(0xFFFFE9A8)
+        )
+    } else {
+        listOf(
+            Color(0xFFFFDADB) to Color(0xFF3B0710),
+            Color(0xFFD9E9FF) to Color(0xFF082E55),
+            Color(0xFFD8F2D8) to Color(0xFF103B16),
+            Color(0xFFFFE0C2) to Color(0xFF5B2D00),
+            Color(0xFFFFE9A8) to Color(0xFF473800)
+        )
+    }
+    return palette[index % palette.size]
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SearchScreen(
@@ -249,6 +283,7 @@ fun SearchScreen(
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
     val glassStyle = LocalGlassSoftStyle.current
     val expressiveStyle = LocalExpressiveStyle.current
+    val isExpressiveTheme = expressiveStyle.enabled
     val isGlassTheme = glassStyle.enabled
     val isStandaloneGlassTheme = isGlassTheme && !expressiveStyle.enabled
     val appTheme = if (isStandaloneGlassTheme) "glass" else localAppTheme
@@ -374,7 +409,11 @@ fun SearchScreen(
         val screenProfile = rememberNrdScreenProfile()
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val headerHeight = maxWidth / 3f
-            val headerShape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
+            val headerShape = if (isExpressiveTheme) {
+                RoundedCornerShape(bottomStart = 40.dp, bottomEnd = 40.dp)
+            } else {
+                RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
+            }
 
             Box(
                 modifier = Modifier
@@ -426,6 +465,8 @@ fun SearchScreen(
                                     .glassSoftShadow(CircleShape, 4.dp)
                                     .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                     .border(1.dp, glassStyle.borderColor, CircleShape)
+                                else if (isExpressiveTheme) Modifier
+                                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                                 else Modifier.background(Color.Transparent)
                             )
                     ) {
@@ -439,7 +480,11 @@ fun SearchScreen(
                             Icon(
                                 imageVector = Icons.Default.Menu,
                                 contentDescription = "Menu",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = if (isExpressiveTheme && !isGlassTheme) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                }
                             )
                         }
                     }
@@ -455,6 +500,8 @@ fun SearchScreen(
                                     .glassSoftShadow(CircleShape, 4.dp)
                                     .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                     .border(1.dp, glassStyle.borderColor, CircleShape)
+                                else if (isExpressiveTheme) Modifier
+                                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                                 else Modifier
                             )
                     ) {
@@ -464,7 +511,11 @@ fun SearchScreen(
                             Icon(
                                 Icons.Default.Notifications,
                                 contentDescription = "Notificações",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = if (isExpressiveTheme && !isGlassTheme) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                }
                             )
                         }
                     }
@@ -477,7 +528,11 @@ fun SearchScreen(
             modifier = Modifier.padding(horizontal = screenProfile.horizontalPadding),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            val searchFieldShape = RoundedCornerShape(32.dp)
+            val searchFieldShape = if (isExpressiveTheme) {
+                RoundedCornerShape(30.dp)
+            } else {
+                RoundedCornerShape(32.dp)
+            }
             TextField(
                 value = searchQuery,
                 onValueChange = viewModel::updateSearchQuery,
@@ -507,20 +562,37 @@ fun SearchScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = if (isExpressiveTheme) 60.dp else 56.dp)
                     .glassSoftShadow(searchFieldShape)
                     .clip(searchFieldShape)
                     .border(
                         1.dp,
-                        if (isGlassTheme) glassStyle.borderColor else MaterialTheme.colorScheme.outline,
+                        when {
+                            isGlassTheme -> glassStyle.borderColor
+                            isExpressiveTheme -> MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                            else -> MaterialTheme.colorScheme.outline
+                        },
                         searchFieldShape
                     ),
                 shape = searchFieldShape,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = if (isGlassTheme) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant,
-                    unfocusedContainerColor = if (isGlassTheme) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant,
-                    disabledContainerColor = if (isGlassTheme) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant,
+                    focusedContainerColor = when {
+                        isGlassTheme -> MaterialTheme.colorScheme.surface
+                        isExpressiveTheme -> MaterialTheme.colorScheme.surfaceContainerHigh
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    },
+                    unfocusedContainerColor = when {
+                        isGlassTheme -> MaterialTheme.colorScheme.surface
+                        isExpressiveTheme -> MaterialTheme.colorScheme.surfaceContainerHigh
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    },
+                    disabledContainerColor = when {
+                        isGlassTheme -> MaterialTheme.colorScheme.surface
+                        isExpressiveTheme -> MaterialTheme.colorScheme.surfaceContainerHigh
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    },
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent
@@ -529,7 +601,11 @@ fun SearchScreen(
             
             Spacer(modifier = Modifier.height(if (screenProfile.veryCompact) 8.dp else 16.dp))
             
-            val searchButtonShape = RoundedCornerShape(28.dp)
+            val searchButtonShape = if (isExpressiveTheme) {
+                RoundedCornerShape(30.dp)
+            } else {
+                RoundedCornerShape(28.dp)
+            }
             val openProductSearch = {
                 keyboardController?.hide()
                 sheetQuery = searchQuery
@@ -540,7 +616,7 @@ fun SearchScreen(
                     onClick = openProductSearch,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp)
+                        .height(if (isExpressiveTheme) 60.dp else 56.dp)
                         .glassSoftShadow(searchButtonShape),
                     shape = searchButtonShape,
                     color = Color.Transparent,
@@ -563,7 +639,9 @@ fun SearchScreen(
                 Button(
                     onClick = openProductSearch,
                     shape = searchButtonShape,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(if (isExpressiveTheme) 60.dp else 56.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Icon(Icons.Default.Search, contentDescription = null)
@@ -1034,7 +1112,7 @@ fun CategorySection(
     ) {
         itemsIndexed(categories) { index, category ->
             val colors = categoryColors[index % categoryColors.size]
-            val dynamicColors = getDynamicThemeColor(index, appTheme, colors.first, colors.second)
+            val dynamicColors = homeDynamicColors(index, appTheme, colors.first, colors.second)
             val categoryGlassFill = if (glass.enabled) glass.fill.copy(alpha = glass.alpha)
             else dynamicColors.first
             val categoryGlassBorder = if (glass.enabled) glass.border else Color.Transparent
@@ -1127,7 +1205,7 @@ fun ProductCard(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val shareLayer = rememberGraphicsLayer()
-    val shareAccentColor = getDynamicThemeColor(
+    val shareAccentColor = homeDynamicColors(
         index,
         appTheme,
         MaterialTheme.colorScheme.primaryContainer,
@@ -1206,7 +1284,7 @@ fun ProductCard(
                     .clip(CircleShape)
             )
         } else {
-            val dynColors = getDynamicThemeColor(index, appTheme, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+            val dynColors = homeDynamicColors(index, appTheme, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
             Box(
                 modifier = Modifier
                     .size(48.dp)
@@ -1515,7 +1593,7 @@ fun MiniProductCard(
                         .clip(CircleShape)
                 )
             } else {
-                val dynColors = getDynamicThemeColor(index, appTheme, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+                val dynColors = homeDynamicColors(index, appTheme, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
                 Box(
                     modifier = Modifier
                         .size(32.dp)
@@ -1611,7 +1689,7 @@ fun HistoryItem(
             }
         )
     }
-    val dynColors = getDynamicThemeColor(index, appTheme, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+    val dynColors = homeDynamicColors(index, appTheme, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
     Row(
         modifier = Modifier
             .fillMaxWidth()
