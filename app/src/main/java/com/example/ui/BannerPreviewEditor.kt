@@ -35,6 +35,9 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.data.BannerMaskSettings
 import com.example.data.ThemeBackground
+import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.expressiveShadow
 
 @Composable
 fun BannerPreviewEditor(
@@ -48,6 +51,9 @@ fun BannerPreviewEditor(
     onSave: (ThemeBackground, BannerMaskSettings) -> Unit
 ) {
     val context = LocalContext.current
+    val expressive = LocalExpressiveStyle.current.enabled
+    val glassStyle = LocalGlassSoftStyle.current
+    val profile = rememberNrdScreenProfile()
     val storedMask = rememberBannerMaskSettings(themeKey, background.url)
     var maskDraft by remember(background.id) { mutableStateOf<BannerMaskSettings?>(null) }
     val effectiveMask = (maskDraft ?: storedMask).normalized()
@@ -76,13 +82,19 @@ fun BannerPreviewEditor(
         onDismissRequest = { if (!isSaving) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
+        val dialogShape = if (expressive) RoundedCornerShape(if (profile.compact) 24.dp else 30.dp) else RoundedCornerShape(20.dp)
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.96f)
-                .padding(horizontal = 6.dp, vertical = 8.dp),
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface
+                .padding(horizontal = 6.dp, vertical = 8.dp)
+                .expressiveShadow(dialogShape, 9.dp),
+            shape = dialogShape,
+            color = when {
+                glassStyle.enabled -> MaterialTheme.colorScheme.surface
+                expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                else -> MaterialTheme.colorScheme.surface
+            }
         ) {
             Column(
                 modifier = Modifier
@@ -586,7 +598,15 @@ private fun ExpandableEditorCard(
     onToggle: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    val shape = if (expressive) RoundedCornerShape(if (profile.compact) 18.dp else 22.dp) else MaterialTheme.shapes.medium
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .expressiveShadow(shape, 4.dp),
+        shape = shape
+    ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier

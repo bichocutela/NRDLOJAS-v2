@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Sync
@@ -30,7 +31,9 @@ import androidx.compose.ui.unit.dp
 import com.example.data.CatalogSnapshot
 import com.example.data.CategoryCount
 import com.example.data.MaintenanceSummary
+import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.expressiveShadow
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -54,7 +57,16 @@ internal fun MestreAdvancedSection(
         description = "Confira o estado do catálogo local e remoto sem alterar dados"
     )
     Spacer(modifier = Modifier.height(8.dp))
-    OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    val diagnosticShape = if (expressive) RoundedCornerShape(if (profile.compact) 22.dp else 26.dp) else MaterialTheme.shapes.medium
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(diagnosticShape)
+            .expressiveShadow(diagnosticShape, 6.dp),
+        shape = diagnosticShape
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             val summary = maintenanceSummary
             if (summary == null) {
@@ -130,7 +142,14 @@ internal fun MestreAdvancedSection(
         description = "Crie pontos de retorno do catálogo antes de mudanças importantes"
     )
     Spacer(modifier = Modifier.height(8.dp))
-    OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
+    val safetyShape = if (expressive) RoundedCornerShape(if (profile.compact) 22.dp else 26.dp) else MaterialTheme.shapes.medium
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(safetyShape)
+            .expressiveShadow(safetyShape, 6.dp),
+        shape = safetyShape
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 "O histórico mantém até 20 backups remotos. Restaurar uma versão cria primeiro um backup automático do catálogo atual.",
@@ -219,9 +238,18 @@ private fun AdvancedCatalogSnapshotItem(
     enabled: Boolean,
     onRestore: (CatalogSnapshot) -> Unit
 ) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    val shape = if (expressive) RoundedCornerShape(if (profile.compact) 20.dp else 24.dp) else MaterialTheme.shapes.medium
     Card(
-        modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(shape)
+            .expressiveShadow(shape, 4.dp),
+        shape = shape,
+        colors = CardDefaults.cardColors(
+            containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(10.dp),

@@ -52,7 +52,10 @@ import com.example.data.MaintenanceSummary
 import com.example.data.ProductImportParser
 import com.example.data.NotificationSettings
 import com.example.data.ProductImportResult
+import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.expressiveShadow
 
 private const val NEW_CATEGORY_ACTION_KEY = "__new_category__"
 private const val CATEGORY_PAGE_SIZE = 15
@@ -199,6 +202,9 @@ fun MestreScreen(
     val suggestions by FirebaseService.observeSuggestions().collectAsStateWithLifecycle(initialValue = emptyList())
     val coroutineScope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val expressive = LocalExpressiveStyle.current.enabled
+    val glassStyle = LocalGlassSoftStyle.current
+    val screenProfile = rememberNrdScreenProfile()
     val themeBackgroundLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
     ) { uri: android.net.Uri? ->
@@ -361,10 +367,16 @@ fun MestreScreen(
     }
 
     Scaffold(
+        containerColor = if (expressive || glassStyle.enabled) Color.Transparent else MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text(currentPage.title) },
+                title = {
+                    Text(
+                        currentPage.title,
+                        fontWeight = if (expressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = returnFromPage) {
                         Icon(
@@ -372,7 +384,12 @@ fun MestreScreen(
                             contentDescription = "Voltar"
                         )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = if (expressive || glassStyle.enabled) Color.Transparent else MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground
+                )
             )
         }
     ) { innerPadding ->
@@ -381,7 +398,10 @@ fun MestreScreen(
                 .padding(innerPadding)
                 .fillMaxSize()
                 .verticalScroll(panelScrollState)
-                .padding(16.dp),
+                .padding(
+                    horizontal = if (screenProfile.compact) 10.dp else 16.dp,
+                    vertical = if (screenProfile.compact) 10.dp else 16.dp
+                ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (currentPage == MestrePanelPage.DASHBOARD) {
@@ -2312,11 +2332,43 @@ private fun HomeSettingSwitch(
 
 @Composable
 internal fun MestreSectionHeader(title: String, description: String) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-    ) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    if (expressive) {
+        val shape = RoundedCornerShape(if (profile.compact) 20.dp else 24.dp)
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .expressiveShadow(shape, 4.dp),
+            shape = shape,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ) {
+            Column(
+                modifier = Modifier.padding(
+                    horizontal = if (profile.compact) 12.dp else 15.dp,
+                    vertical = if (profile.compact) 10.dp else 12.dp
+                )
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold
+                )
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    } else {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
