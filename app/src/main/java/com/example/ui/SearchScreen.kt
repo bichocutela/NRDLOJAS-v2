@@ -282,24 +282,44 @@ private fun homeDynamicColors(
 
 private fun expressiveGlassCardAccent(style: ExpressiveGlassStyle, index: Int): Pair<Color, Color> {
     if (!style.enabled) return style.accent to style.onAccent
-    val palette = if (style.accentName == "multicolor") {
-        listOf(
-            Color(0xFFEF4E56),
-            Color(0xFF2B86D9),
-            Color(0xFFF57C00),
-            Color(0xFFE0A900),
-            Color(0xFF349B50)
-        )
-    } else {
-        listOf(
-            style.accent,
-            style.secondaryAccent,
-            style.tertiaryAccent,
-            style.accent.copy(alpha = 0.88f),
-            style.secondaryAccent.copy(alpha = 0.88f)
-        )
-    }
+
+    // Assinatura visual do mock: fundo pode ser dourado, mas os cards continuam
+    // alternando rosa, azul, laranja, dourado e verde.
+    val signaturePalette = listOf(
+        Color(0xFFEF4E6D),
+        Color(0xFF2587DF),
+        Color(0xFFF57C2C),
+        Color(0xFFE7B21A),
+        Color(0xFF35A75A)
+    )
+    val tonalPalette = listOf(
+        style.accent,
+        style.secondaryAccent,
+        style.tertiaryAccent,
+        style.accent.copy(alpha = 0.92f),
+        style.secondaryAccent.copy(alpha = 0.92f)
+    )
+    val palette = if (style.accentName in setOf("gold", "multicolor")) signaturePalette else tonalPalette
     return palette[index % palette.size] to style.onAccent
+}
+
+private fun expressiveGlassCardSecondary(style: ExpressiveGlassStyle, index: Int): Color {
+    val signature = listOf(
+        Color(0xFFFFA7B5),
+        Color(0xFF8FD0FF),
+        Color(0xFFFFBE82),
+        Color(0xFFFFE17A),
+        Color(0xFF8BE6A4)
+    )
+    return if (style.accentName in setOf("gold", "multicolor")) {
+        signature[index % signature.size]
+    } else {
+        when (index % 3) {
+            1 -> style.tertiaryAccent
+            2 -> style.accent
+            else -> style.secondaryAccent
+        }
+    }
 }
 
 @Composable
@@ -664,7 +684,7 @@ fun SearchScreen(
                                     secondaryAccent = expressiveGlassStyle.secondaryAccent,
                                     intensity = 0.92f,
                                     elevation = 5.dp,
-                                    waves = true,
+                                    waves = false,
                                     bubbleSeed = 41
                                 ),
                             contentAlignment = Alignment.Center
@@ -696,7 +716,7 @@ fun SearchScreen(
                                             accent = expressiveGlassStyle.secondaryAccent,
                                             intensity = 0.88f,
                                             elevation = 4.dp,
-                                            waves = true,
+                                            waves = false,
                                             bubbleSeed = 43
                                         )
                                     } else Modifier
@@ -729,11 +749,11 @@ fun SearchScreen(
                                             if (isExpressiveGlassTheme) {
                                                 Modifier.expressiveLiquidGlass(
                                                     shape = CircleShape,
-                                                    accent = expressiveGlassStyle.accent,
-                                                    secondaryAccent = expressiveGlassStyle.tertiaryAccent,
+                                                    accent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFFFF8E9) else expressiveGlassStyle.accent,
+                                                    secondaryAccent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFFFD56A) else expressiveGlassStyle.tertiaryAccent,
                                                     intensity = 1.10f,
                                                     elevation = 8.dp,
-                                                    waves = true,
+                                                    waves = false,
                                                     bubbleSeed = 47
                                                 )
                                             } else {
@@ -771,11 +791,11 @@ fun SearchScreen(
                                         if (isExpressiveGlassTheme) {
                                             Modifier.expressiveLiquidGlass(
                                                 shape = CircleShape,
-                                                accent = expressiveGlassStyle.tertiaryAccent,
-                                                secondaryAccent = expressiveGlassStyle.accent,
+                                                accent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFFFF8E9) else expressiveGlassStyle.tertiaryAccent,
+                                                secondaryAccent = if (expressiveGlassStyle.accentName == "gold") Color(0xFF9ECFFF) else expressiveGlassStyle.accent,
                                                 intensity = 0.86f,
                                                 elevation = 4.dp,
-                                                waves = true,
+                                                waves = false,
                                                 bubbleSeed = 53
                                             )
                                         } else Modifier
@@ -804,8 +824,8 @@ fun SearchScreen(
                         when {
                             isExpressiveGlassTheme -> Modifier.expressiveLiquidGlass(
                                 shape = searchFieldShape,
-                                accent = expressiveGlassStyle.accent,
-                                secondaryAccent = expressiveGlassStyle.secondaryAccent,
+                                accent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFFFF7F1) else expressiveGlassStyle.accent,
+                                secondaryAccent = if (expressiveGlassStyle.accentName == "gold") Color(0xFF8EC9FF) else expressiveGlassStyle.secondaryAccent,
                                 intensity = 1.18f,
                                 elevation = 10.dp,
                                 animated = true,
@@ -920,7 +940,7 @@ fun SearchScreen(
                                     accent = expressiveGlassStyle.accent,
                                     intensity = 0.88f,
                                     elevation = 3.dp,
-                                    waves = true,
+                                    waves = false,
                                     bubbleSeed = 67
                                 ),
                             contentAlignment = Alignment.Center
@@ -948,9 +968,9 @@ fun SearchScreen(
                         .scale(primaryActionScale)
                         .expressiveLiquidGlass(
                             shape = searchButtonShape,
-                            accent = expressiveGlassStyle.accent,
-                            secondaryAccent = expressiveGlassStyle.tertiaryAccent,
-                            intensity = 1.34f,
+                            accent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFE8B515) else expressiveGlassStyle.accent,
+                            secondaryAccent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFFFD96A) else expressiveGlassStyle.tertiaryAccent,
+                            intensity = 1.40f,
                             elevation = 13.dp,
                             animated = true,
                             waves = true,
@@ -1646,9 +1666,9 @@ fun CategorySection(
                                     0 -> expressiveGlass.secondaryAccent
                                     else -> expressiveGlass.tertiaryAccent
                                 },
-                                intensity = 1.00f,
-                                elevation = 7.dp,
-                                waves = true,
+                                intensity = 0.90f,
+                                elevation = 6.dp,
+                                waves = false,
                                 bubbleSeed = index
                             )
                         } else {
@@ -1786,7 +1806,7 @@ private fun FavoriteToggleButton(
                         secondaryAccent = expressiveGlass.secondaryAccent,
                         intensity = if (product.isFavorite) 0.94f else 0.72f,
                         elevation = if (product.isFavorite) 5.dp else 3.dp,
-                        waves = product.isFavorite,
+                        waves = false,
                         bubbleSeed = product.code.hashCode()
                     )
                 } else Modifier
@@ -1876,8 +1896,8 @@ fun ProductCard(
                     Modifier.expressiveLiquidGlass(
                         shape = cardShape,
                         accent = cardAccent.first,
-                        secondaryAccent = expressiveGlass.secondaryAccent,
-                        intensity = 1.08f,
+                        secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
+                        intensity = 1.30f,
                         elevation = 8.dp,
                         waves = true,
                         bubbleSeed = index
@@ -2011,7 +2031,7 @@ fun ProductCard(
                                 secondaryAccent = expressiveGlass.secondaryAccent,
                                 intensity = 0.90f,
                                 elevation = 4.dp,
-                                waves = true,
+                                waves = false,
                                 bubbleSeed = index + 101
                             )
                         } else {
@@ -2312,8 +2332,8 @@ fun MiniProductCard(
                     Modifier.expressiveLiquidGlass(
                         shape = cardShape,
                         accent = cardAccent.first,
-                        secondaryAccent = expressiveGlass.tertiaryAccent,
-                        intensity = 1.02f,
+                        secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
+                        intensity = 1.26f,
                         elevation = 7.dp,
                         waves = true,
                         bubbleSeed = index + 13
@@ -2613,8 +2633,8 @@ fun HistoryItem(
                         isExpressiveGlass -> Modifier.expressiveLiquidGlass(
                             shape = itemShape,
                             accent = dynColors.first,
-                            secondaryAccent = expressiveGlass.secondaryAccent,
-                            intensity = 1.08f,
+                            secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
+                            intensity = 1.30f,
                             elevation = 7.dp,
                             waves = true,
                             bubbleSeed = index + 29
@@ -2649,7 +2669,7 @@ fun HistoryItem(
                                 secondaryAccent = expressiveGlass.secondaryAccent,
                                 intensity = 0.94f,
                                 elevation = 5.dp,
-                                waves = true,
+                                waves = false,
                                 bubbleSeed = index + 149
                             )
                         } else {

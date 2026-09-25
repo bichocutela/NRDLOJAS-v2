@@ -446,11 +446,11 @@ fun Modifier.expressiveLiquidGlass(
                 val minDimension = minOf(size.width, size.height).coerceAtLeast(1f)
                 val baseBrush = Brush.linearGradient(
                     colors = listOf(
-                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.78f).coerceIn(0f, 1f)),
-                        tint.copy(alpha = (0.18f + 0.16f * fluidity) * safeIntensity),
-                        style.surfaceBase.copy(alpha = (style.surfaceAlpha * 0.66f).coerceIn(0f, 1f)),
-                        refraction.copy(alpha = (0.12f + 0.12f * fluidity) * safeIntensity),
-                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.70f).coerceIn(0f, 1f))
+                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.58f).coerceIn(0f, 1f)),
+                        tint.copy(alpha = (0.30f + 0.18f * fluidity) * safeIntensity),
+                        style.surfaceBase.copy(alpha = (style.surfaceAlpha * 0.46f).coerceIn(0f, 1f)),
+                        refraction.copy(alpha = (0.20f + 0.14f * fluidity) * safeIntensity),
+                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.52f).coerceIn(0f, 1f))
                     ),
                     start = Offset.Zero,
                     end = Offset(size.width, size.height)
@@ -525,7 +525,7 @@ fun Modifier.expressiveLiquidGlass(
                     ),
                     radius = maxDimension * (0.36f + 0.10f * fluidity)
                 )
-                val distortionHeight = size.height * (0.12f + 0.14f * fluidity)
+                val distortionHeight = size.height * (0.18f + 0.18f * fluidity)
                 val bottomLiquidPath = Path().apply {
                     moveTo(0f, size.height - distortionHeight * (0.72f + 0.10f * motion))
                     cubicTo(
@@ -779,10 +779,13 @@ fun NrdAppBackground(
                     .drawWithCache {
                         val maxDimension = maxOf(size.width, size.height).coerceAtLeast(1f)
                         val lightScale = if (expressiveGlass.isDark) 0.52f else 1f
+                        val ambientPrimary = if (expressiveGlass.accentName == "gold") Color(0xFFFF78A7) else expressiveGlass.accent
+                        val ambientSecondary = if (expressiveGlass.accentName == "gold") Color(0xFF72B7FF) else expressiveGlass.secondaryAccent
+                        val ambientTertiary = if (expressiveGlass.accentName == "gold") Color(0xFF70D68F) else expressiveGlass.tertiaryAccent
                         val haloPrimary = Brush.radialGradient(
                             colors = listOf(
-                                expressiveGlass.accent.copy(alpha = 0.30f * lightScale),
-                                expressiveGlass.accent.copy(alpha = 0.10f * lightScale),
+                                ambientPrimary.copy(alpha = 0.26f * lightScale),
+                                ambientPrimary.copy(alpha = 0.09f * lightScale),
                                 Color.Transparent
                             ),
                             center = Offset(
@@ -793,8 +796,8 @@ fun NrdAppBackground(
                         )
                         val haloSecondary = Brush.radialGradient(
                             colors = listOf(
-                                expressiveGlass.secondaryAccent.copy(alpha = 0.24f * lightScale),
-                                expressiveGlass.secondaryAccent.copy(alpha = 0.08f * lightScale),
+                                ambientSecondary.copy(alpha = 0.23f * lightScale),
+                                ambientSecondary.copy(alpha = 0.08f * lightScale),
                                 Color.Transparent
                             ),
                             center = Offset(
@@ -805,7 +808,7 @@ fun NrdAppBackground(
                         )
                         val haloTertiary = Brush.radialGradient(
                             colors = listOf(
-                                expressiveGlass.tertiaryAccent.copy(alpha = 0.22f * lightScale),
+                                ambientTertiary.copy(alpha = 0.20f * lightScale),
                                 Color.Transparent
                             ),
                             center = Offset(
