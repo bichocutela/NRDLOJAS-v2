@@ -110,6 +110,10 @@ class UserPreferences(private val context: Context) {
         preferences[GLASS_TYPE] ?: "soft"
     }
 
+    val expressiveStyle: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[EXPRESSIVE_STYLE] ?: "solid"
+    }
+
     val onboardingShown: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[ONBOARDING_SHOWN] ?: false
     }
@@ -237,6 +241,11 @@ class UserPreferences(private val context: Context) {
         context.dataStore.edit { it[GLASS_TYPE] = safe }
     }
 
+    suspend fun setExpressiveStyle(style: String) {
+        val safe = style.takeIf { it in setOf("solid", "glass") } ?: "solid"
+        context.dataStore.edit { it[EXPRESSIVE_STYLE] = safe }
+    }
+
     suspend fun setOnboardingShown(shown: Boolean) {
         context.dataStore.edit { it[ONBOARDING_SHOWN] = shown }
     }
@@ -277,6 +286,7 @@ class UserPreferences(private val context: Context) {
         val GLASS_ACCENT_COLOR = stringPreferencesKey("glass_accent_color")
         val GLASS_TRANSPARENCY = floatPreferencesKey("glass_transparency")
         val GLASS_TYPE = stringPreferencesKey("glass_type")
+        val EXPRESSIVE_STYLE = stringPreferencesKey("expressive_style")
         val ONBOARDING_SHOWN = booleanPreferencesKey("onboarding_shown")
         val INSTALLATION_ID = stringPreferencesKey("installation_id")
     }
