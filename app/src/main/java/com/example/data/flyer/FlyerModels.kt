@@ -52,7 +52,9 @@ data class FlyerOffer(
     val cashbackValue: Double? = null,
     val sourceText: String = "",
     val reviewed: Boolean = false,
-    val clubCondition: FlyerClubCondition = FlyerClubCondition.NOT_INFORMED
+    val clubCondition: FlyerClubCondition = FlyerClubCondition.NOT_INFORMED,
+    val validFrom: String? = null,
+    val validTo: String? = null
 ) {
     /** Identity suggestions from OCR are never commercial approval. */
     fun reviewError(): String? {
@@ -97,6 +99,21 @@ data class FlyerOffer(
         if (barcodes.any { normalizeIdentifier(it) == productCode }) return true
 
         return false
+    }
+
+    fun effectiveValidFrom(campaign: FlyerCampaign): String =
+        validFrom?.takeIf { parseIsoDate(it) != null } ?: campaign.validFrom
+
+    fun effectiveValidTo(campaign: FlyerCampaign): String =
+        validTo?.takeIf { parseIsoDate(it) != null } ?: campaign.validTo
+
+    fun isActiveAt(campaign: FlyerCampaign, nowMillis: Long = System.currentTimeMillis()): Boolean {
+        if (!campaign.isActiveAt(nowMillis)) return false
+        val start = parseIsoDate(effectiveValidFrom(campaign)) ?: return false
+        val end = parseIsoDate(effectiveValidTo(campaign)) ?: return false
+        val dayFormat = isoDateFormat()
+        val today = dayFormat.parse(dayFormat.format(Date(nowMillis))) ?: return false
+        return !today.before(start) && !today.after(end)
     }
 
     fun displayTitle(): String = when (type) {

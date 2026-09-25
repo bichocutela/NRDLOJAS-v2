@@ -164,7 +164,9 @@ object FlyerRepository {
         "cashbackValue" to offer.cashbackValue,
         "sourceText" to offer.sourceText,
         "reviewed" to offer.reviewed,
-        "clubCondition" to offer.clubCondition.name
+        "clubCondition" to offer.clubCondition.name,
+        "validFrom" to offer.validFrom,
+        "validTo" to offer.validTo
     )
 
     private fun campaignMaps(value: Any?): List<Map<*, *>> =
@@ -220,7 +222,9 @@ object FlyerRepository {
             cashbackValue = number(data["cashbackValue"]),
             sourceText = data["sourceText"]?.toString().orEmpty(),
             reviewed = data["reviewed"] as? Boolean ?: false,
-            clubCondition = enumValueOrNull<FlyerClubCondition>(data["clubCondition"]?.toString()) ?: FlyerClubCondition.NOT_INFORMED
+            clubCondition = enumValueOrNull<FlyerClubCondition>(data["clubCondition"]?.toString()) ?: FlyerClubCondition.NOT_INFORMED,
+            validFrom = data["validFrom"]?.toString()?.takeIf { parseIsoDate(it) != null },
+            validTo = data["validTo"]?.toString()?.takeIf { parseIsoDate(it) != null }
         )
     }
 

@@ -40,6 +40,16 @@ class FlyerReviewTest {
         assertNull(cashback.secondUnitPrice)
         assertNull(cashback.copy(cashbackPercent = 130.0).confirmedForPublication())
     }
+    @Test fun individualOfferValidityOverridesCampaignWindow() {
+        val approved = offer().confirmedForPublication()!!.copy(validFrom = "2026-09-10", validTo = "2026-09-12")
+        val campaign = FlyerCampaign(name = "Semanal", sourceType = "gallery", sourceLabel = "teste.pdf",
+            validFrom = "2026-09-09", validTo = "2026-09-15", offers = listOf(approved))
+        assertTrue(approved.isActiveAt(campaign, parseIsoDate("2026-09-11")!!.time))
+        assertFalse(approved.isActiveAt(campaign, parseIsoDate("2026-09-13")!!.time))
+        val fallback = approved.copy(validFrom = null, validTo = null)
+        assertTrue(fallback.isActiveAt(campaign, parseIsoDate("2026-09-13")!!.time))
+    }
+
     @Test fun publishedCampaignUsesDatesAndEnabledFlag() {
         val campaign = FlyerCampaign(name = "Semanal", sourceType = "gallery", sourceLabel = "teste.pdf",
             validFrom = "2026-09-09", validTo = "2026-09-15", offers = listOf(offer().confirmedForPublication()!!))

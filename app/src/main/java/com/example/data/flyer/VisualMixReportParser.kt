@@ -126,6 +126,8 @@ internal object VisualMixReportParser {
                     id = UUID.randomUUID().toString(),
                     type = FlyerOfferType.DE_POR,
                     flyerPrice = promoPrice,
+                    validFrom = promoRange?.first ?: targetDate,
+                    validTo = promoRange?.second ?: targetDate,
                     detail = "De ${formatMoney(regularPrice)} por ${formatMoney(promoPrice)}" +
                         promoRange?.let { " • ${it.first} a ${it.second}" }.orEmpty()
                 )
@@ -136,6 +138,8 @@ internal object VisualMixReportParser {
                     type = FlyerOfferType.FLYER_PRICE,
                     flyerPrice = clubPrice,
                     clubCondition = FlyerClubCondition.REQUIRED,
+                    validFrom = targetDate,
+                    validTo = clubEnd ?: targetDate,
                     detail = "Clube ${formatMoney(clubPrice)}" +
                         clubEnd?.let { " • até $it" }.orEmpty()
                 )

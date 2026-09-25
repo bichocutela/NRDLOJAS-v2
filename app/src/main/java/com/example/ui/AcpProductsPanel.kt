@@ -67,7 +67,6 @@ import java.util.Locale
 private enum class NrdIdentifier { BARCODE, PRODUCT_CODE }
 
 private const val AUTO_PRICE_REFRESH_MILLIS = 15_000L
-private const val FEATURED_LOAD_IDLE_DELAY_MILLIS = 1_200L
 
 private enum class AcpFeaturedSort(val label: String) {
     MAIOR_DESCONTO("Maior desconto"),
@@ -132,6 +131,7 @@ internal fun AcpProductsPanel(
 
     var featuredOffers by remember { mutableStateOf<List<AcpFeaturedOffer>>(emptyList()) }
     var featuredLoading by remember { mutableStateOf(false) }
+    var featuredError by remember { mutableStateOf<String?>(null) }
     var featuredVisible by remember { mutableStateOf(true) }
     var featuredExpanded by remember { mutableStateOf(false) }
     var featuredSort by remember { mutableStateOf(AcpFeaturedSort.MENOR_PRECO) }
@@ -143,26 +143,30 @@ internal fun AcpProductsPanel(
         .collectAsState(initial = com.example.data.RemoteHomeSettings())
     val featuredIntervalSeconds = (remoteHomeSettings.carouselIntervalSeconds ?: 4).coerceIn(3, 30)
 
-    fun refreshFeaturedFromAcp() {
-        if (featuredRefreshJob?.isActive == true || featuredLoading) return
-        featuredRefreshJob = scope.launch {
+    fun refreshFeaturedFromAcp(): Job {
+        featuredRefreshJob?.takeIf { it.isActive }?.let { return it }
+        return scope.launch {
+            featuredLoading = true
+            featuredError = null
             try {
                 val latest = api.featuredOffersPage(page = 0, forceFresh = true)
                 if (query.isBlank() && featuredVisible) {
-                    val refreshedKeys = latest.items.mapTo(mutableSetOf()) { "${it.product.id}|${it.offer.family}" }
-                    featuredOffers = (latest.items + featuredOffers.filterNot {
-                        "${it.product.id}|${it.offer.family}" in refreshedKeys
-                    }).distinctBy { "${it.product.id}|${it.offer.family}" }
-                    featuredHasMore = latest.hasMore || featuredServerPage > 0
+                    // A ACP é a fonte da verdade: a primeira página nova substitui a antiga.
+                    // Assim uma oferta removida da ACP não sobrevive apenas por estar em cache.
+                    featuredOffers = latest.items
+                    featuredServerPage = 0
+                    featuredHasMore = latest.hasMore
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
-                // Keep showing the last successful list; the next refresh retries.
+            } catch (failure: Exception) {
+                if (query.isBlank() && featuredVisible) featuredOffers = emptyList()
+                featuredError = acpErrorMessage(failure)
             } finally {
+                featuredLoading = false
                 featuredRefreshJob = null
             }
-        }
+        }.also { featuredRefreshJob = it }
     }
 
     fun loadFeaturedPage(serverPage: Int, append: Boolean, loadAll: Boolean = false) {
@@ -204,12 +208,11 @@ internal fun AcpProductsPanel(
     }
 
     LaunchedEffect(api) {
-        // Draw cached cards first, then silently replace them with current ACP data.
-        delay(FEATURED_LOAD_IDLE_DELAY_MILLIS)
-        loadFeaturedPage(0, append = false)
+        // Ao abrir, consulta a ACP imediatamente antes de considerar a lista sincronizada.
+        refreshFeaturedFromAcp().join()
         while (true) {
             delay(5 * 60 * 1000L)
-            if (query.isBlank() && featuredVisible) refreshFeaturedFromAcp()
+            if (query.isBlank() && featuredVisible) refreshFeaturedFromAcp().join()
         }
     }
 
@@ -348,10 +351,16 @@ internal fun AcpProductsPanel(
                 api.confirmAccess()
                 val clean = query.trim()
                 if (clean.isBlank()) {
-                    // Sem uma pesquisa aberta não há uma lista de preços para substituir.
-                    // Ainda assim validamos a sessão e a integração com o ACP.
+                    // Sem pesquisa aberta, o gesto atualiza justamente os destaques visíveis.
+                    featuredRefreshJob?.cancel()
+                    val latest = api.featuredOffersPage(page = 0, forceFresh = true)
+                    if (ticket != generation) return@launch
+                    featuredOffers = latest.items
+                    featuredServerPage = 0
+                    featuredHasMore = latest.hasMore
+                    featuredError = null
                     integration = try { api.integrationInfo() } catch (_: Exception) { null }
-                    refreshMessage = "Conexão com o ACP atualizada. Pesquise um produto para carregar o preço mais recente."
+                    refreshMessage = "Ofertas em destaque atualizadas agora pelo ACP."
                 } else {
                     val targetPage = page?.pageIndex ?: 0
                     val fresh = api.searchProductsUnifiedFresh(clean, targetPage, freshStore)
@@ -577,6 +586,10 @@ internal fun AcpProductsPanel(
                 Spacer(Modifier.width(8.dp))
                 Text(if (busy) "Pesquisando…" else "Pesquisar produto", fontWeight = FontWeight.Bold)
             }
+        }
+
+        featuredError?.let { message ->
+            item { Text("Não foi possível atualizar os destaques da ACP: $message", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
 
         if (featuredVisible && (featuredLoading || featuredOffers.isNotEmpty())) {
