@@ -1358,6 +1358,8 @@ fun CategorySection(
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
+    val expressiveGlass = LocalExpressiveGlassStyle.current
+    val isExpressiveGlass = expressiveGlass.enabled
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
     val categoryColors = listOf(
@@ -1379,29 +1381,47 @@ fun CategorySection(
             val dynamicColors = homeDynamicColors(index, appTheme, colors.first, colors.second)
             val strongColors = homeStrongColors(index)
             val categoryGlassFill = when {
-                glass.enabled && expressive -> strongColors.first.copy(alpha = 0.18f)
                 glass.enabled -> glass.fill.copy(alpha = glass.alpha)
+                isExpressiveGlass -> expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.surfaceAlpha)
                 expressive -> strongColors.first
                 else -> dynamicColors.first
             }
             val categoryGlassBorder = when {
-                glass.enabled && expressive -> strongColors.first.copy(alpha = 0.48f)
                 glass.enabled -> glass.border
+                isExpressiveGlass -> expressiveGlass.borderColor
                 else -> Color.Transparent
             }
-            val categoryShape = if (expressive) {
-                RoundedCornerShape(if (compactExpressive) 18.dp else 22.dp)
-            } else {
-                RoundedCornerShape(16.dp)
+            val categoryShape = when {
+                isExpressiveGlass -> {
+                    val water = expressiveGlass.fluidity
+                    RoundedCornerShape(
+                        topStart = (18f + 8f * water).dp,
+                        topEnd = (14f + 12f * water).dp,
+                        bottomEnd = (22f + 8f * water).dp,
+                        bottomStart = (15f + 10f * water).dp
+                    )
+                }
+                expressive -> RoundedCornerShape(if (compactExpressive) 18.dp else 22.dp)
+                else -> RoundedCornerShape(16.dp)
             }
+            val categoryBrush = Brush.linearGradient(
+                listOf(
+                    expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.strongSurfaceAlpha),
+                    expressiveGlass.accent.copy(alpha = 0.10f + 0.10f * expressiveGlass.fluidity),
+                    expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.surfaceAlpha),
+                    Color.White.copy(alpha = if (expressiveGlass.isDark) 0.05f else 0.18f)
+                )
+            )
 
             Box(
-
                 modifier = Modifier
                     .glassSoftShadow(categoryShape)
                     .expressiveShadow(categoryShape, 6.dp)
                     .clip(categoryShape)
-                    .background(categoryGlassFill)
+                    .then(
+                        if (isExpressiveGlass) Modifier.background(categoryBrush)
+                        else Modifier.background(categoryGlassFill)
+                    )
                     .border(1.dp, categoryGlassBorder, categoryShape)
                     .clickable { onCategoryClick(category) }
                     .padding(
@@ -1423,7 +1443,11 @@ fun CategorySection(
                         Icon(
                             painter = painterResource(id = expressiveCategoryIconRes(category)),
                             contentDescription = category,
-                            tint = if (glass.enabled) strongColors.first else strongColors.second,
+                            tint = when {
+                                isExpressiveGlass -> expressiveGlass.accent
+                                glass.enabled -> strongColors.first
+                                else -> strongColors.second
+                            },
                             modifier = Modifier.size(if (compactExpressive) 18.dp else 20.dp)
                         )
                         Spacer(Modifier.width(if (compactExpressive) 6.dp else 8.dp))
@@ -1438,7 +1462,7 @@ fun CategorySection(
                         boldOutline = textPreferences.boldOutline,
                         uppercaseBold = true,
                         color = when {
-                            glass.enabled && expressive -> strongColors.first
+                            isExpressiveGlass -> MaterialTheme.colorScheme.onSurface
                             glass.enabled -> MaterialTheme.colorScheme.onSurface
                             expressive -> strongColors.second
                             else -> dynamicColors.second
@@ -1530,21 +1554,48 @@ fun ProductCard(
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
+    val expressiveGlass = LocalExpressiveGlassStyle.current
+    val isExpressiveGlass = expressiveGlass.enabled
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
-    val cardShape = if (expressive) {
-        RoundedCornerShape(if (compactExpressive) 24.dp else 30.dp)
-    } else {
-        RoundedCornerShape(24.dp)
+    val cardShape = when {
+        isExpressiveGlass -> {
+            val water = expressiveGlass.fluidity
+            RoundedCornerShape(
+                topStart = (24f + 12f * water).dp,
+                topEnd = (18f + 14f * water).dp,
+                bottomEnd = (28f + 10f * water).dp,
+                bottomStart = (20f + 16f * water).dp
+            )
+        }
+        expressive -> RoundedCornerShape(if (compactExpressive) 24.dp else 30.dp)
+        else -> RoundedCornerShape(24.dp)
     }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val shareLayer = rememberGraphicsLayer()
-    val cardAccent = homeDynamicColors(
-        index,
-        appTheme,
-        MaterialTheme.colorScheme.primaryContainer,
-        MaterialTheme.colorScheme.onPrimaryContainer
+    val cardAccent = if (isExpressiveGlass) {
+        val accent = when (index % 3) {
+            1 -> expressiveGlass.secondaryAccent
+            2 -> expressiveGlass.tertiaryAccent
+            else -> expressiveGlass.accent
+        }
+        accent to expressiveGlass.onAccent
+    } else {
+        homeDynamicColors(
+            index,
+            appTheme,
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    }
+    val productLiquidBrush = Brush.linearGradient(
+        listOf(
+            expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.strongSurfaceAlpha),
+            cardAccent.first.copy(alpha = 0.10f + 0.12f * expressiveGlass.fluidity),
+            expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.surfaceAlpha),
+            Color.White.copy(alpha = if (expressiveGlass.isDark) 0.05f else 0.20f)
+        )
     )
     val shareAccentColor = cardAccent.first.toArgb()
     val shareCodeColor = MaterialTheme.colorScheme.primary.toArgb()
@@ -1568,16 +1619,23 @@ fun ProductCard(
             .fillMaxWidth()
             .glassSoftShadow(cardShape)
             .clip(cardShape)
-            .background(
-                when {
-                    glass.enabled -> glass.fill.copy(alpha = glass.alpha)
-                    expressive -> MaterialTheme.colorScheme.surfaceContainerLow
-                    else -> MaterialTheme.colorScheme.surface
+            .then(
+                if (isExpressiveGlass) {
+                    Modifier.background(productLiquidBrush)
+                } else {
+                    Modifier.background(
+                        when {
+                            glass.enabled -> glass.fill.copy(alpha = glass.alpha)
+                            expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                            else -> MaterialTheme.colorScheme.surface
+                        }
+                    )
                 }
             )
             .border(
                 1.dp,
                 when {
+                    isExpressiveGlass -> expressiveGlass.borderColor
                     glass.enabled -> glass.border
                     expressive -> MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)
                     else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
@@ -1901,20 +1959,47 @@ fun MiniProductCard(
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
+    val expressiveGlass = LocalExpressiveGlassStyle.current
+    val isExpressiveGlass = expressiveGlass.enabled
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
-    val cardShape = if (expressive) {
-        RoundedCornerShape(if (compactExpressive) 22.dp else 26.dp)
-    } else {
-        RoundedCornerShape(24.dp)
+    val cardShape = when {
+        isExpressiveGlass -> {
+            val water = expressiveGlass.fluidity
+            RoundedCornerShape(
+                topStart = (22f + 10f * water).dp,
+                topEnd = (16f + 13f * water).dp,
+                bottomEnd = (26f + 10f * water).dp,
+                bottomStart = (18f + 14f * water).dp
+            )
+        }
+        expressive -> RoundedCornerShape(if (compactExpressive) 22.dp else 26.dp)
+        else -> RoundedCornerShape(24.dp)
     }
-    val cardAccent = homeDynamicColors(
-        index,
-        appTheme,
-        MaterialTheme.colorScheme.primaryContainer,
-        MaterialTheme.colorScheme.onPrimaryContainer
+    val cardAccent = if (isExpressiveGlass) {
+        val accent = when (index % 3) {
+            1 -> expressiveGlass.secondaryAccent
+            2 -> expressiveGlass.tertiaryAccent
+            else -> expressiveGlass.accent
+        }
+        accent to expressiveGlass.onAccent
+    } else {
+        homeDynamicColors(
+            index,
+            appTheme,
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    }
+    val strongAccent = if (isExpressiveGlass) cardAccent else homeStrongColors(index)
+    val miniLiquidBrush = Brush.linearGradient(
+        listOf(
+            expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.strongSurfaceAlpha),
+            cardAccent.first.copy(alpha = 0.09f + 0.12f * expressiveGlass.fluidity),
+            expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.surfaceAlpha),
+            Color.White.copy(alpha = if (expressiveGlass.isDark) 0.05f else 0.18f)
+        )
     )
-    val strongAccent = homeStrongColors(index)
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(
@@ -1954,17 +2039,23 @@ fun MiniProductCard(
             .glassSoftShadow(cardShape)
             .expressiveShadow(cardShape, 7.dp)
             .clip(cardShape)
-            .background(
-                when {
-                    glass.enabled -> glass.fill.copy(alpha = glass.alpha)
-                    expressive -> MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
-                    else -> MaterialTheme.colorScheme.surface
+            .then(
+                if (isExpressiveGlass) {
+                    Modifier.background(miniLiquidBrush)
+                } else {
+                    Modifier.background(
+                        when {
+                            glass.enabled -> glass.fill.copy(alpha = glass.alpha)
+                            expressive -> MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
+                            else -> MaterialTheme.colorScheme.surface
+                        }
+                    )
                 }
             )
             .border(
                 1.dp,
                 when {
-                    glass.enabled && expressive -> strongAccent.first.copy(alpha = 0.38f)
+                    isExpressiveGlass -> expressiveGlass.borderColor
                     glass.enabled -> glass.border
                     expressive -> MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
                     else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
@@ -2158,12 +2249,22 @@ fun HistoryItem(
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
+    val expressiveGlass = LocalExpressiveGlassStyle.current
+    val isExpressiveGlass = expressiveGlass.enabled
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
-    val itemShape = if (expressive) {
-        RoundedCornerShape(if (compactExpressive) 20.dp else 24.dp)
-    } else {
-        RoundedCornerShape(16.dp)
+    val itemShape = when {
+        isExpressiveGlass -> {
+            val water = expressiveGlass.fluidity
+            RoundedCornerShape(
+                topStart = (20f + 10f * water).dp,
+                topEnd = (15f + 13f * water).dp,
+                bottomEnd = (24f + 11f * water).dp,
+                bottomStart = (17f + 14f * water).dp
+            )
+        }
+        expressive -> RoundedCornerShape(if (compactExpressive) 20.dp else 24.dp)
+        else -> RoundedCornerShape(16.dp)
     }
     var showDialog by remember { mutableStateOf(false) }
     if (showDialog) {
@@ -2179,13 +2280,30 @@ fun HistoryItem(
             }
         )
     }
-    val dynColors = homeDynamicColors(
-        index,
-        appTheme,
-        MaterialTheme.colorScheme.primaryContainer,
-        MaterialTheme.colorScheme.onPrimaryContainer
+    val dynColors = if (isExpressiveGlass) {
+        val accent = when (index % 3) {
+            1 -> expressiveGlass.secondaryAccent
+            2 -> expressiveGlass.tertiaryAccent
+            else -> expressiveGlass.accent
+        }
+        accent to expressiveGlass.onAccent
+    } else {
+        homeDynamicColors(
+            index,
+            appTheme,
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    }
+    val strongColors = if (isExpressiveGlass) dynColors else homeStrongColors(index)
+    val historyLiquidBrush = Brush.linearGradient(
+        listOf(
+            expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.strongSurfaceAlpha),
+            dynColors.first.copy(alpha = 0.08f + 0.12f * expressiveGlass.fluidity),
+            expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.surfaceAlpha),
+            Color.White.copy(alpha = if (expressiveGlass.isDark) 0.05f else 0.20f)
+        )
     )
-    val strongColors = homeStrongColors(index)
 
     if (expressive) {
         Row(
@@ -2195,14 +2313,20 @@ fun HistoryItem(
                 .glassSoftShadow(itemShape)
                 .expressiveShadow(itemShape, 6.dp)
                 .clip(itemShape)
-                .background(
-                    if (glass.enabled) glass.fill.copy(alpha = glass.alpha)
-                    else dynColors.first.copy(alpha = 0.62f)
+                .then(
+                    when {
+                        isExpressiveGlass -> Modifier.background(historyLiquidBrush)
+                        glass.enabled -> Modifier.background(glass.fill.copy(alpha = glass.alpha))
+                        else -> Modifier.background(dynColors.first.copy(alpha = 0.62f))
+                    }
                 )
                 .border(
                     1.dp,
-                    if (glass.enabled) strongColors.first.copy(alpha = 0.42f)
-                    else strongColors.first.copy(alpha = 0.52f),
+                    when {
+                        isExpressiveGlass -> expressiveGlass.borderColor
+                        glass.enabled -> strongColors.first.copy(alpha = 0.42f)
+                        else -> strongColors.first.copy(alpha = 0.52f)
+                    },
                     itemShape
                 )
                 .vibrateClickable(viewModel) {
