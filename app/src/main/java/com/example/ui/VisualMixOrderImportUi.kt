@@ -29,17 +29,35 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun VisualMixOrderImportButton(
+internal fun VisualMixOrderImportButton(onClick: () -> Unit) {
+    val isMaster = com.google.firebase.auth.FirebaseAuth.getInstance()
+        .currentUser?.email?.trim()?.lowercase() == "mestre@nrdlojas.com"
+    if (!isMaster) return
+
+    OutlinedButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().height(50.dp)
+    ) {
+        Icon(Icons.Default.UploadFile, contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text("Importar Ordem", fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+internal fun VisualMixOrderImportHost(
     api: AcpApi,
+    open: Boolean,
     externalPdfUri: String? = null,
     externalPdfRequestKey: Long = 0L,
-    onExternalPdfConsumed: () -> Unit = {}
+    onExternalPdfConsumed: () -> Unit = {},
+    onDismiss: () -> Unit
 ) {
     val isMaster = com.google.firebase.auth.FirebaseAuth.getInstance()
         .currentUser?.email?.trim()?.lowercase() == "mestre@nrdlojas.com"
     if (!isMaster) return
 
-    var open by remember { mutableStateOf(false) }
+    var sharedOpen by remember { mutableStateOf(false) }
     var pendingSharedPdf by remember { mutableStateOf<Uri?>(null) }
     var pendingSharedPdfRequestKey by remember { mutableLongStateOf(0L) }
 
@@ -47,29 +65,21 @@ internal fun VisualMixOrderImportButton(
         if (isMaster && externalPdfUri != null) {
             pendingSharedPdf = Uri.parse(externalPdfUri)
             pendingSharedPdfRequestKey = externalPdfRequestKey
-            open = true
-            // Snapshot the shared URI locally before clearing the activity-level pending state.
-            // This keeps the import dialog alive even when the parent recomposes.
+            sharedOpen = true
             onExternalPdfConsumed()
         }
     }
 
-    OutlinedButton(
-        onClick = { open = true },
-        modifier = Modifier.fillMaxWidth().height(50.dp)
-    ) {
-        Icon(Icons.Default.UploadFile, contentDescription = null)
-        Spacer(Modifier.width(8.dp))
-        Text("Importar Ordem", fontWeight = FontWeight.Bold)
-    }
-
-    if (open) {
+    if (open || sharedOpen) {
         VisualMixOrderImportDialog(
             api = api,
             initialPdfUri = pendingSharedPdf,
             initialPdfRequestKey = pendingSharedPdfRequestKey,
             onInitialPdfConsumed = { pendingSharedPdf = null },
-            onDismiss = { open = false }
+            onDismiss = {
+                sharedOpen = false
+                onDismiss()
+            }
         )
     }
 }
