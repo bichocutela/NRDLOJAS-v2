@@ -853,7 +853,7 @@ fun SearchScreen(
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.8f))
                     .clickable { viewModel.setOnboardingShown() }
-                    .padding(if (compactExpressive) 12.dp else 16.dp),
+                    .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -1474,7 +1474,7 @@ fun ProductCard(
                     showDialog = true
                 }
             }
-            .padding(16.dp),
+            .padding(if (compactExpressive) 12.dp else 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (product.imageUrl != null) {
