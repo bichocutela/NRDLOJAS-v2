@@ -69,6 +69,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -111,6 +112,7 @@ import com.example.data.UserPreferences
 import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.expressiveShadow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -179,7 +181,7 @@ fun PromotionsLoginScreen(
     }
 
     Scaffold(
-        containerColor = if (glassStyle.enabled) Color.Transparent else MaterialTheme.colorScheme.background,
+        containerColor = if (glassStyle.enabled || expressive) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
@@ -192,7 +194,10 @@ fun PromotionsLoginScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = if (expressive || glassStyle.enabled) Color.Transparent else MaterialTheme.colorScheme.surface
+                )
             )
         }
     ) { innerPadding ->
@@ -599,7 +604,7 @@ fun PromotionsScreen(
     }
 
     Scaffold(
-        containerColor = if (glassStyle.enabled) Color.Transparent else MaterialTheme.colorScheme.background,
+        containerColor = if (glassStyle.enabled || expressive) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
@@ -753,7 +758,10 @@ fun PromotionsScreen(
                             Text("Sair")
                         }
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = if (expressive || glassStyle.enabled) Color.Transparent else MaterialTheme.colorScheme.surface
+                )
             )
         }
     ) { innerPadding ->
@@ -1051,7 +1059,10 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .expressiveShadow(if (expressive) RoundedCornerShape(24.dp) else RoundedCornerShape(10.dp), 6.dp),
         singleLine = true,
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
         trailingIcon = {
@@ -1082,8 +1093,9 @@ private fun CategoryPreviewSection(
             .padding(horizontal = if (expressive) 8.dp else 0.dp)
             .then(
                 if (expressive) Modifier
+                    .expressiveShadow(sectionShape, 7.dp)
                     .clip(sectionShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
                 else Modifier
             )
     ) {
@@ -1127,7 +1139,10 @@ private fun CompactOfferCard(offer: OfferGroup, onImageClick: (String) -> Unit) 
     val expressive = LocalExpressiveStyle.current.enabled
     val cardShape = if (expressive) RoundedCornerShape(26.dp) else RoundedCornerShape(12.dp)
     Card(
-        modifier = Modifier.widthIn(min = 156.dp, max = 176.dp).glassSoftShadow(cardShape),
+        modifier = Modifier
+            .widthIn(min = 156.dp, max = 176.dp)
+            .glassSoftShadow(cardShape)
+            .expressiveShadow(cardShape, 6.dp),
         shape = cardShape,
         colors = CardDefaults.cardColors(
             containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerHigh
@@ -1330,7 +1345,8 @@ private fun DetailedOfferCard(
                     }
                 }
             )
-            .glassSoftShadow(cardShape),
+            .glassSoftShadow(cardShape)
+            .expressiveShadow(cardShape, 7.dp),
         shape = cardShape,
         colors = CardDefaults.cardColors(
             containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow
@@ -1510,8 +1526,8 @@ private fun DiscountBadge(discount: String?, compact: Boolean) {
     if (discount.isNullOrBlank()) return
     val expressive = LocalExpressiveStyle.current.enabled
     Surface(
-        color = if (expressive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.primary,
-        contentColor = if (expressive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onPrimary,
+        color = if (expressive) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primary,
+        contentColor = if (expressive) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimary,
         shape = if (expressive) RoundedCornerShape(16.dp) else RoundedCornerShape(6.dp)
     ) {
         Text(
@@ -1817,7 +1833,10 @@ private fun StoreOfferDetailCard(
     val storeAvailable = storeOffer.storeCode.isNotBlank() && storeOffer.storeCode != UNKNOWN_STORE_LABEL
     val shape = if (expressive) RoundedCornerShape(24.dp) else RoundedCornerShape(14.dp)
     Card(
-        modifier = Modifier.fillMaxWidth().glassSoftShadow(shape, 2.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(shape, 2.dp)
+            .expressiveShadow(shape, 5.dp),
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerHigh
@@ -2374,6 +2393,7 @@ private fun PromotionChangeCard(
         modifier = Modifier
             .fillMaxWidth()
             .glassSoftShadow(cardShape)
+            .expressiveShadow(cardShape, 5.dp)
             .then(if (canOpen) Modifier.clickable { onOfferClick(change) } else Modifier),
         colors = CardDefaults.cardColors(
             containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow
