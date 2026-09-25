@@ -43,7 +43,10 @@ fun AppNavGraph(
     viewModel: MainViewModel,
     openAboutFromNotification: Boolean = false,
     openPromotionsFromNotification: Boolean = false,
-    productCodeFromNotification: String? = null
+    productCodeFromNotification: String? = null,
+    sharedOrderPdfUri: String? = null,
+    sharedOrderPdfRequestKey: Long = 0L,
+    onSharedOrderPdfConsumed: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -91,6 +94,14 @@ fun AppNavGraph(
             navController.navigate(
                 if (nossaGenteApi.hasSession() && promotionsEnabled) "promotions" else "promotions_login"
             ) {
+                launchSingleTop = true
+            }
+        }
+    }
+
+    LaunchedEffect(sharedOrderPdfUri, sharedOrderPdfRequestKey, isLoggedIn, userRole) {
+        if (sharedOrderPdfUri != null && isLoggedIn && userRole == "mestre") {
+            navController.navigate("acp_consultation") {
                 launchSingleTop = true
             }
         }
@@ -270,8 +281,13 @@ fun AppNavGraph(
                 composable("my_point") { LaunchedEffect(Unit) { navController.navigate("my_profile") { popUpTo("my_point") { inclusive = true } } } }
                 composable("settings") { SettingsScreen(viewModel, onNavigateBack = { navController.popBackStack() }) }
                 composable("acp_consultation") {
-                    AcpConsultationScreen(canConfigure = isLoggedIn && userRole in setOf("admin", "mestre"),
-                        onNavigateBack = { navController.popBackStack() })
+                    AcpConsultationScreen(
+                        canConfigure = isLoggedIn && userRole in setOf("admin", "mestre"),
+                        onNavigateBack = { navController.popBackStack() },
+                        externalPdfUri = if (isLoggedIn && userRole == "mestre") sharedOrderPdfUri else null,
+                        externalPdfRequestKey = sharedOrderPdfRequestKey,
+                        onExternalPdfConsumed = onSharedOrderPdfConsumed
+                    )
                 }
                 composable("about") { AboutScreen(onNavigateBack = { navController.popBackStack() }) }
             }
