@@ -11,12 +11,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import kotlinx.coroutines.tasks.await
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,7 +41,9 @@ import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.FirebaseTooManyRequestsException
 import com.google.firebase.auth.FirebaseAuth
 import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.expressiveShadow
 
 private const val ADMIN_LOGIN_TIMEOUT_MS = 45_000L
 private const val ADMIN_LOGIN_TAG = "AdminLogin"
@@ -61,6 +71,12 @@ fun AppNavGraph(
     var isLoggedIn by remember { mutableStateOf(initialRole != null) }
     var userRole by remember { mutableStateOf(initialRole ?: "user") }
     val glassSoftStyle = LocalGlassSoftStyle.current
+    val expressiveStyle = LocalExpressiveStyle.current
+    val screenProfile = rememberNrdScreenProfile()
+    val expressiveDrawerShape = RoundedCornerShape(
+        topEnd = if (screenProfile.compact) 28.dp else 36.dp,
+        bottomEnd = if (screenProfile.compact) 28.dp else 36.dp
+    )
     val glassDrawerShape = RoundedCornerShape(topEnd = 32.dp, bottomEnd = 32.dp)
 
     DisposableEffect(firebaseAuth) {
@@ -111,9 +127,20 @@ fun AppNavGraph(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
-                modifier = Modifier.glassSoftShadow(glassDrawerShape),
-                drawerShape = if (glassSoftStyle.enabled) glassDrawerShape else DrawerDefaults.shape,
-                drawerContainerColor = if (glassSoftStyle.enabled) MaterialTheme.colorScheme.surfaceContainerHigh else DrawerDefaults.modalContainerColor
+                modifier = Modifier
+                    .widthIn(max = if (screenProfile.compact) 312.dp else 352.dp)
+                    .glassSoftShadow(glassDrawerShape)
+                    .expressiveShadow(expressiveDrawerShape, 10.dp),
+                drawerShape = when {
+                    glassSoftStyle.enabled -> glassDrawerShape
+                    expressiveStyle.enabled -> expressiveDrawerShape
+                    else -> DrawerDefaults.shape
+                },
+                drawerContainerColor = when {
+                    glassSoftStyle.enabled -> MaterialTheme.colorScheme.surfaceContainerHigh
+                    expressiveStyle.enabled -> MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
+                    else -> DrawerDefaults.modalContainerColor
+                }
             ) {
                 LoginDrawerContent(
                     viewModel = viewModel,
@@ -162,7 +189,13 @@ fun AppNavGraph(
             }
         }
     ) {
-        Scaffold(containerColor = if (glassSoftStyle.enabled) Color.Transparent else MaterialTheme.colorScheme.background) { innerPadding ->
+        Scaffold(
+            containerColor = if (glassSoftStyle.enabled || expressiveStyle.enabled) {
+                Color.Transparent
+            } else {
+                MaterialTheme.colorScheme.background
+            }
+        ) { innerPadding ->
             NavHost(navController = navController, startDestination = "search", modifier = Modifier.padding(innerPadding)) {
                 composable("dynamic_tab/{tabId}") { backStackEntry ->
                     val tabId = backStackEntry.arguments?.getString("tabId")?.toIntOrNull()
