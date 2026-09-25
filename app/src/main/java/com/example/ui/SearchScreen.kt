@@ -440,8 +440,9 @@ fun SearchScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
-                    horizontal = if (isExpressiveTheme) 12.dp else 0.dp,
-                    top = if (isExpressiveTheme) 6.dp else 0.dp
+                    start = if (isExpressiveTheme) 12.dp else 0.dp,
+                    top = if (isExpressiveTheme) 6.dp else 0.dp,
+                    end = if (isExpressiveTheme) 12.dp else 0.dp
                 )
         ) {
             val headerHeight = maxWidth / 3f
