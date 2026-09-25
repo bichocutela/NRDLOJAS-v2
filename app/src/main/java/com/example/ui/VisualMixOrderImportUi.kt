@@ -1,5 +1,6 @@
 package com.example.ui
 
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -28,12 +29,24 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun VisualMixOrderImportButton(api: AcpApi) {
+internal fun VisualMixOrderImportButton(
+    api: AcpApi,
+    externalPdfUri: String? = null,
+    externalPdfRequestKey: Long = 0L,
+    onExternalPdfConsumed: () -> Unit = {}
+) {
     val isMaster = com.google.firebase.auth.FirebaseAuth.getInstance()
         .currentUser?.email?.trim()?.lowercase() == "mestre@nrdlojas.com"
     if (!isMaster) return
 
     var open by remember { mutableStateOf(false) }
+
+    LaunchedEffect(externalPdfUri, externalPdfRequestKey, isMaster) {
+        if (isMaster && externalPdfUri != null) {
+            open = true
+        }
+    }
+
     OutlinedButton(
         onClick = { open = true },
         modifier = Modifier.fillMaxWidth().height(50.dp)
@@ -43,12 +56,26 @@ internal fun VisualMixOrderImportButton(api: AcpApi) {
         Text("Importar Ordem", fontWeight = FontWeight.Bold)
     }
 
-    if (open) VisualMixOrderImportDialog(api = api, onDismiss = { open = false })
+    if (open) {
+        VisualMixOrderImportDialog(
+            api = api,
+            initialPdfUri = externalPdfUri?.let(Uri::parse),
+            initialPdfRequestKey = externalPdfRequestKey,
+            onInitialPdfConsumed = onExternalPdfConsumed,
+            onDismiss = { open = false }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun VisualMixOrderImportDialog(api: AcpApi, onDismiss: () -> Unit) {
+private fun VisualMixOrderImportDialog(
+    api: AcpApi,
+    initialPdfUri: Uri? = null,
+    initialPdfRequestKey: Long = 0L,
+    onInitialPdfConsumed: () -> Unit = {},
+    onDismiss: () -> Unit
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var analysis by remember { mutableStateOf<FlyerAnalysisResult?>(null) }
@@ -111,6 +138,29 @@ private fun VisualMixOrderImportDialog(api: AcpApi, onDismiss: () -> Unit) {
                     busy = false
                 }
             }
+        }
+    }
+
+    LaunchedEffect(initialPdfUri, initialPdfRequestKey) {
+        val uri = initialPdfUri ?: return@LaunchedEffect
+        if (busy) return@LaunchedEffect
+
+        busy = true
+        error = null
+        analysis = null
+        selectionMode = false
+        selectedKeys = emptySet()
+        draftMessage = "PDF recebido pelo compartilhamento. Importando automaticamente…"
+        try {
+            analysis = FlyerImportEngine.analyzeUri(context, uri)
+            confirmedKeys = VisualMixReviewStore.confirmedKeys(context)
+            draftMessage = "PDF recebido e carregado automaticamente."
+        } catch (failure: Exception) {
+            error = failure.message ?: "Não foi possível ler a ordem compartilhada."
+            draftMessage = null
+        } finally {
+            busy = false
+            onInitialPdfConsumed()
         }
     }
 
