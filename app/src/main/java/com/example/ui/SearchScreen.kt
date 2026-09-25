@@ -47,6 +47,10 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.BakeryDining
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.LocalCafe
+import androidx.compose.material.icons.filled.ShoppingBasket
 import androidx.compose.material.icons.filled.Sanitizer
 import androidx.compose.material.icons.filled.LocalLaundryService
 import androidx.compose.material.icons.filled.SetMeal
@@ -89,6 +93,7 @@ import com.example.ui.theme.getDynamicThemeColor
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.expressiveShadow
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.ui.res.painterResource
@@ -104,6 +109,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -268,6 +274,29 @@ private fun homeDynamicColors(
     return palette[index % palette.size]
 }
 
+@Composable
+private fun homeStrongColors(index: Int): Pair<Color, Color> {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val palette = if (isDark) {
+        listOf(
+            Color(0xFFFF7078) to Color(0xFF2B070A),
+            Color(0xFF6DB6FF) to Color(0xFF041C32),
+            Color(0xFFFF8B54) to Color(0xFF321003),
+            Color(0xFFFFBD45) to Color(0xFF2D1C00),
+            Color(0xFF63CF80) to Color(0xFF062510)
+        )
+    } else {
+        listOf(
+            Color(0xFFEF4E56) to Color.White,
+            Color(0xFF2B86D9) to Color.White,
+            Color(0xFFF0444C) to Color.White,
+            Color(0xFFF79A18) to Color.White,
+            Color(0xFF349B50) to Color.White
+        )
+    }
+    return palette[index % palette.size]
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SearchScreen(
@@ -402,15 +431,22 @@ fun SearchScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .then(
-                    if (isGlassTheme) Modifier.background(Color.Transparent)
+                    if (isGlassTheme || isExpressiveTheme) Modifier.background(Color.Transparent)
                     else Modifier.background(MaterialTheme.colorScheme.background)
                 )
         ) {
         val screenProfile = rememberNrdScreenProfile()
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = if (isExpressiveTheme) 12.dp else 0.dp,
+                    top = if (isExpressiveTheme) 6.dp else 0.dp
+                )
+        ) {
             val headerHeight = maxWidth / 3f
             val headerShape = if (isExpressiveTheme) {
-                RoundedCornerShape(bottomStart = 40.dp, bottomEnd = 40.dp)
+                RoundedCornerShape(28.dp)
             } else {
                 RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
             }
@@ -420,6 +456,7 @@ fun SearchScreen(
                     .fillMaxWidth()
                     .height(headerHeight)
                     .glassSoftShadow(headerShape)
+                    .expressiveShadow(headerShape, 8.dp)
                     .clip(headerShape)
                     .background(
                         if (isGlassTheme) {
@@ -562,8 +599,9 @@ fun SearchScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = if (isExpressiveTheme) 60.dp else 56.dp)
+                    .heightIn(min = if (isExpressiveTheme) 64.dp else 56.dp)
                     .glassSoftShadow(searchFieldShape)
+                    .expressiveShadow(searchFieldShape, 8.dp)
                     .clip(searchFieldShape)
                     .border(
                         1.dp,
@@ -580,12 +618,12 @@ fun SearchScreen(
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = when {
                         isGlassTheme -> MaterialTheme.colorScheme.surface
-                        isExpressiveTheme -> MaterialTheme.colorScheme.surfaceContainerHigh
+                        isExpressiveTheme -> MaterialTheme.colorScheme.surface
                         else -> MaterialTheme.colorScheme.surfaceVariant
                     },
                     unfocusedContainerColor = when {
                         isGlassTheme -> MaterialTheme.colorScheme.surface
-                        isExpressiveTheme -> MaterialTheme.colorScheme.surfaceContainerHigh
+                        isExpressiveTheme -> MaterialTheme.colorScheme.surface
                         else -> MaterialTheme.colorScheme.surfaceVariant
                     },
                     disabledContainerColor = when {
@@ -617,7 +655,8 @@ fun SearchScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(if (isExpressiveTheme) 60.dp else 56.dp)
-                        .glassSoftShadow(searchButtonShape),
+                        .glassSoftShadow(searchButtonShape)
+                        .expressiveShadow(searchButtonShape, 9.dp),
                     shape = searchButtonShape,
                     color = Color.Transparent,
                     contentColor = glassStyle.onAccent,
@@ -641,7 +680,8 @@ fun SearchScreen(
                     shape = searchButtonShape,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (isExpressiveTheme) 60.dp else 56.dp),
+                        .height(if (isExpressiveTheme) 60.dp else 56.dp)
+                        .expressiveShadow(searchButtonShape, 9.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Icon(Icons.Default.Search, contentDescription = null)
@@ -1027,45 +1067,80 @@ fun SectionHeader(
     onAction: (() -> Unit)? = null
 ) {
     val expressive = LocalExpressiveStyle.current.enabled
+    val sectionIcon = when {
+        title.contains("Mais Utilizados", ignoreCase = true) -> Icons.Default.BarChart
+        title.contains("Últimos", ignoreCase = true) -> Icons.Default.NewReleases
+        title.contains("Histórico", ignoreCase = true) -> Icons.Default.History
+        title.contains("Favoritos", ignoreCase = true) -> Icons.Default.Favorite
+        else -> Icons.Default.Search
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = if (expressive) 5.dp else 2.dp),
+            .padding(horizontal = 16.dp, vertical = if (expressive) 7.dp else 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        StylizedText(
-            text = title,
-            baseStyle = if (expressive) {
-                MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 0.4.sp
-                )
-            } else {
-                MaterialTheme.typography.labelMedium
-            },
-            boldOutline = textPreferences.boldOutline,
-            uppercaseBold = textPreferences.uppercaseBold,
-            color = if (expressive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (expressive) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        sectionIcon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+            }
+            StylizedText(
+                text = title,
+                baseStyle = if (expressive) {
+                    MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp)
+                } else {
+                    MaterialTheme.typography.labelMedium
+                },
+                boldOutline = textPreferences.boldOutline,
+                uppercaseBold = textPreferences.uppercaseBold,
+                color = if (expressive) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         if (actionLabel != null && onAction != null) {
             TextButton(
                 onClick = onAction,
                 shape = RoundedCornerShape(18.dp),
+                contentPadding = PaddingValues(horizontal = if (expressive) 8.dp else 12.dp, vertical = 6.dp),
                 colors = ButtonDefaults.textButtonColors(
-                    containerColor = if (expressive) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                    contentColor = if (expressive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.primary
                 )
             ) {
                 StylizedText(
                     text = actionLabel,
                     baseStyle = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = if (expressive) FontWeight.Bold else FontWeight.Normal
+                        fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal
                     ),
                     boldOutline = textPreferences.boldOutline,
                     uppercaseBold = textPreferences.uppercaseBold,
-                    color = if (expressive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary
                 )
+                if (expressive) {
+                    Spacer(Modifier.width(2.dp))
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
             }
         }
     }
@@ -1134,10 +1209,15 @@ fun CategorySection(
         itemsIndexed(categories) { index, category ->
             val colors = categoryColors[index % categoryColors.size]
             val dynamicColors = homeDynamicColors(index, appTheme, colors.first, colors.second)
-            val categoryGlassFill = if (glass.enabled) glass.fill.copy(alpha = glass.alpha)
-            else dynamicColors.first
+            val strongColors = homeStrongColors(index)
+            val categoryGlassFill = when {
+                glass.enabled && expressive -> strongColors.first.copy(alpha = 0.18f)
+                glass.enabled -> glass.fill.copy(alpha = glass.alpha)
+                expressive -> strongColors.first
+                else -> dynamicColors.first
+            }
             val categoryGlassBorder = when {
-                glass.enabled && expressive -> dynamicColors.first.copy(alpha = 0.72f)
+                glass.enabled && expressive -> strongColors.first.copy(alpha = 0.48f)
                 glass.enabled -> glass.border
                 else -> Color.Transparent
             }
@@ -1147,6 +1227,7 @@ fun CategorySection(
 
                 modifier = Modifier
                     .glassSoftShadow(categoryShape)
+                    .expressiveShadow(categoryShape, 6.dp)
                     .clip(categoryShape)
                     .background(categoryGlassFill)
                     .border(1.dp, categoryGlassBorder, categoryShape)
@@ -1157,21 +1238,33 @@ fun CategorySection(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                StylizedText(
-                    text = category,
-                    baseStyle = if (expressive) {
-                        MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold)
-                    } else {
-                        MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                    },
-                    boldOutline = textPreferences.boldOutline,
-                    uppercaseBold = true,
-                    color = when {
-                        glass.enabled && expressive -> dynamicColors.second
-                        glass.enabled -> MaterialTheme.colorScheme.onSurface
-                        else -> dynamicColors.second
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (expressive) {
+                        Icon(
+                            imageVector = categoryExpressiveIcon(category),
+                            contentDescription = null,
+                            tint = if (glass.enabled) strongColors.first else strongColors.second,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(7.dp))
                     }
-                )
+                    StylizedText(
+                        text = category,
+                        baseStyle = if (expressive) {
+                            MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold)
+                        } else {
+                            MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                        },
+                        boldOutline = textPreferences.boldOutline,
+                        uppercaseBold = true,
+                        color = when {
+                            glass.enabled && expressive -> strongColors.first
+                            glass.enabled -> MaterialTheme.colorScheme.onSurface
+                            expressive -> strongColors.second
+                            else -> dynamicColors.second
+                        }
+                    )
+                }
             }
         }
     }
@@ -1905,6 +1998,15 @@ fun LogoCircle(color: Color, icon: androidx.compose.ui.graphics.vector.ImageVect
             modifier = Modifier.size(16.dp)
         )
     }
+}
+
+private fun categoryExpressiveIcon(category: String): ImageVector = when (category.lowercase()) {
+    "cafeteria" -> Icons.Default.LocalCafe
+    "hortifruti" -> Icons.Default.Eco
+    "padaria" -> Icons.Default.BakeryDining
+    "mercearia" -> Icons.Default.ShoppingBasket
+    "açougue", "acougue", "frios" -> Icons.Default.SetMeal
+    else -> Icons.Default.Restaurant
 }
 
 fun getCategoryIcon(category: String): String {
