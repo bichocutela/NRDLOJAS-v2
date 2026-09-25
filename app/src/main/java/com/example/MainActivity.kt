@@ -40,6 +40,7 @@ import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 
 import androidx.room.Room
@@ -51,6 +52,9 @@ import com.example.data.dataStore
 import com.example.ui.AppNavGraph
 import com.example.ui.MainViewModel
 import com.example.ui.MainViewModelFactory
+import com.example.ui.expressiveResponsiveScale
+import com.example.ui.interfaceLayoutScale
+import com.example.ui.normalizedInterfaceScale
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.NrdAppBackground
 import com.example.ui.theme.LocalGlassSoftStyle
@@ -191,9 +195,19 @@ class MainActivity : ComponentActivity() {
             
 
             val currentDensity = LocalDensity.current
+            val configuration = LocalConfiguration.current
+            val requestedInterfaceScale = normalizedInterfaceScale(fontScale)
+            val layoutScale = interfaceLayoutScale(requestedInterfaceScale)
+            val responsiveScale = expressiveResponsiveScale(
+                widthDp = configuration.screenWidthDp,
+                enabled = effectiveAppTheme == "expressive"
+            )
+            val densityScale = layoutScale * responsiveScale
             val customDensity = androidx.compose.ui.unit.Density(
-                density = currentDensity.density,
-                fontScale = currentDensity.fontScale * fontScale * if (largeText) 1.15f else 1.0f
+                density = currentDensity.density * densityScale,
+                fontScale = currentDensity.fontScale *
+                    (requestedInterfaceScale / layoutScale) *
+                    if (largeText) 1.15f else 1.0f
             )
 
 
