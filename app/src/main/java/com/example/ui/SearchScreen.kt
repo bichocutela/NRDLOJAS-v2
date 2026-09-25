@@ -703,7 +703,7 @@ fun SearchScreen(
                                 Icon(
                                     Icons.Default.Clear,
                                     contentDescription = "Limpar",
-                                    tint = if (isExpressiveGlassTheme) MaterialTheme.colorScheme.onSurface else LocalContentColor.current
+                                    tint = MaterialTheme.colorScheme.onSurface
                                 )
                             }
 
