@@ -561,7 +561,7 @@ internal fun AcpProductsPanel(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(if (isExpressive) 58.dp else 54.dp)
+                    .heightIn(min = if (isExpressive) 58.dp else 54.dp)
                     .glassSoftShadow(
                         if (isExpressive) RoundedCornerShape(28.dp) else RoundedCornerShape(26.dp),
                         if (isExpressive) 4.dp else 0.dp
