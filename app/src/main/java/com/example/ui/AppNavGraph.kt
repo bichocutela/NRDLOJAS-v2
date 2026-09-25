@@ -3,6 +3,7 @@ package com.example.ui
 import android.util.Log
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.ui.draw.alpha
@@ -926,22 +927,154 @@ fun LoginDrawerContent(
 fun CategoryItem(category: String, viewModel: MainViewModel, isExpanded: Boolean, onExpandToggle: () -> Unit) {
     val productsFlow = remember(category) { viewModel.getProductsByCategory(category) }
     val products by if (isExpanded) productsFlow.collectAsState(initial = emptyList()) else remember { mutableStateOf(emptyList()) }
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        TextButton(onClick = onExpandToggle, modifier = Modifier.fillMaxWidth().heightIn(min = 42.dp), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(category, style = MaterialTheme.typography.titleSmall)
-                Icon(if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = if (isExpanded) "Recolher" else "Expandir", modifier = Modifier.size(22.dp))
+    if (expressive) {
+        val shape = RoundedCornerShape(if (profile.compact) 16.dp else 18.dp)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Surface(
+                onClick = onExpandToggle,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .expressiveShadow(shape, if (isExpanded) 4.dp else 2.dp),
+                shape = shape,
+                color = if (isExpanded) {
+                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerLow
+                },
+                contentColor = if (isExpanded) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                border = BorderStroke(
+                    1.dp,
+                    if (isExpanded) {
+                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.34f)
+                    } else {
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f)
+                    }
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = if (profile.compact) 10.dp else 12.dp,
+                            vertical = if (profile.compact) 8.dp else 9.dp
+                        ),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(if (profile.compact) 10.dp else 12.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.secondary
+                    ) {
+                        Icon(
+                            Icons.Default.Category,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .padding(6.dp)
+                                .size(if (profile.compact) 15.dp else 17.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        category,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Icon(
+                        if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (isExpanded) "Recolher" else "Expandir",
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(if (profile.compact) 20.dp else 22.dp)
+                    )
+                }
             }
+
+            if (isExpanded) {
+                Spacer(Modifier.height(4.dp))
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(if (profile.compact) 14.dp else 16.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                    border = BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                horizontal = if (profile.compact) 10.dp else 12.dp,
+                                vertical = 7.dp
+                            )
+                    ) {
+                        if (products.isEmpty()) {
+                            Text("Carregando...", style = MaterialTheme.typography.bodySmall)
+                        } else {
+                            products.forEach { product ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = if (profile.compact) 3.dp else 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        product.name,
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 2
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        product.code,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(5.dp))
         }
-        if (isExpanded) {
-            Column(modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 4.dp)) {
-                if (products.isEmpty()) Text("Carregando...", style = MaterialTheme.typography.bodySmall)
-                else products.forEach { product ->
-                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(product.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(product.code, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    } else {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            TextButton(
+                onClick = onExpandToggle,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 42.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(category, style = MaterialTheme.typography.titleSmall)
+                    Icon(
+                        if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (isExpanded) "Recolher" else "Expandir",
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            if (isExpanded) {
+                Column(modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 4.dp)) {
+                    if (products.isEmpty()) Text("Carregando...", style = MaterialTheme.typography.bodySmall)
+                    else products.forEach { product ->
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(product.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(product.code, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
