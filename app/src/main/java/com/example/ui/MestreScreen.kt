@@ -907,8 +907,14 @@ fun MestreScreen(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(themeLabel, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
                                     Text(
-                                        if (backgrounds.any { it.isAvailableOn() }) "Fundo personalizado ativo"
-                                        else "Fundo padrão ativo",
+                                        when {
+                                            themeKey == "expressive" && backgrounds.any { it.isAvailableOn() } ->
+                                                "Expressivo • Sólido padrão / Glass opcional • fundo personalizado ativo"
+                                            themeKey == "expressive" ->
+                                                "Expressivo • Sólido padrão / Glass opcional • fundo padrão ativo"
+                                            backgrounds.any { it.isAvailableOn() } -> "Fundo personalizado ativo"
+                                            else -> "Fundo padrão ativo"
+                                        },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )

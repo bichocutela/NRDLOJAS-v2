@@ -37,6 +37,7 @@ import com.example.data.acp.AcpUnauthorized
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.expressiveShadow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -127,7 +128,24 @@ fun AcpConsultationScreen(
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = if (isExpressive) 12.dp else 0.dp,
+                            top = if (isExpressive) 6.dp else 0.dp,
+                            end = if (isExpressive) 12.dp else 0.dp
+                        ),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    val consultationHeaderShape = if (isExpressive) {
+                        RoundedCornerShape(28.dp)
+                    } else {
+                        RoundedCornerShape(
+                            bottomStart = if (screenProfile.veryCompact) 16.dp else 22.dp,
+                            bottomEnd = if (screenProfile.veryCompact) 16.dp else 22.dp
+                        )
+                    }
                     Box(
                         Modifier
                             .fillMaxWidth()
@@ -136,22 +154,9 @@ fun AcpConsultationScreen(
                                 else Modifier
                             )
                             .aspectRatio(3f)
-                            .clip(
-                                RoundedCornerShape(
-                                    bottomStart = when {
-                                        isExpressive && screenProfile.veryCompact -> 24.dp
-                                        isExpressive -> 34.dp
-                                        screenProfile.veryCompact -> 16.dp
-                                        else -> 22.dp
-                                    },
-                                    bottomEnd = when {
-                                        isExpressive && screenProfile.veryCompact -> 24.dp
-                                        isExpressive -> 34.dp
-                                        screenProfile.veryCompact -> 16.dp
-                                        else -> 22.dp
-                                    }
-                                )
-                            )
+                            .glassSoftShadow(consultationHeaderShape, if (isExpressive) 6.dp else 0.dp)
+                            .expressiveShadow(consultationHeaderShape, 8.dp)
+                            .clip(consultationHeaderShape)
                             .background(Color.Transparent)
                     ) {
                         if (activeConsultationBackground != null) {
@@ -179,7 +184,8 @@ fun AcpConsultationScreen(
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
                                 .padding(start = if (screenProfile.veryCompact) 4.dp else 10.dp)
-                                .glassSoftShadow(backShape, if (isExpressive) 4.dp else 0.dp),
+                                .glassSoftShadow(backShape, if (isExpressive) 4.dp else 0.dp)
+                                .expressiveShadow(backShape, 5.dp),
                             shape = backShape,
                             color = when {
                                 glassStyle.enabled -> MaterialTheme.colorScheme.surface
@@ -251,7 +257,9 @@ fun AcpConsultationScreen(
                             readOnly = true,
                             label = { Text("Login") },
                             shape = loginShape,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .expressiveShadow(loginShape, 5.dp)
                         )
                         OutlinedTextField(
                             if (configured) "********" else "",
@@ -259,7 +267,9 @@ fun AcpConsultationScreen(
                             readOnly = true,
                             label = { Text("Senha") },
                             shape = loginShape,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .expressiveShadow(loginShape, 5.dp)
                         )
                         if (checking || busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -276,7 +286,8 @@ fun AcpConsultationScreen(
                             enabled = configured && !checking && !busy,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(if (isExpressive) 54.dp else 48.dp),
+                                .height(if (isExpressive) 56.dp else 48.dp)
+                                .expressiveShadow(if (isExpressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.small, 7.dp),
                             shape = if (isExpressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.small
                         ) {
                             Text(if (busy) "Reconectando…" else "Tentar novamente")

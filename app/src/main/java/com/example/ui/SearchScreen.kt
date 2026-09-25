@@ -47,6 +47,10 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.BakeryDining
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.LocalCafe
+import androidx.compose.material.icons.filled.ShoppingBasket
 import androidx.compose.material.icons.filled.Sanitizer
 import androidx.compose.material.icons.filled.LocalLaundryService
 import androidx.compose.material.icons.filled.SetMeal
@@ -89,6 +93,7 @@ import com.example.ui.theme.getDynamicThemeColor
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.expressiveShadow
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.ui.res.painterResource
@@ -104,6 +109,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -268,6 +274,29 @@ private fun homeDynamicColors(
     return palette[index % palette.size]
 }
 
+@Composable
+private fun homeStrongColors(index: Int): Pair<Color, Color> {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val palette = if (isDark) {
+        listOf(
+            Color(0xFFFF7078) to Color(0xFF2B070A),
+            Color(0xFF6DB6FF) to Color(0xFF041C32),
+            Color(0xFFFF8B54) to Color(0xFF321003),
+            Color(0xFFFFBD45) to Color(0xFF2D1C00),
+            Color(0xFF63CF80) to Color(0xFF062510)
+        )
+    } else {
+        listOf(
+            Color(0xFFEF4E56) to Color.White,
+            Color(0xFF2B86D9) to Color.White,
+            Color(0xFFF0444C) to Color.White,
+            Color(0xFFF79A18) to Color.White,
+            Color(0xFF349B50) to Color.White
+        )
+    }
+    return palette[index % palette.size]
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SearchScreen(
@@ -402,15 +431,23 @@ fun SearchScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .then(
-                    if (isGlassTheme) Modifier.background(Color.Transparent)
+                    if (isGlassTheme || isExpressiveTheme) Modifier.background(Color.Transparent)
                     else Modifier.background(MaterialTheme.colorScheme.background)
                 )
         ) {
         val screenProfile = rememberNrdScreenProfile()
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = if (isExpressiveTheme) 12.dp else 0.dp,
+                    top = if (isExpressiveTheme) 6.dp else 0.dp,
+                    end = if (isExpressiveTheme) 12.dp else 0.dp
+                )
+        ) {
             val headerHeight = maxWidth / 3f
             val headerShape = if (isExpressiveTheme) {
-                RoundedCornerShape(bottomStart = 40.dp, bottomEnd = 40.dp)
+                RoundedCornerShape(28.dp)
             } else {
                 RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
             }
@@ -420,6 +457,7 @@ fun SearchScreen(
                     .fillMaxWidth()
                     .height(headerHeight)
                     .glassSoftShadow(headerShape)
+                    .expressiveShadow(headerShape, 8.dp)
                     .clip(headerShape)
                     .background(
                         if (isGlassTheme) {
@@ -562,8 +600,9 @@ fun SearchScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = if (isExpressiveTheme) 60.dp else 56.dp)
+                    .heightIn(min = if (isExpressiveTheme) 64.dp else 56.dp)
                     .glassSoftShadow(searchFieldShape)
+                    .expressiveShadow(searchFieldShape, 8.dp)
                     .clip(searchFieldShape)
                     .border(
                         1.dp,
@@ -580,12 +619,12 @@ fun SearchScreen(
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = when {
                         isGlassTheme -> MaterialTheme.colorScheme.surface
-                        isExpressiveTheme -> MaterialTheme.colorScheme.surfaceContainerHigh
+                        isExpressiveTheme -> MaterialTheme.colorScheme.surface
                         else -> MaterialTheme.colorScheme.surfaceVariant
                     },
                     unfocusedContainerColor = when {
                         isGlassTheme -> MaterialTheme.colorScheme.surface
-                        isExpressiveTheme -> MaterialTheme.colorScheme.surfaceContainerHigh
+                        isExpressiveTheme -> MaterialTheme.colorScheme.surface
                         else -> MaterialTheme.colorScheme.surfaceVariant
                     },
                     disabledContainerColor = when {
@@ -617,7 +656,8 @@ fun SearchScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(if (isExpressiveTheme) 60.dp else 56.dp)
-                        .glassSoftShadow(searchButtonShape),
+                        .glassSoftShadow(searchButtonShape)
+                        .expressiveShadow(searchButtonShape, 9.dp),
                     shape = searchButtonShape,
                     color = Color.Transparent,
                     contentColor = glassStyle.onAccent,
@@ -641,7 +681,8 @@ fun SearchScreen(
                     shape = searchButtonShape,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (isExpressiveTheme) 60.dp else 56.dp),
+                        .height(if (isExpressiveTheme) 60.dp else 56.dp)
+                        .expressiveShadow(searchButtonShape, 9.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Icon(Icons.Default.Search, contentDescription = null)
@@ -1027,45 +1068,80 @@ fun SectionHeader(
     onAction: (() -> Unit)? = null
 ) {
     val expressive = LocalExpressiveStyle.current.enabled
+    val sectionIcon = when {
+        title.contains("Mais Utilizados", ignoreCase = true) -> Icons.Default.BarChart
+        title.contains("Últimos", ignoreCase = true) -> Icons.Default.NewReleases
+        title.contains("Histórico", ignoreCase = true) -> Icons.Default.History
+        title.contains("Favoritos", ignoreCase = true) -> Icons.Default.Favorite
+        else -> Icons.Default.Search
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = if (expressive) 5.dp else 2.dp),
+            .padding(horizontal = 16.dp, vertical = if (expressive) 7.dp else 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        StylizedText(
-            text = title,
-            baseStyle = if (expressive) {
-                MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 0.4.sp
-                )
-            } else {
-                MaterialTheme.typography.labelMedium
-            },
-            boldOutline = textPreferences.boldOutline,
-            uppercaseBold = textPreferences.uppercaseBold,
-            color = if (expressive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (expressive) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        sectionIcon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+            }
+            StylizedText(
+                text = title,
+                baseStyle = if (expressive) {
+                    MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp)
+                } else {
+                    MaterialTheme.typography.labelMedium
+                },
+                boldOutline = textPreferences.boldOutline,
+                uppercaseBold = textPreferences.uppercaseBold,
+                color = if (expressive) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         if (actionLabel != null && onAction != null) {
             TextButton(
                 onClick = onAction,
                 shape = RoundedCornerShape(18.dp),
+                contentPadding = PaddingValues(horizontal = if (expressive) 8.dp else 12.dp, vertical = 6.dp),
                 colors = ButtonDefaults.textButtonColors(
-                    containerColor = if (expressive) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                    contentColor = if (expressive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.primary
                 )
             ) {
                 StylizedText(
                     text = actionLabel,
                     baseStyle = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = if (expressive) FontWeight.Bold else FontWeight.Normal
+                        fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal
                     ),
                     boldOutline = textPreferences.boldOutline,
                     uppercaseBold = textPreferences.uppercaseBold,
-                    color = if (expressive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary
                 )
+                if (expressive) {
+                    Spacer(Modifier.width(2.dp))
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
             }
         }
     }
@@ -1134,10 +1210,15 @@ fun CategorySection(
         itemsIndexed(categories) { index, category ->
             val colors = categoryColors[index % categoryColors.size]
             val dynamicColors = homeDynamicColors(index, appTheme, colors.first, colors.second)
-            val categoryGlassFill = if (glass.enabled) glass.fill.copy(alpha = glass.alpha)
-            else dynamicColors.first
+            val strongColors = homeStrongColors(index)
+            val categoryGlassFill = when {
+                glass.enabled && expressive -> strongColors.first.copy(alpha = 0.18f)
+                glass.enabled -> glass.fill.copy(alpha = glass.alpha)
+                expressive -> strongColors.first
+                else -> dynamicColors.first
+            }
             val categoryGlassBorder = when {
-                glass.enabled && expressive -> dynamicColors.first.copy(alpha = 0.72f)
+                glass.enabled && expressive -> strongColors.first.copy(alpha = 0.48f)
                 glass.enabled -> glass.border
                 else -> Color.Transparent
             }
@@ -1147,6 +1228,7 @@ fun CategorySection(
 
                 modifier = Modifier
                     .glassSoftShadow(categoryShape)
+                    .expressiveShadow(categoryShape, 6.dp)
                     .clip(categoryShape)
                     .background(categoryGlassFill)
                     .border(1.dp, categoryGlassBorder, categoryShape)
@@ -1157,21 +1239,33 @@ fun CategorySection(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                StylizedText(
-                    text = category,
-                    baseStyle = if (expressive) {
-                        MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold)
-                    } else {
-                        MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                    },
-                    boldOutline = textPreferences.boldOutline,
-                    uppercaseBold = true,
-                    color = when {
-                        glass.enabled && expressive -> dynamicColors.second
-                        glass.enabled -> MaterialTheme.colorScheme.onSurface
-                        else -> dynamicColors.second
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (expressive) {
+                        Icon(
+                            imageVector = categoryExpressiveIcon(category),
+                            contentDescription = null,
+                            tint = if (glass.enabled) strongColors.first else strongColors.second,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(7.dp))
                     }
-                )
+                    StylizedText(
+                        text = category,
+                        baseStyle = if (expressive) {
+                            MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold)
+                        } else {
+                            MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                        },
+                        boldOutline = textPreferences.boldOutline,
+                        uppercaseBold = true,
+                        color = when {
+                            glass.enabled && expressive -> strongColors.first
+                            glass.enabled -> MaterialTheme.colorScheme.onSurface
+                            expressive -> strongColors.second
+                            else -> dynamicColors.second
+                        }
+                    )
+                }
             }
         }
     }
@@ -1589,13 +1683,14 @@ fun MiniProductCard(
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
-    val cardShape = if (expressive) RoundedCornerShape(28.dp) else RoundedCornerShape(24.dp)
+    val cardShape = if (expressive) RoundedCornerShape(26.dp) else RoundedCornerShape(24.dp)
     val cardAccent = homeDynamicColors(
         index,
         appTheme,
         MaterialTheme.colorScheme.primaryContainer,
         MaterialTheme.colorScheme.onPrimaryContainer
     )
+    val strongAccent = homeStrongColors(index)
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(
@@ -1612,22 +1707,24 @@ fun MiniProductCard(
     }
     Column(
         modifier = Modifier
-            .widthIn(min = 144.dp, max = 176.dp)
-            .heightIn(min = if (textPreferences.largeText) 168.dp else 132.dp)
+            .widthIn(min = if (expressive) 154.dp else 144.dp, max = if (expressive) 184.dp else 176.dp)
+            .heightIn(min = if (expressive) 176.dp else if (textPreferences.largeText) 168.dp else 132.dp)
             .glassSoftShadow(cardShape)
+            .expressiveShadow(cardShape, 7.dp)
             .clip(cardShape)
             .background(
                 when {
                     glass.enabled -> glass.fill.copy(alpha = glass.alpha)
-                    expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                    expressive -> MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
                     else -> MaterialTheme.colorScheme.surface
                 }
             )
             .border(
                 1.dp,
                 when {
+                    glass.enabled && expressive -> strongAccent.first.copy(alpha = 0.38f)
                     glass.enabled -> glass.border
-                    expressive -> MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
+                    expressive -> MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
                     else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
                 },
                 cardShape
@@ -1640,13 +1737,13 @@ fun MiniProductCard(
                     showDialog = true
                 }
             }
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)
+            .padding(if (expressive) 12.dp else 10.dp),
+        verticalArrangement = Arrangement.spacedBy(if (expressive) 7.dp else 5.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
             if (product.imageUrl != null) {
                 AsyncImage(
@@ -1657,78 +1754,122 @@ fun MiniProductCard(
                     contentDescription = product.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
+                        .size(if (expressive) 54.dp else 32.dp)
+                        .clip(if (expressive) RoundedCornerShape(17.dp) else CircleShape)
+                        .background(cardAccent.first)
                 )
             } else {
-                val dynColors = cardAccent
                 Box(
                     modifier = Modifier
-                        .size(if (expressive) 36.dp else 32.dp)
-                        .clip(if (expressive) RoundedCornerShape(12.dp) else CircleShape)
-                        .background(dynColors.first),
+                        .size(if (expressive) 54.dp else 32.dp)
+                        .clip(if (expressive) RoundedCornerShape(17.dp) else CircleShape)
+                        .background(cardAccent.first),
                     contentAlignment = Alignment.Center
                 ) {
                     StylizedText(
                         text = product.name.take(1),
-                        baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
+                        baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = if (expressive) 18.sp else 14.sp),
                         boldOutline = textPreferences.boldOutline,
                         uppercaseBold = true,
-                        color = dynColors.second
+                        color = if (expressive) strongAccent.first else cardAccent.second
                     )
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+
+            Column(horizontalAlignment = Alignment.End) {
                 if (product.isFavorite) {
                     Icon(
                         imageVector = Icons.Default.Favorite,
                         contentDescription = "Favorito",
-                        tint = Color.Red,
+                        tint = Color(0xFFEF4E56),
                         modifier = Modifier.size(16.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
                 }
-                Text(
-                    text = product.unit.uppercase(),
-                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp),
-                    color = if (expressive) cardAccent.second else MaterialTheme.colorScheme.primary
-                )
+                if (expressive) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ) {
+                        Text(
+                            text = product.unit.uppercase(),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black)
+                        )
+                    }
+                } else {
+                    Text(
+                        text = product.unit.uppercase(),
+                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
-        
-        Column {
+
+        StylizedText(
+            text = product.name,
+            baseStyle = MaterialTheme.typography.titleMedium.copy(
+                fontSize = if (expressive) 15.sp else 14.sp,
+                fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Bold
+            ),
+            boldOutline = textPreferences.boldOutline,
+            uppercaseBold = textPreferences.uppercaseBold,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = getCategoryIcon(product.category),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
             StylizedText(
-                text = product.name,
-                baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
+                text = product.category,
+                baseStyle = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                ),
                 boldOutline = textPreferences.boldOutline,
-                uppercaseBold = textPreferences.uppercaseBold,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 2,
+                uppercaseBold = true,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = getCategoryIcon(product.category),
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                StylizedText(
-                    text = product.category,
-                    baseStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
-                    boldOutline = textPreferences.boldOutline,
-                    uppercaseBold = true,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
                 text = product.code,
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
-                color = if (expressive) cardAccent.second else MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Black,
+                    fontSize = if (expressive) 18.sp else 16.sp
+                ),
+                color = MaterialTheme.colorScheme.primary,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis
             )
+            if (expressive) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = "Abrir produto",
+                        modifier = Modifier.padding(7.dp).size(18.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -1758,26 +1899,131 @@ fun HistoryItem(
             }
         )
     }
-    val dynColors = homeDynamicColors(index, appTheme, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+    val dynColors = homeDynamicColors(
+        index,
+        appTheme,
+        MaterialTheme.colorScheme.primaryContainer,
+        MaterialTheme.colorScheme.onPrimaryContainer
+    )
+    val strongColors = homeStrongColors(index)
+
+    if (expressive) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 84.dp)
+                .glassSoftShadow(itemShape)
+                .expressiveShadow(itemShape, 6.dp)
+                .clip(itemShape)
+                .background(
+                    if (glass.enabled) glass.fill.copy(alpha = glass.alpha)
+                    else dynColors.first.copy(alpha = 0.62f)
+                )
+                .border(
+                    1.dp,
+                    if (glass.enabled) strongColors.first.copy(alpha = 0.42f)
+                    else strongColors.first.copy(alpha = 0.52f),
+                    itemShape
+                )
+                .vibrateClickable(viewModel) {
+                    viewModel.onProductSearched(product)
+                    showDialog = true
+                }
+                .padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(15.dp))
+                    .background(strongColors.first),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.History,
+                    contentDescription = "Histórico",
+                    tint = strongColors.second,
+                    modifier = Modifier.size(23.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(9.dp))
+            if (product.imageUrl != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(product.imageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = product.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                StylizedText(
+                    text = product.name,
+                    baseStyle = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    ),
+                    boldOutline = textPreferences.boldOutline,
+                    uppercaseBold = textPreferences.uppercaseBold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = getCategoryIcon(product.category),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    StylizedText(
+                        text = product.category,
+                        baseStyle = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        ),
+                        boldOutline = textPreferences.boldOutline,
+                        uppercaseBold = true,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Text(
+                    text = "Código: ${product.code}",
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = "Abrir produto",
+                tint = strongColors.first,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        return
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .glassSoftShadow(itemShape)
             .clip(itemShape)
             .background(
-                when {
-                    glass.enabled -> glass.fill.copy(alpha = glass.alpha)
-                    expressive -> MaterialTheme.colorScheme.surfaceContainerLow
-                    else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
-                }
+                if (glass.enabled) glass.fill.copy(alpha = glass.alpha)
+                else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
             )
             .border(
                 1.dp,
-                when {
-                    glass.enabled && expressive -> dynColors.first.copy(alpha = 0.72f)
-                    glass.enabled -> glass.border
-                    else -> dynColors.first
-                },
+                if (glass.enabled) glass.border else dynColors.first,
                 itemShape
             )
             .vibrateClickable(viewModel) {
@@ -1789,38 +2035,17 @@ fun HistoryItem(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (expressive) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(dynColors.first),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.History,
-                        contentDescription = "Histórico",
-                        tint = dynColors.second,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-            } else {
-                Icon(
-                    imageVector = Icons.Default.History,
-                    contentDescription = "Histórico",
-                    tint = dynColors.first,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-            }
+            Icon(
+                imageVector = Icons.Default.History,
+                contentDescription = "Histórico",
+                tint = dynColors.first,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
             Column {
                 StylizedText(
                     text = product.name,
-                    baseStyle = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 14.sp,
-                        fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal
-                    ),
+                    baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
                     boldOutline = textPreferences.boldOutline,
                     uppercaseBold = textPreferences.uppercaseBold,
                     color = MaterialTheme.colorScheme.onBackground
@@ -1833,7 +2058,11 @@ fun HistoryItem(
                     Spacer(modifier = Modifier.width(4.dp))
                     StylizedText(
                         text = product.category,
-                        baseStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
+                        baseStyle = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        ),
                         boldOutline = textPreferences.boldOutline,
                         uppercaseBold = true,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1841,10 +2070,8 @@ fun HistoryItem(
                 }
                 Text(
                     text = "Código: ${product.code}",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontWeight = if (expressive) FontWeight.SemiBold else FontWeight.Normal
-                    ),
-                    color = if (expressive) dynColors.second else MaterialTheme.colorScheme.primary
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -1905,6 +2132,15 @@ fun LogoCircle(color: Color, icon: androidx.compose.ui.graphics.vector.ImageVect
             modifier = Modifier.size(16.dp)
         )
     }
+}
+
+private fun categoryExpressiveIcon(category: String): ImageVector = when (category.lowercase()) {
+    "cafeteria" -> Icons.Default.LocalCafe
+    "hortifruti" -> Icons.Default.Eco
+    "padaria" -> Icons.Default.BakeryDining
+    "mercearia" -> Icons.Default.ShoppingBasket
+    "açougue", "acougue", "frios" -> Icons.Default.SetMeal
+    else -> Icons.Default.Restaurant
 }
 
 fun getCategoryIcon(category: String): String {

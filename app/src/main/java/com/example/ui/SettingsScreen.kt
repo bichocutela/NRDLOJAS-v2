@@ -23,6 +23,8 @@ import com.example.ui.theme.getDynamicThemeColor
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.glassSoftBackgroundColors
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.expressiveShadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -48,6 +50,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val glassType by viewModel.userPreferences.glassType.collectAsState(initial = "soft")
     val expressiveStyle by viewModel.userPreferences.expressiveStyle.collectAsState(initial = "solid")
     val glassStyle = LocalGlassSoftStyle.current
+    val isExpressive = LocalExpressiveStyle.current.enabled
     
     val notificationsEnabled by viewModel.userPreferences.notificationsEnabled.collectAsState(initial = true)
     val notificationsProductAddedEnabled by viewModel.userPreferences.notificationsProductAddedEnabled.collectAsState(initial = true)
@@ -71,6 +74,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val publicSuggestions by com.example.data.FirebaseService.observePublicSuggestions().collectAsState(initial = emptyList())
 
     Scaffold(
+        containerColor = if (glassStyle.enabled || isExpressive) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text("Configurações") },
@@ -80,9 +84,12 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface else getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first,
-                    titleContentColor = if (glassStyle.enabled) MaterialTheme.colorScheme.onSurface else getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second,
-                    navigationIconContentColor = if (glassStyle.enabled) MaterialTheme.colorScheme.onSurface else getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second
+                    containerColor = when {
+                        glassStyle.enabled || isExpressive -> androidx.compose.ui.graphics.Color.Transparent
+                        else -> getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first
+                    },
+                    titleContentColor = if (glassStyle.enabled || isExpressive) MaterialTheme.colorScheme.onBackground else getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second,
+                    navigationIconContentColor = if (glassStyle.enabled || isExpressive) MaterialTheme.colorScheme.onBackground else getDynamicThemeColor(0, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).second
                 )
             )
         }
@@ -202,7 +209,11 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     readOnly = true,
                     label = { Text("Selecione o Tema") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedThemeMenu) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
+                        .expressiveShadow(if (isExpressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraSmall, 5.dp),
+                    shape = if (isExpressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraSmall,
                     colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
                 )
                 ExposedDropdownMenu(
@@ -222,63 +233,97 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             }
 
             if (appTheme == "expressive") {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "Variação do tema",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    "Estilo do Expressivo",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground
                 )
+                Text(
+                    "O layout permanece o mesmo. A variação muda somente o acabamento das superfícies.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     listOf(
                         "solid" to "Sólido",
                         "glass" to "Glass"
                     ).forEach { (styleKey, styleLabel) ->
                         val selected = expressiveStyle == styleKey
+                        val previewShape = RoundedCornerShape(28.dp)
                         Card(
                             modifier = Modifier
                                 .weight(1f)
+                                .expressiveShadow(previewShape, if (selected) 8.dp else 4.dp)
                                 .clickable {
                                     coroutineScope.launch {
                                         viewModel.userPreferences.setExpressiveStyle(styleKey)
                                     }
                                 },
                             colors = CardDefaults.cardColors(
-                                containerColor = if (selected) {
-                                    MaterialTheme.colorScheme.primaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant
+                                containerColor = when {
+                                    styleKey == "glass" && glassStyle.enabled -> MaterialTheme.colorScheme.surface
+                                    selected -> MaterialTheme.colorScheme.primaryContainer
+                                    else -> MaterialTheme.colorScheme.surfaceContainerLow
                                 },
                                 contentColor = if (selected) {
                                     MaterialTheme.colorScheme.onPrimaryContainer
                                 } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                    MaterialTheme.colorScheme.onSurface
                                 }
                             ),
-                            border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
-                            shape = MaterialTheme.shapes.large
+                            border = BorderStroke(
+                                if (selected) 2.dp else 1.dp,
+                                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                            ),
+                            shape = previewShape
                         ) {
-                            Box(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 12.dp, horizontal = 8.dp),
-                                contentAlignment = Alignment.Center
+                                    .padding(horizontal = 12.dp, vertical = 14.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    listOf(
+                                        androidx.compose.ui.graphics.Color(0xFFEF4E56),
+                                        androidx.compose.ui.graphics.Color(0xFF2B86D9),
+                                        androidx.compose.ui.graphics.Color(0xFFF79A18),
+                                        androidx.compose.ui.graphics.Color(0xFF349B50),
+                                        androidx.compose.ui.graphics.Color(0xFFC89300)
+                                    ).forEach { color ->
+                                        Box(
+                                            Modifier
+                                                .size(9.dp)
+                                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                                .background(color)
+                                        )
+                                    }
+                                }
                                 Text(
                                     styleLabel,
-                                    style = MaterialTheme.typography.labelLarge
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    if (styleKey == "solid") "Superfícies sólidas" else "Vidro translúcido",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     if (expressiveStyle == "glass") {
-                        "Glass mantém a estrutura do NRD e aplica superfícies translúcidas usando o motor de vidro já existente no app."
+                        "Glass usa a mesma identidade Expressiva com transparência e profundidade do motor de vidro já existente."
                     } else {
-                        "Sólido é o padrão do Expressivo: cores vivas, formas mais marcantes e superfícies opacas."
+                        "Sólido é o padrão: multicolorido, vibrante, com hierarquia forte e superfícies definidas."
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -52,6 +52,7 @@ import com.example.data.acp.*
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.glassSoftShadow
+import com.example.ui.theme.expressiveShadow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -539,6 +540,10 @@ internal fun AcpProductsPanel(
                     .glassSoftShadow(
                         if (isExpressive) RoundedCornerShape(30.dp) else RoundedCornerShape(28.dp),
                         if (isExpressive) 3.dp else 0.dp
+                    )
+                    .expressiveShadow(
+                        if (isExpressive) RoundedCornerShape(30.dp) else RoundedCornerShape(28.dp),
+                        7.dp
                     ),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { search() })
@@ -560,6 +565,10 @@ internal fun AcpProductsPanel(
                     .glassSoftShadow(
                         if (isExpressive) RoundedCornerShape(28.dp) else RoundedCornerShape(26.dp),
                         if (isExpressive) 4.dp else 0.dp
+                    )
+                    .expressiveShadow(
+                        if (isExpressive) RoundedCornerShape(28.dp) else RoundedCornerShape(26.dp),
+                        8.dp
                     )
             ) {
                 Icon(Icons.Default.Search, contentDescription = null)
@@ -659,6 +668,7 @@ internal fun AcpProductsPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .glassSoftShadow(resultCardShape, if (isExpressive) 3.dp else 0.dp)
+                    .expressiveShadow(resultCardShape, 6.dp)
                     .drawWithContent {
                         shareLayer.record {
                             this@drawWithContent.drawContent()
@@ -1489,7 +1499,8 @@ private fun AcpFeaturedOfferCard(
         onClick = { onOpen(item) },
         modifier = Modifier
             .fillMaxWidth()
-            .glassSoftShadow(cardShape, if (expressive) 3.dp else 0.dp),
+            .glassSoftShadow(cardShape, if (expressive) 3.dp else 0.dp)
+            .expressiveShadow(cardShape, 6.dp),
         shape = cardShape,
         colors = CardDefaults.outlinedCardColors(
             containerColor = when {

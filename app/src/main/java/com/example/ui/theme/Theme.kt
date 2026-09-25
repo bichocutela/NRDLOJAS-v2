@@ -31,11 +31,11 @@ private val GlassSoftShapes = Shapes(
 )
 
 private val ExpressiveShapes = Shapes(
-    extraSmall = RoundedCornerShape(14.dp),
-    small = RoundedCornerShape(18.dp),
-    medium = RoundedCornerShape(24.dp),
-    large = RoundedCornerShape(30.dp),
-    extraLarge = RoundedCornerShape(36.dp)
+    extraSmall = RoundedCornerShape(16.dp),
+    small = RoundedCornerShape(20.dp),
+    medium = RoundedCornerShape(28.dp),
+    large = RoundedCornerShape(36.dp),
+    extraLarge = RoundedCornerShape(44.dp)
 )
 
 @Immutable
@@ -249,6 +249,26 @@ fun Modifier.glassSoftShadow(
     }
 }
 
+
+fun Modifier.expressiveShadow(
+    shape: Shape,
+    elevation: Dp = 7.dp
+): Modifier = composed {
+    val expressive = LocalExpressiveStyle.current
+    val glass = LocalGlassSoftStyle.current
+    if (!expressive.enabled || glass.enabled) {
+        this
+    } else {
+        shadow(
+            elevation = elevation,
+            shape = shape,
+            clip = false,
+            ambientColor = Color(0xFF49627D).copy(alpha = 0.10f),
+            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+        )
+    }
+}
+
 @Composable
 fun GlassSoftBackground(
     modifier: Modifier = Modifier,
@@ -266,6 +286,43 @@ fun GlassSoftBackground(
             .background(Brush.linearGradient(colors)),
         content = { content() }
     )
+}
+
+
+@Composable
+fun NrdAppBackground(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    val glass = LocalGlassSoftStyle.current
+    val expressive = LocalExpressiveStyle.current
+    when {
+        glass.enabled -> GlassSoftBackground(modifier = modifier, content = content)
+        expressive.enabled -> {
+            val dark = MaterialTheme.colorScheme.background.red < 0.2f
+            val colors = if (dark) {
+                listOf(
+                    Color(0xFF101A2A),
+                    Color(0xFF0D1420),
+                    Color(0xFF172538)
+                )
+            } else {
+                listOf(
+                    Color(0xFFE9F6FF),
+                    Color(0xFFF7FBFF),
+                    Color(0xFFFFFCF2),
+                    Color(0xFFF2F8FF)
+                )
+            }
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(Brush.verticalGradient(colors)),
+                content = { content() }
+            )
+        }
+        else -> Box(modifier = modifier, content = { content() })
+    }
 }
 
 private val DefaultLightColorScheme = lightColorScheme(
@@ -318,55 +375,55 @@ private val SessionMulticolorPalette: List<Pair<Color, Color>> by lazy {
 
 private fun expressiveColorScheme(darkTheme: Boolean) = if (darkTheme) {
     DefaultDarkColorScheme.copy(
-        primary = Color(0xFFFF8A8C),
-        onPrimary = Color(0xFF4B0005),
-        primaryContainer = Color(0xFF64151A),
-        onPrimaryContainer = Color(0xFFFFDADB),
-        secondary = Color(0xFF91C3FF),
-        onSecondary = Color(0xFF00315A),
-        secondaryContainer = Color(0xFF123D66),
-        onSecondaryContainer = Color(0xFFD7E9FF),
-        tertiary = Color(0xFF8EDC91),
-        onTertiary = Color(0xFF00390B),
-        tertiaryContainer = Color(0xFF164A23),
-        onTertiaryContainer = Color(0xFFD1F8D2),
-        background = Color(0xFF111013),
-        onBackground = Color(0xFFF5F0F3),
-        surface = Color(0xFF18161A),
-        onSurface = Color(0xFFF5F0F3),
-        surfaceVariant = Color(0xFF262227),
-        onSurfaceVariant = Color(0xFFD3C7CD),
-        surfaceContainerLow = Color(0xFF1D1A1E),
-        surfaceContainer = Color(0xFF211E22),
-        surfaceContainerHigh = Color(0xFF29252A),
-        surfaceContainerHighest = Color(0xFF302B31),
-        outline = Color(0xFF9C8D94)
+        primary = Color(0xFFFFD76A),
+        onPrimary = Color(0xFF3D2F00),
+        primaryContainer = Color(0xFF564300),
+        onPrimaryContainer = Color(0xFFFFEFB7),
+        secondary = Color(0xFF8FC5FF),
+        onSecondary = Color(0xFF003259),
+        secondaryContainer = Color(0xFF113D63),
+        onSecondaryContainer = Color(0xFFD8EAFF),
+        tertiary = Color(0xFF8DDB9B),
+        onTertiary = Color(0xFF003914),
+        tertiaryContainer = Color(0xFF174A28),
+        onTertiaryContainer = Color(0xFFD2F8D9),
+        background = Color(0xFF0D1420),
+        onBackground = Color(0xFFF4F7FF),
+        surface = Color(0xFF151D29),
+        onSurface = Color(0xFFF4F7FF),
+        surfaceVariant = Color(0xFF202A38),
+        onSurfaceVariant = Color(0xFFC8D2E1),
+        surfaceContainerLow = Color(0xFF131B27),
+        surfaceContainer = Color(0xFF182230),
+        surfaceContainerHigh = Color(0xFF202B39),
+        surfaceContainerHighest = Color(0xFF293544),
+        outline = Color(0xFF7F8A99)
     )
 } else {
     DefaultLightColorScheme.copy(
-        primary = Color(0xFFE62325),
+        primary = Color(0xFFC89300),
         onPrimary = Color.White,
-        primaryContainer = Color(0xFFFFDADB),
-        onPrimaryContainer = Color(0xFF3B0710),
+        primaryContainer = Color(0xFFFFE7A3),
+        onPrimaryContainer = Color(0xFF463400),
         secondary = Color(0xFF1976D2),
         onSecondary = Color.White,
-        secondaryContainer = Color(0xFFD9E9FF),
-        onSecondaryContainer = Color(0xFF082E55),
-        tertiary = Color(0xFF388E3C),
+        secondaryContainer = Color(0xFFD9EBFF),
+        onSecondaryContainer = Color(0xFF0B3159),
+        tertiary = Color(0xFF2F9A50),
         onTertiary = Color.White,
-        tertiaryContainer = Color(0xFFD8F2D8),
-        onTertiaryContainer = Color(0xFF103B16),
-        background = Color(0xFFFFF9FB),
-        onBackground = Color(0xFF241E21),
-        surface = Color(0xFFFFFBFC),
-        onSurface = Color(0xFF241E21),
-        surfaceVariant = Color(0xFFF7F0F3),
-        onSurfaceVariant = Color(0xFF5B5156),
-        surfaceContainerLow = Color(0xFFFFF5F8),
-        surfaceContainer = Color(0xFFFBEFF3),
-        surfaceContainerHigh = Color(0xFFF5E9ED),
-        surfaceContainerHighest = Color(0xFFEFE3E7),
-        outline = Color(0xFF8E7F86)
+        tertiaryContainer = Color(0xFFD9F4DF),
+        onTertiaryContainer = Color(0xFF103A1B),
+        background = Color(0xFFF5FAFF),
+        onBackground = Color(0xFF16203B),
+        surface = Color(0xFFFFFEFF),
+        onSurface = Color(0xFF16203B),
+        surfaceVariant = Color(0xFFF1F6FC),
+        onSurfaceVariant = Color(0xFF5C667A),
+        surfaceContainerLow = Color(0xFFFAFCFF),
+        surfaceContainer = Color(0xFFF3F8FE),
+        surfaceContainerHigh = Color(0xFFECF3FB),
+        surfaceContainerHighest = Color(0xFFE4EDF7),
+        outline = Color(0xFF8390A3)
     )
 }
 
@@ -501,9 +558,9 @@ fun MyApplicationTheme(
             accentName = "multicolor",
             isDark = darkTheme
         ).copy(
-            accent = if (darkTheme) Color(0xFFFF8A8C) else Color(0xFFE62325),
-            secondaryAccent = if (darkTheme) Color(0xFF91C3FF) else Color(0xFF1976D2),
-            tertiaryAccent = if (darkTheme) Color(0xFF8EDC91) else Color(0xFF388E3C)
+            accent = if (darkTheme) Color(0xFFFFD76A) else Color(0xFFC89300),
+            secondaryAccent = if (darkTheme) Color(0xFF8FC5FF) else Color(0xFF1976D2),
+            tertiaryAccent = if (darkTheme) Color(0xFF8DDB9B) else Color(0xFF2F9A50)
         )
         else -> GlassSoftStyle()
     }
@@ -525,7 +582,7 @@ fun MyApplicationTheme(
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = Typography,
+            typography = if (isExpressive) ExpressiveTypography else Typography,
             shapes = shapes,
             content = content
         )
