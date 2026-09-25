@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -341,6 +342,187 @@ private fun ProtectedManagementRoute(isLoggedIn: Boolean, userRole: String, allo
 
 private fun androidx.navigation.NavHostController.navigateToSearch() {
     navigate("search") { popUpTo(graph.findStartDestination().id) { inclusive = false }; launchSingleTop = true }
+}
+
+@Composable
+private fun DrawerSectionLabel(
+    title: String,
+    icon: ImageVector? = null
+) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = if (expressive && profile.compact) 4.dp else 2.dp,
+                top = if (expressive) 6.dp else 0.dp,
+                bottom = if (expressive) 4.dp else 0.dp
+            ),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (expressive && icon != null) {
+            Surface(
+                shape = RoundedCornerShape(if (profile.compact) 10.dp else 12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .padding(if (profile.compact) 6.dp else 7.dp)
+                        .size(if (profile.compact) 16.dp else 18.dp)
+                )
+            }
+            Spacer(Modifier.width(if (profile.compact) 7.dp else 9.dp))
+        }
+        Text(
+            title,
+            style = if (expressive) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleMedium,
+            fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+private fun DrawerActionButton(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    legacyOutlined: Boolean = false,
+    emphasized: Boolean = false
+) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    if (expressive) {
+        val shape = RoundedCornerShape(if (profile.compact) 18.dp else 22.dp)
+        Surface(
+            onClick = onClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = if (profile.compact) 46.dp else 50.dp)
+                .expressiveShadow(shape, if (emphasized) 6.dp else 4.dp),
+            shape = shape,
+            color = if (emphasized) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            },
+            contentColor = if (emphasized) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            border = if (emphasized) {
+                null
+            } else {
+                BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+            }
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = if (profile.compact) 12.dp else 14.dp,
+                        vertical = if (profile.compact) 9.dp else 11.dp
+                    ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(if (profile.compact) 11.dp else 13.dp),
+                    color = if (emphasized) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer
+                    },
+                    contentColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .padding(if (profile.compact) 6.dp else 7.dp)
+                            .size(if (profile.compact) 17.dp else 19.dp)
+                    )
+                }
+                Spacer(Modifier.width(if (profile.compact) 9.dp else 11.dp))
+                Text(
+                    label,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(if (profile.compact) 18.dp else 20.dp)
+                )
+            }
+        }
+    } else if (legacyOutlined) {
+        OutlinedButton(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth().height(48.dp)
+        ) { Text(label) }
+    } else {
+        Button(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth().height(46.dp)
+        ) { Text(label) }
+    }
+}
+
+@Composable
+private fun DrawerDynamicLink(
+    label: String,
+    onClick: () -> Unit
+) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    if (expressive) {
+        Surface(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(if (profile.compact) 16.dp else 18.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 11.dp, vertical = if (profile.compact) 8.dp else 9.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.School,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(if (profile.compact) 17.dp else 19.dp)
+                )
+                Spacer(Modifier.width(9.dp))
+                Text(
+                    label,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    } else {
+        TextButton(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp)
+        ) { Text(label) }
+    }
 }
 
 @Composable
