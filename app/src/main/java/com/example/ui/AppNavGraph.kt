@@ -470,12 +470,12 @@ private fun DrawerActionButton(
     } else if (legacyOutlined) {
         OutlinedButton(
             onClick = onClick,
-            modifier = Modifier.fillMaxWidth().height(48.dp)
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) { Text(label) }
     } else {
         Button(
             onClick = onClick,
-            modifier = Modifier.fillMaxWidth().height(46.dp)
+            modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp)
         ) { Text(label) }
     }
 }
@@ -591,7 +591,7 @@ fun LoginDrawerContent(
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Meu Perfil", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.height(8.dp))
-                Button(onClick = onGoToMyPoint, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Meu Perfil") }
+                Button(onClick = onGoToMyPoint, modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp)) { Text("Meu Perfil") }
                 Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(10.dp))
@@ -712,7 +712,7 @@ fun LoginDrawerContent(
                 enabled = !isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(if (expressive && screenProfile.compact) 46.dp else 48.dp)
+                    .heightIn(min = if (expressive && screenProfile.compact) 46.dp else 48.dp)
                     .then(
                         if (expressive) Modifier.expressiveShadow(
                             RoundedCornerShape(if (screenProfile.compact) 18.dp else 22.dp),
@@ -740,7 +740,7 @@ fun LoginDrawerContent(
                         emphasized = true
                     )
                 } else {
-                    Button(onClick = onGoToAdmin, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                    Button(onClick = onGoToAdmin, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                         Text(if (userRole == "mestre") "Acessar Painel Mestre" else "Acessar Painel Administrativo")
                     }
                 }
@@ -748,7 +748,7 @@ fun LoginDrawerContent(
             }
             OutlinedButton(
                 onClick = { loginStatus = null; onLogout() },
-                modifier = Modifier.fillMaxWidth().height(if (expressive && screenProfile.compact) 44.dp else 48.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = if (expressive && screenProfile.compact) 44.dp else 48.dp),
                 shape = if (expressive) {
                     RoundedCornerShape(if (screenProfile.compact) 18.dp else 22.dp)
                 } else {
@@ -854,7 +854,7 @@ fun LoginDrawerContent(
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = onGoToAbout,
-                        modifier = Modifier.fillMaxWidth().height(if (expressive) 42.dp else 40.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = if (expressive) 42.dp else 40.dp),
                         shape = if (expressive) RoundedCornerShape(16.dp) else MaterialTheme.shapes.small
                     ) {
                         Text("Existe Atualização", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)

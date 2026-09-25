@@ -563,7 +563,7 @@ fun ManageTabsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         enabled = !isSyncingTabs && !isUploading,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp)
+                            .heightIn(min = 50.dp)
                     ) {
                         Text(
                             when {

@@ -500,7 +500,7 @@ fun ProductBarcodeDialog(
                             onClick = { closeDialog() },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(if (screenProfile.compact) 50.dp else 54.dp)
+                                .heightIn(min = if (screenProfile.compact) 50.dp else 54.dp)
                                 .expressiveShadow(
                                     if (isExpressive) RoundedCornerShape(24.dp) else RoundedCornerShape(24.dp),
                                     6.dp
