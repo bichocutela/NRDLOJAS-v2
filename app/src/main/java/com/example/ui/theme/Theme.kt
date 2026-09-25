@@ -366,9 +366,12 @@ fun Modifier.glassSoftShadow(
 fun Modifier.expressiveLiquidGlass(
     shape: Shape,
     accent: Color? = null,
+    secondaryAccent: Color? = null,
     intensity: Float = 1f,
     elevation: Dp? = null,
-    animated: Boolean = false
+    animated: Boolean = false,
+    waves: Boolean = false,
+    bubbleSeed: Int = 0
 ): Modifier = composed {
     val style = LocalExpressiveGlassStyle.current
     if (!style.enabled) {
@@ -377,6 +380,7 @@ fun Modifier.expressiveLiquidGlass(
         val safeIntensity = intensity.coerceIn(0.45f, 1.40f)
         val fluidity = style.fluidity.coerceIn(0f, 1f)
         val tint = accent ?: style.accent
+        val secondaryTint = secondaryAccent ?: style.secondaryAccent
         val motion = if (animated) {
             val transition = rememberInfiniteTransition(label = "expressive-liquid-glass")
             transition.animateFloat(
@@ -391,7 +395,7 @@ fun Modifier.expressiveLiquidGlass(
         } else {
             0.36f
         }
-        val refraction = style.secondaryAccent
+        val refraction = secondaryTint
         val highlightAlpha = (0.46f + 0.30f * fluidity) * safeIntensity
         val borderWidthDp = 1.25f + 1.55f * fluidity
 
@@ -470,12 +474,64 @@ fun Modifier.expressiveLiquidGlass(
                     start = Offset(size.width * 0.10f, 0f),
                     end = Offset(size.width * 0.90f, size.height)
                 )
+                val waveA = Brush.radialGradient(
+                    colors = listOf(
+                        tint.copy(alpha = if (waves) (0.24f + 0.12f * fluidity) * safeIntensity else 0f),
+                        tint.copy(alpha = if (waves) 0.08f * safeIntensity else 0f),
+                        Color.Transparent
+                    ),
+                    center = Offset(
+                        x = size.width * (0.18f + 0.11f * ((bubbleSeed % 5 + 5) % 5)),
+                        y = size.height * (0.74f - 0.08f * ((bubbleSeed % 3 + 3) % 3))
+                    ),
+                    radius = maxDimension * (0.42f + 0.12f * fluidity)
+                )
+                val waveB = Brush.radialGradient(
+                    colors = listOf(
+                        refraction.copy(alpha = if (waves) (0.18f + 0.10f * fluidity) * safeIntensity else 0f),
+                        Color.Transparent
+                    ),
+                    center = Offset(
+                        x = size.width * (0.76f - 0.07f * ((bubbleSeed % 4 + 4) % 4)),
+                        y = size.height * (0.28f + 0.06f * ((bubbleSeed % 2 + 2) % 2))
+                    ),
+                    radius = maxDimension * (0.34f + 0.14f * fluidity)
+                )
+                val bubble1 = Offset(
+                    x = size.width * (0.72f + 0.04f * ((bubbleSeed % 3 + 3) % 3)),
+                    y = size.height * (0.76f - 0.08f * ((bubbleSeed % 2 + 2) % 2))
+                )
+                val bubble2 = Offset(
+                    x = size.width * (0.84f - 0.05f * ((bubbleSeed % 4 + 4) % 4)),
+                    y = size.height * (0.34f + 0.06f * ((bubbleSeed % 3 + 3) % 3))
+                )
+                val bubbleRadius1 = maxDimension * (0.022f + 0.015f * fluidity)
+                val bubbleRadius2 = maxDimension * (0.012f + 0.010f * fluidity)
 
                 onDrawWithContent {
                     drawPath(path = outlinePath, brush = baseBrush)
                     drawPath(path = outlinePath, brush = topLens)
                     drawPath(path = outlinePath, brush = lowerRefraction)
+                    drawPath(path = outlinePath, brush = waveA)
+                    drawPath(path = outlinePath, brush = waveB)
                     drawPath(path = outlinePath, brush = innerGleam)
+                    if (waves) {
+                        drawCircle(
+                            color = Color.White.copy(alpha = (0.26f + 0.18f * fluidity) * safeIntensity),
+                            radius = bubbleRadius1,
+                            center = bubble1
+                        )
+                        drawCircle(
+                            color = tint.copy(alpha = (0.18f + 0.12f * fluidity) * safeIntensity),
+                            radius = bubbleRadius1 * 0.62f,
+                            center = bubble1
+                        )
+                        drawCircle(
+                            color = Color.White.copy(alpha = (0.32f + 0.14f * fluidity) * safeIntensity),
+                            radius = bubbleRadius2,
+                            center = bubble2
+                        )
+                    }
                     drawContent()
                     drawPath(
                         path = outlinePath,

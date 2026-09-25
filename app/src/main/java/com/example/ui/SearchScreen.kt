@@ -94,6 +94,7 @@ import com.example.ui.theme.getDynamicThemeColor
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.LocalExpressiveGlassStyle
+import com.example.ui.theme.ExpressiveGlassStyle
 import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.expressiveLiquidGlass
 import com.example.ui.theme.expressiveShadow
@@ -275,6 +276,28 @@ private fun homeDynamicColors(
         )
     }
     return palette[index % palette.size]
+}
+
+private fun expressiveGlassCardAccent(style: ExpressiveGlassStyle, index: Int): Pair<Color, Color> {
+    if (!style.enabled) return style.accent to style.onAccent
+    val palette = if (style.accentName == "multicolor") {
+        listOf(
+            Color(0xFFEF4E56),
+            Color(0xFF2B86D9),
+            Color(0xFFF57C00),
+            Color(0xFFE0A900),
+            Color(0xFF349B50)
+        )
+    } else {
+        listOf(
+            style.accent,
+            style.secondaryAccent,
+            style.tertiaryAccent,
+            style.accent.copy(alpha = 0.88f),
+            style.secondaryAccent.copy(alpha = 0.88f)
+        )
+    }
+    return palette[index % palette.size] to style.onAccent
 }
 
 @Composable
@@ -1408,6 +1431,7 @@ fun CategorySection(
             val colors = categoryColors[index % categoryColors.size]
             val dynamicColors = homeDynamicColors(index, appTheme, colors.first, colors.second)
             val strongColors = homeStrongColors(index)
+            val liquidAccent = expressiveGlassCardAccent(expressiveGlass, index)
             val categoryGlassFill = when {
                 glass.enabled -> glass.fill.copy(alpha = glass.alpha)
                 isExpressiveGlass -> expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.surfaceAlpha)
@@ -1441,13 +1465,15 @@ fun CategorySection(
                         if (isExpressiveGlass) {
                             Modifier.expressiveLiquidGlass(
                                 shape = categoryShape,
-                                accent = when (index % 3) {
-                                    1 -> expressiveGlass.secondaryAccent
-                                    2 -> expressiveGlass.tertiaryAccent
-                                    else -> expressiveGlass.accent
+                                accent = liquidAccent.first,
+                                secondaryAccent = when (index % 2) {
+                                    0 -> expressiveGlass.secondaryAccent
+                                    else -> expressiveGlass.tertiaryAccent
                                 },
-                                intensity = 0.90f,
-                                elevation = 6.dp
+                                intensity = 1.00f,
+                                elevation = 7.dp,
+                                waves = true,
+                                bubbleSeed = index
                             )
                         } else {
                             Modifier
@@ -1607,12 +1633,7 @@ fun ProductCard(
     val scope = rememberCoroutineScope()
     val shareLayer = rememberGraphicsLayer()
     val cardAccent = if (isExpressiveGlass) {
-        val accent = when (index % 3) {
-            1 -> expressiveGlass.secondaryAccent
-            2 -> expressiveGlass.tertiaryAccent
-            else -> expressiveGlass.accent
-        }
-        accent to expressiveGlass.onAccent
+        expressiveGlassCardAccent(expressiveGlass, index)
     } else {
         homeDynamicColors(
             index,
@@ -1648,8 +1669,11 @@ fun ProductCard(
                     Modifier.expressiveLiquidGlass(
                         shape = cardShape,
                         accent = cardAccent.first,
-                        intensity = 0.92f,
-                        elevation = 7.dp
+                        secondaryAccent = expressiveGlass.secondaryAccent,
+                        intensity = 1.08f,
+                        elevation = 8.dp,
+                        waves = true,
+                        bubbleSeed = index
                     )
                 } else {
                     Modifier
@@ -2006,12 +2030,7 @@ fun MiniProductCard(
         else -> RoundedCornerShape(24.dp)
     }
     val cardAccent = if (isExpressiveGlass) {
-        val accent = when (index % 3) {
-            1 -> expressiveGlass.secondaryAccent
-            2 -> expressiveGlass.tertiaryAccent
-            else -> expressiveGlass.accent
-        }
-        accent to expressiveGlass.onAccent
+        expressiveGlassCardAccent(expressiveGlass, index)
     } else {
         homeDynamicColors(
             index,
@@ -2065,8 +2084,11 @@ fun MiniProductCard(
                     Modifier.expressiveLiquidGlass(
                         shape = cardShape,
                         accent = cardAccent.first,
-                        intensity = 0.88f,
-                        elevation = 7.dp
+                        secondaryAccent = expressiveGlass.tertiaryAccent,
+                        intensity = 1.02f,
+                        elevation = 7.dp,
+                        waves = true,
+                        bubbleSeed = index + 13
                     )
                 } else {
                     Modifier
@@ -2307,12 +2329,7 @@ fun HistoryItem(
         )
     }
     val dynColors = if (isExpressiveGlass) {
-        val accent = when (index % 3) {
-            1 -> expressiveGlass.secondaryAccent
-            2 -> expressiveGlass.tertiaryAccent
-            else -> expressiveGlass.accent
-        }
-        accent to expressiveGlass.onAccent
+        expressiveGlassCardAccent(expressiveGlass, index)
     } else {
         homeDynamicColors(
             index,
@@ -2336,8 +2353,11 @@ fun HistoryItem(
                         isExpressiveGlass -> Modifier.expressiveLiquidGlass(
                             shape = itemShape,
                             accent = dynColors.first,
-                            intensity = 0.94f,
-                            elevation = 6.dp
+                            secondaryAccent = expressiveGlass.secondaryAccent,
+                            intensity = 1.08f,
+                            elevation = 7.dp,
+                            waves = true,
+                            bubbleSeed = index + 29
                         )
                         glass.enabled -> Modifier
                             .background(glass.fill.copy(alpha = glass.alpha))
