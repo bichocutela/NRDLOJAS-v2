@@ -8,6 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
@@ -709,26 +711,48 @@ fun SearchScreen(
 
                         } else {
                             if (canQuickAddProduct) {
-                                IconButton(
-                                    onClick = { showQuickAddProduct = true },
-                                    modifier = Modifier.then(
-                                        if (isExpressiveGlassTheme) {
-                                            Modifier.expressiveLiquidGlass(
-                                                shape = CircleShape,
-                                                accent = expressiveGlassStyle.accent,
-                                                secondaryAccent = expressiveGlassStyle.tertiaryAccent,
-                                                intensity = 0.96f,
-                                                elevation = 5.dp,
-                                                waves = true,
-                                                bubbleSeed = 47
-                                            )
-                                        } else Modifier
-                                    )
+                                val quickAddInteraction = remember { MutableInteractionSource() }
+                                val quickAddPressed by quickAddInteraction.collectIsPressedAsState()
+                                val quickAddScale by animateFloatAsState(
+                                    targetValue = if (quickAddPressed) 0.90f else 1f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMedium
+                                    ),
+                                    label = "quick-add-fab-scale"
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(if (isExpressiveTheme) 48.dp else 40.dp)
+                                        .scale(quickAddScale)
+                                        .then(
+                                            if (isExpressiveGlassTheme) {
+                                                Modifier.expressiveLiquidGlass(
+                                                    shape = CircleShape,
+                                                    accent = expressiveGlassStyle.accent,
+                                                    secondaryAccent = expressiveGlassStyle.tertiaryAccent,
+                                                    intensity = 1.10f,
+                                                    elevation = 8.dp,
+                                                    waves = true,
+                                                    bubbleSeed = 47
+                                                )
+                                            } else {
+                                                Modifier
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                                            }
+                                        )
+                                        .clickable(
+                                            interactionSource = quickAddInteraction,
+                                            indication = null
+                                        ) { showQuickAddProduct = true },
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         Icons.Default.Add,
                                         contentDescription = "Adicionar produto",
-                                        tint = if (isExpressiveGlassTheme) expressiveGlassStyle.accent else MaterialTheme.colorScheme.primary
+                                        tint = if (isExpressiveGlassTheme) expressiveGlassStyle.accent else MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(if (isExpressiveTheme) 28.dp else 24.dp)
                                     )
                                 }
                             }
@@ -741,19 +765,21 @@ fun SearchScreen(
                                     }
                                     voiceLauncher.launch(intent)
                                 },
-                                modifier = Modifier.then(
-                                    if (isExpressiveGlassTheme) {
-                                        Modifier.expressiveLiquidGlass(
-                                            shape = CircleShape,
-                                            accent = expressiveGlassStyle.tertiaryAccent,
-                                            secondaryAccent = expressiveGlassStyle.accent,
-                                            intensity = 0.96f,
-                                            elevation = 5.dp,
-                                            waves = true,
-                                            bubbleSeed = 53
-                                        )
-                                    } else Modifier
-                                )
+                                modifier = Modifier
+                                    .size(if (isExpressiveTheme) 42.dp else 48.dp)
+                                    .then(
+                                        if (isExpressiveGlassTheme) {
+                                            Modifier.expressiveLiquidGlass(
+                                                shape = CircleShape,
+                                                accent = expressiveGlassStyle.tertiaryAccent,
+                                                secondaryAccent = expressiveGlassStyle.accent,
+                                                intensity = 0.86f,
+                                                elevation = 4.dp,
+                                                waves = true,
+                                                bubbleSeed = 53
+                                            )
+                                        } else Modifier
+                                    )
                             ) {
                                 Icon(
                                     Icons.Default.Mic,
@@ -768,7 +794,8 @@ fun SearchScreen(
                     .fillMaxWidth()
                     .heightIn(
                         min = when {
-                            compactExpressive -> 56.dp
+                            compactExpressive -> 58.dp
+                            isExpressiveGlassTheme -> 62.dp
                             isExpressiveTheme -> 60.dp
                             else -> 56.dp
                         }
@@ -849,6 +876,16 @@ fun SearchScreen(
                 sheetQuery = searchQuery
                 showProductSearchSheet = true
             }
+            val primaryActionInteraction = remember { MutableInteractionSource() }
+            val primaryActionPressed by primaryActionInteraction.collectIsPressedAsState()
+            val primaryActionScale by animateFloatAsState(
+                targetValue = if (primaryActionPressed) 0.965f else 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
+                label = "expressive-primary-action"
+            )
             if (isGlassSoftTheme) {
                 val glassSearchButtonHeight = when {
                     compactExpressive -> 54.dp
@@ -900,14 +937,15 @@ fun SearchScreen(
                 }
             } else if (isExpressiveGlassTheme) {
                 val expressiveGlassSearchButtonHeight = when {
-                    compactExpressive -> 54.dp
-                    else -> 58.dp
+                    compactExpressive -> 58.dp
+                    else -> 64.dp
                 }
                 Surface(
                     onClick = openProductSearch,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(expressiveGlassSearchButtonHeight)
+                        .scale(primaryActionScale)
                         .expressiveLiquidGlass(
                             shape = searchButtonShape,
                             accent = expressiveGlassStyle.accent,
@@ -921,7 +959,8 @@ fun SearchScreen(
                     shape = searchButtonShape,
                     color = Color.Transparent,
                     contentColor = expressiveGlassStyle.onAccent,
-                    border = null
+                    border = null,
+                    interactionSource = primaryActionInteraction
                 ) {
                     Row(
                         modifier = Modifier
@@ -1789,7 +1828,12 @@ fun ProductCard(
                 bottomStart = (20f + 16f * water).dp
             )
         }
-        expressive -> RoundedCornerShape(if (compactExpressive) 24.dp else 30.dp)
+        expressive -> RoundedCornerShape(
+            topStart = if (compactExpressive) 26.dp else 34.dp,
+            topEnd = if (compactExpressive) 18.dp else 22.dp,
+            bottomEnd = if (compactExpressive) 24.dp else 30.dp,
+            bottomStart = if (compactExpressive) 20.dp else 26.dp
+        )
         else -> RoundedCornerShape(24.dp)
     }
     val context = LocalContext.current
@@ -2205,7 +2249,12 @@ fun MiniProductCard(
                 bottomStart = (18f + 14f * water).dp
             )
         }
-        expressive -> RoundedCornerShape(if (compactExpressive) 22.dp else 26.dp)
+        expressive -> RoundedCornerShape(
+            topStart = if (compactExpressive) 24.dp else 30.dp,
+            topEnd = if (compactExpressive) 15.dp else 18.dp,
+            bottomEnd = if (compactExpressive) 28.dp else 34.dp,
+            bottomStart = if (compactExpressive) 18.dp else 22.dp
+        )
         else -> RoundedCornerShape(24.dp)
     }
     val cardAccent = if (isExpressiveGlass) {
@@ -2517,7 +2566,12 @@ fun HistoryItem(
                 bottomStart = (17f + 14f * water).dp
             )
         }
-        expressive -> RoundedCornerShape(if (compactExpressive) 20.dp else 24.dp)
+        expressive -> RoundedCornerShape(
+            topStart = if (compactExpressive) 22.dp else 28.dp,
+            topEnd = if (compactExpressive) 14.dp else 18.dp,
+            bottomEnd = if (compactExpressive) 26.dp else 32.dp,
+            bottomStart = if (compactExpressive) 17.dp else 21.dp
+        )
         else -> RoundedCornerShape(16.dp)
     }
     var showDialog by remember { mutableStateOf(false) }

@@ -42,11 +42,36 @@ private val GlassSoftShapes = Shapes(
 )
 
 private val ExpressiveShapes = Shapes(
-    extraSmall = RoundedCornerShape(16.dp),
-    small = RoundedCornerShape(20.dp),
-    medium = RoundedCornerShape(28.dp),
-    large = RoundedCornerShape(36.dp),
-    extraLarge = RoundedCornerShape(44.dp)
+    extraSmall = RoundedCornerShape(
+        topStart = 18.dp,
+        topEnd = 10.dp,
+        bottomEnd = 16.dp,
+        bottomStart = 12.dp
+    ),
+    small = RoundedCornerShape(
+        topStart = 24.dp,
+        topEnd = 14.dp,
+        bottomEnd = 22.dp,
+        bottomStart = 16.dp
+    ),
+    medium = RoundedCornerShape(
+        topStart = 32.dp,
+        topEnd = 20.dp,
+        bottomEnd = 30.dp,
+        bottomStart = 22.dp
+    ),
+    large = RoundedCornerShape(
+        topStart = 42.dp,
+        topEnd = 26.dp,
+        bottomEnd = 38.dp,
+        bottomStart = 30.dp
+    ),
+    extraLarge = RoundedCornerShape(
+        topStart = 54.dp,
+        topEnd = 32.dp,
+        bottomEnd = 48.dp,
+        bottomStart = 36.dp
+    )
 )
 
 @Immutable

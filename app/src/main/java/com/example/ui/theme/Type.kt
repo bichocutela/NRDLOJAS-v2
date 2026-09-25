@@ -47,11 +47,25 @@ val Typography = Typography(
 
 
 val ExpressiveTypography = Typography.copy(
+    displaySmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Black,
+        fontSize = 36.sp,
+        lineHeight = 40.sp,
+        letterSpacing = (-1.0).sp
+    ),
+    headlineLarge = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Black,
+        fontSize = 32.sp,
+        lineHeight = 36.sp,
+        letterSpacing = (-0.8).sp
+    ),
     headlineMedium = Typography.headlineMedium.copy(
         fontWeight = FontWeight.Black,
-        fontSize = 30.sp,
-        lineHeight = 34.sp,
-        letterSpacing = (-0.7).sp
+        fontSize = 31.sp,
+        lineHeight = 35.sp,
+        letterSpacing = (-0.8).sp
     ),
     headlineSmall = TextStyle(
         fontFamily = FontFamily.SansSerif,
@@ -79,12 +93,16 @@ val ExpressiveTypography = Typography.copy(
         lineHeight = 19.sp,
         letterSpacing = 0.1.sp
     ),
+    bodyLarge = Typography.bodyLarge.copy(
+        fontWeight = FontWeight.Medium,
+        letterSpacing = 0.15.sp
+    ),
     labelLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.ExtraBold,
+        fontWeight = FontWeight.Black,
         fontSize = 14.sp,
         lineHeight = 18.sp,
-        letterSpacing = 0.15.sp
+        letterSpacing = 0.05.sp
     ),
     labelMedium = Typography.labelMedium.copy(
         fontWeight = FontWeight.ExtraBold,
