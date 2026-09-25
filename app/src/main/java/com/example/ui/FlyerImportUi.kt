@@ -477,7 +477,7 @@ internal fun ActiveFlyerOffersForAcpProduct(product: AcpProduct) {
 @Composable
 private fun FlyerOfferDisplayCard(campaign: FlyerCampaign, offer: FlyerOffer) {
     val shape = RoundedCornerShape(16.dp)
-    ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = shape, colors = CardDefaults.elevatedCardColors(contentColor = androidx.compose.ui.graphics.Color.Black)) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = shape, colors = CardDefaults.elevatedCardColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
         Column(
             Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Color(0xFFFFEB3B)).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -513,7 +513,7 @@ private fun FlyerOfferDisplayCard(campaign: FlyerCampaign, offer: FlyerOffer) {
             Text(
                 "${campaign.name} • válido de ${dateLabel(campaign.validFrom)} até ${dateLabel(campaign.validTo)}",
                 style = MaterialTheme.typography.labelSmall,
-                color = androidx.compose.ui.graphics.Color.Black
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }
