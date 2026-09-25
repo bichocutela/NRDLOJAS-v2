@@ -219,6 +219,7 @@ internal fun AcpProductsPanel(
     var nrdSaving by remember { mutableStateOf(false) }
     var nrdError by remember { mutableStateOf<String?>(null) }
     var nrdActionMessage by remember { mutableStateOf<String?>(null) }
+    var visualMixImportOpen by rememberSaveable { mutableStateOf(false) }
 
     fun closeAddToNrd() {
         if (nrdSaving) return
@@ -583,10 +584,7 @@ internal fun AcpProductsPanel(
 
         item {
             VisualMixOrderImportButton(
-                api = api,
-                externalPdfUri = externalPdfUri,
-                externalPdfRequestKey = externalPdfRequestKey,
-                onExternalPdfConsumed = onExternalPdfConsumed
+                onClick = { visualMixImportOpen = true }
             )
         }
 
@@ -736,6 +734,15 @@ internal fun AcpProductsPanel(
         }
     }
     }
+
+    VisualMixOrderImportHost(
+        api = api,
+        open = visualMixImportOpen,
+        externalPdfUri = externalPdfUri,
+        externalPdfRequestKey = externalPdfRequestKey,
+        onExternalPdfConsumed = onExternalPdfConsumed,
+        onDismiss = { visualMixImportOpen = false }
+    )
 
     if (scanning) {
         AcpBarcodeScanner(
