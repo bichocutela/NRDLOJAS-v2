@@ -49,6 +49,9 @@ import com.example.data.AppearanceSettings
 import com.example.data.FirebaseService
 import com.example.data.NrdProductImportService
 import com.example.data.acp.*
+import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.glassSoftShadow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -90,6 +93,9 @@ internal fun AcpProductsPanel(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val expressiveStyle = LocalExpressiveStyle.current
+    val glassStyle = LocalGlassSoftStyle.current
+    val isExpressive = expressiveStyle.enabled
     val offerValidityByKey by remember { AcpOfferValidityStore.observeAll() }
         .collectAsState(initial = emptyMap())
     val freshStore = remember(context) { AcpSecureStore(context.applicationContext) }
@@ -527,8 +533,13 @@ internal fun AcpProductsPanel(
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(28.dp),
-                modifier = Modifier.fillMaxWidth(),
+                shape = if (isExpressive) RoundedCornerShape(30.dp) else RoundedCornerShape(28.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .glassSoftShadow(
+                        if (isExpressive) RoundedCornerShape(30.dp) else RoundedCornerShape(28.dp),
+                        if (isExpressive) 3.dp else 0.dp
+                    ),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { search() })
             )
@@ -538,12 +549,18 @@ internal fun AcpProductsPanel(
             Button(
                 onClick = { search() },
                 enabled = !busy && query.isNotBlank(),
-                shape = RoundedCornerShape(26.dp),
+                shape = if (isExpressive) RoundedCornerShape(28.dp) else RoundedCornerShape(26.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 ),
-                modifier = Modifier.fillMaxWidth().height(54.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(if (isExpressive) 58.dp else 54.dp)
+                    .glassSoftShadow(
+                        if (isExpressive) RoundedCornerShape(28.dp) else RoundedCornerShape(26.dp),
+                        if (isExpressive) 4.dp else 0.dp
+                    )
             ) {
                 Icon(Icons.Default.Search, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
@@ -575,7 +592,7 @@ internal fun AcpProductsPanel(
                 OutlinedButton(
                     onClick = { featuredVisible = true },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp)
+                    shape = if (isExpressive) RoundedCornerShape(26.dp) else RoundedCornerShape(22.dp)
                 ) {
                     Text("Mostrar ofertas em destaque", fontWeight = FontWeight.Bold)
                 }
@@ -608,7 +625,15 @@ internal fun AcpProductsPanel(
                             Text("${result.items.size} $label", style = MaterialTheme.typography.labelMedium)
                         }
                     }
-                    TextButton(onClick = { refreshFromAcp() }, enabled = !busy && !refreshing) { Text("Atualizar") }
+                    TextButton(
+                        onClick = { refreshFromAcp() },
+                        enabled = !busy && !refreshing,
+                        shape = if (isExpressive) RoundedCornerShape(18.dp) else MaterialTheme.shapes.small,
+                        colors = ButtonDefaults.textButtonColors(
+                            containerColor = if (isExpressive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                            contentColor = if (isExpressive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
+                        )
+                    ) { Text("Atualizar") }
                 }
             }
         }
@@ -629,9 +654,11 @@ internal fun AcpProductsPanel(
                     product.isWithinOfferValidity(saved)
                 }
             val shareLayer = rememberGraphicsLayer()
+            val resultCardShape = if (isExpressive) RoundedCornerShape(30.dp) else MaterialTheme.shapes.medium
             OutlinedCard(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .glassSoftShadow(resultCardShape, if (isExpressive) 3.dp else 0.dp)
                     .drawWithContent {
                         shareLayer.record {
                             this@drawWithContent.drawContent()
@@ -656,22 +683,45 @@ internal fun AcpProductsPanel(
                                 ).show()
                             }
                         }
-                    )
+                    ),
+                shape = resultCardShape,
+                colors = CardDefaults.outlinedCardColors(
+                    containerColor = when {
+                        glassStyle.enabled -> MaterialTheme.colorScheme.surface
+                        isExpressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                        else -> MaterialTheme.colorScheme.surface
+                    }
+                )
             ) {
                 Column(
                     Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(product.description, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        product.description,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = if (isExpressive) FontWeight.ExtraBold else FontWeight.Normal
+                    )
                     val identifiers = buildString {
                         append("Código: ${product.code.ifBlank { "não informado" }}")
                         if (product.barcode.isNotBlank()) append(" • EAN: ${product.barcode}")
                     }
                     Text(identifiers, style = MaterialTheme.typography.bodySmall)
-                    Text(
-                        "Preço: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}",
-                        style = MaterialTheme.typography.titleMedium
-                    )
+                    Surface(
+                        shape = if (isExpressive) RoundedCornerShape(18.dp) else MaterialTheme.shapes.small,
+                        color = if (isExpressive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                        contentColor = if (isExpressive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                    ) {
+                        Text(
+                            "Preço: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = if (isExpressive) FontWeight.ExtraBold else FontWeight.Normal,
+                            modifier = Modifier.padding(
+                                horizontal = if (isExpressive) 12.dp else 0.dp,
+                                vertical = if (isExpressive) 7.dp else 0.dp
+                            )
+                        )
+                    }
                     product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let {
                         Text("Limite: ${it.quantity()} un. por CPF", style = MaterialTheme.typography.bodySmall)
                     }
@@ -708,7 +758,12 @@ internal fun AcpProductsPanel(
                             Text("Sem promoção explícita identificada no cadastro do produto.", style = MaterialTheme.typography.labelSmall)
                         }
                     }
-                    Text("Ver ficha completa", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        "Ver ficha completa",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isExpressive) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
+                        fontWeight = if (isExpressive) FontWeight.Bold else FontWeight.Normal
+                    )
                 }
             }
         }
@@ -1427,9 +1482,22 @@ private fun AcpFeaturedOfferCard(
     validity: AcpOfferValidity?,
     onOpen: (AcpFeaturedOffer) -> Unit
 ) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    val glassStyle = LocalGlassSoftStyle.current
+    val cardShape = if (expressive) RoundedCornerShape(28.dp) else MaterialTheme.shapes.medium
     OutlinedCard(
         onClick = { onOpen(item) },
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(cardShape, if (expressive) 3.dp else 0.dp),
+        shape = cardShape,
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = when {
+                glassStyle.enabled -> MaterialTheme.colorScheme.surface
+                expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                else -> MaterialTheme.colorScheme.surface
+            }
+        )
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(10.dp),
@@ -1438,6 +1506,7 @@ private fun AcpFeaturedOfferCard(
             Text(
                 item.product.description,
                 style = MaterialTheme.typography.titleSmall,
+                fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal,
                 maxLines = 2,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp)
             )

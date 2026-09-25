@@ -34,6 +34,9 @@ import com.example.data.FirebaseService
 import com.example.data.acp.AcpApi
 import com.example.data.acp.AcpFailure
 import com.example.data.acp.AcpUnauthorized
+import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.glassSoftShadow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -47,6 +50,9 @@ fun AcpConsultationScreen(
     onExternalPdfConsumed: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val expressiveStyle = LocalExpressiveStyle.current
+    val glassStyle = LocalGlassSoftStyle.current
+    val isExpressive = expressiveStyle.enabled
     val api = remember { AcpApi(context.applicationContext) }
     val scope = rememberCoroutineScope()
     val screenProfile = rememberNrdScreenProfile()
@@ -132,8 +138,18 @@ fun AcpConsultationScreen(
                             .aspectRatio(3f)
                             .clip(
                                 RoundedCornerShape(
-                                    bottomStart = if (screenProfile.veryCompact) 16.dp else 22.dp,
-                                    bottomEnd = if (screenProfile.veryCompact) 16.dp else 22.dp
+                                    bottomStart = when {
+                                        isExpressive && screenProfile.veryCompact -> 24.dp
+                                        isExpressive -> 34.dp
+                                        screenProfile.veryCompact -> 16.dp
+                                        else -> 22.dp
+                                    },
+                                    bottomEnd = when {
+                                        isExpressive && screenProfile.veryCompact -> 24.dp
+                                        isExpressive -> 34.dp
+                                        screenProfile.veryCompact -> 16.dp
+                                        else -> 22.dp
+                                    }
                                 )
                             )
                             .background(Color.Transparent)
@@ -158,12 +174,23 @@ fun AcpConsultationScreen(
                             )
                         }
 
+                        val backShape = if (isExpressive) RoundedCornerShape(18.dp) else RoundedCornerShape(50)
                         Surface(
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
-                                .padding(start = if (screenProfile.veryCompact) 4.dp else 10.dp),
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+                                .padding(start = if (screenProfile.veryCompact) 4.dp else 10.dp)
+                                .glassSoftShadow(backShape, if (isExpressive) 4.dp else 0.dp),
+                            shape = backShape,
+                            color = when {
+                                glassStyle.enabled -> MaterialTheme.colorScheme.surface
+                                isExpressive -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f)
+                                else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.78f)
+                            },
+                            contentColor = if (isExpressive && !glassStyle.enabled) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
                             tonalElevation = 0.dp
                         ) {
                             IconButton(onClick = onNavigateBack) {
@@ -211,21 +238,47 @@ fun AcpConsultationScreen(
                             }
                         )
                     } else {
-                        Text("Acesso ACP", style = MaterialTheme.typography.headlineSmall)
+                        Text(
+                            "Acesso ACP",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = if (isExpressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal
+                        )
                         Text(if (configured) "A sessão é renovada automaticamente. Tente novamente apenas se a ACP não responder." else "Acesse a consulta de preços do Nordestão.")
-                        OutlinedTextField(if (configured) "********" else "", {}, readOnly = true, label = { Text("Login") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(if (configured) "********" else "", {}, readOnly = true, label = { Text("Senha") }, modifier = Modifier.fillMaxWidth())
+                        val loginShape = if (isExpressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraSmall
+                        OutlinedTextField(
+                            if (configured) "********" else "",
+                            {},
+                            readOnly = true,
+                            label = { Text("Login") },
+                            shape = loginShape,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            if (configured) "********" else "",
+                            {},
+                            readOnly = true,
+                            label = { Text("Senha") },
+                            shape = loginShape,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                         if (checking || busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                        Button(onClick = {
-                            busy = true; error = null
-                            scope.launch {
-                                try { api.confirmAccess(); api.enableBackgroundSync(); api.warmFeaturedCatalog(); authenticated = true }
-                                catch (cancelled: CancellationException) { throw cancelled }
-                                catch (failure: Exception) { error = acpErrorMessage(failure) }
-                                finally { busy = false }
-                            }
-                        }, enabled = configured && !checking && !busy, modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = {
+                                busy = true; error = null
+                                scope.launch {
+                                    try { api.confirmAccess(); api.enableBackgroundSync(); api.warmFeaturedCatalog(); authenticated = true }
+                                    catch (cancelled: CancellationException) { throw cancelled }
+                                    catch (failure: Exception) { error = acpErrorMessage(failure) }
+                                    finally { busy = false }
+                                }
+                            },
+                            enabled = configured && !checking && !busy,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(if (isExpressive) 54.dp else 48.dp),
+                            shape = if (isExpressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.small
+                        ) {
                             Text(if (busy) "Reconectando…" else "Tentar novamente")
                         }
                         if (!configured && !checking) Text("O administrador precisa configurar o acesso neste aparelho uma única vez.")
