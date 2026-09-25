@@ -142,7 +142,14 @@ internal fun MestreAdvancedSection(
         description = "Crie pontos de retorno do catálogo antes de mudanças importantes"
     )
     Spacer(modifier = Modifier.height(8.dp))
-    OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
+    val safetyShape = if (expressive) RoundedCornerShape(if (profile.compact) 22.dp else 26.dp) else MaterialTheme.shapes.medium
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(safetyShape)
+            .expressiveShadow(safetyShape, 6.dp),
+        shape = safetyShape
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 "O histórico mantém até 20 backups remotos. Restaurar uma versão cria primeiro um backup automático do catálogo atual.",
