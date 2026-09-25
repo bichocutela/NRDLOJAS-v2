@@ -15,6 +15,7 @@ on:
       - 'app/src/main/java/com/example/ui/AcpOfferPoster.kt'
       - 'app/src/main/java/com/example/ui/MestreScreen.kt'
       - 'app/src/main/java/com/example/ui/SearchScreen.kt'
+      - 'app/src/main/java/com/example/ui/PromotionsScreen.kt'
       - 'app/src/main/java/com/example/ui/theme/Theme.kt'
       - '.github/workflows/validate_banners.yml'
   pull_request:
@@ -31,6 +32,7 @@ on:
       - 'app/src/main/java/com/example/ui/AcpOfferPoster.kt'
       - 'app/src/main/java/com/example/ui/MestreScreen.kt'
       - 'app/src/main/java/com/example/ui/SearchScreen.kt'
+      - 'app/src/main/java/com/example/ui/PromotionsScreen.kt'
       - 'app/src/main/java/com/example/ui/theme/Theme.kt'
       - '.github/workflows/validate_banners.yml'
   workflow_dispatch:
