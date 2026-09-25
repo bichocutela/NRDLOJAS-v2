@@ -434,11 +434,15 @@ private fun DrawerActionButton(
                 Surface(
                     shape = RoundedCornerShape(if (profile.compact) 11.dp else 13.dp),
                     color = if (emphasized) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                        MaterialTheme.colorScheme.surfaceContainerHighest
                     } else {
                         MaterialTheme.colorScheme.primaryContainer
                     },
-                    contentColor = MaterialTheme.colorScheme.primary
+                    contentColor = if (emphasized) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    }
                 ) {
                     Icon(
                         icon,
@@ -574,68 +578,8 @@ fun LoginDrawerContent(
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (expressive) {
-            val headerShape = RoundedCornerShape(if (screenProfile.compact) 22.dp else 28.dp)
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .expressiveShadow(headerShape, 7.dp),
-                shape = headerShape,
-                color = if (glassStyle.enabled) {
-                    MaterialTheme.colorScheme.surface
-                } else {
-                    MaterialTheme.colorScheme.primaryContainer
-                },
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                border = if (glassStyle.enabled) {
-                    BorderStroke(1.dp, glassStyle.borderColor)
-                } else {
-                    null
-                }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            horizontal = if (screenProfile.compact) 14.dp else 16.dp,
-                            vertical = if (screenProfile.compact) 12.dp else 14.dp
-                        ),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(if (screenProfile.compact) 14.dp else 16.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ) {
-                        Icon(
-                            Icons.Default.Menu,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .padding(if (screenProfile.compact) 8.dp else 9.dp)
-                                .size(if (screenProfile.compact) 20.dp else 22.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(if (screenProfile.compact) 10.dp else 12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "NRD V2",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Black
-                        )
-                        Text(
-                            "Navegação",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(if (screenProfile.compact) 10.dp else 12.dp))
-        }
-
         if (showMyProfile) {
             if (expressive) {
-                DrawerSectionLabel("Meu Perfil", Icons.Default.Person)
                 DrawerActionButton(
                     label = "Meu Perfil",
                     icon = Icons.Default.Person,
@@ -851,9 +795,7 @@ fun LoginDrawerContent(
         }
 
         Spacer(modifier = Modifier.height(12.dp))
-        if (expressive) {
-            DrawerSectionLabel("Acessos", Icons.Default.Menu)
-        } else {
+        if (!expressive) {
             HorizontalDivider()
             Spacer(modifier = Modifier.height(10.dp))
         }
