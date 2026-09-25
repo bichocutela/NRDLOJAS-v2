@@ -1682,13 +1682,14 @@ fun MiniProductCard(
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
-    val cardShape = if (expressive) RoundedCornerShape(28.dp) else RoundedCornerShape(24.dp)
+    val cardShape = if (expressive) RoundedCornerShape(26.dp) else RoundedCornerShape(24.dp)
     val cardAccent = homeDynamicColors(
         index,
         appTheme,
         MaterialTheme.colorScheme.primaryContainer,
         MaterialTheme.colorScheme.onPrimaryContainer
     )
+    val strongAccent = homeStrongColors(index)
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(
@@ -1705,22 +1706,24 @@ fun MiniProductCard(
     }
     Column(
         modifier = Modifier
-            .widthIn(min = 144.dp, max = 176.dp)
-            .heightIn(min = if (textPreferences.largeText) 168.dp else 132.dp)
+            .widthIn(min = if (expressive) 154.dp else 144.dp, max = if (expressive) 184.dp else 176.dp)
+            .heightIn(min = if (expressive) 176.dp else if (textPreferences.largeText) 168.dp else 132.dp)
             .glassSoftShadow(cardShape)
+            .expressiveShadow(cardShape, 7.dp)
             .clip(cardShape)
             .background(
                 when {
                     glass.enabled -> glass.fill.copy(alpha = glass.alpha)
-                    expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                    expressive -> MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
                     else -> MaterialTheme.colorScheme.surface
                 }
             )
             .border(
                 1.dp,
                 when {
+                    glass.enabled && expressive -> strongAccent.first.copy(alpha = 0.38f)
                     glass.enabled -> glass.border
-                    expressive -> MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
+                    expressive -> MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
                     else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
                 },
                 cardShape
@@ -1733,13 +1736,13 @@ fun MiniProductCard(
                     showDialog = true
                 }
             }
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)
+            .padding(if (expressive) 12.dp else 10.dp),
+        verticalArrangement = Arrangement.spacedBy(if (expressive) 7.dp else 5.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
             if (product.imageUrl != null) {
                 AsyncImage(
@@ -1750,78 +1753,122 @@ fun MiniProductCard(
                     contentDescription = product.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
+                        .size(if (expressive) 54.dp else 32.dp)
+                        .clip(if (expressive) RoundedCornerShape(17.dp) else CircleShape)
+                        .background(cardAccent.first)
                 )
             } else {
-                val dynColors = cardAccent
                 Box(
                     modifier = Modifier
-                        .size(if (expressive) 36.dp else 32.dp)
-                        .clip(if (expressive) RoundedCornerShape(12.dp) else CircleShape)
-                        .background(dynColors.first),
+                        .size(if (expressive) 54.dp else 32.dp)
+                        .clip(if (expressive) RoundedCornerShape(17.dp) else CircleShape)
+                        .background(cardAccent.first),
                     contentAlignment = Alignment.Center
                 ) {
                     StylizedText(
                         text = product.name.take(1),
-                        baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
+                        baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = if (expressive) 18.sp else 14.sp),
                         boldOutline = textPreferences.boldOutline,
                         uppercaseBold = true,
-                        color = dynColors.second
+                        color = if (expressive) strongAccent.first else cardAccent.second
                     )
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+
+            Column(horizontalAlignment = Alignment.End) {
                 if (product.isFavorite) {
                     Icon(
                         imageVector = Icons.Default.Favorite,
                         contentDescription = "Favorito",
-                        tint = Color.Red,
+                        tint = Color(0xFFEF4E56),
                         modifier = Modifier.size(16.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
                 }
-                Text(
-                    text = product.unit.uppercase(),
-                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp),
-                    color = if (expressive) cardAccent.second else MaterialTheme.colorScheme.primary
-                )
+                if (expressive) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ) {
+                        Text(
+                            text = product.unit.uppercase(),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black)
+                        )
+                    }
+                } else {
+                    Text(
+                        text = product.unit.uppercase(),
+                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
-        
-        Column {
+
+        StylizedText(
+            text = product.name,
+            baseStyle = MaterialTheme.typography.titleMedium.copy(
+                fontSize = if (expressive) 15.sp else 14.sp,
+                fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Bold
+            ),
+            boldOutline = textPreferences.boldOutline,
+            uppercaseBold = textPreferences.uppercaseBold,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = getCategoryIcon(product.category),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
             StylizedText(
-                text = product.name,
-                baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
+                text = product.category,
+                baseStyle = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                ),
                 boldOutline = textPreferences.boldOutline,
-                uppercaseBold = textPreferences.uppercaseBold,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 2,
+                uppercaseBold = true,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = getCategoryIcon(product.category),
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                StylizedText(
-                    text = product.category,
-                    baseStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
-                    boldOutline = textPreferences.boldOutline,
-                    uppercaseBold = true,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
                 text = product.code,
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
-                color = if (expressive) cardAccent.second else MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Black,
+                    fontSize = if (expressive) 18.sp else 16.sp
+                ),
+                color = MaterialTheme.colorScheme.primary,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis
             )
+            if (expressive) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = "Abrir produto",
+                        modifier = Modifier.padding(7.dp).size(18.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -1851,26 +1898,131 @@ fun HistoryItem(
             }
         )
     }
-    val dynColors = homeDynamicColors(index, appTheme, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+    val dynColors = homeDynamicColors(
+        index,
+        appTheme,
+        MaterialTheme.colorScheme.primaryContainer,
+        MaterialTheme.colorScheme.onPrimaryContainer
+    )
+    val strongColors = homeStrongColors(index)
+
+    if (expressive) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 84.dp)
+                .glassSoftShadow(itemShape)
+                .expressiveShadow(itemShape, 6.dp)
+                .clip(itemShape)
+                .background(
+                    if (glass.enabled) glass.fill.copy(alpha = glass.alpha)
+                    else dynColors.first.copy(alpha = 0.62f)
+                )
+                .border(
+                    1.dp,
+                    if (glass.enabled) strongColors.first.copy(alpha = 0.42f)
+                    else strongColors.first.copy(alpha = 0.52f),
+                    itemShape
+                )
+                .vibrateClickable(viewModel) {
+                    viewModel.onProductSearched(product)
+                    showDialog = true
+                }
+                .padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(15.dp))
+                    .background(strongColors.first),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.History,
+                    contentDescription = "Histórico",
+                    tint = strongColors.second,
+                    modifier = Modifier.size(23.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(9.dp))
+            if (product.imageUrl != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(product.imageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = product.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                StylizedText(
+                    text = product.name,
+                    baseStyle = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    ),
+                    boldOutline = textPreferences.boldOutline,
+                    uppercaseBold = textPreferences.uppercaseBold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = getCategoryIcon(product.category),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    StylizedText(
+                        text = product.category,
+                        baseStyle = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        ),
+                        boldOutline = textPreferences.boldOutline,
+                        uppercaseBold = true,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Text(
+                    text = "Código: ${product.code}",
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = "Abrir produto",
+                tint = strongColors.first,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        return
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .glassSoftShadow(itemShape)
             .clip(itemShape)
             .background(
-                when {
-                    glass.enabled -> glass.fill.copy(alpha = glass.alpha)
-                    expressive -> MaterialTheme.colorScheme.surfaceContainerLow
-                    else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
-                }
+                if (glass.enabled) glass.fill.copy(alpha = glass.alpha)
+                else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
             )
             .border(
                 1.dp,
-                when {
-                    glass.enabled && expressive -> dynColors.first.copy(alpha = 0.72f)
-                    glass.enabled -> glass.border
-                    else -> dynColors.first
-                },
+                if (glass.enabled) glass.border else dynColors.first,
                 itemShape
             )
             .vibrateClickable(viewModel) {
@@ -1882,38 +2034,17 @@ fun HistoryItem(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (expressive) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(dynColors.first),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.History,
-                        contentDescription = "Histórico",
-                        tint = dynColors.second,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-            } else {
-                Icon(
-                    imageVector = Icons.Default.History,
-                    contentDescription = "Histórico",
-                    tint = dynColors.first,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-            }
+            Icon(
+                imageVector = Icons.Default.History,
+                contentDescription = "Histórico",
+                tint = dynColors.first,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
             Column {
                 StylizedText(
                     text = product.name,
-                    baseStyle = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 14.sp,
-                        fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal
-                    ),
+                    baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
                     boldOutline = textPreferences.boldOutline,
                     uppercaseBold = textPreferences.uppercaseBold,
                     color = MaterialTheme.colorScheme.onBackground
@@ -1926,7 +2057,11 @@ fun HistoryItem(
                     Spacer(modifier = Modifier.width(4.dp))
                     StylizedText(
                         text = product.category,
-                        baseStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
+                        baseStyle = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        ),
                         boldOutline = textPreferences.boldOutline,
                         uppercaseBold = true,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1934,10 +2069,8 @@ fun HistoryItem(
                 }
                 Text(
                     text = "Código: ${product.code}",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontWeight = if (expressive) FontWeight.SemiBold else FontWeight.Normal
-                    ),
-                    color = if (expressive) dynColors.second else MaterialTheme.colorScheme.primary
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }
