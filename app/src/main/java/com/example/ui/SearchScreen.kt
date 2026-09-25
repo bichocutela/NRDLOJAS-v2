@@ -1377,6 +1377,8 @@ fun SectionHeader(
     onAction: (() -> Unit)? = null
 ) {
     val expressive = LocalExpressiveStyle.current.enabled
+    val expressiveGlass = LocalExpressiveGlassStyle.current
+    val isExpressiveGlass = expressiveGlass.enabled
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
     val sectionIcon = when {
@@ -1385,6 +1387,13 @@ fun SectionHeader(
         title.contains("Histórico", ignoreCase = true) -> Icons.Default.History
         title.contains("Favoritos", ignoreCase = true) -> Icons.Default.Favorite
         else -> Icons.Default.Search
+    }
+    val sectionAccent = when {
+        title.contains("Mais Utilizados", ignoreCase = true) -> expressiveGlass.accent
+        title.contains("Últimos", ignoreCase = true) -> expressiveGlass.tertiaryAccent
+        title.contains("Histórico", ignoreCase = true) -> expressiveGlass.secondaryAccent
+        title.contains("Favoritos", ignoreCase = true) -> Color(0xFFEF4E56)
+        else -> expressiveGlass.accent
     }
     Row(
         modifier = Modifier
@@ -1401,17 +1410,33 @@ fun SectionHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (expressive) {
+                val headerIconShape = RoundedCornerShape(if (compactExpressive) 10.dp else 12.dp)
                 Box(
                     modifier = Modifier
                         .size(if (compactExpressive) 30.dp else 34.dp)
-                        .clip(RoundedCornerShape(if (compactExpressive) 10.dp else 12.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer),
+                        .then(
+                            if (isExpressiveGlass) {
+                                Modifier.expressiveLiquidGlass(
+                                    shape = headerIconShape,
+                                    accent = sectionAccent,
+                                    secondaryAccent = expressiveGlass.secondaryAccent,
+                                    intensity = 0.92f,
+                                    elevation = 5.dp,
+                                    waves = true,
+                                    bubbleSeed = title.hashCode()
+                                )
+                            } else {
+                                Modifier
+                                    .clip(headerIconShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                            }
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         sectionIcon,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = if (isExpressiveGlass) sectionAccent else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(if (compactExpressive) 18.dp else 20.dp)
                     )
                 }
@@ -1430,9 +1455,20 @@ fun SectionHeader(
             )
         }
         if (actionLabel != null && onAction != null) {
+            val actionShape = RoundedCornerShape(18.dp)
             TextButton(
                 onClick = onAction,
-                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.then(
+                    if (isExpressiveGlass) {
+                        Modifier.expressiveLiquidGlass(
+                            shape = actionShape,
+                            accent = sectionAccent,
+                            intensity = 0.72f,
+                            elevation = 3.dp
+                        )
+                    } else Modifier
+                ),
+                shape = actionShape,
                 contentPadding = PaddingValues(
                     horizontal = if (compactExpressive) 5.dp else if (expressive) 8.dp else 12.dp,
                     vertical = if (compactExpressive) 4.dp else 6.dp
@@ -1689,15 +1725,41 @@ private fun FavoriteToggleButton(
     viewModel: MainViewModel,
     compact: Boolean = false
 ) {
+    val expressiveGlass = LocalExpressiveGlassStyle.current
+    val heartScale by animateFloatAsState(
+        targetValue = if (product.isFavorite) 1.10f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "favorite-liquid-scale"
+    )
+    val heartAccent = if (product.isFavorite) Color(0xFFEF4E56) else expressiveGlass.accent
     IconButton(
         onClick = { viewModel.toggleFavorite(product) },
-        modifier = Modifier.size(if (compact) 34.dp else 38.dp)
+        modifier = Modifier
+            .size(if (compact) 34.dp else 38.dp)
+            .then(
+                if (expressiveGlass.enabled) {
+                    Modifier.expressiveLiquidGlass(
+                        shape = CircleShape,
+                        accent = heartAccent,
+                        secondaryAccent = expressiveGlass.secondaryAccent,
+                        intensity = if (product.isFavorite) 0.94f else 0.72f,
+                        elevation = if (product.isFavorite) 5.dp else 3.dp,
+                        waves = product.isFavorite,
+                        bubbleSeed = product.code.hashCode()
+                    )
+                } else Modifier
+            )
     ) {
         Icon(
             imageVector = if (product.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
             contentDescription = if (product.isFavorite) "Remover dos favoritos" else "Adicionar aos favoritos",
             tint = if (product.isFavorite) Color(0xFFEF4E56) else MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(if (compact) 19.dp else 21.dp)
+            modifier = Modifier
+                .size(if (compact) 19.dp else 21.dp)
+                .scale(heartScale)
         )
     }
 }
@@ -1894,10 +1956,26 @@ fun ProductCard(
 
         Column(horizontalAlignment = Alignment.End) {
             FavoriteToggleButton(product, viewModel, compact = compactExpressive)
+            val codeShape = if (expressive) RoundedCornerShape(20.dp) else RoundedCornerShape(16.dp)
             Box(
                 modifier = Modifier
-                    .clip(if (expressive) RoundedCornerShape(20.dp) else RoundedCornerShape(16.dp))
-                    .background(if (expressive) cardAccent.first else MaterialTheme.colorScheme.primaryContainer)
+                    .then(
+                        if (isExpressiveGlass) {
+                            Modifier.expressiveLiquidGlass(
+                                shape = codeShape,
+                                accent = cardAccent.first,
+                                secondaryAccent = expressiveGlass.secondaryAccent,
+                                intensity = 0.90f,
+                                elevation = 4.dp,
+                                waves = true,
+                                bubbleSeed = index + 101
+                            )
+                        } else {
+                            Modifier
+                                .clip(codeShape)
+                                .background(if (expressive) cardAccent.first else MaterialTheme.colorScheme.primaryContainer)
+                        }
+                    )
                     .padding(
                         horizontal = when {
                             compactExpressive -> 12.dp
@@ -1916,12 +1994,12 @@ fun ProductCard(
                     Text(
                         text = product.code,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
-                        color = if (expressive) cardAccent.second else MaterialTheme.colorScheme.onPrimaryContainer
+                        color = if (isExpressiveGlass) cardAccent.first else if (expressive) cardAccent.second else MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
                         text = product.unit.uppercase(),
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Black),
-                        color = if (expressive) cardAccent.second.copy(alpha = 0.78f) else MaterialTheme.colorScheme.primary
+                        color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurfaceVariant else if (expressive) cardAccent.second.copy(alpha = 0.78f) else MaterialTheme.colorScheme.primary
                     )
                 }
             }
@@ -2291,15 +2369,29 @@ fun MiniProductCard(
             Column(horizontalAlignment = Alignment.End) {
                 FavoriteToggleButton(product, viewModel, compact = compactExpressive)
                 if (expressive) {
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    val unitShape = RoundedCornerShape(14.dp)
+                    Box(
+                        modifier = Modifier
+                            .then(
+                                if (isExpressiveGlass) {
+                                    Modifier.expressiveLiquidGlass(
+                                        shape = unitShape,
+                                        accent = cardAccent.first,
+                                        intensity = 0.76f,
+                                        elevation = 3.dp
+                                    )
+                                } else {
+                                    Modifier
+                                        .clip(unitShape)
+                                        .background(MaterialTheme.colorScheme.primaryContainer)
+                                }
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = product.unit.uppercase(),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black)
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
+                            color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
                 } else {
@@ -2370,17 +2462,30 @@ fun MiniProductCard(
                 overflow = TextOverflow.Ellipsis
             )
             if (expressive) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.primary
+                Box(
+                    modifier = Modifier
+                        .then(
+                            if (isExpressiveGlass) {
+                                Modifier.expressiveLiquidGlass(
+                                    shape = CircleShape,
+                                    accent = cardAccent.first,
+                                    intensity = 0.78f,
+                                    elevation = 3.dp
+                                )
+                            } else {
+                                Modifier
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                            }
+                        )
+                        .padding(if (compactExpressive) 5.dp else 7.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.ChevronRight,
                         contentDescription = "Abrir produto",
-                        modifier = Modifier
-                            .padding(if (compactExpressive) 5.dp else 7.dp)
-                            .size(if (compactExpressive) 16.dp else 18.dp)
+                        tint = if (isExpressiveGlass) cardAccent.first else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(if (compactExpressive) 16.dp else 18.dp)
                     )
                 }
             }
@@ -2478,17 +2583,33 @@ fun HistoryItem(
                 ),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val historyIconShape = RoundedCornerShape(if (compactExpressive) 12.dp else 15.dp)
             Box(
                 modifier = Modifier
                     .size(if (compactExpressive) 38.dp else 46.dp)
-                    .clip(RoundedCornerShape(if (compactExpressive) 12.dp else 15.dp))
-                    .background(strongColors.first),
+                    .then(
+                        if (isExpressiveGlass) {
+                            Modifier.expressiveLiquidGlass(
+                                shape = historyIconShape,
+                                accent = dynColors.first,
+                                secondaryAccent = expressiveGlass.secondaryAccent,
+                                intensity = 0.94f,
+                                elevation = 5.dp,
+                                waves = true,
+                                bubbleSeed = index + 149
+                            )
+                        } else {
+                            Modifier
+                                .clip(historyIconShape)
+                                .background(strongColors.first)
+                        }
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.History,
                     contentDescription = "Histórico",
-                    tint = strongColors.second,
+                    tint = if (isExpressiveGlass) dynColors.first else strongColors.second,
                     modifier = Modifier.size(if (compactExpressive) 19.dp else 23.dp)
                 )
             }
@@ -2549,12 +2670,28 @@ fun HistoryItem(
             }
             Spacer(modifier = Modifier.width(4.dp))
             FavoriteToggleButton(product, viewModel, compact = compactExpressive)
-            Icon(
-                Icons.Default.ChevronRight,
-                contentDescription = "Abrir produto",
-                tint = strongColors.first,
-                modifier = Modifier.size(if (compactExpressive) 20.dp else 24.dp)
-            )
+            Box(
+                modifier = Modifier.then(
+                    if (isExpressiveGlass) {
+                        Modifier.expressiveLiquidGlass(
+                            shape = CircleShape,
+                            accent = dynColors.first,
+                            intensity = 0.70f,
+                            elevation = 2.dp
+                        )
+                    } else Modifier
+                ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = "Abrir produto",
+                    tint = strongColors.first,
+                    modifier = Modifier
+                        .padding(if (isExpressiveGlass) 4.dp else 0.dp)
+                        .size(if (compactExpressive) 20.dp else 24.dp)
+                )
+            }
         }
         return
     }
