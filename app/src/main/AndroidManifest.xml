@@ -42,6 +42,20 @@
             </intent-filter>
         </activity>
 
+        <activity-alias
+            android:name=".ImportOrderShareTarget"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@drawable/icon_multicolor_original"
+            android:label="Importar Ordem pro NRD"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+        </activity-alias>
+
         <service
             android:name=".util.MyFirebaseMessagingService"
             android:exported="false">

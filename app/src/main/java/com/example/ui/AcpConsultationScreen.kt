@@ -39,7 +39,13 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
+fun AcpConsultationScreen(
+    canConfigure: Boolean,
+    onNavigateBack: () -> Unit,
+    externalPdfUri: String? = null,
+    externalPdfRequestKey: Long = 0L,
+    onExternalPdfConsumed: () -> Unit = {}
+) {
     val context = LocalContext.current
     val api = remember { AcpApi(context.applicationContext) }
     val scope = rememberCoroutineScope()
@@ -196,6 +202,9 @@ fun AcpConsultationScreen(canConfigure: Boolean, onNavigateBack: () -> Unit) {
                             historyExportBusy = historyExportBusy,
                             historyExportMessage = historyExportMessage,
                             onExportHistory = exportHistory,
+                            externalPdfUri = externalPdfUri,
+                            externalPdfRequestKey = externalPdfRequestKey,
+                            onExternalPdfConsumed = onExternalPdfConsumed,
                             onSessionExpired = {
                                 authenticated = false
                                 error = "Não foi possível renovar a sessão automaticamente. Tente novamente."

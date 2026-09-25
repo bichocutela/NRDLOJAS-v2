@@ -83,6 +83,9 @@ internal fun AcpProductsPanel(
     historyExportBusy: Boolean,
     historyExportMessage: String?,
     onExportHistory: (String, Int) -> Unit,
+    externalPdfUri: String? = null,
+    externalPdfRequestKey: Long = 0L,
+    onExternalPdfConsumed: () -> Unit = {},
     onSessionExpired: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -579,7 +582,12 @@ internal fun AcpProductsPanel(
         }
 
         item {
-            VisualMixOrderImportButton(api)
+            VisualMixOrderImportButton(
+                api = api,
+                externalPdfUri = externalPdfUri,
+                externalPdfRequestKey = externalPdfRequestKey,
+                onExternalPdfConsumed = onExternalPdfConsumed
+            )
         }
 
         if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }

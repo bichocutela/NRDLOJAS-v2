@@ -1,7 +1,9 @@
 package com.example
 
 import android.os.Bundle
+import android.os.Build
 import android.content.Intent
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -85,10 +87,13 @@ class MainActivity : ComponentActivity() {
     private var openPromotionsFromNotification by mutableStateOf(false)
     private var productCodeFromNotification: String? = null
     private var productNotificationNavigationKey by mutableStateOf(0L)
+    private var sharedOrderPdfUri by mutableStateOf<String?>(null)
+    private var sharedOrderPdfRequestKey by mutableStateOf(0L)
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
         super.onCreate(savedInstanceState)
+        captureSharedOrderPdf(intent)
         openAboutFromNotification = shouldOpenAbout(intent)
         openPromotionsFromNotification = shouldOpenPromotions(intent)
         productCodeFromNotification = extractProductCode(intent)
@@ -225,7 +230,10 @@ class MainActivity : ComponentActivity() {
                                 viewModel = viewModel,
                                 openAboutFromNotification = openAboutFromNotification,
                                 openPromotionsFromNotification = openPromotionsFromNotification,
-                                productCodeFromNotification = productCodeFromNotification
+                                productCodeFromNotification = productCodeFromNotification,
+                                sharedOrderPdfUri = sharedOrderPdfUri,
+                                sharedOrderPdfRequestKey = sharedOrderPdfRequestKey,
+                                onSharedOrderPdfConsumed = { sharedOrderPdfUri = null }
                                 )
                             }
 
@@ -264,6 +272,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        captureSharedOrderPdf(intent)
         if (shouldOpenAbout(intent)) {
             openAboutFromNotification = true
         }
@@ -275,6 +284,36 @@ class MainActivity : ComponentActivity() {
             viewModel.updateSearchQuery(code)
             productNotificationNavigationKey += 1L
         }
+    }
+
+    private fun captureSharedOrderPdf(intent: Intent?) {
+        val uri = extractSharedOrderPdfUri(intent) ?: return
+        sharedOrderPdfUri = uri.toString()
+        sharedOrderPdfRequestKey += 1L
+    }
+
+    @Suppress("DEPRECATION")
+    private fun extractSharedOrderPdfUri(intent: Intent?): Uri? {
+        if (intent == null) return null
+
+        val uri = when (intent.action) {
+            Intent.ACTION_SEND -> {
+                val stream = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                } else {
+                    intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+                }
+                stream ?: intent.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.uri
+            }
+            Intent.ACTION_VIEW -> intent.data
+            else -> null
+        } ?: return null
+
+        val mimeType = intent.type ?: runCatching { contentResolver.getType(uri) }.getOrNull()
+        val looksLikePdf = mimeType.equals("application/pdf", ignoreCase = true) ||
+            uri.toString().substringBefore('?').endsWith(".pdf", ignoreCase = true)
+
+        return uri.takeIf { looksLikePdf }
     }
 
     private fun shouldOpenAbout(intent: Intent?): Boolean {

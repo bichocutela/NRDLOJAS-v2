@@ -16,6 +16,9 @@ internal fun AcpProductsExperience(
     historyExportBusy: Boolean,
     historyExportMessage: String?,
     onExportHistory: (String, Int) -> Unit,
+    externalPdfUri: String? = null,
+    externalPdfRequestKey: Long = 0L,
+    onExternalPdfConsumed: () -> Unit = {},
     onSessionExpired: () -> Unit
 ) {
     AcpProductsPanel(
@@ -25,6 +28,9 @@ internal fun AcpProductsExperience(
         historyExportBusy = historyExportBusy,
         historyExportMessage = historyExportMessage,
         onExportHistory = onExportHistory,
+        externalPdfUri = externalPdfUri,
+        externalPdfRequestKey = externalPdfRequestKey,
+        onExternalPdfConsumed = onExternalPdfConsumed,
         onSessionExpired = onSessionExpired
     )
 }
