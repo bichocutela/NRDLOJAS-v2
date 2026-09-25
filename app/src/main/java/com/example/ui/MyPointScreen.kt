@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -40,6 +41,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -67,6 +69,9 @@ import com.example.data.NossaGenteHoursResult
 import com.example.data.NossaGentePointResult
 import com.example.data.PointEntry
 import com.example.data.PointSummary
+import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.glassSoftShadow
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -74,6 +79,9 @@ import kotlin.math.roundToInt
 @Composable
 fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () -> Unit) {
     val configuration = LocalConfiguration.current
+    val expressiveStyle = LocalExpressiveStyle.current
+    val glassStyle = LocalGlassSoftStyle.current
+    val isExpressive = expressiveStyle.enabled
     val contentPadding = if (configuration.screenWidthDp < 360) 10.dp else 16.dp
     val purchasesMaxHeight = (configuration.screenHeightDp * 0.42f).coerceIn(160f, 420f).dp
     var point by remember { mutableStateOf<PointSummary?>(null) }
@@ -122,12 +130,26 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
         load()
     }
 
-    Scaffold(topBar = {
+    Scaffold(
+        containerColor = if (glassStyle.enabled) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
+        topBar = {
         TopAppBar(
-            title = { Text("Meu Perfil") },
+            title = {
+                Text(
+                    "Meu Perfil",
+                    fontWeight = if (isExpressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal
+                )
+            },
             navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, "Voltar") } },
             actions = {
-                IconButton(onClick = ::load, enabled = !loading) {
+                IconButton(
+                    onClick = ::load,
+                    enabled = !loading,
+                    modifier = if (isExpressive) Modifier.background(
+                        MaterialTheme.colorScheme.primaryContainer,
+                        RoundedCornerShape(16.dp)
+                    ) else Modifier
+                ) {
                     if (loading) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     } else {
@@ -144,15 +166,29 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                         } else {
                             com.example.util.HoursNotificationWorker.cancel(context)
                         }
-                    }
+                    },
+                    modifier = if (isExpressive) Modifier.background(
+                        MaterialTheme.colorScheme.secondaryContainer,
+                        RoundedCornerShape(16.dp)
+                    ) else Modifier
                 ) {
                     Icon(
                         if (hoursNotifications) Icons.Default.Notifications else Icons.Default.NotificationsOff,
                         if (hoursNotifications) "Desativar notificações do banco de horas" else "Ativar notificações do banco de horas"
                     )
                 }
-                TextButton(onClick = onSignOut) { Text("Sair") }
-            }
+                TextButton(
+                    onClick = onSignOut,
+                    shape = if (isExpressive) RoundedCornerShape(18.dp) else MaterialTheme.shapes.small
+                ) { Text("Sair") }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = when {
+                    glassStyle.enabled -> MaterialTheme.colorScheme.surface.copy(alpha = glassStyle.surfaceAlpha)
+                    isExpressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                    else -> MaterialTheme.colorScheme.surface
+                }
+            )
         )
     }) { padding ->
         if (loading && hours == null && point == null) {
@@ -161,9 +197,23 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
             LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(contentPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item {
                     hours?.let { summary ->
-                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
-                            Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                                Text("Banco de horas", style = MaterialTheme.typography.titleLarge)
+                        val hoursShape = if (isExpressive) RoundedCornerShape(30.dp) else MaterialTheme.shapes.medium
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .glassSoftShadow(hoursShape, if (isExpressive) 4.dp else 0.dp),
+                            shape = hoursShape,
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface
+                                else MaterialTheme.colorScheme.secondaryContainer
+                            )
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(if (isExpressive) 18.dp else 16.dp)) {
+                                Text(
+                                    "Banco de horas",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = if (isExpressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal
+                                )
                                 Spacer(Modifier.height(8.dp)); Text("Saldo atual: ${summary.total}", style = MaterialTheme.typography.titleMedium)
                                 Spacer(Modifier.height(10.dp)); Text("Saldos a vencer", style = MaterialTheme.typography.titleMedium)
                                 summary.months.forEach { month ->
@@ -179,17 +229,46 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                         !summary.period.isNullOrBlank() || !summary.status.isNullOrBlank() ||
                             !summary.worked.isNullOrBlank() || !summary.balance.isNullOrBlank() || summary.records.isNotEmpty()
                     }?.let { summary ->
-                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-                            Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                                Text(summary.period ?: "Período atual", style = MaterialTheme.typography.titleLarge)
+                        val pointShape = if (isExpressive) RoundedCornerShape(28.dp) else MaterialTheme.shapes.medium
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .glassSoftShadow(pointShape, if (isExpressive) 3.dp else 0.dp),
+                            shape = pointShape,
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface
+                                else MaterialTheme.colorScheme.primaryContainer
+                            )
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(if (isExpressive) 18.dp else 16.dp)) {
+                                Text(
+                                    summary.period ?: "Período atual",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = if (isExpressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal
+                                )
                                 summary.status?.let { Text("Status: $it") }; summary.worked?.let { Text("Horas trabalhadas: $it") }; summary.balance?.let { Text("Saldo: $it") }
                             }
                         }
                     }
                     benefit?.let { summary ->
-                        Card(onClick = { showBenefitDetails = true }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
-                            Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                                Text("Convênio", style = MaterialTheme.typography.titleLarge)
+                        val benefitShape = if (isExpressive) RoundedCornerShape(30.dp) else MaterialTheme.shapes.medium
+                        Card(
+                            onClick = { showBenefitDetails = true },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .glassSoftShadow(benefitShape, if (isExpressive) 4.dp else 0.dp),
+                            shape = benefitShape,
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface
+                                else MaterialTheme.colorScheme.tertiaryContainer
+                            )
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(if (isExpressive) 18.dp else 16.dp)) {
+                                Text(
+                                    "Convênio",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = if (isExpressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal
+                                )
                                 summary.period?.let { Text("Período: $it") }
                                 summary.updatedAt?.let { Text("Atualizado em: $it", style = MaterialTheme.typography.bodySmall) }
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -213,18 +292,28 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
             onDismissRequest = { showBenefitDetails = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
+            val dialogShape = if (isExpressive) RoundedCornerShape(32.dp) else MaterialTheme.shapes.large
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = contentPadding)
-                    .heightIn(max = (configuration.screenHeightDp * 0.88f).dp),
-                shape = MaterialTheme.shapes.large
+                    .heightIn(max = (configuration.screenHeightDp * 0.88f).dp)
+                    .glassSoftShadow(dialogShape, if (isExpressive) 6.dp else 0.dp),
+                shape = dialogShape,
+                colors = CardDefaults.cardColors(
+                    containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface
+                    else MaterialTheme.colorScheme.surfaceContainerLow
+                )
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Convênio", style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        "Convênio",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = if (isExpressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal
+                    )
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Ative as notificações", style = MaterialTheme.typography.titleMedium)
@@ -356,8 +445,33 @@ private fun formatBenefitDate(date: String?, separateTime: String? = null): Stri
 
 @Composable
 private fun PointEntryCard(entry: PointEntry) {
-    Card { Column(Modifier.fillMaxWidth().padding(14.dp)) {
-        Row { Icon(Icons.Default.AccessTime, contentDescription = null); Text(entry.date ?: "Dia não informado", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp)) }
+    val expressive = LocalExpressiveStyle.current.enabled
+    val glassStyle = LocalGlassSoftStyle.current
+    val cardShape = if (expressive) RoundedCornerShape(24.dp) else MaterialTheme.shapes.medium
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(cardShape, if (expressive) 3.dp else 0.dp),
+        shape = cardShape,
+        colors = CardDefaults.cardColors(
+            containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface
+            else if (expressive) MaterialTheme.colorScheme.surfaceContainerLow
+            else MaterialTheme.colorScheme.surface
+        )
+    ) { Column(Modifier.fillMaxWidth().padding(if (expressive) 16.dp else 14.dp)) {
+        Row {
+            Icon(
+                Icons.Default.AccessTime,
+                contentDescription = null,
+                tint = if (expressive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                entry.date ?: "Dia não informado",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = if (expressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+        }
         Spacer(Modifier.height(5.dp)); Text("Entrada: ${entry.entry ?: "—"}   Saída: ${entry.exit ?: "—"}")
         entry.interval?.let { Text("Intervalo: $it") }; entry.status?.let { Text("Status: $it", color = MaterialTheme.colorScheme.onSurfaceVariant) }
     } }
