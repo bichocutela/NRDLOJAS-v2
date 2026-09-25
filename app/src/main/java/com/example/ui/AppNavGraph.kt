@@ -552,6 +552,9 @@ fun LoginDrawerContent(
     val context = LocalContext.current
     com.example.util.UpdateAvailabilityState.initialize(context)
     val drawerUpdateAvailable by com.example.util.UpdateAvailabilityState.available.collectAsState()
+    val expressive = LocalExpressiveStyle.current.enabled
+    val glassStyle = LocalGlassSoftStyle.current
+    val screenProfile = rememberNrdScreenProfile()
 
     LaunchedEffect(isLoggedIn, userRole) {
         com.example.util.UpdateAvailabilityState.clearIfCurrent(context)
@@ -561,23 +564,115 @@ fun LoginDrawerContent(
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).verticalScroll(rememberScrollState()),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = if (expressive && screenProfile.compact) 12.dp else 16.dp,
+                vertical = if (expressive && screenProfile.compact) 8.dp else 10.dp
+            )
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        if (expressive) {
+            val headerShape = RoundedCornerShape(if (screenProfile.compact) 22.dp else 28.dp)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .expressiveShadow(headerShape, 7.dp),
+                shape = headerShape,
+                color = if (glassStyle.enabled) {
+                    MaterialTheme.colorScheme.surface
+                } else {
+                    MaterialTheme.colorScheme.primaryContainer
+                },
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                border = if (glassStyle.enabled) {
+                    BorderStroke(1.dp, glassStyle.borderColor)
+                } else {
+                    null
+                }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = if (screenProfile.compact) 14.dp else 16.dp,
+                            vertical = if (screenProfile.compact) 12.dp else 14.dp
+                        ),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(if (screenProfile.compact) 14.dp else 16.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ) {
+                        Icon(
+                            Icons.Default.Menu,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .padding(if (screenProfile.compact) 8.dp else 9.dp)
+                                .size(if (screenProfile.compact) 20.dp else 22.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(if (screenProfile.compact) 10.dp else 12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "NRD V2",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black
+                        )
+                        Text(
+                            "Navegação",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(if (screenProfile.compact) 10.dp else 12.dp))
+        }
+
         if (showMyProfile) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Meu Perfil", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = onGoToMyPoint, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Meu Perfil") }
-            Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(10.dp))
+            if (expressive) {
+                DrawerSectionLabel("Meu Perfil", Icons.Default.Person)
+                DrawerActionButton(
+                    label = "Meu Perfil",
+                    icon = Icons.Default.Person,
+                    onClick = onGoToMyPoint,
+                    emphasized = true
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+            } else {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Meu Perfil", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(onClick = onGoToMyPoint, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Meu Perfil") }
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(10.dp))
+            }
         }
         if (!isLoggedIn) {
             Spacer(modifier = Modifier.height(8.dp))
             TextButton(
                 onClick = { loginExpanded = !loginExpanded },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (expressive) Modifier.expressiveShadow(
+                            RoundedCornerShape(if (screenProfile.compact) 18.dp else 22.dp),
+                            4.dp
+                        ) else Modifier
+                    ),
+                shape = if (expressive) {
+                    RoundedCornerShape(if (screenProfile.compact) 18.dp else 22.dp)
+                } else {
+                    MaterialTheme.shapes.small
+                },
+                colors = ButtonDefaults.textButtonColors(
+                    containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow else Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.primary
+                )
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -594,9 +689,31 @@ fun LoginDrawerContent(
             }
             if (loginExpanded) {
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text("Usuário") }, enabled = !isLoading, singleLine = true, modifier = Modifier.fillMaxWidth())
+                val loginFieldShape = if (expressive) {
+                    RoundedCornerShape(if (screenProfile.compact) 18.dp else 22.dp)
+                } else {
+                    MaterialTheme.shapes.extraSmall
+                }
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text("Usuário") },
+                    enabled = !isLoading,
+                    singleLine = true,
+                    shape = loginFieldShape,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Senha") }, visualTransformation = PasswordVisualTransformation(), enabled = !isLoading, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Senha") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    enabled = !isLoading,
+                    singleLine = true,
+                    shape = loginFieldShape,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
                 onClick = {
@@ -648,7 +765,20 @@ fun LoginDrawerContent(
                     }
                 },
                 enabled = !isLoading,
-                modifier = Modifier.fillMaxWidth().height(48.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(if (expressive && screenProfile.compact) 46.dp else 48.dp)
+                    .then(
+                        if (expressive) Modifier.expressiveShadow(
+                            RoundedCornerShape(if (screenProfile.compact) 18.dp else 22.dp),
+                            5.dp
+                        ) else Modifier
+                    ),
+                shape = if (expressive) {
+                    RoundedCornerShape(if (screenProfile.compact) 18.dp else 22.dp)
+                } else {
+                    MaterialTheme.shapes.small
+                }
                 ) { Text(if (isLoading) "Autenticando..." else "Entrar") }
                 if (loginStatus != null) { Spacer(modifier = Modifier.height(8.dp)); Text(loginStatus!!, color = MaterialTheme.colorScheme.error) }
             }
@@ -657,10 +787,29 @@ fun LoginDrawerContent(
             Text(if (userRole == "mestre" || userRole == "admin") "Administrador" else "Usuário", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(12.dp))
             if (userRole == "mestre" || userRole == "admin") {
-                Button(onClick = onGoToAdmin, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text(if (userRole == "mestre") "Acessar Painel Mestre" else "Acessar Painel Administrativo") }
+                if (expressive) {
+                    DrawerActionButton(
+                        label = if (userRole == "mestre") "Acessar Painel Mestre" else "Acessar Painel Administrativo",
+                        icon = Icons.Default.Settings,
+                        onClick = onGoToAdmin,
+                        emphasized = true
+                    )
+                } else {
+                    Button(onClick = onGoToAdmin, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                        Text(if (userRole == "mestre") "Acessar Painel Mestre" else "Acessar Painel Administrativo")
+                    }
+                }
                 Spacer(modifier = Modifier.height(8.dp))
             }
-            OutlinedButton(onClick = { loginStatus = null; onLogout() }, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Sair") }
+            OutlinedButton(
+                onClick = { loginStatus = null; onLogout() },
+                modifier = Modifier.fillMaxWidth().height(if (expressive && screenProfile.compact) 44.dp else 48.dp),
+                shape = if (expressive) {
+                    RoundedCornerShape(if (screenProfile.compact) 18.dp else 22.dp)
+                } else {
+                    MaterialTheme.shapes.small
+                }
+            ) { Text("Sair") }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -675,33 +824,77 @@ fun LoginDrawerContent(
             supported && com.example.data.DynamicPageCodec.isVisible(tab)
         }
         if (supportedDynamicTabs.isNotEmpty()) {
-            Text("Páginas e Cursos", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.Start))
-            Spacer(modifier = Modifier.height(4.dp))
-            supportedDynamicTabs.sortedWith(compareBy<com.example.data.DynamicTab> { it.displayOrder }.thenBy { it.id }).forEach { tab ->
-                TextButton(onClick = { onGoToDynamicTab(tab.id) }, modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp)) { Text(tab.title) }
+            if (expressive) {
+                DrawerSectionLabel("Páginas e Cursos", Icons.Default.School)
+            } else {
+                Text("Páginas e Cursos", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.Start))
+                Spacer(modifier = Modifier.height(4.dp))
             }
-            Spacer(modifier = Modifier.height(8.dp)); HorizontalDivider(); Spacer(modifier = Modifier.height(8.dp))
+            supportedDynamicTabs.sortedWith(compareBy<com.example.data.DynamicTab> { it.displayOrder }.thenBy { it.id }).forEach { tab ->
+                DrawerDynamicLink(label = tab.title, onClick = { onGoToDynamicTab(tab.id) })
+                Spacer(modifier = Modifier.height(if (expressive) 5.dp else 0.dp))
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            if (!expressive) HorizontalDivider()
+            Spacer(modifier = Modifier.height(8.dp))
         }
 
-        Text("Categorias", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.Start))
-        Spacer(modifier = Modifier.height(6.dp))
+        if (expressive) {
+            DrawerSectionLabel("Categorias", Icons.Default.Category)
+        } else {
+            Text("Categorias", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.Start))
+            Spacer(modifier = Modifier.height(6.dp))
+        }
         activeCategoryNames.forEach { categoryName ->
             CategoryItem(categoryName, viewModel, expandedCategory == categoryName) { expandedCategory = if (expandedCategory == categoryName) null else categoryName }
         }
 
-        Spacer(modifier = Modifier.height(12.dp)); HorizontalDivider(); Spacer(modifier = Modifier.height(10.dp))
-        Button(onClick = onGoToAcp, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Consultar Preços") }
+        Spacer(modifier = Modifier.height(12.dp))
+        if (expressive) {
+            DrawerSectionLabel("Acessos", Icons.Default.Menu)
+        } else {
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+        DrawerActionButton(
+            label = "Consultar Preços",
+            icon = Icons.Default.Search,
+            onClick = onGoToAcp,
+            emphasized = expressive
+        )
+        Spacer(modifier = Modifier.height(if (expressive) 6.dp else 8.dp))
+        DrawerActionButton(
+            label = "Promoções",
+            icon = Icons.Default.LocalOffer,
+            onClick = onGoToPromotions
+        )
+        Spacer(modifier = Modifier.height(if (expressive) 6.dp else 8.dp))
+        DrawerActionButton(
+            label = "Configurações",
+            icon = Icons.Default.Settings,
+            onClick = onGoToSettings
+        )
+        Spacer(modifier = Modifier.height(if (expressive) 6.dp else 8.dp))
+        DrawerActionButton(
+            label = "Sobre",
+            icon = Icons.Default.Info,
+            onClick = onGoToAbout
+        )
         Spacer(modifier = Modifier.height(8.dp))
-        Button(onClick = onGoToPromotions, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Promoções") }
-        Spacer(modifier = Modifier.height(8.dp))
-        Button(onClick = onGoToSettings, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Configurações") }
-        Spacer(modifier = Modifier.height(8.dp))
-        Button(onClick = onGoToAbout, modifier = Modifier.fillMaxWidth().height(46.dp)) { Text("Sobre") }
-        Spacer(modifier = Modifier.height(8.dp))
+        val versionShape = if (expressive) {
+            RoundedCornerShape(if (screenProfile.compact) 18.dp else 22.dp)
+        } else {
+            RoundedCornerShape(14.dp)
+        }
         Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (expressive) Modifier.expressiveShadow(versionShape, 4.dp)
+                    else Modifier
+                ),
+            shape = versionShape,
+            color = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceVariant,
             contentColor = MaterialTheme.colorScheme.onSurfaceVariant
         ) {
             Column(
@@ -718,7 +911,8 @@ fun LoginDrawerContent(
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = onGoToAbout,
-                        modifier = Modifier.fillMaxWidth().height(40.dp)
+                        modifier = Modifier.fillMaxWidth().height(if (expressive) 42.dp else 40.dp),
+                        shape = if (expressive) RoundedCornerShape(16.dp) else MaterialTheme.shapes.small
                     ) {
                         Text("Existe Atualização", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                     }
