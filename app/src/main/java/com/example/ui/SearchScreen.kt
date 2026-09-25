@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Eco
@@ -304,6 +305,7 @@ fun SearchScreen(
     notificationProductCode: String? = null,
     onOpenDrawer: () -> Unit = {},
     canQuickEditBanner: Boolean = false,
+    canQuickAddProduct: Boolean = false,
     onQuickEditBanner: (String) -> Unit = {}
 ) {
     val bannerImageUri by viewModel.userPreferences.bannerImageUri.collectAsState(initial = null)
@@ -364,6 +366,7 @@ fun SearchScreen(
     var selectedMostUsedProduct by remember { mutableStateOf<Product?>(null) }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     var showNotificationsSheet by remember { mutableStateOf(false) }
+    var showQuickAddProduct by remember { mutableStateOf(false) }
     var selectedNotificationProduct by remember { mutableStateOf<Product?>(null) }
     var handledNotificationProductCode by remember { mutableStateOf<String?>(null) }
 
@@ -600,6 +603,15 @@ fun SearchScreen(
                             }
 
                         } else {
+                            if (canQuickAddProduct) {
+                                IconButton(onClick = { showQuickAddProduct = true }) {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = "Adicionar produto",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
                             IconButton(onClick = {
                                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -927,6 +939,17 @@ fun SearchScreen(
                     }
                 }
             }
+        }
+
+        if (showQuickAddProduct && canQuickAddProduct) {
+            QuickAddProductDialog(
+                viewModel = viewModel,
+                categories = activeCategoryNames,
+                onDismiss = { showQuickAddProduct = false },
+                onSaved = {
+                    Toast.makeText(context, "Produto adicionado com sucesso!", Toast.LENGTH_SHORT).show()
+                }
+            )
         }
 
         if (showProductSearchSheet) {
