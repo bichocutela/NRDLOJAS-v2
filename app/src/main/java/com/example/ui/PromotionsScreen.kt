@@ -333,7 +333,7 @@ fun PromotionsLoginScreen(
                 enabled = !isLoading && cpf.length == 11 && password.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(if (expressive) 54.dp else 48.dp),
+                    .heightIn(min = if (expressive) 54.dp else 48.dp),
                 shape = if (expressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.small
             ) {
                 if (isLoading) {
