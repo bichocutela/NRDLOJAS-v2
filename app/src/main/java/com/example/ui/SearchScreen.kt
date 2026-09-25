@@ -1101,6 +1101,8 @@ fun SectionHeader(
     onAction: (() -> Unit)? = null
 ) {
     val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    val compactExpressive = expressive && profile.compact
     val sectionIcon = when {
         title.contains("Mais Utilizados", ignoreCase = true) -> Icons.Default.BarChart
         title.contains("Últimos", ignoreCase = true) -> Icons.Default.NewReleases
@@ -1111,7 +1113,10 @@ fun SectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = if (expressive) 7.dp else 2.dp),
+            .padding(
+                horizontal = if (compactExpressive) 12.dp else 16.dp,
+                vertical = if (compactExpressive) 4.dp else if (expressive) 7.dp else 2.dp
+            ),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1122,8 +1127,8 @@ fun SectionHeader(
             if (expressive) {
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .size(if (compactExpressive) 30.dp else 34.dp)
+                        .clip(RoundedCornerShape(if (compactExpressive) 10.dp else 12.dp))
                         .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1131,15 +1136,15 @@ fun SectionHeader(
                         sectionIcon,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(if (compactExpressive) 18.dp else 20.dp)
                     )
                 }
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(if (compactExpressive) 7.dp else 10.dp))
             }
             StylizedText(
                 text = title,
                 baseStyle = if (expressive) {
-                    MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp)
+                    MaterialTheme.typography.titleLarge.copy(fontSize = if (compactExpressive) 17.sp else 19.sp)
                 } else {
                     MaterialTheme.typography.labelMedium
                 },
@@ -1152,7 +1157,10 @@ fun SectionHeader(
             TextButton(
                 onClick = onAction,
                 shape = RoundedCornerShape(18.dp),
-                contentPadding = PaddingValues(horizontal = if (expressive) 8.dp else 12.dp, vertical = 6.dp),
+                contentPadding = PaddingValues(
+                    horizontal = if (compactExpressive) 5.dp else if (expressive) 8.dp else 12.dp,
+                    vertical = if (compactExpressive) 4.dp else 6.dp
+                ),
                 colors = ButtonDefaults.textButtonColors(
                     containerColor = Color.Transparent,
                     contentColor = MaterialTheme.colorScheme.primary
@@ -1172,7 +1180,7 @@ fun SectionHeader(
                     Icon(
                         Icons.Default.ChevronRight,
                         contentDescription = null,
-                        modifier = Modifier.size(17.dp)
+                        modifier = Modifier.size(if (compactExpressive) 15.dp else 17.dp)
                     )
                 }
             }
@@ -1226,6 +1234,8 @@ fun CategorySection(
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
+    val profile = rememberNrdScreenProfile()
+    val compactExpressive = expressive && profile.compact
     val categoryColors = listOf(
         MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer,
         MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer,
@@ -1236,8 +1246,8 @@ fun CategorySection(
     )
 
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = if (compactExpressive) 12.dp else 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (compactExpressive) 6.dp else 8.dp),
         modifier = Modifier.padding(bottom = 2.dp)
     ) {
         itemsIndexed(categories) { index, category ->
@@ -1255,7 +1265,11 @@ fun CategorySection(
                 glass.enabled -> glass.border
                 else -> Color.Transparent
             }
-            val categoryShape = if (expressive) RoundedCornerShape(22.dp) else RoundedCornerShape(16.dp)
+            val categoryShape = if (expressive) {
+                RoundedCornerShape(if (compactExpressive) 18.dp else 22.dp)
+            } else {
+                RoundedCornerShape(16.dp)
+            }
 
             Box(
 
@@ -1267,8 +1281,16 @@ fun CategorySection(
                     .border(1.dp, categoryGlassBorder, categoryShape)
                     .clickable { onCategoryClick(category) }
                     .padding(
-                        horizontal = if (expressive) 18.dp else 16.dp,
-                        vertical = if (expressive) 11.dp else 10.dp
+                        horizontal = when {
+                            compactExpressive -> 13.dp
+                            expressive -> 18.dp
+                            else -> 16.dp
+                        },
+                        vertical = when {
+                            compactExpressive -> 8.dp
+                            expressive -> 11.dp
+                            else -> 10.dp
+                        }
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -1278,9 +1300,9 @@ fun CategorySection(
                             painter = painterResource(id = categoryExpressiveIconRes(category)),
                             contentDescription = null,
                             tint = if (glass.enabled) strongColors.first else strongColors.second,
-                            modifier = Modifier.size(19.dp)
+                            modifier = Modifier.size(if (compactExpressive) 16.dp else 19.dp)
                         )
-                        Spacer(Modifier.width(7.dp))
+                        Spacer(Modifier.width(if (compactExpressive) 5.dp else 7.dp))
                     }
                     StylizedText(
                         text = category,
