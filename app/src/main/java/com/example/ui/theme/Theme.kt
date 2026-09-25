@@ -620,10 +620,92 @@ fun NrdAppBackground(
                 expressiveGlass.accentName,
                 expressiveGlass.isDark
             )
+            val transition = rememberInfiniteTransition(label = "expressive-liquid-background")
+            val drift by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 9800, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "expressive-background-drift"
+            )
             Box(
                 modifier = modifier
                     .fillMaxSize()
-                    .background(Brush.linearGradient(colors)),
+                    .background(
+                        Brush.linearGradient(
+                            colors = colors,
+                            start = Offset(0f, 0f),
+                            end = Offset(1450f, 2200f)
+                        )
+                    )
+                    .drawWithCache {
+                        val maxDimension = maxOf(size.width, size.height).coerceAtLeast(1f)
+                        val lightScale = if (expressiveGlass.isDark) 0.52f else 1f
+                        val haloPrimary = Brush.radialGradient(
+                            colors = listOf(
+                                expressiveGlass.accent.copy(alpha = 0.30f * lightScale),
+                                expressiveGlass.accent.copy(alpha = 0.10f * lightScale),
+                                Color.Transparent
+                            ),
+                            center = Offset(
+                                size.width * (0.18f + 0.18f * drift),
+                                size.height * (0.13f + 0.05f * drift)
+                            ),
+                            radius = maxDimension * 0.54f
+                        )
+                        val haloSecondary = Brush.radialGradient(
+                            colors = listOf(
+                                expressiveGlass.secondaryAccent.copy(alpha = 0.24f * lightScale),
+                                expressiveGlass.secondaryAccent.copy(alpha = 0.08f * lightScale),
+                                Color.Transparent
+                            ),
+                            center = Offset(
+                                size.width * (0.86f - 0.13f * drift),
+                                size.height * (0.34f + 0.08f * drift)
+                            ),
+                            radius = maxDimension * 0.50f
+                        )
+                        val haloTertiary = Brush.radialGradient(
+                            colors = listOf(
+                                expressiveGlass.tertiaryAccent.copy(alpha = 0.22f * lightScale),
+                                Color.Transparent
+                            ),
+                            center = Offset(
+                                size.width * (0.26f + 0.14f * drift),
+                                size.height * (0.77f - 0.06f * drift)
+                            ),
+                            radius = maxDimension * 0.47f
+                        )
+                        val pearlLight = Brush.radialGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = if (expressiveGlass.isDark) 0.08f else 0.42f),
+                                Color.White.copy(alpha = if (expressiveGlass.isDark) 0.03f else 0.12f),
+                                Color.Transparent
+                            ),
+                            center = Offset(
+                                size.width * (0.54f + 0.09f * drift),
+                                size.height * (0.55f - 0.07f * drift)
+                            ),
+                            radius = maxDimension * 0.39f
+                        )
+                        val lowerGlow = Brush.radialGradient(
+                            colors = listOf(
+                                expressiveGlass.accent.copy(alpha = if (expressiveGlass.isDark) 0.13f else 0.20f),
+                                Color.Transparent
+                            ),
+                            center = Offset(size.width * 0.76f, size.height * 0.96f),
+                            radius = maxDimension * 0.45f
+                        )
+                        onDrawBehind {
+                            drawRect(brush = haloPrimary)
+                            drawRect(brush = haloSecondary)
+                            drawRect(brush = haloTertiary)
+                            drawRect(brush = pearlLight)
+                            drawRect(brush = lowerGlow)
+                        }
+                    },
                 content = { content() }
             )
         }
