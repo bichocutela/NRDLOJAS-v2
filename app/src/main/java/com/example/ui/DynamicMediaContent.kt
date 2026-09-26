@@ -494,7 +494,7 @@ private fun DynamicPdfRenderer(file: File) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFE3E3E3)),
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest),
         contentPadding = PaddingValues(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {

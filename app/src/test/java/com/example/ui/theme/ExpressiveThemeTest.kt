@@ -104,6 +104,33 @@ class ExpressiveThemeTest {
     }
 
     @Test
+    fun `expressive glass dark mode keeps readable foregrounds on every accent`() {
+        ExpressiveGlassAccentNames.forEach { accent ->
+            val style = resolveExpressiveGlassStyle(
+                enabled = true,
+                isDark = true,
+                accentName = accent
+            )
+            val scheme = expressiveGlassColorScheme(style, darkTheme = true)
+
+            expressiveGlassBackgroundColors(accent, true).forEach { background ->
+                assertTrue(
+                    "Background escuro ilegível para $accent",
+                    contrastRatio(background, scheme.onBackground) >= 4.5f
+                )
+            }
+            assertTrue(
+                "Ação primária ilegível para $accent",
+                contrastRatio(scheme.primary, scheme.onPrimary) >= 4.5f
+            )
+            assertTrue(
+                "Superfície ilegível para $accent",
+                contrastRatio(style.surfaceBase, scheme.onSurface) >= 4.5f
+            )
+        }
+    }
+
+    @Test
     fun `expressive glass owns its visual engine independently from glass soft`() {
         val expressiveGlass = resolveExpressiveGlassStyle(enabled = true, isDark = false)
         val glassSoft = resolveGlassSoftStyle(

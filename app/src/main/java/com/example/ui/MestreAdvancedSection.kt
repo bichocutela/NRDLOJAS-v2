@@ -29,13 +29,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import com.example.data.CatalogSnapshot
 import com.example.data.CategoryCount
 import com.example.data.DeviceInstallationSummary
 import com.example.data.MaintenanceSummary
 import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.LocalNrdDarkMode
 import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.expressiveShadow
 import java.text.SimpleDateFormat
@@ -447,7 +447,7 @@ private fun advancedCatalogHistoryReason(reason: String): String = when (reason)
 }
 
 @Composable
-private fun advancedSuccessColor(): Color = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
+private fun advancedSuccessColor(): Color = if (LocalNrdDarkMode.current) {
     Color(0xFF81C784)
 } else {
     Color(0xFF2E7D32)

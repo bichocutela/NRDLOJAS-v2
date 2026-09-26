@@ -96,6 +96,7 @@ import com.example.ui.theme.getDynamicThemeColor
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.LocalExpressiveGlassStyle
+import com.example.ui.theme.LocalNrdDarkMode
 import com.example.ui.theme.ExpressiveGlassStyle
 import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.expressiveLiquidGlass
@@ -116,7 +117,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.graphicsLayer
@@ -259,7 +259,7 @@ private fun homeDynamicColors(
         return getDynamicThemeColor(index, appTheme, defaultColor, defaultOnColor)
     }
 
-    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val isDark = LocalNrdDarkMode.current
     val palette = if (isDark) {
         listOf(
             Color(0xFF64151A) to Color(0xFFFFDADB),
@@ -324,7 +324,7 @@ private fun expressiveGlassCardSecondary(style: ExpressiveGlassStyle, index: Int
 
 @Composable
 private fun homeStrongColors(index: Int): Pair<Color, Color> {
-    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val isDark = LocalNrdDarkMode.current
     val palette = if (isDark) {
         listOf(
             Color(0xFFFF7078) to Color(0xFF2B070A),

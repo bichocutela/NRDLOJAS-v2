@@ -57,6 +57,7 @@ import com.example.data.ProductImportParser
 import com.example.data.NotificationSettings
 import com.example.data.ProductImportResult
 import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.LocalNrdDarkMode
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.expressiveShadow
@@ -2202,7 +2203,7 @@ private fun BackgroundStatusBadge(background: ThemeBackground) {
     val today = ThemeBackground.todayIsoDate()
     val start = ThemeBackground.normalizeDate(background.startDate)
     val end = ThemeBackground.normalizeDate(background.endDate)
-    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val isDark = LocalNrdDarkMode.current
     val (label, colors) = when {
         start == null -> "Sem data" to (MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer)
         !background.isActive -> "Desativado" to (MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer)

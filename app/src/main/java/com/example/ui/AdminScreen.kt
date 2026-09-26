@@ -613,11 +613,7 @@ fun AdminProductList(
             modifier = Modifier.padding(vertical = 10.dp)
         )
     } else {
-        val selectionContentColor = if (glassStyle.enabled) {
-            MaterialTheme.colorScheme.onPrimaryContainer
-        } else {
-            Color.White
-        }
+        val selectionContentColor = MaterialTheme.colorScheme.onPrimaryContainer
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -676,11 +672,11 @@ fun AdminProductList(
                             enabled = !isBulkWorking,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.error,
-                                contentColor = Color.White
+                                contentColor = MaterialTheme.colorScheme.onError
                             ),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Excluir", maxLines = 1, color = Color.White)
+                            Text("Excluir", maxLines = 1, color = MaterialTheme.colorScheme.onError)
                         }
                     }
                 }
