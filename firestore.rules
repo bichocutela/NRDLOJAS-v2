@@ -41,6 +41,12 @@ service cloud.firestore {
       allow write: if isManager();
     }
 
+    // Histórico de novidades publicado pelo Painel Mestre.
+    match /app_novelties/{noveltyId} {
+      allow read: if true;
+      allow create, update, delete: if isManager();
+    }
+
     // Abas dinâmicas fazem parte da navegação pública do aplicativo.
     match /dynamic_tabs/{tabId} {
       allow read: if true;
