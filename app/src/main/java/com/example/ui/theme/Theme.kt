@@ -1,6 +1,18 @@
 package com.example.ui.theme
 
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.launch
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -432,6 +444,9 @@ fun Modifier.expressiveLiquidGlass(
         val refraction = secondaryTint
         val highlightAlpha = (0.54f + 0.30f * fluidity) * safeIntensity
         val borderWidthDp = 1.85f + 1.85f * fluidity
+        val ripple = remember { Animatable(1f) }
+        var rippleCenter by remember { mutableStateOf(Offset.Zero) }
+        val rippleScope = rememberCoroutineScope()
 
         this
             .shadow(
@@ -442,7 +457,28 @@ fun Modifier.expressiveLiquidGlass(
                 spotColor = tint.copy(alpha = (style.shadowAlpha + 0.10f).coerceAtMost(0.34f))
             )
             .clip(shape)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(
+                        requireUnconsumed = false,
+                        pass = PointerEventPass.Initial
+                    )
+                    val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                    if (up != null) {
+                        rippleCenter = up.position
+                        rippleScope.launch {
+                            ripple.snapTo(0f)
+                            ripple.animateTo(
+                                targetValue = 1f,
+                                animationSpec = tween(durationMillis = 900, easing = LinearEasing)
+                            )
+                        }
+                    }
+                }
+            }
             .drawWithCache {
+                val rippleProgress = ripple.value
+                val rippleOrigin = rippleCenter
                 val outline = shape.createOutline(size, layoutDirection, this)
                 val outlinePath = Path().apply {
                     when (outline) {
