@@ -985,8 +985,7 @@ fun SearchScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(expressiveGlassSearchButtonHeight)
-                            .background(expressiveGlassActionBrush),
+                            .height(expressiveGlassSearchButtonHeight),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1666,9 +1665,10 @@ fun CategorySection(
                                     0 -> expressiveGlass.secondaryAccent
                                     else -> expressiveGlass.tertiaryAccent
                                 },
-                                intensity = 0.90f,
-                                elevation = 6.dp,
-                                waves = false,
+                                intensity = 1.02f,
+                                elevation = 7.dp,
+                                animated = true,
+                                waves = true,
                                 bubbleSeed = index
                             )
                         } else {
