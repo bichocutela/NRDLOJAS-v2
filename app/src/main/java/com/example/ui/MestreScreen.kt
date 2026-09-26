@@ -357,7 +357,11 @@ fun MestreScreen(
             draftAppearanceSettings.theme != appearanceSettings.theme ||
             draftAppearanceSettings.appearanceMode != appearanceSettings.appearanceMode ||
             draftAppearanceSettings.bubbleSpeed != appearanceSettings.bubbleSpeed ||
-            draftAppearanceSettings.bubbleMotion != appearanceSettings.bubbleMotion
+            draftAppearanceSettings.bubbleMotion != appearanceSettings.bubbleMotion ||
+            draftAppearanceSettings.bubbleSize != appearanceSettings.bubbleSize ||
+            draftAppearanceSettings.bubbleExtraCount != appearanceSettings.bubbleExtraCount ||
+            draftAppearanceSettings.bubbleBrightness != appearanceSettings.bubbleBrightness ||
+            draftAppearanceSettings.bubbleOutline != appearanceSettings.bubbleOutline
     val themeBackgroundsHaveChanges =
         draftDefaultThemeBackgrounds != appearanceSettings.defaultThemeBackgrounds ||
             draftThemeBackgrounds != appearanceSettings.themeBackgrounds
@@ -892,7 +896,7 @@ fun MestreScreen(
                 Spacer(modifier = Modifier.height(12.dp))
                 MestreSectionHeader(
                     title = "Movimentos das Bolhas",
-                    description = "Escolha como as bolhas se deslocam e a velocidade da animação"
+                    description = "Ajuste movimento, tamanho, quantidade e aparência das bolhas"
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
@@ -944,13 +948,69 @@ fun MestreScreen(
                             Text("Lenta", style = MaterialTheme.typography.labelSmall)
                             Text("Rápida", style = MaterialTheme.typography.labelSmall)
                         }
+                        Text(
+                            "Tamanho: ${String.format(Locale("pt", "BR"), "%.0f", draftAppearanceSettings.bubbleSize * 100)}%",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Slider(
+                            value = draftAppearanceSettings.bubbleSize,
+                            onValueChange = { draftAppearanceSettings = draftAppearanceSettings.copy(bubbleSize = it) },
+                            valueRange = 0.65f..1.8f,
+                            steps = 4
+                        )
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Menores", style = MaterialTheme.typography.labelSmall)
+                            Text("Maiores", style = MaterialTheme.typography.labelSmall)
+                        }
+                        Text(
+                            "Bolhas extras: +${draftAppearanceSettings.bubbleExtraCount}",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Slider(
+                            value = draftAppearanceSettings.bubbleExtraCount.toFloat(),
+                            onValueChange = { draftAppearanceSettings = draftAppearanceSettings.copy(bubbleExtraCount = it.toInt()) },
+                            valueRange = 0f..18f,
+                            steps = 17
+                        )
+                        Text(
+                            "A quantidade é ajustada automaticamente conforme o desempenho do aparelho.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            "Brilho: ${String.format(Locale("pt", "BR"), "%.0f", draftAppearanceSettings.bubbleBrightness * 100)}%",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Slider(
+                            value = draftAppearanceSettings.bubbleBrightness,
+                            onValueChange = { draftAppearanceSettings = draftAppearanceSettings.copy(bubbleBrightness = it) },
+                            valueRange = 0.25f..2f,
+                            steps = 6
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Contorno das bolhas", style = MaterialTheme.typography.titleSmall)
+                                Text("Exibe o aro luminoso ao redor de cada bolha", style = MaterialTheme.typography.bodySmall)
+                            }
+                            Switch(
+                                checked = draftAppearanceSettings.bubbleOutline,
+                                onCheckedChange = { draftAppearanceSettings = draftAppearanceSettings.copy(bubbleOutline = it) }
+                            )
+                        }
                         Button(
                             onClick = {
                                 coroutineScope.launch {
                                     isSavingGlobalAppearance = true
                                     val settingsToSave = appearanceSettings.copy(
                                         bubbleSpeed = draftAppearanceSettings.bubbleSpeed,
-                                        bubbleMotion = draftAppearanceSettings.bubbleMotion
+                                        bubbleMotion = draftAppearanceSettings.bubbleMotion,
+                                        bubbleSize = draftAppearanceSettings.bubbleSize,
+                                        bubbleExtraCount = draftAppearanceSettings.bubbleExtraCount,
+                                        bubbleBrightness = draftAppearanceSettings.bubbleBrightness,
+                                        bubbleOutline = draftAppearanceSettings.bubbleOutline
                                     )
                                     val saved = FirebaseService.saveAppearanceSettings(settingsToSave)
                                     isSavingGlobalAppearance = false

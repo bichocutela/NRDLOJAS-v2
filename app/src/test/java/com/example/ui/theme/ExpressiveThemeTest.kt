@@ -104,6 +104,23 @@ class ExpressiveThemeTest {
     }
 
     @Test
+    fun `glass bubble controls are clamped and reach the rendering style`() {
+        val style = resolveExpressiveGlassStyle(
+            enabled = true,
+            isDark = false,
+            bubbleSize = 2f,
+            bubbleExtraCount = 30,
+            bubbleBrightness = 0.1f,
+            bubbleOutline = false
+        )
+
+        assertEquals(1.8f, style.bubbleSize)
+        assertEquals(18, style.bubbleExtraCount)
+        assertEquals(0.25f, style.bubbleBrightness)
+        assertFalse(style.bubbleOutline)
+    }
+
+    @Test
     fun `expressive glass dark mode keeps readable foregrounds on every accent`() {
         ExpressiveGlassAccentNames.forEach { accent ->
             val style = resolveExpressiveGlassStyle(

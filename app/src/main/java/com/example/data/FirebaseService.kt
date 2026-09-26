@@ -1107,6 +1107,10 @@ object FirebaseService {
                         bubbleSpeed = (snapshot?.getDouble("appearanceBubbleSpeed") ?: 1.0).toFloat().coerceIn(0.25f, 2.5f),
                         bubbleMotion = snapshot?.getString("appearanceBubbleMotion")
                             ?.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
+                        bubbleSize = (snapshot?.getDouble("appearanceBubbleSize") ?: 1.0).toFloat().coerceIn(0.65f, 1.8f),
+                        bubbleExtraCount = (snapshot?.getLong("appearanceBubbleExtraCount") ?: 0L).toInt().coerceIn(0, 18),
+                        bubbleBrightness = (snapshot?.getDouble("appearanceBubbleBrightness") ?: 1.0).toFloat().coerceIn(0.25f, 2f),
+                        bubbleOutline = snapshot?.getBoolean("appearanceBubbleOutline") ?: true,
                         revision = snapshot?.getLong("appearanceRevision") ?: 0L
                     )
                 }
@@ -1253,6 +1257,10 @@ object FirebaseService {
             offerBanners = safeOfferBanners,
             bubbleSpeed = settings.bubbleSpeed.coerceIn(0.25f, 2.5f),
             bubbleMotion = settings.bubbleMotion.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
+            bubbleSize = settings.bubbleSize.coerceIn(0.65f, 1.8f),
+            bubbleExtraCount = settings.bubbleExtraCount.coerceIn(0, 18),
+            bubbleBrightness = settings.bubbleBrightness.coerceIn(0.25f, 2f),
+            bubbleOutline = settings.bubbleOutline,
             revision = revision
         )
         val publicManifestSaved = runCatching {
@@ -1284,6 +1292,10 @@ object FirebaseService {
                         "appearanceOfferBanners" to safeOfferBanners,
                         "appearanceBubbleSpeed" to settings.bubbleSpeed.coerceIn(0.25f, 2.5f).toDouble(),
                         "appearanceBubbleMotion" to (settings.bubbleMotion.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random"),
+                        "appearanceBubbleSize" to settings.bubbleSize.coerceIn(0.65f, 1.8f).toDouble(),
+                        "appearanceBubbleExtraCount" to settings.bubbleExtraCount.coerceIn(0, 18).toLong(),
+                        "appearanceBubbleBrightness" to settings.bubbleBrightness.coerceIn(0.25f, 2f).toDouble(),
+                        "appearanceBubbleOutline" to settings.bubbleOutline,
                         "appearanceRevision" to revision
                     ),
                     com.google.firebase.firestore.SetOptions.merge()
@@ -1309,6 +1321,10 @@ object FirebaseService {
         offerBanners: Map<String, List<Map<String, Any>>>,
         bubbleSpeed: Float,
         bubbleMotion: String,
+        bubbleSize: Float,
+        bubbleExtraCount: Int,
+        bubbleBrightness: Float,
+        bubbleOutline: Boolean,
         revision: Long
     ): String {
         val defaultsJson = org.json.JSONObject()
@@ -1343,6 +1359,10 @@ object FirebaseService {
             .put("appearanceOfferBanners", offerBannersJson)
             .put("appearanceBubbleSpeed", bubbleSpeed.toDouble())
             .put("appearanceBubbleMotion", bubbleMotion)
+            .put("appearanceBubbleSize", bubbleSize.toDouble())
+            .put("appearanceBubbleExtraCount", bubbleExtraCount)
+            .put("appearanceBubbleBrightness", bubbleBrightness.toDouble())
+            .put("appearanceBubbleOutline", bubbleOutline)
             .put("appearanceRevision", revision)
             .toString()
     }
@@ -1425,6 +1445,10 @@ object FirebaseService {
             offerBanners = parseOfferBannersJson(root.optJSONObject("appearanceOfferBanners")),
             bubbleSpeed = root.optDouble("appearanceBubbleSpeed", 1.0).toFloat().coerceIn(0.25f, 2.5f),
             bubbleMotion = root.optString("appearanceBubbleMotion").takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
+            bubbleSize = root.optDouble("appearanceBubbleSize", 1.0).toFloat().coerceIn(0.65f, 1.8f),
+            bubbleExtraCount = root.optInt("appearanceBubbleExtraCount", 0).coerceIn(0, 18),
+            bubbleBrightness = root.optDouble("appearanceBubbleBrightness", 1.0).toFloat().coerceIn(0.25f, 2f),
+            bubbleOutline = root.optBoolean("appearanceBubbleOutline", true),
             revision = root.optLong("appearanceRevision", 0L)
         )
     }.getOrNull()

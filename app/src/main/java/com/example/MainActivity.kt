@@ -250,7 +250,11 @@ class MainActivity : ComponentActivity() {
                     expressiveGlassTransparency = expressiveGlassTransparency,
                     expressiveGlassFluidity = expressiveGlassFluidity,
                     expressiveGlassBubbleSpeed = remoteAppearance.bubbleSpeed,
-                    expressiveGlassBubbleMotion = remoteAppearance.bubbleMotion
+                    expressiveGlassBubbleMotion = remoteAppearance.bubbleMotion,
+                    expressiveGlassBubbleSize = remoteAppearance.bubbleSize,
+                    expressiveGlassBubbleExtraCount = remoteAppearance.bubbleExtraCount,
+                    expressiveGlassBubbleBrightness = remoteAppearance.bubbleBrightness,
+                    expressiveGlassBubbleOutline = remoteAppearance.bubbleOutline
                 ) {
 
                 var showSplash by remember { mutableStateOf(true) }

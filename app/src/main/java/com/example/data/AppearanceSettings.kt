@@ -15,6 +15,10 @@ class AppearanceSettings(
     val offerBanners: Map<String, List<ThemeBackground>> = emptyMap(),
     val bubbleSpeed: Float = 1f,
     val bubbleMotion: String = "random",
+    val bubbleSize: Float = 1f,
+    val bubbleExtraCount: Int = 0,
+    val bubbleBrightness: Float = 1f,
+    val bubbleOutline: Boolean = true,
     val revision: Long = 0L
 ) {
     /**
@@ -74,6 +78,10 @@ class AppearanceSettings(
         offerBanners: Map<String, List<ThemeBackground>> = this.offerBanners,
         bubbleSpeed: Float = this.bubbleSpeed,
         bubbleMotion: String = this.bubbleMotion,
+        bubbleSize: Float = this.bubbleSize,
+        bubbleExtraCount: Int = this.bubbleExtraCount,
+        bubbleBrightness: Float = this.bubbleBrightness,
+        bubbleOutline: Boolean = this.bubbleOutline,
         revision: Long = this.revision
     ): AppearanceSettings = AppearanceSettings(
         overrideLocalTheme = overrideLocalTheme,
@@ -85,6 +93,10 @@ class AppearanceSettings(
         offerBanners = offerBanners,
         bubbleSpeed = bubbleSpeed,
         bubbleMotion = bubbleMotion,
+        bubbleSize = bubbleSize,
+        bubbleExtraCount = bubbleExtraCount,
+        bubbleBrightness = bubbleBrightness,
+        bubbleOutline = bubbleOutline,
         revision = revision
     )
 
@@ -100,6 +112,10 @@ class AppearanceSettings(
             offerBanners == other.offerBanners &&
             bubbleSpeed == other.bubbleSpeed &&
             bubbleMotion == other.bubbleMotion &&
+            bubbleSize == other.bubbleSize &&
+            bubbleExtraCount == other.bubbleExtraCount &&
+            bubbleBrightness == other.bubbleBrightness &&
+            bubbleOutline == other.bubbleOutline &&
             revision == other.revision
     }
 
@@ -113,6 +129,10 @@ class AppearanceSettings(
         result = 31 * result + offerBanners.hashCode()
         result = 31 * result + bubbleSpeed.hashCode()
         result = 31 * result + bubbleMotion.hashCode()
+        result = 31 * result + bubbleSize.hashCode()
+        result = 31 * result + bubbleExtraCount.hashCode()
+        result = 31 * result + bubbleBrightness.hashCode()
+        result = 31 * result + bubbleOutline.hashCode()
         result = 31 * result + revision.hashCode()
         return result
     }

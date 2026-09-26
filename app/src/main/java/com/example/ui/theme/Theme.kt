@@ -135,6 +135,10 @@ data class ExpressiveGlassStyle(
     val shadowAlpha: Float = 0.20f,
     val bubbleSpeed: Float = 1f,
     val bubbleMotion: String = "random",
+    val bubbleSize: Float = 1f,
+    val bubbleExtraCount: Int = 0,
+    val bubbleBrightness: Float = 1f,
+    val bubbleOutline: Boolean = true,
     val isDark: Boolean = false
 ) {
     val surfaceBase: Color
@@ -197,7 +201,11 @@ internal fun resolveExpressiveGlassStyle(
     transparency: Float = 0.58f,
     fluidity: Float = 0.68f,
     bubbleSpeed: Float = 1f,
-    bubbleMotion: String = "random"
+    bubbleMotion: String = "random",
+    bubbleSize: Float = 1f,
+    bubbleExtraCount: Int = 0,
+    bubbleBrightness: Float = 1f,
+    bubbleOutline: Boolean = true
 ): ExpressiveGlassStyle {
     if (!enabled) return ExpressiveGlassStyle()
     val safeTransparency = transparency.coerceIn(0.20f, 0.90f)
@@ -225,6 +233,10 @@ internal fun resolveExpressiveGlassStyle(
         shadowAlpha = (if (isDark) 0.24f else 0.12f) + (0.08f * safeFluidity),
         bubbleSpeed = bubbleSpeed.coerceIn(0.25f, 2.5f),
         bubbleMotion = bubbleMotion.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
+        bubbleSize = bubbleSize.coerceIn(0.65f, 1.8f),
+        bubbleExtraCount = bubbleExtraCount.coerceIn(0, 18),
+        bubbleBrightness = bubbleBrightness.coerceIn(0.25f, 2f),
+        bubbleOutline = bubbleOutline,
         isDark = isDark
     )
 }
@@ -854,6 +866,10 @@ private fun AmbientLiquidBubbleLayer(
     turbulence: Float,
     speedMultiplier: Float,
     motion: String,
+    sizeMultiplier: Float,
+    additionalBubbles: Int,
+    brightness: Float,
+    outlineEnabled: Boolean,
     isDark: Boolean,
     touchPoint: MutableState<Offset?>
 ) {
@@ -872,13 +888,14 @@ private fun AmbientLiquidBubbleLayer(
                 ?.defaultDisplay?.refreshRate ?: 60f
         }
         when {
-            lowRam || powerSave -> 8 to false
-            refreshRate <= 65f -> 10 to false
-            refreshRate <= 105f -> 14 to true
-            else -> 18 to true
+            lowRam || powerSave -> Triple(8, false, 12)
+            refreshRate <= 65f -> Triple(10, false, 18)
+            refreshRate <= 105f -> Triple(14, true, 26)
+            else -> Triple(18, true, 36)
         }
     }
-    val bubbleCount = performanceProfile.first
+    val bubbleCount = (performanceProfile.first + additionalBubbles.coerceIn(0, 18))
+        .coerceAtMost(performanceProfile.third)
     val enhancedLighting = performanceProfile.second
     val bubbles = remember { mutableStateListOf<AmbientLiquidBubble>() }
     var canvasSize by remember { mutableStateOf(Size.Zero) }
@@ -908,7 +925,7 @@ private fun AmbientLiquidBubbleLayer(
         }
     }
 
-    LaunchedEffect(canvasSize, turbulence, speedMultiplier, motion) {
+    LaunchedEffect(canvasSize, turbulence, speedMultiplier, motion, sizeMultiplier) {
         var lastFrameNanos = 0L
         while (true) {
             withFrameNanos { frameNanos ->
@@ -919,7 +936,7 @@ private fun AmbientLiquidBubbleLayer(
                     val touchRadius = with(density) { 250.dp.toPx() }
 
                     bubbles.forEach { bubble ->
-                        val radius = with(density) { bubble.radiusDp.dp.toPx() }
+                        val radius = with(density) { (bubble.radiusDp * sizeMultiplier).dp.toPx() }
                         val dx = bubble.x - canvasSize.width * 0.5f
                         val dy = bubble.y - canvasSize.height * 0.5f
                         val distance = hypot(dx, dy).coerceAtLeast(1f)
@@ -984,29 +1001,30 @@ private fun AmbientLiquidBubbleLayer(
         val rimWidth = 1.45.dp.toPx()
         val highlightWidth = 3.1.dp.toPx()
         val bounceWidth = 2.2.dp.toPx()
-        val primaryGlow = primary.copy(alpha = if (enhancedLighting) 0.13f else 0.07f)
-        val secondaryGlow = secondary.copy(alpha = if (enhancedLighting) 0.08f else 0.035f)
-        val cyanRim = Color(0xFF80D8FF).copy(alpha = if (enhancedLighting) 0.62f else 0.28f)
-        val roseRim = Color(0xFFFF80AB).copy(alpha = if (enhancedLighting) 0.48f else 0.18f)
-        val goldRim = Color(0xFFFFD54F).copy(alpha = if (enhancedLighting) 0.56f else 0.22f)
-        val whiteHighlight = Color.White.copy(alpha = if (isDark) 0.76f else 0.94f)
-        val whiteBounce = Color.White.copy(alpha = if (isDark) 0.20f else 0.40f)
+        val lightStrength = brightness.coerceIn(0.25f, 2f)
+        val primaryGlow = primary.copy(alpha = (if (enhancedLighting) 0.13f else 0.07f) * lightStrength)
+        val secondaryGlow = secondary.copy(alpha = (if (enhancedLighting) 0.08f else 0.035f) * lightStrength)
+        val cyanRim = Color(0xFF80D8FF).copy(alpha = (if (enhancedLighting) 0.62f else 0.28f) * lightStrength)
+        val roseRim = Color(0xFFFF80AB).copy(alpha = (if (enhancedLighting) 0.48f else 0.18f) * lightStrength)
+        val goldRim = Color(0xFFFFD54F).copy(alpha = (if (enhancedLighting) 0.56f else 0.22f) * lightStrength)
+        val whiteHighlight = Color.White.copy(alpha = (if (isDark) 0.76f else 0.94f) * lightStrength)
+        val whiteBounce = Color.White.copy(alpha = (if (isDark) 0.20f else 0.40f) * lightStrength)
         bubbles.forEach { bubble ->
             val center = Offset(bubble.x, bubble.y)
-            val radius = with(density) { bubble.radiusDp.dp.toPx() }
+            val radius = with(density) { (bubble.radiusDp * sizeMultiplier).dp.toPx() }
             val lightCenter = Offset(center.x - radius * 0.30f, center.y - radius * 0.32f)
             if (enhancedLighting) {
                 drawCircle(primaryGlow, radius * 1.24f, center)
                 drawCircle(secondaryGlow, radius * 1.10f, center)
             }
-            drawCircle(bubble.color.copy(alpha = bubble.color.alpha * 0.20f), radius * 0.98f, center)
-            drawCircle(Color.White.copy(alpha = if (isDark) 0.035f else 0.10f), radius * 0.72f, lightCenter)
-            if (enhancedLighting) {
+            drawCircle(bubble.color.copy(alpha = (bubble.color.alpha * 0.20f * lightStrength).coerceIn(0f, 0.75f)), radius * 0.98f, center)
+            drawCircle(Color.White.copy(alpha = (if (isDark) 0.035f else 0.10f) * lightStrength), radius * 0.72f, lightCenter)
+            if (enhancedLighting && outlineEnabled) {
                 drawArc(cyanRim, 195f, 58f, false, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f), style = Stroke(rimWidth))
                 drawArc(roseRim, 258f, 54f, false, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f), style = Stroke(rimWidth))
                 drawArc(goldRim, 318f, 56f, false, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f), style = Stroke(rimWidth))
-            } else {
-                drawCircle(Color.White.copy(alpha = 0.40f), radius * 0.98f, center, style = Stroke(rimWidth))
+            } else if (outlineEnabled) {
+                drawCircle(Color.White.copy(alpha = (0.40f * lightStrength).coerceIn(0f, 0.9f)), radius * 0.98f, center, style = Stroke(rimWidth))
             }
             drawArc(
                 color = whiteBounce,
@@ -1208,6 +1226,10 @@ fun NrdAppBackground(
                         turbulence = expressiveGlass.fluidity,
                         speedMultiplier = expressiveGlass.bubbleSpeed,
                         motion = expressiveGlass.bubbleMotion,
+                        sizeMultiplier = expressiveGlass.bubbleSize,
+                        additionalBubbles = expressiveGlass.bubbleExtraCount,
+                        brightness = expressiveGlass.bubbleBrightness,
+                        outlineEnabled = expressiveGlass.bubbleOutline,
                         isDark = expressiveGlass.isDark,
                         touchPoint = touchPoint
                     )
@@ -1507,6 +1529,10 @@ fun MyApplicationTheme(
     expressiveGlassFluidity: Float = 0.68f,
     expressiveGlassBubbleSpeed: Float = 1f,
     expressiveGlassBubbleMotion: String = "random",
+    expressiveGlassBubbleSize: Float = 1f,
+    expressiveGlassBubbleExtraCount: Int = 0,
+    expressiveGlassBubbleBrightness: Float = 1f,
+    expressiveGlassBubbleOutline: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (appearanceMode) {
@@ -1533,7 +1559,11 @@ fun MyApplicationTheme(
         transparency = expressiveGlassTransparency,
         fluidity = expressiveGlassFluidity,
         bubbleSpeed = expressiveGlassBubbleSpeed,
-        bubbleMotion = expressiveGlassBubbleMotion
+        bubbleMotion = expressiveGlassBubbleMotion,
+        bubbleSize = expressiveGlassBubbleSize,
+        bubbleExtraCount = expressiveGlassBubbleExtraCount,
+        bubbleBrightness = expressiveGlassBubbleBrightness,
+        bubbleOutline = expressiveGlassBubbleOutline
     )
     val colorScheme = when {
         isGlassSoft -> glassSoftColorScheme(glassStyle)
