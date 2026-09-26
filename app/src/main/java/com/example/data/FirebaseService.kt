@@ -1283,7 +1283,7 @@ object FirebaseService {
                         "appearanceConsultationBackgrounds" to safeConsultationBackgrounds,
                         "appearanceOfferBanners" to safeOfferBanners,
                         "appearanceBubbleSpeed" to settings.bubbleSpeed.coerceIn(0.25f, 2.5f).toDouble(),
-                        "appearanceBubbleMotion" to settings.bubbleMotion.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
+                        "appearanceBubbleMotion" to (settings.bubbleMotion.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random"),
                         "appearanceRevision" to revision
                     ),
                     com.google.firebase.firestore.SetOptions.merge()

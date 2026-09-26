@@ -282,6 +282,7 @@ fun MestreScreen(
     )
     var expandedRemoteTheme by remember { mutableStateOf(false) }
     var expandedRemoteMode by remember { mutableStateOf(false) }
+    var expandedBubbleMotion by remember { mutableStateOf(false) }
 
     fun defaultBackgroundFor(themeKey: String): ThemeBackground =
         draftDefaultThemeBackgrounds[themeKey] ?: ThemeBackground(
