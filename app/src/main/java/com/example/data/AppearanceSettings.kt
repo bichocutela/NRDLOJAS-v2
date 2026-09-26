@@ -13,6 +13,8 @@ class AppearanceSettings(
     val themeBackgrounds: Map<String, List<ThemeBackground>> = emptyMap(),
     val consultationBackgrounds: List<ThemeBackground> = emptyList(),
     val offerBanners: Map<String, List<ThemeBackground>> = emptyMap(),
+    val bubbleSpeed: Float = 1f,
+    val bubbleMotion: String = "random",
     val revision: Long = 0L
 ) {
     /**
@@ -70,6 +72,8 @@ class AppearanceSettings(
         themeBackgrounds: Map<String, List<ThemeBackground>> = this.themeBackgrounds,
         consultationBackgrounds: List<ThemeBackground> = this.consultationBackgrounds,
         offerBanners: Map<String, List<ThemeBackground>> = this.offerBanners,
+        bubbleSpeed: Float = this.bubbleSpeed,
+        bubbleMotion: String = this.bubbleMotion,
         revision: Long = this.revision
     ): AppearanceSettings = AppearanceSettings(
         overrideLocalTheme = overrideLocalTheme,
@@ -79,6 +83,8 @@ class AppearanceSettings(
         themeBackgrounds = themeBackgrounds,
         consultationBackgrounds = consultationBackgrounds,
         offerBanners = offerBanners,
+        bubbleSpeed = bubbleSpeed,
+        bubbleMotion = bubbleMotion,
         revision = revision
     )
 
@@ -92,6 +98,8 @@ class AppearanceSettings(
             themeBackgrounds == other.themeBackgrounds &&
             consultationBackgrounds == other.consultationBackgrounds &&
             offerBanners == other.offerBanners &&
+            bubbleSpeed == other.bubbleSpeed &&
+            bubbleMotion == other.bubbleMotion &&
             revision == other.revision
     }
 
@@ -103,6 +111,8 @@ class AppearanceSettings(
         result = 31 * result + themeBackgrounds.hashCode()
         result = 31 * result + consultationBackgrounds.hashCode()
         result = 31 * result + offerBanners.hashCode()
+        result = 31 * result + bubbleSpeed.hashCode()
+        result = 31 * result + bubbleMotion.hashCode()
         result = 31 * result + revision.hashCode()
         return result
     }

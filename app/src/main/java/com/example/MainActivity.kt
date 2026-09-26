@@ -248,7 +248,9 @@ class MainActivity : ComponentActivity() {
                     expressiveStyle = expressiveStyle,
                     expressiveGlassAccentColor = expressiveGlassAccentColor,
                     expressiveGlassTransparency = expressiveGlassTransparency,
-                    expressiveGlassFluidity = expressiveGlassFluidity
+                    expressiveGlassFluidity = expressiveGlassFluidity,
+                    expressiveGlassBubbleSpeed = remoteAppearance.bubbleSpeed,
+                    expressiveGlassBubbleMotion = remoteAppearance.bubbleMotion
                 ) {
 
                 var showSplash by remember { mutableStateOf(true) }

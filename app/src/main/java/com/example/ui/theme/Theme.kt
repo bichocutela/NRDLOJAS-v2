@@ -132,6 +132,8 @@ data class ExpressiveGlassStyle(
     val borderColor: Color = Color.White.copy(alpha = 0.82f),
     val shadowElevation: Float = 11f,
     val shadowAlpha: Float = 0.20f,
+    val bubbleSpeed: Float = 1f,
+    val bubbleMotion: String = "random",
     val isDark: Boolean = false
 ) {
     val surfaceBase: Color
@@ -174,7 +176,7 @@ internal fun expressiveGlassBackgroundColors(name: String, isDark: Boolean): Lis
         "green" to listOf(Color(0xFFDFF7E8), Color(0xFFD9F7EF), Color(0xFFE4F3FF), Color(0xFFF0F9E6)),
         "orange" to listOf(Color(0xFFFFE8D0), Color(0xFFFFF0D5), Color(0xFFFFE1D6), Color(0xFFFFF6E8)),
         "blue" to listOf(Color(0xFFDDEEFF), Color(0xFFE5F6FF), Color(0xFFE8E5FF), Color(0xFFE2F7F3)),
-        "gold" to listOf(Color(0xFFCDEBFF), Color(0xFFE8F5FF), Color(0xFFD5F3FF), Color(0xFFF5F9FF), Color(0xFFBDE6FF))
+        "gold" to listOf(Color(0xFFFFE7A8), Color(0xFFFFF4CF), Color(0xFFFFD980), Color(0xFFFFF9E8), Color(0xFFFFEAB8))
     )
     val dark = mapOf(
         "multicolor" to listOf(Color(0xFF190F18), Color(0xFF0E1C30), Color(0xFF2B2110), Color(0xFF0F291F), Color(0xFF21172F)),
@@ -192,7 +194,9 @@ internal fun resolveExpressiveGlassStyle(
     isDark: Boolean,
     accentName: String = "multicolor",
     transparency: Float = 0.58f,
-    fluidity: Float = 0.68f
+    fluidity: Float = 0.68f,
+    bubbleSpeed: Float = 1f,
+    bubbleMotion: String = "random"
 ): ExpressiveGlassStyle {
     if (!enabled) return ExpressiveGlassStyle()
     val safeTransparency = transparency.coerceIn(0.20f, 0.90f)
@@ -218,6 +222,8 @@ internal fun resolveExpressiveGlassStyle(
         borderColor = Color.White.copy(alpha = (0.62f + 0.24f * safeFluidity).coerceAtMost(0.90f)),
         shadowElevation = 9f + (5f * safeFluidity),
         shadowAlpha = (if (isDark) 0.24f else 0.12f) + (0.08f * safeFluidity),
+        bubbleSpeed = bubbleSpeed.coerceIn(0.25f, 2.5f),
+        bubbleMotion = bubbleMotion.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
         isDark = isDark
     )
 }
@@ -831,8 +837,8 @@ private class AmbientLiquidBubble(
     initialPosition: Offset,
     initialVelocity: Offset,
     val radiusDp: Float,
-    val phase: Float,
-    val color: Color
+    val color: Color,
+    val phase: Float
 ) {
     var position by mutableStateOf(initialPosition)
     var velocity: Offset = initialVelocity
@@ -844,6 +850,8 @@ private fun AmbientLiquidBubbleLayer(
     primary: Color,
     secondary: Color,
     turbulence: Float,
+    speedMultiplier: Float,
+    motion: String,
     isDark: Boolean,
     touchPoint: MutableState<Offset?>
 ) {
@@ -851,7 +859,7 @@ private fun AmbientLiquidBubbleLayer(
     val bubbles = remember { mutableStateListOf<AmbientLiquidBubble>() }
     var canvasSize by remember { mutableStateOf(Size.Zero) }
 
-    LaunchedEffect(canvasSize, primary, secondary, isDark) {
+    LaunchedEffect(canvasSize, primary, secondary, isDark, speedMultiplier) {
         bubbles.clear()
         if (canvasSize.width > 0f && canvasSize.height > 0f) {
             val random = Random(primary.hashCode() xor secondary.hashCode() xor canvasSize.width.toInt())
@@ -868,8 +876,8 @@ private fun AmbientLiquidBubbleLayer(
                         y = radius * density.density + random.nextFloat() * (canvasSize.height - radius * 2f * density.density).coerceAtLeast(1f)
                     ),
                     initialVelocity = Offset(
-                        x = (random.nextFloat() - 0.5f) * 16f,
-                        y = (random.nextFloat() - 0.5f) * 16f
+                        x = (random.nextFloat() - 0.5f) * 16f * speedMultiplier,
+                        y = (random.nextFloat() - 0.5f) * 16f * speedMultiplier
                     ),
                     radiusDp = radius,
                     phase = random.nextFloat() * 6.28318f,
@@ -879,7 +887,7 @@ private fun AmbientLiquidBubbleLayer(
         }
     }
 
-    LaunchedEffect(canvasSize, turbulence) {
+    LaunchedEffect(canvasSize, turbulence, speedMultiplier, motion) {
         var lastFrameNanos = 0L
         while (true) {
             withFrameNanos { frameNanos ->
@@ -891,8 +899,21 @@ private fun AmbientLiquidBubbleLayer(
 
                     bubbles.forEach { bubble ->
                         val radius = with(density) { bubble.radiusDp.dp.toPx() }
-                        var vx = bubble.velocity.x + sin(time * 0.46f + bubble.phase) * (34f + 54f * turbulence) * dt
-                        var vy = bubble.velocity.y + sin(time * 0.39f + bubble.phase * 1.23f) * (30f + 48f * turbulence) * dt
+                        val dx = bubble.position.x - canvasSize.width * 0.5f
+                        val dy = bubble.position.y - canvasSize.height * 0.5f
+                        val distance = hypot(dx, dy).coerceAtLeast(1f)
+                        var vx = when (motion) {
+                            "circular" -> -dy / distance * 42f * speedMultiplier
+                            "rise" -> bubble.velocity.x * 0.96f + sin(time * 0.7f + bubble.phase) * 9f * speedMultiplier
+                            "drift" -> 24f * speedMultiplier + sin(time * 0.24f + bubble.phase) * 10f
+                            else -> bubble.velocity.x + sin(time * 0.46f + bubble.phase) * (34f + 54f * turbulence) * dt
+                        }
+                        var vy = when (motion) {
+                            "circular" -> dx / distance * 42f * speedMultiplier
+                            "rise" -> -34f * speedMultiplier + sin(time * 0.39f + bubble.phase) * 8f
+                            "drift" -> sin(time * 0.39f + bubble.phase * 1.23f) * 7f
+                            else -> bubble.velocity.y + sin(time * 0.39f + bubble.phase * 1.23f) * (30f + 48f * turbulence) * dt
+                        }
                         touch?.let { point ->
                             val dx = bubble.position.x - point.x
                             val dy = bubble.position.y - point.y
@@ -908,9 +929,10 @@ private fun AmbientLiquidBubbleLayer(
                         vx *= damping
                         vy *= damping
                         val speed = hypot(vx, vy)
-                        if (speed > 118f) {
-                            vx = vx / speed * 118f
-                            vy = vy / speed * 118f
+                        val maxSpeed = 118f * speedMultiplier
+                        if (speed > maxSpeed) {
+                            vx = vx / speed * maxSpeed
+                            vy = vy / speed * maxSpeed
                         }
 
                         var x = bubble.position.x + vx * dt
@@ -940,8 +962,8 @@ private fun AmbientLiquidBubbleLayer(
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        Color(0xFF80D8FF).copy(alpha = if (isDark) 0.14f else 0.24f),
-                        Color(0xFFFF80AB).copy(alpha = if (isDark) 0.08f else 0.14f),
+                        primary.copy(alpha = if (isDark) 0.14f else 0.24f),
+                        secondary.copy(alpha = if (isDark) 0.08f else 0.14f),
                         Color.Transparent
                     ),
                     center = center,
@@ -961,7 +983,7 @@ private fun AmbientLiquidBubbleLayer(
                     colors = listOf(
                         Color.White.copy(alpha = if (isDark) 0.26f else 0.40f),
                         bubble.color.copy(alpha = bubble.color.alpha * 0.72f),
-                        Color(0xFF80D8FF).copy(alpha = if (isDark) 0.10f else 0.20f),
+                        secondary.copy(alpha = if (isDark) 0.10f else 0.20f),
                         Color.Transparent
                     ),
                     center = lightCenter,
@@ -973,10 +995,10 @@ private fun AmbientLiquidBubbleLayer(
             drawCircle(
                 brush = Brush.sweepGradient(
                     colors = listOf(
-                        Color(0xFF80D8FF).copy(alpha = 0.72f),
-                        Color(0xFFFF80AB).copy(alpha = 0.55f),
-                        Color(0xFFFFD54F).copy(alpha = 0.66f),
-                        Color(0xFF80D8FF).copy(alpha = 0.72f)
+                        primary.copy(alpha = 0.72f),
+                        secondary.copy(alpha = 0.55f),
+                        bubble.color.copy(alpha = 0.66f),
+                        primary.copy(alpha = 0.72f)
                     ),
                     center = center
                 ),
@@ -1090,9 +1112,9 @@ fun NrdAppBackground(
                     .drawWithCache {
                         val maxDimension = maxOf(size.width, size.height).coerceAtLeast(1f)
                         val lightScale = if (expressiveGlass.isDark) 0.52f else 1f
-                        val ambientPrimary = if (expressiveGlass.accentName == "gold") Color(0xFFFF78A7) else expressiveGlass.accent
-                        val ambientSecondary = if (expressiveGlass.accentName == "gold") Color(0xFF72B7FF) else expressiveGlass.secondaryAccent
-                        val ambientTertiary = if (expressiveGlass.accentName == "gold") Color(0xFF70D68F) else expressiveGlass.tertiaryAccent
+                        val ambientPrimary = expressiveGlass.accent
+                        val ambientSecondary = expressiveGlass.secondaryAccent
+                        val ambientTertiary = expressiveGlass.tertiaryAccent
                         val haloPrimary = Brush.radialGradient(
                             colors = listOf(
                                 ambientPrimary.copy(alpha = 0.26f * lightScale),
@@ -1152,7 +1174,7 @@ fun NrdAppBackground(
                             colors = listOf(
                                 Color.Transparent,
                                 Color.White.copy(alpha = if (expressiveGlass.isDark) 0.07f else 0.48f),
-                                Color(0xFF70D9FF).copy(alpha = if (expressiveGlass.isDark) 0.08f else 0.34f),
+                                ambientSecondary.copy(alpha = if (expressiveGlass.isDark) 0.08f else 0.34f),
                                 Color.White.copy(alpha = if (expressiveGlass.isDark) 0.05f else 0.36f),
                                 Color.Transparent
                             )
@@ -1190,6 +1212,8 @@ fun NrdAppBackground(
                         primary = expressiveGlass.accent,
                         secondary = expressiveGlass.secondaryAccent,
                         turbulence = expressiveGlass.fluidity,
+                        speedMultiplier = expressiveGlass.bubbleSpeed,
+                        motion = expressiveGlass.bubbleMotion,
                         isDark = expressiveGlass.isDark,
                         touchPoint = touchPoint
                     )
@@ -1487,6 +1511,8 @@ fun MyApplicationTheme(
     expressiveGlassAccentColor: String = "multicolor",
     expressiveGlassTransparency: Float = 0.58f,
     expressiveGlassFluidity: Float = 0.68f,
+    expressiveGlassBubbleSpeed: Float = 1f,
+    expressiveGlassBubbleMotion: String = "random",
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (appearanceMode) {
@@ -1511,7 +1537,9 @@ fun MyApplicationTheme(
         isDark = darkTheme,
         accentName = expressiveGlassAccentColor,
         transparency = expressiveGlassTransparency,
-        fluidity = expressiveGlassFluidity
+        fluidity = expressiveGlassFluidity,
+        bubbleSpeed = expressiveGlassBubbleSpeed,
+        bubbleMotion = expressiveGlassBubbleMotion
     )
     val colorScheme = when {
         isGlassSoft -> glassSoftColorScheme(glassStyle)

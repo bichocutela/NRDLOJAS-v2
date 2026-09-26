@@ -99,6 +99,7 @@ private enum class MestrePanelPage(val title: String) {
     HOME_SETTINGS("Configurações da Home"),
     NOTIFICATION_SETTINGS("Notificações globais"),
     APPEARANCE_SETTINGS("Fundos por tema"),
+    BUBBLE_SETTINGS("Movimentos das Bolhas"),
     CONSULTATION_APPEARANCE_SETTINGS("Aparência Consultar Produtos"),
     ADVANCED("Ferramentas avançadas")
 }
@@ -154,6 +155,7 @@ fun MestreScreen(
     var isSavingNotificationSettings by remember { mutableStateOf(false) }
     val appearanceSettingsFlow = remember(currentPage) {
         if (currentPage == MestrePanelPage.APPEARANCE_SETTINGS ||
+            currentPage == MestrePanelPage.BUBBLE_SETTINGS ||
             currentPage == MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS
         ) {
             FirebaseService.observeAppearanceSettings()
@@ -352,7 +354,9 @@ fun MestreScreen(
     val globalAppearanceHasChanges =
         draftAppearanceSettings.overrideLocalTheme != appearanceSettings.overrideLocalTheme ||
             draftAppearanceSettings.theme != appearanceSettings.theme ||
-            draftAppearanceSettings.appearanceMode != appearanceSettings.appearanceMode
+            draftAppearanceSettings.appearanceMode != appearanceSettings.appearanceMode ||
+            draftAppearanceSettings.bubbleSpeed != appearanceSettings.bubbleSpeed ||
+            draftAppearanceSettings.bubbleMotion != appearanceSettings.bubbleMotion
     val themeBackgroundsHaveChanges =
         draftDefaultThemeBackgrounds != appearanceSettings.defaultThemeBackgrounds ||
             draftThemeBackgrounds != appearanceSettings.themeBackgrounds
@@ -367,7 +371,7 @@ fun MestreScreen(
     val currentPageHasChanges = when (currentPage) {
         MestrePanelPage.HOME_SETTINGS -> homeHasChanges
         MestrePanelPage.NOTIFICATION_SETTINGS -> notificationsHaveChanges
-        MestrePanelPage.APPEARANCE_SETTINGS -> appearancePageHasChanges
+        MestrePanelPage.APPEARANCE_SETTINGS, MestrePanelPage.BUBBLE_SETTINGS -> appearancePageHasChanges
         MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS -> consultationAppearanceHasChanges
         else -> false
     }
@@ -500,9 +504,10 @@ fun MestreScreen(
                 MestreSettingsHub(
                     onOpenHome = { openPage(MestrePanelPage.HOME_SETTINGS) },
                     onOpenAppearance = { openPage(MestrePanelPage.APPEARANCE_SETTINGS) },
+                    onOpenBubbles = { openPage(MestrePanelPage.BUBBLE_SETTINGS) },
                     onOpenConsultationAppearance = { openPage(MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS) },
-                    onOpenNotifications = { openPage(MestrePanelPage.NOTIFICATION_SETTINGS) }
-                    ,onOpenNovelties = { openPage(MestrePanelPage.NOVELTY_SETTINGS) }
+                    onOpenNotifications = { openPage(MestrePanelPage.NOTIFICATION_SETTINGS) },
+                    onOpenNovelties = { openPage(MestrePanelPage.NOVELTY_SETTINGS) }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -876,6 +881,92 @@ fun MestreScreen(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            if (currentPage == MestrePanelPage.BUBBLE_SETTINGS) {
+                MestrePageIntro(
+                    description = "Personalize o movimento das bolhas do Glass Expressivo para os usuários do aplicativo.",
+                    hasUnsavedChanges = globalAppearanceHasChanges
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                MestreSectionHeader(
+                    title = "Movimentos das Bolhas",
+                    description = "Escolha como as bolhas se deslocam e a velocidade da animação"
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        val motionOptions = listOf(
+                            "random" to "Aleatória",
+                            "circular" to "Circular",
+                            "rise" to "Subida suave",
+                            "drift" to "Deriva lateral"
+                        )
+                        ExposedDropdownMenuBox(
+                            expanded = expandedBubbleMotion,
+                            onExpandedChange = { expandedBubbleMotion = !expandedBubbleMotion }
+                        ) {
+                            OutlinedTextField(
+                                value = motionOptions.find { it.first == draftAppearanceSettings.bubbleMotion }?.second ?: "Aleatória",
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Modelo de movimento") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedBubbleMotion) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = expandedBubbleMotion,
+                                onDismissRequest = { expandedBubbleMotion = false }
+                            ) {
+                                motionOptions.forEach { (key, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            draftAppearanceSettings = draftAppearanceSettings.copy(bubbleMotion = key)
+                                            expandedBubbleMotion = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            "Velocidade: ${String.format(Locale("pt", "BR"), "%.1f", draftAppearanceSettings.bubbleSpeed)}×",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Slider(
+                            value = draftAppearanceSettings.bubbleSpeed,
+                            onValueChange = { draftAppearanceSettings = draftAppearanceSettings.copy(bubbleSpeed = it) },
+                            valueRange = 0.25f..2.5f,
+                            steps = 8
+                        )
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Lenta", style = MaterialTheme.typography.labelSmall)
+                            Text("Rápida", style = MaterialTheme.typography.labelSmall)
+                        }
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    isSavingGlobalAppearance = true
+                                    val settingsToSave = appearanceSettings.copy(
+                                        bubbleSpeed = draftAppearanceSettings.bubbleSpeed,
+                                        bubbleMotion = draftAppearanceSettings.bubbleMotion
+                                    )
+                                    val saved = FirebaseService.saveAppearanceSettings(settingsToSave)
+                                    isSavingGlobalAppearance = false
+                                    if (saved) draftAppearanceSettings = settingsToSave
+                                    snackbarHostState.showSnackbar(
+                                        if (saved) "Movimentos das bolhas publicados para todos."
+                                        else FirebaseService.lastError ?: "Não foi possível salvar os movimentos."
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = globalAppearanceHasChanges && !isSavingGlobalAppearance
+                        ) {
+                            Text(if (isSavingGlobalAppearance) "Salvando..." else "Salvar movimentos")
+                        }
+                    }
+                }
             }
 
             if (currentPage == MestrePanelPage.APPEARANCE_SETTINGS) {

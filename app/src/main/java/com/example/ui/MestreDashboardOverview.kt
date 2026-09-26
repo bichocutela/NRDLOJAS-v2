@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.PendingActions
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.ViewCarousel
+import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -324,6 +325,7 @@ internal fun MestreContentHub(
 internal fun MestreSettingsHub(
     onOpenHome: () -> Unit,
     onOpenAppearance: () -> Unit,
+    onOpenBubbles: () -> Unit,
     onOpenConsultationAppearance: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenNovelties: () -> Unit
@@ -347,6 +349,13 @@ internal fun MestreSettingsHub(
         description = "Tema, modo visual e fundos programados",
         icon = Icons.Default.Palette,
         onClick = onOpenAppearance
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+    PanelAreaCard(
+        title = "Movimentos das Bolhas",
+        description = "Velocidade e trajetos do Glass Expressivo",
+        icon = Icons.Default.Waves,
+        onClick = onOpenBubbles
     )
     Spacer(modifier = Modifier.height(6.dp))
     PanelAreaCard(

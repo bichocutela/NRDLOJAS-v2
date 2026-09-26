@@ -1104,6 +1104,9 @@ object FirebaseService {
                         themeBackgrounds = parseThemeBackgrounds(snapshot?.get("appearanceThemeBackgrounds")),
                         consultationBackgrounds = parseConsultationBackgrounds(snapshot?.get("appearanceConsultationBackgrounds")),
                         offerBanners = parseOfferBanners(snapshot?.get("appearanceOfferBanners")),
+                        bubbleSpeed = (snapshot?.getDouble("appearanceBubbleSpeed") ?: 1.0).toFloat().coerceIn(0.25f, 2.5f),
+                        bubbleMotion = snapshot?.getString("appearanceBubbleMotion")
+                            ?.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
                         revision = snapshot?.getLong("appearanceRevision") ?: 0L
                     )
                 }
@@ -1248,6 +1251,8 @@ object FirebaseService {
             themeBackgrounds = safeBackgrounds,
             consultationBackgrounds = safeConsultationBackgrounds,
             offerBanners = safeOfferBanners,
+            bubbleSpeed = settings.bubbleSpeed.coerceIn(0.25f, 2.5f),
+            bubbleMotion = settings.bubbleMotion.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
             revision = revision
         )
         val publicManifestSaved = runCatching {
@@ -1277,6 +1282,8 @@ object FirebaseService {
                         "appearanceThemeBackgrounds" to safeBackgrounds,
                         "appearanceConsultationBackgrounds" to safeConsultationBackgrounds,
                         "appearanceOfferBanners" to safeOfferBanners,
+                        "appearanceBubbleSpeed" to settings.bubbleSpeed.coerceIn(0.25f, 2.5f).toDouble(),
+                        "appearanceBubbleMotion" to settings.bubbleMotion.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
                         "appearanceRevision" to revision
                     ),
                     com.google.firebase.firestore.SetOptions.merge()
@@ -1300,6 +1307,8 @@ object FirebaseService {
         themeBackgrounds: Map<String, List<Map<String, Any>>>,
         consultationBackgrounds: List<Map<String, Any>>,
         offerBanners: Map<String, List<Map<String, Any>>>,
+        bubbleSpeed: Float,
+        bubbleMotion: String,
         revision: Long
     ): String {
         val defaultsJson = org.json.JSONObject()
@@ -1332,6 +1341,8 @@ object FirebaseService {
             .put("appearanceThemeBackgrounds", backgroundsJson)
             .put("appearanceConsultationBackgrounds", consultationJson)
             .put("appearanceOfferBanners", offerBannersJson)
+            .put("appearanceBubbleSpeed", bubbleSpeed.toDouble())
+            .put("appearanceBubbleMotion", bubbleMotion)
             .put("appearanceRevision", revision)
             .toString()
     }
@@ -1412,6 +1423,8 @@ object FirebaseService {
             themeBackgrounds = parseThemeBackgroundsJson(root.optJSONObject("appearanceThemeBackgrounds")),
             consultationBackgrounds = parseConsultationBackgroundsJson(root.optJSONArray("appearanceConsultationBackgrounds")),
             offerBanners = parseOfferBannersJson(root.optJSONObject("appearanceOfferBanners")),
+            bubbleSpeed = root.optDouble("appearanceBubbleSpeed", 1.0).toFloat().coerceIn(0.25f, 2.5f),
+            bubbleMotion = root.optString("appearanceBubbleMotion").takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
             revision = root.optLong("appearanceRevision", 0L)
         )
     }.getOrNull()
