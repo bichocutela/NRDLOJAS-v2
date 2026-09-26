@@ -49,6 +49,8 @@ import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.expressiveShadow
+import com.example.data.RemoteHomeSettings
+import com.example.data.FirebaseService
 
 private const val ADMIN_LOGIN_TIMEOUT_MS = 45_000L
 private const val ADMIN_LOGIN_TAG = "AdminLogin"
@@ -609,6 +611,14 @@ fun LoginDrawerContent(
     val context = LocalContext.current
     com.example.util.UpdateAvailabilityState.initialize(context)
     val drawerUpdateAvailable by com.example.util.UpdateAvailabilityState.available.collectAsState()
+    val remoteHomeSettings by FirebaseService.observeHomeSettings().collectAsState(initial = RemoteHomeSettings())
+    val noveltyVisible = remoteHomeSettings.noveltyEnabled == true &&
+        !remoteHomeSettings.noveltyText.isNullOrBlank() &&
+        when (remoteHomeSettings.noveltyTarget) {
+            "new" -> com.example.BuildConfig.VERSION_NAME == remoteHomeSettings.noveltyVersion
+            "previous" -> com.example.BuildConfig.VERSION_NAME != remoteHomeSettings.noveltyVersion
+            else -> true
+        }
     val expressive = LocalExpressiveStyle.current.enabled
     val glassStyle = LocalGlassSoftStyle.current
     val screenProfile = rememberNrdScreenProfile()
@@ -876,11 +886,34 @@ fun LoginDrawerContent(
             onClick = onGoToPromotions
         )
         Spacer(modifier = Modifier.height(if (expressive) 6.dp else 8.dp))
-        DrawerActionButton(
-            label = "Configurações",
-            icon = Icons.Default.Settings,
-            onClick = onGoToSettings
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (noveltyVisible) {
+                Surface(
+                    color = Color(0xFFD91C1C),
+                    shape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp, topEnd = 2.dp, bottomEnd = 2.dp),
+                    modifier = Modifier.weight(0.9f)
+                ) {
+                    Text(
+                        remoteHomeSettings.noveltyText.orEmpty(),
+                        color = Color.White,
+                        maxLines = 2,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+            Box(modifier = Modifier.weight(if (noveltyVisible) 1.1f else 1f)) {
+                DrawerActionButton(
+                    label = "Configurações",
+                    icon = Icons.Default.Settings,
+                    onClick = onGoToSettings
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(if (expressive) 6.dp else 8.dp))
         DrawerActionButton(
             label = "Sobre",

@@ -12,7 +12,11 @@ data class RemoteHomeSettings(
     val showDrawerIcon: Boolean? = null,
     val showNotificationIcon: Boolean? = null,
     val mostUsedLimit: Int? = null,
-    val carouselIntervalSeconds: Int? = null
+    val carouselIntervalSeconds: Int? = null,
+    val noveltyText: String? = null,
+    val noveltyEnabled: Boolean? = null,
+    val noveltyTarget: String? = null,
+    val noveltyVersion: String? = null
 )
 
 /**

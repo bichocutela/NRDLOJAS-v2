@@ -838,12 +838,49 @@ object FirebaseService {
                         showDrawerIcon = snapshot?.getBoolean("homeShowDrawerIcon"),
                         showNotificationIcon = snapshot?.getBoolean("homeShowNotificationIcon"),
                         mostUsedLimit = snapshot?.getLong("homeMostUsedLimit")?.toInt(),
-                        carouselIntervalSeconds = snapshot?.getLong("homeCarouselIntervalSeconds")?.toInt()
+                        carouselIntervalSeconds = snapshot?.getLong("homeCarouselIntervalSeconds")?.toInt(),
+                        noveltyText = snapshot?.getString("noveltyText"),
+                        noveltyEnabled = snapshot?.getBoolean("noveltyEnabled"),
+                        noveltyTarget = snapshot?.getString("noveltyTarget"),
+                        noveltyVersion = snapshot?.getString("noveltyVersion")
                     )
                 )
             }
 
         awaitClose { registration.remove() }
+    }
+
+    suspend fun saveNoveltySettings(
+        text: String,
+        enabled: Boolean,
+        target: String,
+        version: String
+    ): Boolean {
+        if (!prepareManagementWrite("publicar a novidade")) return false
+        if (text.isBlank()) {
+            lastError = "Digite o texto da novidade."
+            return false
+        }
+        return try {
+            FirebaseFirestore.getInstance()
+                .collection("config")
+                .document("appSettings")
+                .set(
+                    mapOf(
+                        "noveltyText" to text.trim(),
+                        "noveltyEnabled" to enabled,
+                        "noveltyTarget" to target,
+                        "noveltyVersion" to version.trim()
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge()
+                )
+                .await()
+            true
+        } catch (e: Exception) {
+            lastError = e.message
+            Log.e("FirebaseService", "Erro ao salvar novidade", e)
+            false
+        }
     }
 
     suspend fun saveHomeSettings(settings: HomeSettings): Boolean {

@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.GeminiMasterService
+import com.example.data.FirebaseService
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.glassSoftShadow
@@ -363,8 +364,12 @@ internal fun MestreSettingsHub(
 
 @Composable
 internal fun MestreNoveltySettings() {
+    val coroutineScope = rememberCoroutineScope()
+    var isSaving by remember { mutableStateOf(false) }
+    var saveMessage by remember { mutableStateOf<String?>(null) }
     var noveltyText by rememberSaveable { mutableStateOf("Tema Novo: Expressivo disponível") }
-    var target by rememberSaveable { mutableStateOf("Todos os usuários") }
+    var target by rememberSaveable { mutableStateOf("all") }
+    var targetVersion by rememberSaveable { mutableStateOf(com.example.BuildConfig.VERSION_NAME) }
     var enabled by rememberSaveable { mutableStateOf(true) }
 
     Text("Inserir Novidade", style = MaterialTheme.typography.titleMedium)
@@ -397,15 +402,55 @@ internal fun MestreNoveltySettings() {
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(value = target, onValueChange = {}, readOnly = true, label = { Text("Enviar para (versões)") }, modifier = Modifier.fillMaxWidth())
+            Button(
+                onClick = { target = when (target) { "all" -> "new"; "new" -> "previous"; else -> "all" } },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    when (target) {
+                        "new" -> "Somente versão nova"
+                        "previous" -> "Somente versões anteriores"
+                        else -> "Todos os usuários"
+                    }
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = targetVersion,
+                onValueChange = { targetVersion = it },
+                label = { Text("Versão considerada nova") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Novidade ativa", modifier = Modifier.weight(1f))
                 Switch(checked = enabled, onCheckedChange = { enabled = it })
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = {}, modifier = Modifier.fillMaxWidth(), enabled = enabled && noveltyText.isNotBlank()) {
-                Text("Salvar novidade")
+            Button(
+                onClick = {
+                    coroutineScope.launch {
+                        isSaving = true
+                        saveMessage = null
+                        val saved = FirebaseService.saveNoveltySettings(
+                            text = noveltyText,
+                            enabled = enabled,
+                            target = target,
+                            version = targetVersion
+                        )
+                        saveMessage = if (saved) "Novidade publicada para o público escolhido." else FirebaseService.lastError ?: "Não foi possível publicar a novidade."
+                        isSaving = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isSaving && enabled && noveltyText.isNotBlank()
+            ) {
+                Text(if (isSaving) "Salvando..." else "Salvar novidade")
+            }
+            saveMessage?.let {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(it, color = if (it.startsWith("Novidade")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
             }
         }
     }
