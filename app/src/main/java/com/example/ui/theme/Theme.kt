@@ -54,6 +54,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -511,9 +513,6 @@ fun Modifier.expressiveLiquidGlass(
             }
             .drawWithCache {
                 // Read animated state during drawing so moving highlights invalidate the draw layer, not the whole card composition.
-                val motion = motionState?.value?.let { (sin(it) + 1f) * 0.5f } ?: 0.36f
-                val rippleProgress = ripple.value
-                val rippleOrigin = rippleCenter
                 val outline = shape.createOutline(size, layoutDirection, this)
                 val outlinePath = Path().apply {
                     when (outline) {
@@ -542,8 +541,8 @@ fun Modifier.expressiveLiquidGlass(
                         Color.Transparent
                     ),
                     center = Offset(
-                        x = size.width * (0.12f + 0.18f * motion + 0.06f * fluidity),
-                        y = size.height * (0.02f + 0.07f * fluidity + 0.04f * motion)
+                        x = size.width * (0.21f + 0.06f * fluidity),
+                        y = size.height * (0.04f + 0.07f * fluidity)
                     ),
                     radius = maxDimension * (0.58f + 0.12f * fluidity)
                 )
@@ -554,8 +553,8 @@ fun Modifier.expressiveLiquidGlass(
                         Color.Transparent
                     ),
                     center = Offset(
-                        x = size.width * (0.88f - 0.16f * motion - 0.06f * fluidity),
-                        y = size.height * (0.92f - 0.07f * fluidity - 0.05f * motion)
+                        x = size.width * (0.80f - 0.06f * fluidity),
+                        y = size.height * (0.895f - 0.07f * fluidity)
                     ),
                     radius = maxDimension * (0.46f + 0.16f * fluidity)
                 )
@@ -568,8 +567,8 @@ fun Modifier.expressiveLiquidGlass(
                         refraction.copy(alpha = (0.24f + 0.12f * fluidity) * safeIntensity),
                         Color.White.copy(alpha = (0.82f * safeIntensity).coerceAtMost(0.92f))
                     ),
-                    start = Offset(size.width * (0.04f + 0.18f * motion), size.height * 0.04f),
-                    end = Offset(size.width * (0.96f - 0.16f * motion), size.height * 0.96f)
+                    start = Offset(size.width * 0.13f, size.height * 0.04f),
+                    end = Offset(size.width * 0.88f, size.height * 0.96f)
                 )
                 val iridescentRim = Brush.sweepGradient(
                     colors = listOf(
@@ -598,8 +597,8 @@ fun Modifier.expressiveLiquidGlass(
                         Color.Transparent
                     ),
                     center = Offset(
-                        size.width * (0.34f + 0.24f * motion),
-                        size.height * (0.36f - 0.05f * motion)
+                        size.width * 0.46f,
+                        size.height * 0.335f
                     ),
                     radius = maxDimension * (0.42f + 0.12f * fluidity)
                 )
@@ -610,49 +609,49 @@ fun Modifier.expressiveLiquidGlass(
                         Color.Transparent
                     ),
                     center = Offset(
-                        size.width * (0.56f - 0.24f * motion),
-                        size.height * (0.64f + 0.04f * motion)
+                        size.width * 0.44f,
+                        size.height * 0.66f
                     ),
                     radius = maxDimension * (0.36f + 0.10f * fluidity)
                 )
                 val distortionHeight = size.height * (0.18f + 0.18f * fluidity)
                 val bottomLiquidPath = Path().apply {
-                    moveTo(0f, size.height - distortionHeight * (0.66f + 0.28f * motion))
+                    moveTo(0f, size.height - distortionHeight * (0.80f))
                     cubicTo(
                         size.width * 0.18f,
-                        size.height - distortionHeight * (1.20f - 0.42f * motion),
+                        size.height - distortionHeight * (0.99f),
                         size.width * 0.34f,
-                        size.height - distortionHeight * (0.24f + 0.36f * motion),
+                        size.height - distortionHeight * (0.42f),
                         size.width * 0.52f,
-                        size.height - distortionHeight * (0.76f - 0.30f * motion)
+                        size.height - distortionHeight * (0.61f)
                     )
                     cubicTo(
                         size.width * 0.68f,
-                        size.height - distortionHeight * (1.20f - 0.38f * motion),
+                        size.height - distortionHeight * (1.01f),
                         size.width * 0.84f,
-                        size.height - distortionHeight * (0.20f + 0.30f * motion),
+                        size.height - distortionHeight * (0.35f),
                         size.width,
-                        size.height - distortionHeight * (0.56f + 0.26f * motion)
+                        size.height - distortionHeight * (0.69f)
                     )
                     lineTo(size.width, size.height)
                     lineTo(0f, size.height)
                     close()
                 }
                 val upperLiquidPath = Path().apply {
-                    moveTo(0f, distortionHeight * (0.42f + 0.08f * motion))
+                    moveTo(0f, distortionHeight * (0.46f))
                     cubicTo(
                         size.width * 0.24f,
-                        distortionHeight * (0.02f + 0.30f * motion),
+                        distortionHeight * (0.17f),
                         size.width * 0.48f,
-                        distortionHeight * (0.70f - 0.34f * motion),
+                        distortionHeight * (0.53f),
                         size.width * 0.70f,
-                        distortionHeight * (0.20f + 0.24f * motion)
+                        distortionHeight * (0.32f)
                     )
                     cubicTo(
                         size.width * 0.82f,
                         distortionHeight * 0.04f,
                         size.width * 0.92f,
-                        distortionHeight * (0.66f - 0.08f * motion),
+                        distortionHeight * (0.62f),
                         size.width,
                         distortionHeight * 0.24f
                     )
@@ -702,19 +701,43 @@ fun Modifier.expressiveLiquidGlass(
                     radius = maxDimension * (0.34f + 0.14f * fluidity)
                 )
                 onDrawWithContent {
+                    // Animated values are read only in the draw phase. Gradients and paths above stay cached between frames.
+                    val motion = motionState?.value?.let { (sin(it) + 1f) * 0.5f } ?: 0.5f
+                    val travel = (motion - 0.5f) * 2f
+                    val horizontalShift = size.width * 0.12f * travel
+                    val verticalShift = size.height * 0.045f * travel
+                    val rippleProgress = ripple.value
+                    val rippleOrigin = rippleCenter
+
                     drawPath(path = outlinePath, brush = baseBrush)
                     drawPath(path = outlinePath, brush = diffusionA)
                     drawPath(path = outlinePath, brush = diffusionB)
-                    drawPath(path = outlinePath, brush = topLens)
-                    drawPath(path = outlinePath, brush = lowerRefraction)
-                    drawPath(path = outlinePath, brush = waveA)
-                    drawPath(path = outlinePath, brush = waveB)
+                    clipPath(outlinePath) {
+                        withTransform({ translate(left = horizontalShift, top = verticalShift) }) {
+                            drawRect(brush = topLens)
+                        }
+                        withTransform({ translate(left = -horizontalShift, top = -verticalShift) }) {
+                            drawRect(brush = lowerRefraction)
+                        }
+                    }
+                    clipPath(outlinePath) {
+                        withTransform({ translate(left = horizontalShift * 0.55f, top = -verticalShift * 0.6f) }) {
+                            drawRect(brush = waveA)
+                        }
+                        withTransform({ translate(left = -horizontalShift * 0.55f, top = verticalShift * 0.6f) }) {
+                            drawRect(brush = waveB)
+                        }
+                    }
                     drawPath(path = outlinePath, brush = innerGleam)
                     drawContent()
                     // Reflexos e gotas ficam na camada superior do vidro, como no mockup.
                     if (waves) {
-                        drawPath(path = upperLiquidPath, brush = upperCausticBrush)
-                        drawPath(path = bottomLiquidPath, brush = liquidWaveBrush)
+                        withTransform({ translate(top = verticalShift) }) {
+                            drawPath(path = upperLiquidPath, brush = upperCausticBrush)
+                        }
+                        withTransform({ translate(top = -verticalShift) }) {
+                            drawPath(path = bottomLiquidPath, brush = liquidWaveBrush)
+                        }
                     }
                     if (rippleProgress < 1f) {
                         val maxRippleRadius = maxDimension * 0.92f
