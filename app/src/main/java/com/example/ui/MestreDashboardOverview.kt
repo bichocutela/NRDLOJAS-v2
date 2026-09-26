@@ -1,6 +1,7 @@
 package com.example.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +27,11 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
@@ -43,6 +49,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -379,6 +386,12 @@ internal fun MestreNoveltySettings() {
     var startDate by rememberSaveable { mutableStateOf("") }
     var endDate by rememberSaveable { mutableStateOf("") }
     var enabled by rememberSaveable { mutableStateOf(true) }
+    var showPreview by remember { mutableStateOf(false) }
+    var showStartPicker by remember { mutableStateOf(false) }
+    var showEndPicker by remember { mutableStateOf(false) }
+    val startPicker = rememberDatePickerState()
+    val endPicker = rememberDatePickerState()
+    fun formatPickerDate(value: Long?): String = value?.let { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(it)) }.orEmpty()
 
     Text("Inserir Novidade", style = MaterialTheme.typography.titleMedium)
     Text(
@@ -408,6 +421,10 @@ internal fun MestreNoveltySettings() {
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Modelo do aviso", style = MaterialTheme.typography.titleSmall)
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(onClick = { showPreview = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("Pré-visualizar aviso")
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
@@ -459,8 +476,12 @@ internal fun MestreNoveltySettings() {
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(value = startDate, onValueChange = { startDate = it }, label = { Text("Início (AAAA-MM-DD)") }, singleLine = true, modifier = Modifier.weight(1f))
-                OutlinedTextField(value = endDate, onValueChange = { endDate = it }, label = { Text("Fim (AAAA-MM-DD)") }, singleLine = true, modifier = Modifier.weight(1f))
+                Button(onClick = { showStartPicker = true }, modifier = Modifier.weight(1f)) {
+                    Text(if (startDate.isBlank()) "Escolher início" else startDate)
+                }
+                Button(onClick = { showEndPicker = true }, modifier = Modifier.weight(1f)) {
+                    Text(if (endDate.isBlank()) "Escolher fim" else endDate)
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
@@ -508,6 +529,15 @@ internal fun MestreNoveltySettings() {
                 Text(it, color = if (it.startsWith("Novidade")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
             }
         }
+    }
+    if (showStartPicker) {
+        DatePickerDialog(onDismissRequest = { showStartPicker = false }, confirmButton = { TextButton(onClick = { startDate = formatPickerDate(startPicker.selectedDateMillis); showStartPicker = false }) { Text("OK") } }, dismissButton = { TextButton(onClick = { showStartPicker = false }) { Text("Cancelar") } }) { DatePicker(state = startPicker) }
+    }
+    if (showEndPicker) {
+        DatePickerDialog(onDismissRequest = { showEndPicker = false }, confirmButton = { TextButton(onClick = { endDate = formatPickerDate(endPicker.selectedDateMillis); showEndPicker = false }) { Text("OK") } }, dismissButton = { TextButton(onClick = { showEndPicker = false }) { Text("Cancelar") } }) { DatePicker(state = endPicker) }
+    }
+    if (showPreview) {
+        androidx.compose.material3.AlertDialog(onDismissRequest = { showPreview = false }, confirmButton = { TextButton(onClick = { showPreview = false }) { Text("Fechar") } }, title = { Text("Prévia") }, text = { Row(verticalAlignment = Alignment.CenterVertically) { Surface(color = Color(0xFFD91C1C), shape = RoundedCornerShape(12.dp)) { Text(noveltyText, color = Color.White, modifier = Modifier.padding(10.dp)) }; Spacer(modifier = Modifier.width(8.dp)); Text("Configurações") } })
     }
 }
 
