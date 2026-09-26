@@ -173,7 +173,10 @@ internal fun resolveExpressiveGlassStyle(
     val safeFluidity = fluidity.coerceIn(0f, 1f)
     val progress = ((safeTransparency - 0.20f) / 0.70f).coerceIn(0f, 1f)
     val actions = expressiveGlassActionColors(accentName, isDark)
-    val surfaceAlpha = 0.76f - (0.34f * progress)
+    // O vidro precisa deixar o fundo e as refrações atravessarem a superfície.
+    // Antes o preenchimento branco/dourado ficava dominante e transformava o
+    // efeito em cartões sólidos, principalmente no preset gold.
+    val surfaceAlpha = 0.64f - (0.30f * progress)
     val normalized = normalizeExpressiveGlassAccentName(accentName)
     return ExpressiveGlassStyle(
         enabled = true,
@@ -185,7 +188,7 @@ internal fun resolveExpressiveGlassStyle(
         tertiaryAccent = actions[2],
         onAccent = if (isDark || normalized in setOf("gold", "orange")) Color(0xFF17202A) else Color.White,
         surfaceAlpha = surfaceAlpha,
-        strongSurfaceAlpha = (surfaceAlpha + 0.12f).coerceAtMost(0.90f),
+        strongSurfaceAlpha = (surfaceAlpha + 0.10f).coerceAtMost(0.82f),
         borderColor = Color.White.copy(alpha = (0.62f + 0.24f * safeFluidity).coerceAtMost(0.90f)),
         shadowElevation = 9f + (5f * safeFluidity),
         shadowAlpha = (if (isDark) 0.24f else 0.12f) + (0.08f * safeFluidity),
@@ -452,11 +455,11 @@ fun Modifier.expressiveLiquidGlass(
                 val minDimension = minOf(size.width, size.height).coerceAtLeast(1f)
                 val baseBrush = Brush.linearGradient(
                     colors = listOf(
-                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.58f).coerceIn(0f, 1f)),
-                        tint.copy(alpha = (0.30f + 0.18f * fluidity) * safeIntensity),
-                        style.surfaceBase.copy(alpha = (style.surfaceAlpha * 0.46f).coerceIn(0f, 1f)),
+                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.40f).coerceIn(0f, 1f)),
+                        tint.copy(alpha = (0.34f + 0.20f * fluidity) * safeIntensity),
+                        style.surfaceBase.copy(alpha = (style.surfaceAlpha * 0.30f).coerceIn(0f, 1f)),
                         refraction.copy(alpha = (0.20f + 0.14f * fluidity) * safeIntensity),
-                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.52f).coerceIn(0f, 1f))
+                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.36f).coerceIn(0f, 1f))
                     ),
                     start = Offset.Zero,
                     end = Offset(size.width, size.height)
@@ -509,8 +512,8 @@ fun Modifier.expressiveLiquidGlass(
                 // Difusão óptica suave: cria a leitura de backdrop blur/frost sem borrar o conteúdo.
                 val diffusionA = Brush.radialGradient(
                     colors = listOf(
-                        style.surfaceBase.copy(alpha = (0.12f + 0.08f * fluidity) * safeIntensity),
-                        Color.White.copy(alpha = if (style.isDark) 0.025f else 0.07f),
+                        style.surfaceBase.copy(alpha = (0.08f + 0.06f * fluidity) * safeIntensity),
+                        Color.White.copy(alpha = if (style.isDark) 0.02f else 0.045f),
                         Color.Transparent
                     ),
                     center = Offset(
@@ -522,7 +525,7 @@ fun Modifier.expressiveLiquidGlass(
                 val diffusionB = Brush.radialGradient(
                     colors = listOf(
                         refraction.copy(alpha = (0.085f + 0.075f * fluidity) * safeIntensity),
-                        style.surfaceBase.copy(alpha = (0.065f + 0.04f * fluidity) * safeIntensity),
+                        style.surfaceBase.copy(alpha = (0.045f + 0.03f * fluidity) * safeIntensity),
                         Color.Transparent
                     ),
                     center = Offset(
