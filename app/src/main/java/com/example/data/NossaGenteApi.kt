@@ -93,7 +93,7 @@ class NossaGenteApi(context: Context) {
         fetchPointOnce(limit.coerceIn(1, 100), allowSavedCredentialRecovery = true)
     }
 
-    /** Perfil autenticado do colaborador. O APK oficial usa GET /me e /tempo-casa. */
+    /** Perfil autenticado do colaborador. O APK oficial usa GET /me, /tempo-casa e /me/foto. */
     suspend fun fetchEmployeeProfile(): NossaGenteProfileResult = withContext(Dispatchers.IO) {
         fetchEmployeeProfileOnce(allowSavedCredentialRecovery = true)
     }
@@ -132,48 +132,202 @@ class NossaGenteApi(context: Context) {
     }
 
     /**
-     * Baixa a foto do colaborador usando a mesma sessão autenticada do Nossa Gente.
-     * A foto é opcional: qualquer falha mantém o boneco padrão sem afetar Meu Perfil.
+     * Foto autenticada do colaborador.
+     *
+     * O APK oficial do Nossa Gente não depende de uma URL dentro do GET /me:
+     * ele possui o endpoint dedicado GET /me/foto. Por isso este método consulta
+     * primeiro esse endpoint e usa a URL do perfil apenas como compatibilidade.
      */
-    suspend fun fetchProfilePhoto(photoUrl: String?): ByteArray? = withContext(Dispatchers.IO) {
-        val normalizedUrl = normalizeProfilePhotoUrl(photoUrl) ?: return@withContext null
-        profilePhotoCache[normalizedUrl]?.let { return@withContext it }
+    suspend fun fetchProfilePhoto(fallbackPhotoUrl: String? = null): ByteArray? = withContext(Dispatchers.IO) {
+        fetchProfilePhotoOnce(
+            fallbackPhotoUrl = fallbackPhotoUrl,
+            allowSavedCredentialRecovery = true
+        )
+    }
 
-        if (normalizedUrl.startsWith("data:image/", ignoreCase = true)) {
-            val encoded = normalizedUrl.substringAfter("base64,", missingDelimiterValue = "")
-            if (encoded.isBlank()) return@withContext null
-            return@withContext runCatching {
-                Base64.decode(encoded, Base64.DEFAULT)
-            }.getOrNull()?.takeIf { it.isNotEmpty() }?.also {
-                profilePhotoCache[normalizedUrl] = it
-            }
-        }
+    private suspend fun fetchProfilePhotoOnce(
+        fallbackPhotoUrl: String?,
+        allowSavedCredentialRecovery: Boolean
+    ): ByteArray? {
+        val token = currentToken() ?: return null
+        val authenticatedCacheKey = "me:" + tokenCacheFingerprint(token)
+        profilePhotoCache[authenticatedCacheKey]?.let { return it }
 
-        fun download(authorization: String?): ByteArray? {
-            val requestBuilder = Request.Builder()
-                .url(normalizedUrl)
+        val endpointResult = runCatching {
+            val request = Request.Builder()
+                .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/me/foto?_sync=${System.currentTimeMillis()}")
                 .get()
-                .header("Accept", "image/*")
-                .header("Cache-Control", "no-cache")
-            if (!authorization.isNullOrBlank()) {
-                requestBuilder.header("Authorization", authorization)
-            }
-            return runCatching {
-                client.newCall(requestBuilder.build()).execute().use { response ->
-                    if (!response.isSuccessful) return@use null
-                    val body = response.body ?: return@use null
-                    val contentLength = body.contentLength()
-                    if (contentLength > MAX_PROFILE_PHOTO_BYTES) return@use null
-                    body.bytes().takeIf { bytes ->
-                        bytes.isNotEmpty() && bytes.size.toLong() <= MAX_PROFILE_PHOTO_BYTES
+                .header("Accept", "image/*, application/json;q=0.9, */*;q=0.8")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .header("Cache-Control", "no-cache, no-store")
+                .header("Pragma", "no-cache")
+                .header("Authorization", "Bearer $token")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                when {
+                    response.code == 401 || response.code == 403 -> ProfilePhotoEndpointResult.Unauthorized
+                    response.code == 204 || response.code == 404 -> ProfilePhotoEndpointResult.NoPhoto
+                    !response.isSuccessful -> ProfilePhotoEndpointResult.NoPhoto
+                    else -> {
+                        val body = response.body ?: return@use ProfilePhotoEndpointResult.NoPhoto
+                        val contentLength = body.contentLength()
+                        if (contentLength > MAX_PROFILE_PHOTO_BYTES) {
+                            return@use ProfilePhotoEndpointResult.NoPhoto
+                        }
+                        val mediaType = body.contentType()?.toString().orEmpty()
+                        val bytes = body.bytes()
+                        if (bytes.isEmpty() || bytes.size.toLong() > MAX_PROFILE_PHOTO_BYTES) {
+                            return@use ProfilePhotoEndpointResult.NoPhoto
+                        }
+                        when {
+                            mediaType.startsWith("image/", ignoreCase = true) || looksLikeImageBytes(bytes) -> {
+                                ProfilePhotoEndpointResult.Photo(bytes)
+                            }
+                            else -> {
+                                val reference = parseProfilePhotoReference(bytes.toString(Charsets.UTF_8))
+                                val downloaded = downloadProfilePhotoReference(reference, token)
+                                if (downloaded != null) ProfilePhotoEndpointResult.Photo(downloaded)
+                                else ProfilePhotoEndpointResult.NoPhoto
+                            }
+                        }
                     }
                 }
-            }.getOrNull()
+            }
+        }.getOrElse { ProfilePhotoEndpointResult.NoPhoto }
+
+        when (endpointResult) {
+            ProfilePhotoEndpointResult.Unauthorized -> {
+                if (allowSavedCredentialRecovery && renewFromSavedCredentials()) {
+                    return fetchProfilePhotoOnce(
+                        fallbackPhotoUrl = fallbackPhotoUrl,
+                        allowSavedCredentialRecovery = false
+                    )
+                }
+                return null
+            }
+            is ProfilePhotoEndpointResult.Photo -> {
+                profilePhotoCache[authenticatedCacheKey] = endpointResult.bytes
+                return endpointResult.bytes
+            }
+            ProfilePhotoEndpointResult.NoPhoto -> Unit
         }
 
-        val bearer = currentToken()?.let { "Bearer $it" }
-        val bytes = download(bearer) ?: download(null)
-        bytes?.also { profilePhotoCache[normalizedUrl] = it }
+        val fallbackBytes = downloadProfilePhotoReference(fallbackPhotoUrl, token)
+        if (fallbackBytes != null) {
+            profilePhotoCache[authenticatedCacheKey] = fallbackBytes
+        }
+        return fallbackBytes
+    }
+
+    private fun downloadProfilePhotoReference(reference: String?, token: String): ByteArray? {
+        val normalizedUrl = normalizeProfilePhotoUrl(reference) ?: return null
+        if (normalizedUrl.startsWith("data:image/", ignoreCase = true)) {
+            val encoded = normalizedUrl.substringAfter("base64,", missingDelimiterValue = "")
+            if (encoded.isBlank()) return null
+            return runCatching {
+                Base64.decode(encoded, Base64.DEFAULT)
+            }.getOrNull()?.takeIf { it.isNotEmpty() && it.size.toLong() <= MAX_PROFILE_PHOTO_BYTES }
+        }
+
+        val request = Request.Builder()
+            .url(normalizedUrl)
+            .get()
+            .header("Accept", "image/*")
+            .header("Cache-Control", "no-cache")
+            .header("Authorization", "Bearer $token")
+            .build()
+
+        return runCatching {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                val body = response.body ?: return@use null
+                val contentLength = body.contentLength()
+                if (contentLength > MAX_PROFILE_PHOTO_BYTES) return@use null
+                val mediaType = body.contentType()?.toString().orEmpty()
+                val bytes = body.bytes()
+                bytes.takeIf {
+                    it.isNotEmpty() &&
+                        it.size.toLong() <= MAX_PROFILE_PHOTO_BYTES &&
+                        (mediaType.startsWith("image/", ignoreCase = true) || looksLikeImageBytes(it))
+                }
+            }
+        }.getOrNull()
+    }
+
+    private fun looksLikeImageBytes(bytes: ByteArray): Boolean {
+        if (bytes.size < 4) return false
+        val b0 = bytes[0].toInt() and 0xFF
+        val b1 = bytes[1].toInt() and 0xFF
+        val b2 = bytes[2].toInt() and 0xFF
+        val b3 = bytes[3].toInt() and 0xFF
+        val jpeg = b0 == 0xFF && b1 == 0xD8 && b2 == 0xFF
+        val png = b0 == 0x89 && b1 == 0x50 && b2 == 0x4E && b3 == 0x47
+        val gif = b0 == 0x47 && b1 == 0x49 && b2 == 0x46 && b3 == 0x38
+        val webp = bytes.size >= 12 &&
+            String(bytes, 0, 4, Charsets.US_ASCII) == "RIFF" &&
+            String(bytes, 8, 4, Charsets.US_ASCII) == "WEBP"
+        return jpeg || png || gif || webp
+    }
+
+    private fun parseProfilePhotoReference(raw: String): String? {
+        val trimmed = raw.trim()
+        if (trimmed.isBlank()) return null
+        if (
+            trimmed.startsWith("data:image/", ignoreCase = true) ||
+            trimmed.startsWith("https://", ignoreCase = true) ||
+            trimmed.startsWith("http://", ignoreCase = true) ||
+            trimmed.startsWith("//") ||
+            trimmed.startsWith("/")
+        ) {
+            return trimmed.trim('"')
+        }
+
+        val parsed = runCatching { JSONTokener(trimmed).nextValue() }.getOrNull() ?: return null
+        fun find(value: Any?, depth: Int): String? {
+            if (depth > 5 || value == null || value == JSONObject.NULL) return null
+            return when (value) {
+                is String -> value.trim().trim('"').takeIf { candidate ->
+                    candidate.startsWith("data:image/", ignoreCase = true) ||
+                        candidate.startsWith("https://", ignoreCase = true) ||
+                        candidate.startsWith("http://", ignoreCase = true) ||
+                        candidate.startsWith("//") ||
+                        candidate.startsWith("/") ||
+                        candidate.contains("/uploads/", ignoreCase = true) ||
+                        candidate.contains("/media/", ignoreCase = true)
+                }
+                is JSONObject -> {
+                    val priorityKeys = arrayOf(
+                        "foto", "fotoUrl", "foto_url", "urlFoto", "url_foto",
+                        "photo", "photoUrl", "photo_url",
+                        "avatar", "avatarUrl", "avatar_url",
+                        "imagem", "image", "imageUrl", "image_url",
+                        "url", "uri", "src", "path",
+                        "data", "resultado", "result", "payload"
+                    )
+                    priorityKeys.firstNotNullOfOrNull { key ->
+                        if (value.has(key)) find(value.opt(key), depth + 1) else null
+                    }
+                }
+                is JSONArray -> (0 until value.length()).firstNotNullOfOrNull { index ->
+                    find(value.opt(index), depth + 1)
+                }
+                else -> null
+            }
+        }
+        return find(parsed, 0)
+    }
+
+    private fun tokenCacheFingerprint(token: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(token.toByteArray(StandardCharsets.UTF_8))
+            .take(8)
+            .joinToString("") { byte -> "%02x".format(byte) }
+
+    private sealed interface ProfilePhotoEndpointResult {
+        data class Photo(val bytes: ByteArray) : ProfilePhotoEndpointResult
+        data object NoPhoto : ProfilePhotoEndpointResult
+        data object Unauthorized : ProfilePhotoEndpointResult
     }
 
     /** Banco de horas do Nossa Gente. O contrato oficial usa SALDOTOTAL e MESES. */
@@ -729,12 +883,15 @@ class NossaGenteApi(context: Context) {
 
     private fun clearSession() {
         inMemoryToken = null
+        profilePhotoCache.clear()
         secureSession.clear()
     }
 
     internal fun parsePromotionsForTest(raw: String): List<Promotion> = parsePromotions(raw)
     internal fun parseEmployeeProfileForTest(raw: String): EmployeeProfile = parseEmployeeProfile(raw)
     internal fun normalizeProfilePhotoUrlForTest(raw: String?): String? = normalizeProfilePhotoUrl(raw)
+    internal fun parseProfilePhotoReferenceForTest(raw: String): String? = parseProfilePhotoReference(raw)
+    internal fun looksLikeImageBytesForTest(bytes: ByteArray): Boolean = looksLikeImageBytes(bytes)
 
     /** Assinatura estável do conteúdo comercial; a ordem da resposta não altera o resultado. */
     private fun fingerprintPromotions(promotions: List<Promotion>): String = fingerprintPromotionsForTest(promotions)

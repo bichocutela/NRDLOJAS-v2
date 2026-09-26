@@ -1,5 +1,7 @@
 package com.example.ui
 
+import android.graphics.BitmapFactory
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -118,12 +120,10 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
             when (val result = api.fetchEmployeeProfile()) {
                 is NossaGenteProfileResult.Success -> {
                     employeeProfile = result.profile
-                    val photoUrl = result.profile.photoUrl
-                    if (photoUrl.isNullOrBlank()) {
-                        employeePhotoModel = null
-                    } else {
-                        scope.launch {
-                            employeePhotoModel = api.fetchProfilePhoto(photoUrl) ?: photoUrl
+                    employeePhotoModel = null
+                    scope.launch {
+                        employeePhotoModel = api.fetchProfilePhoto(result.profile.photoUrl)?.let { bytes ->
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                         }
                     }
                 }

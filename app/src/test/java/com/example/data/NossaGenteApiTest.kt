@@ -83,6 +83,43 @@ class NossaGenteApiTest {
     }
 
     @Test
+    fun parsesDedicatedProfilePhotoPayloadsFromOfficialEndpoint() {
+        val api = NossaGenteApi(ApplicationProvider.getApplicationContext())
+
+        assertEquals(
+            "https://app.nordestao.com.br/media/perfis/42.jpg",
+            api.parseProfilePhotoReferenceForTest(
+                """{"data":{"foto":"https://app.nordestao.com.br/media/perfis/42.jpg"}}"""
+            )
+        )
+        assertEquals(
+            "/uploads/perfis/42.jpg",
+            api.parseProfilePhotoReferenceForTest(
+                """{"imagem":{"url":"/uploads/perfis/42.jpg"}}"""
+            )
+        )
+        assertEquals(
+            "https://cdn.example.com/perfil.jpg",
+            api.parseProfilePhotoReferenceForTest(""https://cdn.example.com/perfil.jpg"")
+        )
+    }
+
+    @Test
+    fun recognizesCommonImageSignaturesForAuthenticatedProfilePhoto() {
+        val api = NossaGenteApi(ApplicationProvider.getApplicationContext())
+
+        assertEquals(
+            true,
+            api.looksLikeImageBytesForTest(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0x00))
+        )
+        assertEquals(
+            true,
+            api.looksLikeImageBytesForTest(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47))
+        )
+        assertEquals(false, api.looksLikeImageBytesForTest("sem-foto".toByteArray()))
+    }
+
+    @Test
     fun formatsExactTenureInYearsAndMonths() {
         val api = NossaGenteApi(ApplicationProvider.getApplicationContext())
         val now = java.util.Calendar.getInstance().apply {

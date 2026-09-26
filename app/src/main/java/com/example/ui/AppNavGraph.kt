@@ -1,5 +1,7 @@
 package com.example.ui
 
+import android.graphics.BitmapFactory
+
 import android.util.Log
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -112,12 +114,9 @@ fun AppNavGraph(
             when (val result = nossaGenteApi.fetchEmployeeProfile()) {
                 is com.example.data.NossaGenteProfileResult.Success -> {
                     drawerEmployeeProfile = result.profile
-                    val photoUrl = result.profile.photoUrl
-                    drawerProfilePhotoModel = if (photoUrl.isNullOrBlank()) {
-                        null
-                    } else {
-                        nossaGenteApi.fetchProfilePhoto(photoUrl) ?: photoUrl
-                    }
+                    drawerProfilePhotoModel = nossaGenteApi
+                        .fetchProfilePhoto(result.profile.photoUrl)
+                        ?.let { bytes -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
                 }
                 else -> Unit
             }
@@ -172,7 +171,7 @@ fun AppNavGraph(
                     isLoggedIn = isLoggedIn,
                     userRole = userRole,
                     showMyProfile = nossaGenteApi.hasSession() && profileEnabled,
-                    myProfilePhotoModel = drawerProfilePhotoModel ?: drawerEmployeeProfile?.photoUrl,
+                    myProfilePhotoModel = drawerProfilePhotoModel,
                     myProfileName = drawerEmployeeProfile?.name,
                     onLoginSuccess = { role ->
                         isLoggedIn = true
