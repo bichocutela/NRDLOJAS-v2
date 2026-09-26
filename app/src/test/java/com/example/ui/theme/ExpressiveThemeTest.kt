@@ -7,9 +7,44 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import org.junit.Test
 
 class ExpressiveThemeTest {
+
+    private fun contrastRatio(a: Color, b: Color): Float {
+        val l1 = a.luminance()
+        val l2 = b.luminance()
+        val lighter = maxOf(l1, l2)
+        val darker = minOf(l1, l2)
+        return (lighter + 0.05f) / (darker + 0.05f)
+    }
+
+    @Test
+    fun `expressive dark palette keeps readable semantic pairs`() {
+        val scheme = expressiveColorScheme(darkTheme = true)
+        val pairs = listOf(
+            scheme.background to scheme.onBackground,
+            scheme.surface to scheme.onSurface,
+            scheme.surfaceVariant to scheme.onSurfaceVariant,
+            scheme.primary to scheme.onPrimary,
+            scheme.primaryContainer to scheme.onPrimaryContainer,
+            scheme.secondary to scheme.onSecondary,
+            scheme.secondaryContainer to scheme.onSecondaryContainer,
+            scheme.tertiary to scheme.onTertiary,
+            scheme.tertiaryContainer to scheme.onTertiaryContainer,
+            scheme.error to scheme.onError,
+            scheme.errorContainer to scheme.onErrorContainer
+        )
+
+        pairs.forEach { (background, foreground) ->
+            assertTrue(
+                "Contraste insuficiente: " + contrastRatio(background, foreground),
+                contrastRatio(background, foreground) >= 4.5f
+            )
+        }
+    }
 
     @Test
     fun `expressive is the eighth supported theme`() {

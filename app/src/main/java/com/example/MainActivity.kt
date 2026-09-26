@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.animation.*
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
@@ -43,6 +45,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 
+import androidx.core.view.WindowCompat
 import androidx.room.Room
 import com.example.data.AppDatabase
 import com.example.data.AppearanceSettings
@@ -193,6 +196,18 @@ class MainActivity : ComponentActivity() {
                 hasLocalChoice = hasLocalAppearanceChoice,
                 forceGlobal = remoteAppearance.globalOverrideEnabled
             )
+            val systemDark = isSystemInDarkTheme()
+            val resolvedDarkAppearance = when (effectiveAppearanceMode) {
+                "light" -> false
+                "dark" -> true
+                else -> systemDark
+            }
+            SideEffect {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !resolvedDarkAppearance
+                    isAppearanceLightNavigationBars = !resolvedDarkAppearance
+                }
+            }
             val latestFirebase by viewModel.latestProduct.collectAsState(null)
             val latestLocal by viewModel.latestProductLocal.collectAsState(null)
             val lastNotifiedCode by userPreferences.lastNotifiedProductCode.collectAsState("___LOADING___")
@@ -249,7 +264,8 @@ class MainActivity : ComponentActivity() {
                         color = if (
                             LocalGlassSoftStyle.current.enabled ||
                             LocalExpressiveStyle.current.enabled
-                        ) Color.Transparent else MaterialTheme.colorScheme.background
+                        ) Color.Transparent else MaterialTheme.colorScheme.background,
+                        contentColor = MaterialTheme.colorScheme.onBackground
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
                         if (!showSplash) {

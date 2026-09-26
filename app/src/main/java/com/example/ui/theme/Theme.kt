@@ -85,6 +85,12 @@ data class ExpressiveStyle(
 
 val LocalExpressiveStyle = staticCompositionLocalOf { ExpressiveStyle() }
 
+/**
+ * Fonte única para claro/escuro dentro de toda a árvore do app.
+ * Não inferimos mais pelo background porque Glass usa background transparente.
+ */
+val LocalNrdDarkMode = staticCompositionLocalOf { false }
+
 @Immutable
 data class ExpressiveGlassStyle(
     val enabled: Boolean = false,
@@ -849,7 +855,7 @@ fun NrdAppBackground(
             )
         }
         expressive.enabled -> {
-            val dark = MaterialTheme.colorScheme.background.red < 0.2f
+            val dark = LocalNrdDarkMode.current
             val colors = if (dark) {
                 listOf(
                     Color(0xFF101A2A),
@@ -923,7 +929,7 @@ private val SessionMulticolorPalette: List<Pair<Color, Color>> by lazy {
     MulticolorPalette.shuffled()
 }
 
-private fun expressiveColorScheme(darkTheme: Boolean) = if (darkTheme) {
+internal fun expressiveColorScheme(darkTheme: Boolean) = if (darkTheme) {
     DefaultDarkColorScheme.copy(
         primary = Color(0xFFFFD45C),
         onPrimary = Color(0xFF2E2200),
@@ -1179,7 +1185,8 @@ fun MyApplicationTheme(
     CompositionLocalProvider(
         LocalGlassSoftStyle provides glassStyle,
         LocalExpressiveStyle provides expressive,
-        LocalExpressiveGlassStyle provides expressiveGlassStyle
+        LocalExpressiveGlassStyle provides expressiveGlassStyle,
+        LocalNrdDarkMode provides darkTheme
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
