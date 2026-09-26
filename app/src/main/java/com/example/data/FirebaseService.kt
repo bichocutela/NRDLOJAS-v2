@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import com.example.BuildConfig
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import android.webkit.MimeTypeMap
 import okhttp3.RequestBody.Companion.asRequestBody
 
@@ -652,6 +653,13 @@ object FirebaseService {
     }
 
     private val okHttpClient = OkHttpClient()
+    private val appearanceHttpClient = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .writeTimeout(90, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
+        .callTimeout(110, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .build()
 
     private fun getMimeType(context: android.content.Context, uri: android.net.Uri): String {
         val extension = MimeTypeMap.getFileExtensionFromUrl(uri.toString())
@@ -1286,7 +1294,7 @@ object FirebaseService {
             .addHeader("x-firebase-token", firebaseToken)
             .build()
 
-        okHttpClient.newCall(request).execute().use { response ->
+        appearanceHttpClient.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 lastError = "Falha ao publicar a configuração remota da aparência."
@@ -1311,7 +1319,7 @@ object FirebaseService {
             .header("Cache-Control", "no-cache")
             .build()
         runCatching {
-            okHttpClient.newCall(request).execute().use { response ->
+            appearanceHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@use null
                 parsePublicAppearanceManifest(response.body?.string().orEmpty())
             }

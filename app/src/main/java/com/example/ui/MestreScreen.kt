@@ -177,6 +177,9 @@ fun MestreScreen(
     var consultationBackgroundPage by rememberSaveable { mutableIntStateOf(0) }
     var showDiscardChangesDialog by remember { mutableStateOf(false) }
     var isSavingAppearanceSettings by remember { mutableStateOf(false) }
+    var isSavingGlobalAppearance by remember { mutableStateOf(false) }
+    var isSavingThemeBackgrounds by remember { mutableStateOf(false) }
+    var isSavingConsultationAppearance by remember { mutableStateOf(false) }
     var expandedBackgroundThemes by remember { mutableStateOf<Set<String>>(emptySet()) }
     var backgroundPages by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
     var showThemeBackgroundDialog by remember { mutableStateOf(false) }
@@ -344,12 +347,26 @@ fun MestreScreen(
         consultationBackgrounds = draftConsultationBackgrounds,
         offerBanners = draftOfferBanners
     )
-    val appearanceHasChanges = appearanceDraft != appearanceSettings
+    val globalAppearanceHasChanges =
+        draftAppearanceSettings.overrideLocalTheme != appearanceSettings.overrideLocalTheme ||
+            draftAppearanceSettings.theme != appearanceSettings.theme ||
+            draftAppearanceSettings.appearanceMode != appearanceSettings.appearanceMode
+    val themeBackgroundsHaveChanges =
+        draftDefaultThemeBackgrounds != appearanceSettings.defaultThemeBackgrounds ||
+            draftThemeBackgrounds != appearanceSettings.themeBackgrounds
+    val consultationAppearanceHasChanges =
+        draftConsultationBackgrounds != appearanceSettings.consultationBackgrounds ||
+            draftOfferBanners != appearanceSettings.offerBanners
+    val appearancePageHasChanges = globalAppearanceHasChanges || themeBackgroundsHaveChanges
+    val consultationDraft = appearanceSettings.copy(
+        consultationBackgrounds = draftConsultationBackgrounds,
+        offerBanners = draftOfferBanners
+    )
     val currentPageHasChanges = when (currentPage) {
         MestrePanelPage.HOME_SETTINGS -> homeHasChanges
         MestrePanelPage.NOTIFICATION_SETTINGS -> notificationsHaveChanges
-        MestrePanelPage.APPEARANCE_SETTINGS,
-        MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS -> appearanceHasChanges
+        MestrePanelPage.APPEARANCE_SETTINGS -> appearancePageHasChanges
+        MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS -> consultationAppearanceHasChanges
         else -> false
     }
     val performPanelBack: () -> Unit = {
@@ -855,10 +872,15 @@ fun MestreScreen(
 
             if (currentPage == MestrePanelPage.APPEARANCE_SETTINGS) {
             MestrePageIntro(
-                description = "Defina o tema padrão de primeira instalação, o modo de aparência e os fundos de cada tema. O usuário continua podendo personalizar depois, salvo quando a aparência global for forçada.",
-                hasUnsavedChanges = appearanceHasChanges
+                description = "Aparência global e fundos por tema são configurações independentes. Salve cada bloco separadamente.",
+                hasUnsavedChanges = appearancePageHasChanges
             )
             Spacer(modifier = Modifier.height(12.dp))
+            MestreSectionHeader(
+                title = "Aparência global",
+                description = "Define o padrão da primeira instalação ou, quando ativado, força tema e modo para todos"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     NotificationSettingSwitch(
@@ -939,12 +961,53 @@ fun MestreScreen(
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        "Fundos por tema",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                isSavingGlobalAppearance = true
+                                val settingsToSave = appearanceSettings.copy(
+                                    overrideLocalTheme = draftAppearanceSettings.overrideLocalTheme,
+                                    theme = draftAppearanceSettings.theme,
+                                    appearanceMode = draftAppearanceSettings.appearanceMode
+                                )
+                                val saved = FirebaseService.saveAppearanceSettings(settingsToSave)
+                                isSavingGlobalAppearance = false
+                                if (saved) draftAppearanceSettings = settingsToSave
+                                snackbarHostState.showSnackbar(
+                                    if (saved) "Aparência global salva."
+                                    else FirebaseService.lastError ?: "Não foi possível salvar a aparência global."
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = globalAppearanceHasChanges && !isSavingGlobalAppearance
+                    ) {
+                        if (isSavingGlobalAppearance) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Salvando...")
+                        } else if (globalAppearanceHasChanges) {
+                            Text("Salvar aparência global")
+                        } else {
+                            Text("Aparência global atualizada")
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            MestreSectionHeader(
+                title = "Fundos por tema",
+                description = "Gerencie banners, períodos e fundos padrão sem alterar a aparência global"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         "O fundo padrão permanece disponível. Você pode ativar vários fundos por tema quando cada um tiver data de início; o período define qual aparece ao longo do ano.",
                         style = MaterialTheme.typography.bodySmall,
@@ -1120,30 +1183,34 @@ fun MestreScreen(
                     Button(
                         onClick = {
                             coroutineScope.launch {
-                                isSavingAppearanceSettings = true
-                                val saved = FirebaseService.saveAppearanceSettings(appearanceDraft)
-                                isSavingAppearanceSettings = false
+                                isSavingThemeBackgrounds = true
+                                val settingsToSave = appearanceSettings.copy(
+                                    defaultThemeBackgrounds = draftDefaultThemeBackgrounds,
+                                    themeBackgrounds = draftThemeBackgrounds
+                                )
+                                val saved = FirebaseService.saveAppearanceSettings(settingsToSave)
+                                isSavingThemeBackgrounds = false
                                 snackbarHostState.showSnackbar(
-                                    if (saved) "Aparência global publicada para todos."
-                                    else FirebaseService.lastError ?: "Não foi possível publicar a aparência global."
+                                    if (saved) "Fundos por tema publicados."
+                                    else FirebaseService.lastError ?: "Não foi possível publicar os fundos por tema."
                                 )
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = appearanceHasChanges && !isSavingAppearanceSettings
+                        enabled = themeBackgroundsHaveChanges && !isSavingThemeBackgrounds
                     ) {
-                        if (isSavingAppearanceSettings) {
+                        if (isSavingThemeBackgrounds) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 strokeWidth = 2.dp
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Publicando...")
-                        } else if (appearanceHasChanges) {
-                            Text("Salvar aparência e fundos")
+                            Text("Salvando fundos...")
+                        } else if (themeBackgroundsHaveChanges) {
+                            Text("Salvar fundos por tema")
                         } else {
-                            Text("Tudo atualizado")
+                            Text("Fundos atualizados")
                         }
                     }
                 }
@@ -1155,13 +1222,13 @@ fun MestreScreen(
             if (currentPage == MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS) {
                 MestrePageIntro(
                     description = "Escolha, agende e ajuste o fundo exclusivo da aba Consultar Produtos.",
-                    hasUnsavedChanges = appearanceHasChanges
+                    hasUnsavedChanges = consultationAppearanceHasChanges
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedCard(modifier = Modifier.fillMaxWidth().glassSoftShadow(MaterialTheme.shapes.medium)) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         val backgrounds = draftConsultationBackgrounds
-                        val activeBackground = appearanceDraft.activeConsultationBackground()
+                        val activeBackground = consultationDraft.activeConsultationBackground()
                         val pagination = calculatePaginationWindow(
                             totalItems = backgrounds.size,
                             requestedPage = consultationBackgroundPage,
@@ -1269,7 +1336,7 @@ fun MestreScreen(
                         offerBannerLabels.forEach { (offerKey, title) ->
                             val editorKey = offerEditorKey(offerKey)
                             val banners = draftOfferBanners[offerKey].orEmpty()
-                            val active = appearanceDraft.activeOfferBanner(offerKey)
+                            val active = consultationDraft.activeOfferBanner(offerKey)
                             Spacer(modifier = Modifier.height(12.dp))
                             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                                 Column(modifier = Modifier.padding(12.dp)) {
@@ -1313,9 +1380,9 @@ fun MestreScreen(
                         Button(
                             onClick = {
                                 coroutineScope.launch {
-                                    isSavingAppearanceSettings = true
-                                    val saved = FirebaseService.saveAppearanceSettings(appearanceDraft)
-                                    isSavingAppearanceSettings = false
+                                    isSavingConsultationAppearance = true
+                                    val saved = FirebaseService.saveAppearanceSettings(consultationDraft)
+                                    isSavingConsultationAppearance = false
                                     snackbarHostState.showSnackbar(
                                         if (saved) "Aparência de Consultar Produtos publicada para todos."
                                         else FirebaseService.lastError
@@ -1324,9 +1391,9 @@ fun MestreScreen(
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            enabled = appearanceHasChanges && !isSavingAppearanceSettings
+                            enabled = consultationAppearanceHasChanges && !isSavingConsultationAppearance
                         ) {
-                            if (isSavingAppearanceSettings) {
+                            if (isSavingConsultationAppearance) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(20.dp),
                                     color = MaterialTheme.colorScheme.onPrimary,
@@ -1334,7 +1401,7 @@ fun MestreScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("Publicando...")
-                            } else if (appearanceHasChanges) {
+                            } else if (consultationAppearanceHasChanges) {
                                 Text("Salvar configuração")
                             } else {
                                 Text("Tudo atualizado")
@@ -1356,11 +1423,12 @@ fun MestreScreen(
                                 when (currentPage) {
                                     MestrePanelPage.HOME_SETTINGS -> draftHomeSettings = homeSettings
                                     MestrePanelPage.NOTIFICATION_SETTINGS -> draftNotificationSettings = notificationSettings
-                                    MestrePanelPage.APPEARANCE_SETTINGS,
-                                    MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS -> {
+                                    MestrePanelPage.APPEARANCE_SETTINGS -> {
                                         draftAppearanceSettings = appearanceSettings
                                         draftDefaultThemeBackgrounds = appearanceSettings.defaultThemeBackgrounds
                                         draftThemeBackgrounds = appearanceSettings.themeBackgrounds
+                                    }
+                                    MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS -> {
                                         draftConsultationBackgrounds = appearanceSettings.consultationBackgrounds
                                         draftOfferBanners = appearanceSettings.offerBanners
                                     }
@@ -1804,12 +1872,17 @@ fun MestreScreen(
               draftThemeBackgrounds = updatedThemeBackgrounds
               draftConsultationBackgrounds = updatedConsultationBackgrounds
               draftOfferBanners = updatedOfferBanners
-              val settingsToSave = draftAppearanceSettings.copy(
-                  defaultThemeBackgrounds = updatedDefaultThemeBackgrounds,
-                  themeBackgrounds = updatedThemeBackgrounds,
-                  consultationBackgrounds = updatedConsultationBackgrounds,
-                  offerBanners = updatedOfferBanners
-              )
+              val settingsToSave = if (themeKey == CONSULTATION_BACKGROUND_KEY || previewOfferKey != null) {
+                  appearanceSettings.copy(
+                      consultationBackgrounds = updatedConsultationBackgrounds,
+                      offerBanners = updatedOfferBanners
+                  )
+              } else {
+                  appearanceSettings.copy(
+                      defaultThemeBackgrounds = updatedDefaultThemeBackgrounds,
+                      themeBackgrounds = updatedThemeBackgrounds
+                  )
+              }
 
               coroutineScope.launch {
                   isSavingAppearanceSettings = true
@@ -1878,8 +1951,9 @@ fun MestreScreen(
                           endDate = null
                       )
                       val updatedDefaults = draftDefaultThemeBackgrounds + (pending.themeKey to newDefault)
-                      val settingsToSave = appearanceDraft.copy(
-                          defaultThemeBackgrounds = updatedDefaults
+                      val settingsToSave = appearanceSettings.copy(
+                          defaultThemeBackgrounds = updatedDefaults,
+                          themeBackgrounds = draftThemeBackgrounds
                       )
                       coroutineScope.launch {
                           isSavingAppearanceSettings = true
@@ -1893,7 +1967,6 @@ fun MestreScreen(
                           isSavingAppearanceSettings = false
                           if (appearanceSaved && maskSaved) {
                               draftDefaultThemeBackgrounds = updatedDefaults
-                              draftAppearanceSettings = settingsToSave
                               pendingDefaultBannerChange = null
                               backgroundToPreview = pending.themeKey to newDefault
                               snackbarHostState.showSnackbar("Novo banner padrão publicado para todos.")
