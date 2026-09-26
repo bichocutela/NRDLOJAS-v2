@@ -2708,6 +2708,7 @@ fun HistoryItem(
                     .then(
                         if (isExpressiveGlass) {
                             Modifier
+                                .clip(historyIconShape)
                                 .background(
                                     Brush.radialGradient(
                                         colors = listOf(Color.White.copy(alpha = 0.40f), dynColors.first, dynColors.first.copy(alpha = 0.92f)),
