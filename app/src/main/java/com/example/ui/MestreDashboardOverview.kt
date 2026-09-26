@@ -43,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -366,6 +367,7 @@ internal fun MestreSettingsHub(
 internal fun MestreNoveltySettings() {
     val coroutineScope = rememberCoroutineScope()
     var isSaving by remember { mutableStateOf(false) }
+    val savedNovelties by FirebaseService.observeNovelties().collectAsState(initial = emptyList())
     var saveMessage by remember { mutableStateOf<String?>(null) }
     var noveltyText by rememberSaveable { mutableStateOf("Tema Novo: Expressivo disponível") }
     var target by rememberSaveable { mutableStateOf("all") }
@@ -384,6 +386,24 @@ internal fun MestreNoveltySettings() {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
+    if (savedNovelties.isNotEmpty()) {
+        Spacer(modifier = Modifier.height(10.dp))
+        Text("Novidades publicadas", style = MaterialTheme.typography.titleSmall)
+        Spacer(modifier = Modifier.height(6.dp))
+        savedNovelties.take(10).forEach { novelty ->
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(novelty.text, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "${if (novelty.enabled) "Ativa" else "Desativada"} • ${when (novelty.target) { "new" -> "Versão nova"; "previous" -> "Versões anteriores"; else -> "Todos" }} • ${novelty.version}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (novelty.enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+        }
+    }
     Spacer(modifier = Modifier.height(10.dp))
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
