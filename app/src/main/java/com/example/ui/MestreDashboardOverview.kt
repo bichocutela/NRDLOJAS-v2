@@ -32,6 +32,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -308,7 +315,8 @@ internal fun MestreSettingsHub(
     onOpenHome: () -> Unit,
     onOpenAppearance: () -> Unit,
     onOpenConsultationAppearance: () -> Unit,
-    onOpenNotifications: () -> Unit
+    onOpenNotifications: () -> Unit,
+    onOpenNovelties: () -> Unit
 ) {
     Text("Escolha o que deseja configurar", style = MaterialTheme.typography.titleMedium)
     Text(
@@ -344,6 +352,60 @@ internal fun MestreSettingsHub(
         icon = Icons.Default.Notifications,
         onClick = onOpenNotifications
     )
+    Spacer(modifier = Modifier.height(6.dp))
+    PanelAreaCard(
+        title = "Inserir Novidade",
+        description = "Crie avisos visuais por versão do aplicativo",
+        icon = Icons.Default.NewReleases,
+        onClick = onOpenNovelties
+    )
+}
+
+@Composable
+internal fun MestreNoveltySettings() {
+    var noveltyText by rememberSaveable { mutableStateOf("Tema Novo: Expressivo disponível") }
+    var target by rememberSaveable { mutableStateOf("Todos os usuários") }
+    var enabled by rememberSaveable { mutableStateOf(true) }
+
+    Text("Inserir Novidade", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "Monte o aviso que será publicado no aplicativo. Nesta primeira etapa, a prévia e os campos já ficam disponíveis para validação visual.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Modelo do aviso", style = MaterialTheme.typography.titleSmall)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = Color(0xFFD91C1C),
+                    shape = RoundedCornerShape(topStart = 14.dp, bottomStart = 14.dp, topEnd = 2.dp, bottomEnd = 2.dp)
+                ) {
+                    Text("NOVIDADE", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp), style = MaterialTheme.typography.labelSmall)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Configurações", style = MaterialTheme.typography.titleMedium)
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+            OutlinedTextField(
+                value = noveltyText,
+                onValueChange = { noveltyText = it },
+                label = { Text("Texto da fita") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(value = target, onValueChange = {}, readOnly = true, label = { Text("Enviar para (versões)") }, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(8.dp))
+            NotificationSettingSwitch(label = "Novidade ativa", checked = enabled, onCheckedChange = { enabled = it })
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(onClick = {}, modifier = Modifier.fillMaxWidth(), enabled = enabled && noveltyText.isNotBlank()) {
+                Text("Salvar novidade")
+            }
+        }
+    }
 }
 
 @Composable

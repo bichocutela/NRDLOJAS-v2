@@ -95,6 +95,7 @@ private enum class MestrePanelPage(val title: String) {
     CONTENT("Conteúdo e catálogo"),
     CATEGORIES("Categorias"),
     SETTINGS("Configuração do aplicativo"),
+    NOVELTY_SETTINGS("Inserir Novidade"),
     HOME_SETTINGS("Configurações da Home"),
     NOTIFICATION_SETTINGS("Notificações globais"),
     APPEARANCE_SETTINGS("Fundos por tema"),
@@ -501,7 +502,13 @@ fun MestreScreen(
                     onOpenAppearance = { openPage(MestrePanelPage.APPEARANCE_SETTINGS) },
                     onOpenConsultationAppearance = { openPage(MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS) },
                     onOpenNotifications = { openPage(MestrePanelPage.NOTIFICATION_SETTINGS) }
+                    ,onOpenNovelties = { openPage(MestrePanelPage.NOVELTY_SETTINGS) }
                 )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            if (currentPage == MestrePanelPage.NOVELTY_SETTINGS) {
+                MestreNoveltySettings()
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
