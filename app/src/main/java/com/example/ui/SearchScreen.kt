@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 33850)
-Total output lines: 3038
-
 package com.example.ui
 import androidx.compose.ui.composed
 import androidx.compose.ui.composed
@@ -556,7 +553,1886 @@ fun SearchScreen(
                             .padding(top = if (compactExpressive) 34.dp else 48.dp, start = 8.dp)
                             .then(
                                 if (isGlassSoftTheme) Modifier
-                                    .glassSoftShadow(CircleShape, 4…21850 tokens truncated…             Modifier.expressiveLiquidGlass(
+                                    .glassSoftShadow(CircleShape, 4.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                                    .border(1.dp, glassStyle.borderColor, CircleShape)
+                                else if (isExpressiveGlassTheme) Modifier
+                                    .expressiveLiquidGlass(
+                                        shape = CircleShape,
+                                        accent = expressiveGlassStyle.accent,
+                                        intensity = 0.92f,
+                                        elevation = 7.dp
+                                    )
+                                else if (isExpressiveTheme) Modifier
+                                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
+                                else Modifier.background(Color.Transparent)
+                            )
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                if (newProductsCount > 0) {
+                                    Badge { Text(newProductsCount.toString()) }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "Menu",
+                                tint = when {
+                                    isExpressiveGlassTheme -> expressiveGlassStyle.accent
+                                    isExpressiveTheme -> MaterialTheme.colorScheme.onPrimaryContainer
+                                    else -> MaterialTheme.colorScheme.primary
+                                }
+                            )
+                        }
+                    }
+                }
+                if (homeSettings.showNotificationIcon && unreadNotifications > 0) {
+                    IconButton(
+                        onClick = { showNotificationsSheet = true },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = if (compactExpressive) 34.dp else 48.dp, end = 8.dp)
+                            .then(
+                                if (isGlassSoftTheme) Modifier
+                                    .glassSoftShadow(CircleShape, 4.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                                    .border(1.dp, glassStyle.borderColor, CircleShape)
+                                else if (isExpressiveGlassTheme) Modifier
+                                    .expressiveLiquidGlass(
+                                        shape = CircleShape,
+                                        accent = expressiveGlassStyle.accent,
+                                        intensity = 0.92f,
+                                        elevation = 7.dp
+                                    )
+                                else if (isExpressiveTheme) Modifier
+                                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
+                                else Modifier
+                            )
+                    ) {
+                        BadgedBox(
+                            badge = { Badge { Text(unreadNotifications.toString()) } }
+                        ) {
+                            Icon(
+                                Icons.Default.Notifications,
+                                contentDescription = "Notificações",
+                                tint = when {
+                                    isExpressiveGlassTheme -> expressiveGlassStyle.accent
+                                    isExpressiveTheme -> MaterialTheme.colorScheme.onPrimaryContainer
+                                    else -> MaterialTheme.colorScheme.primary
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(
+            modifier = Modifier.height(
+                when {
+                    compactExpressive -> 10.dp
+                    screenProfile.veryCompact -> 8.dp
+                    else -> 16.dp
+                }
+            )
+        )
+
+            Column(
+            modifier = Modifier.padding(horizontal = screenProfile.horizontalPadding),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            val searchFieldShape = when {
+                isExpressiveGlassTheme -> {
+                    val water = expressiveGlassStyle.fluidity
+                    RoundedCornerShape(
+                        topStart = (30f + 8f * water).dp,
+                        topEnd = (22f + 10f * water).dp,
+                        bottomEnd = (32f + 8f * water).dp,
+                        bottomStart = (24f + 12f * water).dp
+                    )
+                }
+                isExpressiveTheme -> RoundedCornerShape(30.dp)
+                else -> RoundedCornerShape(32.dp)
+            }
+            TextField(
+                value = searchQuery,
+                onValueChange = viewModel::updateSearchQuery,
+                singleLine = true,
+                placeholder = { Text("Pesquisar produto...", style = MaterialTheme.typography.bodyLarge) },
+                leadingIcon = {
+                    if (isExpressiveGlassTheme) {
+                        Box(
+                            modifier = Modifier
+                                .size(if (compactExpressive) 38.dp else 42.dp)
+                                .expressiveLiquidGlass(
+                                    shape = CircleShape,
+                                    accent = expressiveGlassStyle.accent,
+                                    secondaryAccent = expressiveGlassStyle.secondaryAccent,
+                                    intensity = 0.92f,
+                                    elevation = 5.dp,
+                                    waves = false,
+                                    bubbleSeed = 41
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = "Pesquisar",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(if (compactExpressive) 21.dp else 23.dp)
+                            )
+                        }
+                    } else {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "Pesquisar",
+                            modifier = Modifier.size(if (compactExpressive) 24.dp else 28.dp)
+                        )
+                    }
+                },
+                trailingIcon = {
+                    Row {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(
+                                onClick = { viewModel.updateSearchQuery("") },
+                                modifier = Modifier.then(
+                                    if (isExpressiveGlassTheme) {
+                                        Modifier.expressiveLiquidGlass(
+                                            shape = CircleShape,
+                                            accent = expressiveGlassStyle.secondaryAccent,
+                                            intensity = 0.88f,
+                                            elevation = 4.dp,
+                                            waves = false,
+                                            bubbleSeed = 43
+                                        )
+                                    } else Modifier
+                                )
+                            ) {
+                                Icon(
+                                    Icons.Default.Clear,
+                                    contentDescription = "Limpar",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                        } else {
+                            if (canQuickAddProduct) {
+                                val quickAddInteraction = remember { MutableInteractionSource() }
+                                val quickAddPressed by quickAddInteraction.collectIsPressedAsState()
+                                val quickAddScale by animateFloatAsState(
+                                    targetValue = if (quickAddPressed) 0.90f else 1f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMedium
+                                    ),
+                                    label = "quick-add-fab-scale"
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(if (isExpressiveTheme) 48.dp else 40.dp)
+                                        .scale(quickAddScale)
+                                        .then(
+                                            if (isExpressiveGlassTheme) {
+                                                Modifier.expressiveLiquidGlass(
+                                                    shape = CircleShape,
+                                                    accent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFFFF8E9) else expressiveGlassStyle.accent,
+                                                    secondaryAccent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFFFD56A) else expressiveGlassStyle.tertiaryAccent,
+                                                    intensity = 1.10f,
+                                                    elevation = 8.dp,
+                                                    waves = false,
+                                                    bubbleSeed = 47
+                                                )
+                                            } else {
+                                                Modifier
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                                            }
+                                        )
+                                        .clickable(
+                                            interactionSource = quickAddInteraction,
+                                            indication = null
+                                        ) { showQuickAddProduct = true },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = "Adicionar produto",
+                                        tint = if (isExpressiveGlassTheme) expressiveGlassStyle.accent else MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(if (isExpressiveTheme) 28.dp else 24.dp)
+                                    )
+                                }
+                            }
+                            IconButton(
+                                onClick = {
+                                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                        putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
+                                        putExtra(RecognizerIntent.EXTRA_PROMPT, "Diga o nome ou código do produto")
+                                    }
+                                    voiceLauncher.launch(intent)
+                                },
+                                modifier = Modifier
+                                    .size(if (isExpressiveTheme) 42.dp else 48.dp)
+                                    .then(
+                                        if (isExpressiveGlassTheme) {
+                                            Modifier.expressiveLiquidGlass(
+                                                shape = CircleShape,
+                                                accent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFFFF8E9) else expressiveGlassStyle.tertiaryAccent,
+                                                secondaryAccent = if (expressiveGlassStyle.accentName == "gold") Color(0xFF9ECFFF) else expressiveGlassStyle.accent,
+                                                intensity = 0.86f,
+                                                elevation = 4.dp,
+                                                waves = false,
+                                                bubbleSeed = 53
+                                            )
+                                        } else Modifier
+                                    )
+                            ) {
+                                Icon(
+                                    Icons.Default.Mic,
+                                    contentDescription = "Pesquisar por voz",
+                                    tint = if (isExpressiveGlassTheme) expressiveGlassStyle.tertiaryAccent else MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(
+                        min = when {
+                            compactExpressive -> 58.dp
+                            isExpressiveGlassTheme -> 62.dp
+                            isExpressiveTheme -> 60.dp
+                            else -> 56.dp
+                        }
+                    )
+                    .then(
+                        when {
+                            isExpressiveGlassTheme -> Modifier.expressiveLiquidGlass(
+                                shape = searchFieldShape,
+                                accent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFFFF7F1) else expressiveGlassStyle.accent,
+                                secondaryAccent = if (expressiveGlassStyle.accentName == "gold") Color(0xFF8EC9FF) else expressiveGlassStyle.secondaryAccent,
+                                intensity = 1.18f,
+                                elevation = 10.dp,
+                                animated = true,
+                                waves = true,
+                                bubbleSeed = 59
+                            )
+                            isGlassSoftTheme -> Modifier.glassSoftShadow(searchFieldShape)
+                            isExpressiveTheme -> Modifier.expressiveShadow(searchFieldShape, 8.dp)
+                            else -> Modifier
+                        }
+                    )
+                    .clip(searchFieldShape)
+                    .border(
+                        1.dp,
+                        when {
+                            isExpressiveGlassTheme -> Color.Transparent
+                            isGlassSoftTheme -> glassStyle.borderColor
+                            isExpressiveTheme -> MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                            else -> MaterialTheme.colorScheme.outline
+                        },
+                        searchFieldShape
+                    ),
+                shape = searchFieldShape,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = when {
+                        isExpressiveGlassTheme -> Color.Transparent
+                        isGlassSoftTheme -> MaterialTheme.colorScheme.surface
+                        isExpressiveTheme -> MaterialTheme.colorScheme.surface
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    },
+                    unfocusedContainerColor = when {
+                        isExpressiveGlassTheme -> Color.Transparent
+                        isGlassSoftTheme -> MaterialTheme.colorScheme.surface
+                        isExpressiveTheme -> MaterialTheme.colorScheme.surface
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    },
+                    disabledContainerColor = when {
+                        isExpressiveGlassTheme -> Color.Transparent
+                        isGlassSoftTheme -> MaterialTheme.colorScheme.surface
+                        isExpressiveTheme -> MaterialTheme.colorScheme.surfaceContainerHigh
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    },
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent
+                )
+            )
+            
+            Spacer(modifier = Modifier.height(if (screenProfile.veryCompact) 8.dp else 16.dp))
+            
+            val searchButtonShape = when {
+                isExpressiveGlassTheme -> {
+                    val water = expressiveGlassStyle.fluidity
+                    RoundedCornerShape(
+                        topStart = (30f + 10f * water).dp,
+                        topEnd = (20f + 14f * water).dp,
+                        bottomEnd = (34f + 8f * water).dp,
+                        bottomStart = (22f + 16f * water).dp
+                    )
+                }
+                isExpressiveTheme -> RoundedCornerShape(30.dp)
+                else -> RoundedCornerShape(28.dp)
+            }
+            val openProductSearch = {
+                keyboardController?.hide()
+                sheetQuery = searchQuery
+                showProductSearchSheet = true
+            }
+            val primaryActionInteraction = remember { MutableInteractionSource() }
+            val primaryActionPressed by primaryActionInteraction.collectIsPressedAsState()
+            val primaryActionScale by animateFloatAsState(
+                targetValue = if (primaryActionPressed) 0.965f else 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
+                label = "expressive-primary-action"
+            )
+            if (isGlassSoftTheme) {
+                val glassSearchButtonHeight = when {
+                    compactExpressive -> 54.dp
+                    isExpressiveTheme -> 58.dp
+                    else -> 56.dp
+                }
+                Surface(
+                    onClick = openProductSearch,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(glassSearchButtonHeight)
+                        .glassSoftShadow(searchButtonShape)
+                        .expressiveShadow(searchButtonShape, 9.dp),
+                    shape = searchButtonShape,
+                    color = Color.Transparent,
+                    contentColor = glassStyle.onAccent,
+                    border = BorderStroke(1.dp, glassStyle.borderColor)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(glassSearchButtonHeight)
+                            .background(glassActionBrush),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .expressiveLiquidGlass(
+                                    shape = CircleShape,
+                                    accent = expressiveGlassStyle.accent,
+                                    intensity = 0.88f,
+                                    elevation = 3.dp,
+                                    waves = false,
+                                    bubbleSeed = 67
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Pesquisar", fontWeight = FontWeight.Black, fontSize = 17.sp)
+                    }
+                }
+            } else if (isExpressiveGlassTheme) {
+                val expressiveGlassSearchButtonHeight = when {
+                    compactExpressive -> 58.dp
+                    else -> 64.dp
+                }
+                Surface(
+                    onClick = openProductSearch,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(expressiveGlassSearchButtonHeight)
+                        .scale(primaryActionScale)
+                        .expressiveLiquidGlass(
+                            shape = searchButtonShape,
+                            accent = Color(0xFFF5AA00),
+                            secondaryAccent = Color(0xFFFFE27A),
+                            intensity = 1.40f,
+                            elevation = 13.dp,
+                            animated = true,
+                            waves = true,
+                            bubbleSeed = 61
+                        ),
+                    shape = searchButtonShape,
+                    color = Color.Transparent,
+                    contentColor = expressiveGlassStyle.onAccent,
+                    border = null,
+                    interactionSource = primaryActionInteraction
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(expressiveGlassSearchButtonHeight),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Pesquisar", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                }
+            } else {
+                Button(
+                    onClick = openProductSearch,
+                    shape = searchButtonShape,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(
+                            min = when {
+                                compactExpressive -> 54.dp
+                                isExpressiveTheme -> 58.dp
+                                else -> 56.dp
+                            }
+                        )
+                        .expressiveShadow(searchButtonShape, 9.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Default.Search, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Pesquisar", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(if (screenProfile.veryCompact) 8.dp else 16.dp))
+
+        if (searchQuery.isNotEmpty()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentPadding = PaddingValues(horizontal = screenProfile.horizontalPadding, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (searchResults.isEmpty()) {
+                    item { SearchEmptyState(onClear = { viewModel.updateSearchQuery("") }) }
+                } else {
+                    itemsIndexed(searchResults, key = { _, it -> it.code }) { index, product ->
+                        ProductCard(product, viewModel, index, appTheme, textPreferences)
+                    }
+                }
+            }
+        } else {
+            val hasVisibleHomeSection = homeSettings.showCategories ||
+                (homeSettings.showMostUsed && mostUsed.isNotEmpty()) ||
+                latestAdded.isNotEmpty() ||
+                (homeSettings.showHistory && history.isNotEmpty()) ||
+                homeSettings.showFavorites
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentPadding = PaddingValues(bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (homeSettings.showCategories) {
+                    item {
+                        CategorySection(
+                            viewModel = viewModel,
+                            appTheme = appTheme,
+                            textPreferences = textPreferences,
+                            categories = activeCategoryNames,
+                            onCategoryClick = { selectedCategory = it }
+                        )
+                    }
+                }
+
+                if (homeSettings.showMostUsed && mostUsed.isNotEmpty()) {
+                    item {
+                        SectionHeader("Mais Utilizados", textPreferences, actionLabel = "VER TODOS", onAction = { showMostUsedSheet = true })
+                        LazyRow(
+                            state = mostUsedListState,
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            itemsIndexed(mostUsed, key = { _, it -> it.code }) { index, product ->
+                                MiniProductCard(
+                                    product = product,
+                                    viewModel = viewModel,
+                                    index = index,
+                                    appTheme = appTheme,
+                                    textPreferences = textPreferences,
+                                    onProductClick = { selected ->
+                                        viewModel.onProductSearched(selected)
+                                        selectedMostUsedProduct = selected
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (latestAdded.isNotEmpty()) {
+                    item {
+                        SectionHeader("Últimos Adicionados", textPreferences)
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            latestAdded.forEachIndexed { index, product ->
+                                HistoryItem(product, viewModel, index, appTheme, textPreferences)
+                            }
+                        }
+                    }
+                }
+
+                if (homeSettings.showHistory && history.isNotEmpty()) {
+                    item {
+                        SectionHeader("Histórico Recente", textPreferences, actionLabel = "Limpar Histórico", onAction = { showClearHistoryDialog = true })
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            history.take(5).forEachIndexed { index, product ->
+                                HistoryItem(product, viewModel, index, appTheme, textPreferences)
+                            }
+                        }
+                    }
+                }
+
+                if (homeSettings.showFavorites) {
+                    item {
+                        SectionHeader("Meus Favoritos", textPreferences)
+                        if (favorites.isEmpty()) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                shape = RoundedCornerShape(if (isExpressiveTheme) 22.dp else 16.dp),
+                                color = if (isExpressiveTheme) {
+                                    MaterialTheme.colorScheme.surfaceContainerLow
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.FavoriteBorder,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        "Toque no coração de um produto para adicioná-lo aos seus favoritos.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        } else {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                favorites.forEachIndexed { index, product ->
+                                    ProductCard(product, viewModel, index, appTheme, textPreferences)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!hasVisibleHomeSection) {
+                    item {
+                        Text(
+                            "Nenhuma seção da Home está disponível no momento.",
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        }
+
+        val onboardingShown by viewModel.userPreferences.onboardingShown.collectAsState(initial = true)
+        if (!onboardingShown) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.8f))
+                    .clickable { viewModel.setOnboardingShown() }
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(64.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Use a barra de busca para encontrar produtos rapidamente pelo nome ou código.",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(48.dp))
+                    Icon(
+                        imageVector = Icons.Default.FavoriteBorder,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(64.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Toque no coração para favoritar os produtos que você mais usa.",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(48.dp))
+                    Button(
+                        onClick = { viewModel.setOnboardingShown() },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Entendi, vamos lá!")
+                    }
+                }
+            }
+        }
+
+        if (showQuickAddProduct && canQuickAddProduct) {
+            QuickAddProductDialog(
+                viewModel = viewModel,
+                categories = activeCategoryNames,
+                onDismiss = { showQuickAddProduct = false },
+                onSaved = {
+                    Toast.makeText(context, "Produto adicionado com sucesso!", Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
+
+        if (showProductSearchSheet) {
+            val sheetResultsFlow = remember(sheetQuery) { viewModel.searchProducts(sheetQuery) }
+            val sheetResults by sheetResultsFlow.collectAsState(initial = emptyList())
+            ModalBottomSheet(
+                onDismissRequest = { showProductSearchSheet = false },
+                containerColor = if (isGlassSoftTheme || isExpressiveGlassTheme) MaterialTheme.colorScheme.surfaceContainerHigh
+                else MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Pesquisar Produtos", style = MaterialTheme.typography.headlineSmall)
+                    OutlinedTextField(
+                        value = sheetQuery,
+                        onValueChange = { sheetQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Pesquisar") }
+                    )
+                    val products = if (sheetQuery.isBlank()) {
+                        viewModel.allProducts.value.sortedByDescending { it.id }.take(10)
+                    } else sheetResults
+                    Text(
+                        if (sheetQuery.isBlank()) "Adicionados recentemente" else "Resultados",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(products, key = { _, item -> item.code }) { index, product ->
+                            ProductCard(product, viewModel, index, appTheme, textPreferences)
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showMostUsedSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showMostUsedSheet = false },
+                containerColor = if (isGlassSoftTheme || isExpressiveGlassTheme) MaterialTheme.colorScheme.surfaceContainerHigh
+                else MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text("Mais Utilizados", style = MaterialTheme.typography.headlineSmall)
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(mostUsed, key = { _, item -> item.code }) { index, product ->
+                            ProductCard(
+                                product = product,
+                                viewModel = viewModel,
+                                index = index,
+                                appTheme = appTheme,
+                                textPreferences = textPreferences,
+                                onProductClick = { selected ->
+                                    viewModel.onProductSearched(selected)
+                                    selectedMostUsedProduct = selected
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        selectedCategory?.let { category ->
+                CategoryProductsSheet(
+                category = category,
+                viewModel = viewModel,
+                appTheme = appTheme,
+                textPreferences = textPreferences,
+                onDismiss = { selectedCategory = null }
+            )
+        }
+
+        if (showNotificationsSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showNotificationsSheet = false },
+                containerColor = if (isGlassSoftTheme || isExpressiveGlassTheme) MaterialTheme.colorScheme.surfaceContainerHigh
+                else MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Notificações", style = MaterialTheme.typography.headlineSmall)
+                        TextButton(onClick = { viewModel.markAllNotificationsRead() }) { Text("Marcar todas como lidas") }
+                    }
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(notificationHistory, key = { _, item -> item.id }) { _, notification ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .glassSoftShadow(MaterialTheme.shapes.medium)
+                                    .clickable {
+                                    viewModel.markNotificationRead(notification.id)
+                                    val directCode = notification.productCode?.trim().orEmpty()
+                                    val notificationTarget = "${notification.title} ${notification.body}".trim()
+                                    val normalizedTarget = normalizeNotificationText(notificationTarget)
+                                    val codesInText = Regex("\\b\\d{4,14}\\b")
+                                        .findAll(notificationTarget)
+                                        .map { it.value }
+                                        .toSet()
+                                    val resolvedProduct = viewModel.allProducts.value.firstOrNull {
+                                        directCode.isNotBlank() && it.code.trim() == directCode
+                                    } ?: viewModel.allProducts.value.firstOrNull {
+                                        it.code.trim() in codesInText
+                                    } ?: viewModel.allProducts.value.firstOrNull {
+                                        val normalizedName = normalizeNotificationText(it.name)
+                                        normalizedName.isNotBlank() && normalizedTarget.contains(normalizedName)
+                                    }
+                                    selectedNotificationProduct = resolvedProduct
+                                    resolvedProduct?.let(viewModel::onProductSearched)
+                                    showNotificationsSheet = false
+                                },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (notification.read) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primaryContainer
+                                )
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(notification.title, fontWeight = FontWeight.Bold)
+                                    Text(notification.body, style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        when (notification.type) {
+                                            "CODE_CHANGED" -> "CÓDIGO ALTERADO"
+                                            "BENEFIT_RELEASED" -> "CONVÊNIO LIBERADO"
+                                            "BENEFIT_PURCHASE" -> "COMPRA NO CONVÊNIO"
+                                            "HOURS_UPDATED" -> "BANCO DE HORAS"
+                                            else -> "NOVO PRODUTO"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        selectedNotificationProduct?.let { product ->
+            ProductBarcodeDialog(
+                product = product,
+                onDismiss = { selectedNotificationProduct = null },
+                highlightedFromNotification = true,
+                onProductUpdated = { updated ->
+                    selectedNotificationProduct = updated
+                    viewModel.updateProductLocally(updated)
+                },
+                onProductCodeChanged = { old, newCode ->
+                    viewModel.updateProductSuspend(old, old.copy(code = newCode))
+                },
+                onProductDeleted = { target ->
+                    viewModel.deleteProductSuspend(target)
+                }
+            )
+        }
+
+        selectedMostUsedProduct?.let { product ->
+            ProductBarcodeDialog(
+                product = product,
+                onDismiss = { selectedMostUsedProduct = null },
+                onProductUpdated = { updated ->
+                    selectedMostUsedProduct = updated
+                    viewModel.updateProductLocally(updated)
+                },
+                onProductCodeChanged = { old, newCode ->
+                    viewModel.updateProductSuspend(old, old.copy(code = newCode))
+                },
+                onProductDeleted = { target ->
+                    viewModel.deleteProductSuspend(target)
+                }
+            )
+        }
+
+        if (showClearHistoryDialog) {
+            AlertDialog(
+                onDismissRequest = { showClearHistoryDialog = false },
+                title = { Text("Limpar Histórico") },
+                text = { Text("Deseja limpar somente o histórico recente de produtos?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.clearHistory()
+                        showClearHistoryDialog = false
+                    }) { Text("Limpar") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearHistoryDialog = false }) { Text("Cancelar") }
+                }
+            )
+        }
+
+    }
+
+@Composable
+fun SectionHeader(
+    title: String,
+    textPreferences: HomeTextPreferences = HomeTextPreferences(),
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
+) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    val expressiveGlass = LocalExpressiveGlassStyle.current
+    val isExpressiveGlass = expressiveGlass.enabled
+    val profile = rememberNrdScreenProfile()
+    val compactExpressive = expressive && profile.compact
+    val sectionIcon = when {
+        title.contains("Mais Utilizados", ignoreCase = true) -> Icons.Default.BarChart
+        title.contains("Últimos", ignoreCase = true) -> Icons.Default.NewReleases
+        title.contains("Histórico", ignoreCase = true) -> Icons.Default.History
+        title.contains("Favoritos", ignoreCase = true) -> Icons.Default.Favorite
+        else -> Icons.Default.Search
+    }
+    val sectionAccent = when {
+        title.contains("Mais Utilizados", ignoreCase = true) -> expressiveGlass.accent
+        title.contains("Últimos", ignoreCase = true) -> expressiveGlass.tertiaryAccent
+        title.contains("Histórico", ignoreCase = true) -> expressiveGlass.secondaryAccent
+        title.contains("Favoritos", ignoreCase = true) -> Color(0xFFEF4E56)
+        else -> expressiveGlass.accent
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = if (compactExpressive) 12.dp else 16.dp,
+                vertical = if (compactExpressive) 4.dp else if (expressive) 7.dp else 2.dp
+            ),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (expressive) {
+                val headerIconShape = RoundedCornerShape(if (compactExpressive) 10.dp else 12.dp)
+                Box(
+                    modifier = Modifier
+                        .size(if (compactExpressive) 30.dp else 34.dp)
+                        .then(
+                            if (isExpressiveGlass) {
+                                Modifier.expressiveLiquidGlass(
+                                    shape = headerIconShape,
+                                    accent = sectionAccent,
+                                    secondaryAccent = expressiveGlass.secondaryAccent,
+                                    intensity = 0.92f,
+                                    elevation = 5.dp,
+                                    waves = true,
+                                    bubbleSeed = title.hashCode()
+                                )
+                            } else {
+                                Modifier
+                                    .clip(headerIconShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        sectionIcon,
+                        contentDescription = null,
+                        tint = if (isExpressiveGlass) sectionAccent else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(if (compactExpressive) 18.dp else 20.dp)
+                    )
+                }
+                Spacer(Modifier.width(if (compactExpressive) 7.dp else 10.dp))
+            }
+            StylizedText(
+                text = title,
+                baseStyle = if (expressive) {
+                    MaterialTheme.typography.titleLarge.copy(fontSize = if (compactExpressive) 17.sp else 19.sp)
+                } else {
+                    MaterialTheme.typography.labelMedium
+                },
+                boldOutline = textPreferences.boldOutline,
+                uppercaseBold = textPreferences.uppercaseBold,
+                color = if (expressive) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (actionLabel != null && onAction != null) {
+            val actionShape = RoundedCornerShape(18.dp)
+            TextButton(
+                onClick = onAction,
+                modifier = Modifier.then(
+                    if (isExpressiveGlass) {
+                        Modifier.expressiveLiquidGlass(
+                            shape = actionShape,
+                            accent = sectionAccent,
+                            intensity = 0.72f,
+                            elevation = 3.dp
+                        )
+                    } else Modifier
+                ),
+                shape = actionShape,
+                contentPadding = PaddingValues(
+                    horizontal = if (compactExpressive) 5.dp else if (expressive) 8.dp else 12.dp,
+                    vertical = if (compactExpressive) 4.dp else 6.dp
+                ),
+                colors = ButtonDefaults.textButtonColors(
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                StylizedText(
+                    text = actionLabel,
+                    baseStyle = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal
+                    ),
+                    boldOutline = textPreferences.boldOutline,
+                    uppercaseBold = textPreferences.uppercaseBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                if (expressive) {
+                    Spacer(Modifier.width(2.dp))
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        modifier = Modifier.size(if (compactExpressive) 15.dp else 17.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchEmptyState(onClear: () -> Unit) {
+    val expressive = LocalExpressiveStyle.current.enabled
+    val shape = if (expressive) RoundedCornerShape(28.dp) else RoundedCornerShape(20.dp)
+    Card(
+        modifier = Modifier.fillMaxWidth().glassSoftShadow(shape),
+        colors = CardDefaults.cardColors(
+            containerColor = if (expressive) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceVariant
+        ),
+        shape = shape
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(40.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text("Nenhum produto encontrado", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "Tente uma parte do nome ou confira o código.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(onClick = onClear) { Text("Limpar busca") }
+        }
+    }
+}
+
+@Composable
+fun CategorySection(
+    viewModel: MainViewModel,
+    appTheme: String,
+    textPreferences: HomeTextPreferences = HomeTextPreferences(),
+    categories: List<String> = ProductStandards.officialCategories,
+    onCategoryClick: (String) -> Unit = {}
+) {
+    val glass = rememberGlassVisualStyle()
+    val expressive = LocalExpressiveStyle.current.enabled
+    val expressiveGlass = LocalExpressiveGlassStyle.current
+    val isExpressiveGlass = expressiveGlass.enabled
+    val profile = rememberNrdScreenProfile()
+    val compactExpressive = expressive && profile.compact
+    val categoryColors = listOf(
+        MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer,
+        MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer,
+        MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer,
+        MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer,
+        MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer,
+        MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+    )
+
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = if (compactExpressive) 12.dp else 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (compactExpressive) 6.dp else 8.dp),
+        modifier = Modifier.padding(bottom = 2.dp)
+    ) {
+        itemsIndexed(categories) { index, category ->
+            val colors = categoryColors[index % categoryColors.size]
+            val dynamicColors = homeDynamicColors(index, appTheme, colors.first, colors.second)
+            val strongColors = homeStrongColors(index)
+            val liquidAccent = expressiveGlassCardAccent(expressiveGlass, index)
+            val categoryGlassFill = when {
+                glass.enabled -> glass.fill.copy(alpha = glass.alpha)
+                isExpressiveGlass -> expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.surfaceAlpha)
+                expressive -> strongColors.first
+                else -> dynamicColors.first
+            }
+            val categoryGlassBorder = when {
+                glass.enabled -> glass.border
+                isExpressiveGlass -> expressiveGlass.borderColor
+                else -> Color.Transparent
+            }
+            val categoryShape = when {
+                isExpressiveGlass -> {
+                    val water = expressiveGlass.fluidity
+                    RoundedCornerShape(
+                        topStart = (18f + 8f * water).dp,
+                        topEnd = (14f + 12f * water).dp,
+                        bottomEnd = (22f + 8f * water).dp,
+                        bottomStart = (15f + 10f * water).dp
+                    )
+                }
+                expressive -> RoundedCornerShape(if (compactExpressive) 18.dp else 22.dp)
+                else -> RoundedCornerShape(16.dp)
+            }
+            Box(
+                modifier = Modifier
+                    .glassSoftShadow(categoryShape)
+                    .expressiveShadow(categoryShape, 6.dp)
+                    .clip(categoryShape)
+                    .then(
+                        if (isExpressiveGlass) {
+                            Modifier
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(liquidAccent.first.copy(alpha = 0.96f), liquidAccent.first)
+                                    )
+                                )
+                                .expressiveLiquidGlass(
+                                    shape = categoryShape,
+                                    accent = liquidAccent.first,
+                                    secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
+                                    intensity = 1.08f,
+                                    elevation = 8.dp,
+                                    animated = true,
+                                    waves = true,
+                                    bubbleSeed = index
+                                )
+                        } else {
+                            Modifier
+                                .background(categoryGlassFill)
+                                .border(1.dp, categoryGlassBorder, categoryShape)
+                        }
+                    )
+                    .clickable { onCategoryClick(category) }
+                    .padding(
+                        horizontal = when {
+                            compactExpressive -> 13.dp
+                            expressive -> 18.dp
+                            else -> 16.dp
+                        },
+                        vertical = when {
+                            compactExpressive -> 8.dp
+                            expressive -> 11.dp
+                            else -> 10.dp
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (expressive) {
+                        Icon(
+                            painter = painterResource(id = expressiveCategoryIconRes(category)),
+                            contentDescription = category,
+                            tint = when {
+                                isExpressiveGlass -> Color.White
+                                glass.enabled -> strongColors.first
+                                else -> strongColors.second
+                            },
+                            modifier = Modifier.size(if (compactExpressive) 18.dp else 20.dp)
+                        )
+                        Spacer(Modifier.width(if (compactExpressive) 6.dp else 8.dp))
+                    }
+                    StylizedText(
+                        text = category,
+                        baseStyle = if (expressive) {
+                            MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold)
+                        } else {
+                            MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                        },
+                        boldOutline = textPreferences.boldOutline,
+                        uppercaseBold = true,
+                        color = when {
+                            isExpressiveGlass -> Color.White
+                            glass.enabled -> MaterialTheme.colorScheme.onSurface
+                            expressive -> strongColors.second
+                            else -> dynamicColors.second
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CategoryProductsSheet(
+    category: String,
+    viewModel: MainViewModel,
+    appTheme: String,
+    textPreferences: HomeTextPreferences = HomeTextPreferences(),
+    onDismiss: () -> Unit
+) {
+    val glass = rememberGlassVisualStyle()
+    var query by remember { mutableStateOf("") }
+    val productsFlow = remember(category, query) { viewModel.searchProductsByCategory(category, query) }
+    val products by productsFlow.collectAsState(initial = emptyList())
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = if (glass.enabled) glass.fill.copy(alpha = glass.alpha) else MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            StylizedText(
+                text = category,
+                baseStyle = MaterialTheme.typography.headlineSmall,
+                boldOutline = textPreferences.boldOutline,
+                uppercaseBold = true,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Pesquisar em $category") }
+            )
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                itemsIndexed(products, key = { _, item -> item.code }) { index, product ->
+                    ProductCard(product, viewModel, index, appTheme, textPreferences)
+                }
+            }
+        }
+    }
+}
+
+private fun normalizeNotificationText(value: String): String =
+    Normalizer.normalize(value, Normalizer.Form.NFD)
+        .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+        .lowercase()
+        .trim()
+
+@Composable
+private fun FavoriteToggleButton(
+    product: Product,
+    viewModel: MainViewModel,
+    compact: Boolean = false
+) {
+    val expressiveGlass = LocalExpressiveGlassStyle.current
+    val heartScale by animateFloatAsState(
+        targetValue = if (product.isFavorite) 1.10f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "favorite-liquid-scale"
+    )
+    val heartAccent = if (product.isFavorite) Color(0xFFEF4E56) else expressiveGlass.accent
+    IconButton(
+        onClick = { viewModel.toggleFavorite(product) },
+        modifier = Modifier
+            .size(if (compact) 34.dp else 38.dp)
+            .then(
+                if (expressiveGlass.enabled) {
+                    Modifier.expressiveLiquidGlass(
+                        shape = CircleShape,
+                        accent = heartAccent,
+                        secondaryAccent = expressiveGlass.secondaryAccent,
+                        intensity = if (product.isFavorite) 0.94f else 0.72f,
+                        elevation = if (product.isFavorite) 5.dp else 3.dp,
+                        waves = false,
+                        bubbleSeed = product.code.hashCode()
+                    )
+                } else Modifier
+            )
+    ) {
+        Icon(
+            imageVector = if (product.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+            contentDescription = if (product.isFavorite) "Remover dos favoritos" else "Adicionar aos favoritos",
+            tint = if (product.isFavorite) Color(0xFFEF4E56) else MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .size(if (compact) 19.dp else 21.dp)
+                .scale(heartScale)
+        )
+    }
+}
+
+@Composable
+fun ProductCard(
+    product: Product,
+    viewModel: MainViewModel,
+    index: Int = 0,
+    appTheme: String = "multicolor",
+    textPreferences: HomeTextPreferences = HomeTextPreferences(),
+    onProductClick: ((Product) -> Unit)? = null
+) {
+    val glass = rememberGlassVisualStyle()
+    val expressive = LocalExpressiveStyle.current.enabled
+    val expressiveGlass = LocalExpressiveGlassStyle.current
+    val isExpressiveGlass = expressiveGlass.enabled
+    val profile = rememberNrdScreenProfile()
+    val compactExpressive = expressive && profile.compact
+    val cardShape = when {
+        isExpressiveGlass -> {
+            val water = expressiveGlass.fluidity
+            RoundedCornerShape(
+                topStart = (24f + 12f * water).dp,
+                topEnd = (18f + 14f * water).dp,
+                bottomEnd = (28f + 10f * water).dp,
+                bottomStart = (20f + 16f * water).dp
+            )
+        }
+        expressive -> RoundedCornerShape(
+            topStart = if (compactExpressive) 26.dp else 34.dp,
+            topEnd = if (compactExpressive) 18.dp else 22.dp,
+            bottomEnd = if (compactExpressive) 24.dp else 30.dp,
+            bottomStart = if (compactExpressive) 20.dp else 26.dp
+        )
+        else -> RoundedCornerShape(24.dp)
+    }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val shareLayer = rememberGraphicsLayer()
+    val cardAccent = if (isExpressiveGlass) {
+        expressiveGlassCardAccent(expressiveGlass, index)
+    } else {
+        homeDynamicColors(
+            index,
+            appTheme,
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    }
+    val shareAccentColor = cardAccent.first.toArgb()
+    val shareCodeColor = MaterialTheme.colorScheme.primary.toArgb()
+    var showDialog by remember(product.code) { mutableStateOf(false) }
+    if (showDialog) {
+        ProductBarcodeDialog(
+            product = product,
+            onDismiss = { showDialog = false },
+            onProductUpdated = { updated -> viewModel.updateProductLocally(updated) },
+            onProductCodeChanged = { old, newCode ->
+                viewModel.updateProductSuspend(old, old.copy(code = newCode))
+            },
+            onProductDeleted = { target ->
+                viewModel.deleteProductSuspend(target)
+            }
+        )
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSoftShadow(cardShape)
+            .clip(cardShape)
+            .then(
+                if (isExpressiveGlass) {
+                    Modifier.expressiveLiquidGlass(
+                        shape = cardShape,
+                        accent = cardAccent.first,
+                        secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
+                        intensity = 1.30f,
+                        elevation = 8.dp,
+                        waves = true,
+                        bubbleSeed = index
+                    )
+                } else {
+                    Modifier
+                        .background(
+                            when {
+                                glass.enabled -> glass.fill.copy(alpha = glass.alpha)
+                                expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                                else -> MaterialTheme.colorScheme.surface
+                            }
+                        )
+                        .border(
+                            1.dp,
+                            when {
+                                glass.enabled -> glass.border
+                                expressive -> MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)
+                                else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                            },
+                            cardShape
+                        )
+                }
+            )
+            .drawWithContent {
+                shareLayer.record {
+                    this@drawWithContent.drawContent()
+                }
+                drawLayer(shareLayer)
+            }
+            .vibrateClickable(
+                viewModel = viewModel,
+                onLongClick = {
+                    scope.launch {
+                        val copied = copyHomeProductCardToClipboard(
+                            context = context,
+                            layer = shareLayer,
+                            product = product,
+                            accentColor = shareAccentColor,
+                            codeBackgroundColor = shareCodeColor
+                        )
+                        Toast.makeText(
+                            context,
+                            if (copied) "Copiado na Área de Transferência"
+                            else "Não foi possível copiar o quadradinho.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            ) {
+                if (onProductClick != null) {
+                    onProductClick(product)
+                } else {
+                    viewModel.onProductSearched(product)
+                    showDialog = true
+                }
+            }
+            .padding(if (compactExpressive) 12.dp else 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (product.imageUrl != null) {
+            AsyncImage(
+                model = product.imageUrl,
+                contentDescription = product.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(if (compactExpressive) 42.dp else 48.dp)
+                    .clip(CircleShape)
+            )
+        } else {
+            val dynColors = cardAccent
+            Box(
+                modifier = Modifier
+                    .size(if (compactExpressive) 42.dp else 48.dp)
+                    .clip(
+                        if (expressive) RoundedCornerShape(if (compactExpressive) 14.dp else 16.dp)
+                        else CircleShape
+                    )
+                    .background(dynColors.first),
+                contentAlignment = Alignment.Center
+            ) {
+                StylizedText(
+                    text = product.name.take(1),
+                    baseStyle = MaterialTheme.typography.titleMedium,
+                    boldOutline = textPreferences.boldOutline,
+                    uppercaseBold = true,
+                    color = dynColors.second
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(if (compactExpressive) 11.dp else 16.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            StylizedText(
+                text = product.name,
+                baseStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                boldOutline = textPreferences.boldOutline,
+                uppercaseBold = textPreferences.uppercaseBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = getCategoryIcon(product.category),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                StylizedText(
+                    text = product.category,
+                    baseStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
+                    boldOutline = textPreferences.boldOutline,
+                    uppercaseBold = true,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(if (compactExpressive) 8.dp else 12.dp))
+
+        Column(horizontalAlignment = Alignment.End) {
+            FavoriteToggleButton(product, viewModel, compact = compactExpressive)
+            val codeShape = if (expressive) RoundedCornerShape(20.dp) else RoundedCornerShape(16.dp)
+            Box(
+                modifier = Modifier
+                    .then(
+                        if (isExpressiveGlass) {
+                            Modifier.expressiveLiquidGlass(
+                                shape = codeShape,
+                                accent = cardAccent.first,
+                                secondaryAccent = expressiveGlass.secondaryAccent,
+                                intensity = 0.90f,
+                                elevation = 4.dp,
+                                waves = false,
+                                bubbleSeed = index + 101
+                            )
+                        } else {
+                            Modifier
+                                .clip(codeShape)
+                                .background(if (expressive) cardAccent.first else MaterialTheme.colorScheme.primaryContainer)
+                        }
+                    )
+                    .padding(
+                        horizontal = when {
+                            compactExpressive -> 12.dp
+                            expressive -> 18.dp
+                            else -> 16.dp
+                        },
+                        vertical = when {
+                            compactExpressive -> 7.dp
+                            expressive -> 10.dp
+                            else -> 8.dp
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = product.code,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
+                        color = if (isExpressiveGlass) cardAccent.first else if (expressive) cardAccent.second else MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = product.unit.uppercase(),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Black),
+                        color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurfaceVariant else if (expressive) cardAccent.second.copy(alpha = 0.78f) else MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
+    }
+}
+
+
+private suspend fun copyHomeProductCardToClipboard(
+    context: Context,
+    layer: androidx.compose.ui.graphics.layer.GraphicsLayer,
+    product: Product,
+    accentColor: Int,
+    codeBackgroundColor: Int
+): Boolean = runCatching {
+    val captured = layer.toImageBitmap().asAndroidBitmap()
+    val width = captured.width.coerceAtLeast(1)
+    val height = captured.height.coerceAtLeast(1)
+    val density = context.resources.displayMetrics.density
+    fun dp(value: Float) = value * density
+
+    val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(output)
+
+    val neutral = 0xFFE5E5E5.toInt()
+    val border = 0xFFC7C7C7.toInt()
+    val titleColor = 0xFF202124.toInt()
+    val metaColor = 0xFF666666.toInt()
+
+    canvas.drawColor(neutral)
+
+    val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = neutral
+        style = Paint.Style.FILL
+    }
+    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = border
+        style = Paint.Style.STROKE
+        strokeWidth = dp(1f)
+    }
+    val outer = RectF(dp(1f), dp(1f), width - dp(1f), height - dp(1f))
+    val radius = dp(22f)
+    canvas.drawRoundRect(outer, radius, radius, cardPaint)
+    canvas.drawRoundRect(outer, radius, radius, borderPaint)
+
+    val pad = dp(16f)
+    val circleSize = dp(48f).coerceAtMost(height - dp(20f))
+    val circleCx = pad + circleSize / 2f
+    val circleCy = height / 2f
+
+    val circlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accentColor }
+    canvas.drawCircle(circleCx, circleCy, circleSize / 2f, circlePaint)
+
+    val initialPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+        textSize = dp(18f)
+    }
+    val initialBaseline = circleCy - (initialPaint.ascent() + initialPaint.descent()) / 2f
+    canvas.drawText(product.name.take(1).uppercase(), circleCx, initialBaseline, initialPaint)
+
+    val codePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+        textSize = dp(16f)
+    }
+    val codeHorizontal = dp(14f)
+    val codeWidth = (codePaint.measureText(product.code) + codeHorizontal * 2f)
+        .coerceIn(dp(92f), dp(150f))
+    val codeHeight = dp(48f).coerceAtMost(height - dp(20f))
+    val codeRight = width - pad
+    val codeLeft = codeRight - codeWidth
+    val codeTop = (height - codeHeight) / 2f
+    val codeRect = RectF(codeLeft, codeTop, codeRight, codeTop + codeHeight)
+    val codeBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = codeBackgroundColor }
+    canvas.drawRoundRect(codeRect, dp(14f), dp(14f), codeBg)
+    val codeBaseline = codeRect.centerY() - (codePaint.ascent() + codePaint.descent()) / 2f
+    canvas.drawText(product.code, codeRect.centerX(), codeBaseline, codePaint)
+
+    val textX = circleCx + circleSize / 2f + dp(16f)
+    val textRight = codeLeft - dp(14f)
+    val maxTextWidth = (textRight - textX).coerceAtLeast(dp(80f))
+
+    val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = titleColor
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textSize = dp(17f)
+    }
+    val metaPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = metaColor
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textSize = dp(11f)
+    }
+
+    fun drawWrapped(
+        text: String,
+        paint: Paint,
+        startX: Float,
+        startY: Float,
+        maxWidth: Float,
+        maxLines: Int,
+        lineHeight: Float
+    ): Float {
+        var remaining = text.trim()
+        var y = startY
+        repeat(maxLines) { lineIndex ->
+            if (remaining.isEmpty()) return y
+            var count = paint.breakText(remaining, true, maxWidth, null).coerceAtLeast(1)
+            if (count < remaining.length) {
+                val wordEnd = remaining.lastIndexOf(' ', count - 1)
+                if (wordEnd > 0) count = wordEnd
+            }
+            var line = remaining.take(count).trim()
+            remaining = remaining.drop(count).trim()
+            if (lineIndex == maxLines - 1 && remaining.isNotEmpty()) {
+                while (line.isNotEmpty() && paint.measureText("${line}…") > maxWidth) {
+                    line = line.dropLast(1)
+                }
+                line += "…"
+                remaining = ""
+            }
+            canvas.drawText(line, startX, y, paint)
+            y += lineHeight
+        }
+        return y
+    }
+
+    val titleLineHeight = dp(20f)
+    val metaLineHeight = dp(15f)
+    val titleStart = (height / 2f - dp(10f)).coerceAtLeast(dp(24f))
+    val afterTitle = drawWrapped(
+        product.name,
+        titlePaint,
+        textX,
+        titleStart,
+        maxTextWidth,
+        2,
+        titleLineHeight
+    )
+    drawWrapped(
+        "${getCategoryIcon(product.category)} ${product.category.uppercase()}",
+        metaPaint,
+        textX,
+        (afterTitle + dp(3f)).coerceAtMost(height - dp(10f)),
+        maxTextWidth,
+        1,
+        metaLineHeight
+    )
+
+    val file = withContext(Dispatchers.IO) {
+        val directory = File(context.cacheDir, "shared_cards").apply { mkdirs() }
+        directory.listFiles()?.forEach { old ->
+            if (System.currentTimeMillis() - old.lastModified() > 24 * 60 * 60 * 1000L) old.delete()
+        }
+        val safeName = product.name
+            .lowercase()
+            .replace(Regex("[^a-z0-9]+"), "-")
+            .trim('-')
+            .take(48)
+            .ifBlank { "produto" }
+        File(directory, "nrd-home-${safeName}-${System.currentTimeMillis()}.png").also { target ->
+            FileOutputStream(target).use { stream ->
+                check(output.compress(Bitmap.CompressFormat.PNG, 100, stream))
+            }
+        }
+    }
+
+    val uri = FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        file
+    )
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newUri(context.contentResolver, "Produto NRD", uri))
+    true
+}.getOrDefault(false)
+
+@Composable
+fun MiniProductCard(
+    product: Product,
+    viewModel: MainViewModel,
+    index: Int = 0,
+    appTheme: String = "multicolor",
+    textPreferences: HomeTextPreferences = HomeTextPreferences(),
+    onProductClick: ((Product) -> Unit)? = null
+) {
+    val glass = rememberGlassVisualStyle()
+    val expressive = LocalExpressiveStyle.current.enabled
+    val expressiveGlass = LocalExpressiveGlassStyle.current
+    val isExpressiveGlass = expressiveGlass.enabled
+    val profile = rememberNrdScreenProfile()
+    val compactExpressive = expressive && profile.compact
+    val cardShape = when {
+        isExpressiveGlass -> {
+            val water = expressiveGlass.fluidity
+            RoundedCornerShape(
+                topStart = (22f + 10f * water).dp,
+                topEnd = (16f + 13f * water).dp,
+                bottomEnd = (26f + 10f * water).dp,
+                bottomStart = (18f + 14f * water).dp
+            )
+        }
+        expressive -> RoundedCornerShape(
+            topStart = if (compactExpressive) 24.dp else 30.dp,
+            topEnd = if (compactExpressive) 15.dp else 18.dp,
+            bottomEnd = if (compactExpressive) 28.dp else 34.dp,
+            bottomStart = if (compactExpressive) 18.dp else 22.dp
+        )
+        else -> RoundedCornerShape(24.dp)
+    }
+    val cardAccent = if (isExpressiveGlass) {
+        expressiveGlassCardAccent(expressiveGlass, index)
+    } else {
+        homeDynamicColors(
+            index,
+            appTheme,
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    }
+    val strongAccent = if (isExpressiveGlass) cardAccent else homeStrongColors(index)
+    var showDialog by remember(product.code) { mutableStateOf(false) }
+    if (showDialog) {
+        ProductBarcodeDialog(
+            product = product,
+            onDismiss = { showDialog = false },
+            onProductUpdated = { updated -> viewModel.updateProductLocally(updated) },
+            onProductCodeChanged = { old, newCode ->
+                viewModel.updateProductSuspend(old, old.copy(code = newCode))
+            },
+            onProductDeleted = { target ->
+                viewModel.deleteProductSuspend(target)
+            }
+        )
+    }
+    Column(
+        modifier = Modifier
+            .widthIn(
+                min = when {
+                    compactExpressive -> 138.dp
+                    expressive -> 154.dp
+                    else -> 144.dp
+                },
+                max = when {
+                    compactExpressive -> 164.dp
+                    expressive -> 184.dp
+                    else -> 176.dp
+                }
+            )
+            .heightIn(
+                min = when {
+                    compactExpressive -> 154.dp
+                    expressive -> 176.dp
+                    textPreferences.largeText -> 168.dp
+                    else -> 132.dp
+                }
+            )
+            .glassSoftShadow(cardShape)
+            .expressiveShadow(cardShape, 7.dp)
+            .clip(cardShape)
+            .then(
+                if (isExpressiveGlass) {
+                    Modifier.expressiveLiquidGlass(
+                        shape = cardShape,
+                        accent = cardAccent.first,
+                        secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
+                        intensity = 1.26f,
+                        elevation = 7.dp,
+                        waves = true,
+                        bubbleSeed = index + 13
+                    )
+                } else {
+                    Modifier
+                        .background(
+                            when {
+                                glass.enabled -> glass.fill.copy(alpha = glass.alpha)
+                                expressive -> MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
+                                else -> MaterialTheme.colorScheme.surface
+                            }
+                        )
+                        .border(
+                            1.dp,
+                            when {
+                                glass.enabled -> glass.border
+                                expressive -> MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
+                                else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                            },
+                            cardShape
+                        )
+                }
+            )
+            .vibrateClickable(viewModel) {
+                if (onProductClick != null) {
+                    onProductClick(product)
+                } else {
+                    viewModel.onProductSearched(product)
+                    showDialog = true
+                }
+            }
+            .padding(
+                when {
+                    compactExpressive -> 9.dp
+                    expressive -> 12.dp
+                    else -> 10.dp
+                }
+            ),
+        verticalArrangement = Arrangement.spacedBy(
+            when {
+                compactExpressive -> 5.dp
+                expressive -> 7.dp
+                else -> 5.dp
+            }
+        )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
+            if (product.imageUrl != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(product.imageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = product.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(
+                            when {
+                                compactExpressive -> 46.dp
+                                expressive -> 54.dp
+                                else -> 32.dp
+                            }
+                        )
+                        .clip(
+                            if (expressive) RoundedCornerShape(if (compactExpressive) 14.dp else 17.dp)
+                            else CircleShape
+                        )
+                        .background(cardAccent.first)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(
+                            when {
+                                compactExpressive -> 46.dp
+                                expressive -> 54.dp
+                                else -> 32.dp
+                            }
+                        )
+                        .clip(
+                            if (expressive) RoundedCornerShape(if (compactExpressive) 14.dp else 17.dp)
+                            else CircleShape
+                        )
+                        .background(cardAccent.first),
+                    contentAlignment = Alignment.Center
+                ) {
+                    StylizedText(
+                        text = product.name.take(1),
+                        baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = if (expressive) 18.sp else 14.sp),
+                        boldOutline = textPreferences.boldOutline,
+                        uppercaseBold = true,
+                        color = if (expressive) strongAccent.first else cardAccent.second
+                    )
+                }
+            }
+
+            Column(horizontalAlignment = Alignment.End) {
+                FavoriteToggleButton(product, viewModel, compact = compactExpressive)
+                if (expressive) {
+                    val unitShape = RoundedCornerShape(14.dp)
+                    Box(
+                        modifier = Modifier
+                            .then(
+                                if (isExpressiveGlass) {
+                                    Modifier.expressiveLiquidGlass(
                                         shape = unitShape,
                                         accent = cardAccent.first,
                                         intensity = 0.76f,
