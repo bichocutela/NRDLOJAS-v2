@@ -51,10 +51,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 
 private val GlassSoftShapes = Shapes(
     extraSmall = RoundedCornerShape(12.dp),
@@ -166,12 +169,12 @@ private fun expressiveGlassActionColors(name: String, isDark: Boolean): List<Col
 internal fun expressiveGlassBackgroundColors(name: String, isDark: Boolean): List<Color> {
     val normalized = normalizeExpressiveGlassAccentName(name)
     val light = mapOf(
-        "multicolor" to listOf(Color(0xFFFFE4E7), Color(0xFFE8F3FF), Color(0xFFFFF2CA), Color(0xFFE8F8F0), Color(0xFFF1E8FF)),
+        "multicolor" to listOf(Color(0xFFCDEBFF), Color(0xFFE5F5FF), Color(0xFFD6F4FF), Color(0xFFF2EBFF), Color(0xFFDBFAF2)),
         "red" to listOf(Color(0xFFFFE4E7), Color(0xFFFFD9D5), Color(0xFFFFE9F1), Color(0xFFFFF1E8)),
         "green" to listOf(Color(0xFFDFF7E8), Color(0xFFD9F7EF), Color(0xFFE4F3FF), Color(0xFFF0F9E6)),
         "orange" to listOf(Color(0xFFFFE8D0), Color(0xFFFFF0D5), Color(0xFFFFE1D6), Color(0xFFFFF6E8)),
         "blue" to listOf(Color(0xFFDDEEFF), Color(0xFFE5F6FF), Color(0xFFE8E5FF), Color(0xFFE2F7F3)),
-        "gold" to listOf(Color(0xFFEAF5FF), Color(0xFFF3F8FF), Color(0xFFFFF5DF), Color(0xFFE7F4FF), Color(0xFFF7FAFF))
+        "gold" to listOf(Color(0xFFCDEBFF), Color(0xFFE8F5FF), Color(0xFFD5F3FF), Color(0xFFF5F9FF), Color(0xFFBDE6FF))
     )
     val dark = mapOf(
         "multicolor" to listOf(Color(0xFF190F18), Color(0xFF0E1C30), Color(0xFF2B2110), Color(0xFF0F291F), Color(0xFF21172F)),
@@ -547,6 +550,16 @@ fun Modifier.expressiveLiquidGlass(
                     start = Offset(size.width * (0.04f + 0.08f * motion), size.height * 0.04f),
                     end = Offset(size.width * (0.96f - 0.06f * motion), size.height * 0.96f)
                 )
+                val iridescentRim = Brush.sweepGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.90f),
+                        Color(0xFF80D8FF).copy(alpha = 0.58f),
+                        Color(0xFFFF80AB).copy(alpha = 0.42f),
+                        Color(0xFFFFD54F).copy(alpha = 0.52f),
+                        Color.White.copy(alpha = 0.90f)
+                    ),
+                    center = Offset(size.width * 0.5f, size.height * 0.5f)
+                )
                 val innerGleam = Brush.linearGradient(
                     colors = listOf(
                         Color.White.copy(alpha = 0.30f * safeIntensity),
@@ -734,6 +747,11 @@ fun Modifier.expressiveLiquidGlass(
                     }
                     drawPath(
                         path = outlinePath,
+                        brush = iridescentRim,
+                        style = Stroke(width = 1.45.dp.toPx())
+                    )
+                    drawPath(
+                        path = outlinePath,
                         brush = specularEdge,
                         style = Stroke(width = borderWidthDp.dp.toPx())
                     )
@@ -837,8 +855,8 @@ private fun AmbientLiquidBubbleLayer(
         bubbles.clear()
         if (canvasSize.width > 0f && canvasSize.height > 0f) {
             val random = Random(primary.hashCode() xor secondary.hashCode() xor canvasSize.width.toInt())
-            repeat(14) { index ->
-                val radius = 17f + random.nextFloat() * 20f
+            repeat(18) { index ->
+                val radius = 21f + random.nextFloat() * 24f
                 val tint = when (index % 4) {
                     0 -> primary
                     1 -> secondary
@@ -855,7 +873,7 @@ private fun AmbientLiquidBubbleLayer(
                     ),
                     radiusDp = radius,
                     phase = random.nextFloat() * 6.28318f,
-                    color = tint.copy(alpha = if (isDark) 0.24f else 0.32f)
+                    color = tint.copy(alpha = if (isDark) 0.34f else 0.48f)
                 )
             }
         }
@@ -873,14 +891,14 @@ private fun AmbientLiquidBubbleLayer(
 
                     bubbles.forEach { bubble ->
                         val radius = with(density) { bubble.radiusDp.dp.toPx() }
-                        var vx = bubble.velocity.x + sin(time * 0.46f + bubble.phase) * (18f + 34f * turbulence) * dt
-                        var vy = bubble.velocity.y + sin(time * 0.39f + bubble.phase * 1.23f) * (16f + 30f * turbulence) * dt
+                        var vx = bubble.velocity.x + sin(time * 0.46f + bubble.phase) * (34f + 54f * turbulence) * dt
+                        var vy = bubble.velocity.y + sin(time * 0.39f + bubble.phase * 1.23f) * (30f + 48f * turbulence) * dt
                         touch?.let { point ->
                             val dx = bubble.position.x - point.x
                             val dy = bubble.position.y - point.y
                             val distance = hypot(dx, dy)
                             if (distance in 1f..touchRadius) {
-                                val force = (1f - distance / touchRadius) * (850f + 1350f * turbulence) * dt
+                                val force = (1f - distance / touchRadius) * (1500f + 2100f * turbulence) * dt
                                 vx += dx / distance * force
                                 vy += dy / distance * force
                             }
@@ -890,9 +908,9 @@ private fun AmbientLiquidBubbleLayer(
                         vx *= damping
                         vy *= damping
                         val speed = hypot(vx, vy)
-                        if (speed > 78f) {
-                            vx = vx / speed * 78f
-                            vy = vy / speed * 78f
+                        if (speed > 118f) {
+                            vx = vx / speed * 118f
+                            vy = vy / speed * 118f
                         }
 
                         var x = bubble.position.x + vx * dt
@@ -920,6 +938,19 @@ private fun AmbientLiquidBubbleLayer(
             val radius = with(density) { bubble.radiusDp.dp.toPx() }
             val lightCenter = Offset(center.x - radius * 0.30f, center.y - radius * 0.32f)
             drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF80D8FF).copy(alpha = if (isDark) 0.14f else 0.24f),
+                        Color(0xFFFF80AB).copy(alpha = if (isDark) 0.08f else 0.14f),
+                        Color.Transparent
+                    ),
+                    center = center,
+                    radius = radius * 1.28f
+                ),
+                radius = radius * 1.28f,
+                center = center
+            )
+            drawCircle(
                 color = bubble.color.copy(alpha = bubble.color.alpha * 0.28f),
                 radius = radius * 1.08f,
                 center = center,
@@ -928,9 +959,9 @@ private fun AmbientLiquidBubbleLayer(
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = if (isDark) 0.30f else 0.46f),
-                        bubble.color,
-                        bubble.color.copy(alpha = bubble.color.alpha * 0.38f),
+                        Color.White.copy(alpha = if (isDark) 0.26f else 0.40f),
+                        bubble.color.copy(alpha = bubble.color.alpha * 0.72f),
+                        Color(0xFF80D8FF).copy(alpha = if (isDark) 0.10f else 0.20f),
                         Color.Transparent
                     ),
                     center = lightCenter,
@@ -940,8 +971,48 @@ private fun AmbientLiquidBubbleLayer(
                 center = center
             )
             drawCircle(
-                color = Color.White.copy(alpha = if (isDark) 0.52f else 0.76f),
-                radius = radius * 0.12f,
+                brush = Brush.sweepGradient(
+                    colors = listOf(
+                        Color(0xFF80D8FF).copy(alpha = 0.72f),
+                        Color(0xFFFF80AB).copy(alpha = 0.55f),
+                        Color(0xFFFFD54F).copy(alpha = 0.66f),
+                        Color(0xFF80D8FF).copy(alpha = 0.72f)
+                    ),
+                    center = center
+                ),
+                radius = radius * 0.96f,
+                center = center,
+                style = Stroke(width = 1.5.dp.toPx())
+            )
+            drawArc(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color.Transparent, Color.White.copy(alpha = if (isDark) 0.24f else 0.48f)),
+                    startY = center.y,
+                    endY = center.y + radius
+                ),
+                startAngle = 28f,
+                sweepAngle = 118f,
+                useCenter = false,
+                topLeft = Offset(center.x - radius * 0.84f, center.y - radius * 0.84f),
+                size = Size(radius * 1.68f, radius * 1.68f),
+                style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round)
+            )
+            drawArc(
+                brush = Brush.linearGradient(
+                    colors = listOf(Color.White.copy(alpha = 0.92f), Color.White.copy(alpha = 0.12f)),
+                    start = Offset(center.x - radius, center.y - radius),
+                    end = center
+                ),
+                startAngle = 192f,
+                sweepAngle = 78f,
+                useCenter = false,
+                topLeft = Offset(center.x - radius * 0.78f, center.y - radius * 0.78f),
+                size = Size(radius * 1.56f, radius * 1.56f),
+                style = Stroke(width = 3.2.dp.toPx(), cap = StrokeCap.Round)
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = if (isDark) 0.46f else 0.72f),
+                radius = radius * 0.09f,
                 center = Offset(lightCenter.x - radius * 0.04f, lightCenter.y - radius * 0.04f)
             )
         }
@@ -974,14 +1045,38 @@ fun NrdAppBackground(
                 label = "expressive-background-drift"
             ).value
             val touchPoint = remember { mutableStateOf<Offset?>(null) }
+            val touchScope = rememberCoroutineScope()
             Box(
                 modifier = modifier
                     .fillMaxSize()
                     .pointerInput(Unit) {
-                        awaitPointerEventScope {
-                            while (true) {
+                        var touchFadeJob: Job? = null
+                        while (true) {
+                            var releasedAt: Offset? = null
+                            var activePoint: Offset? = null
+                            var pointerReleased = false
+                            awaitPointerEventScope {
                                 val event = awaitPointerEvent(pass = PointerEventPass.Initial)
-                                touchPoint.value = event.changes.firstOrNull { it.pressed }?.position
+                                activePoint = event.changes.firstOrNull { it.pressed }?.position
+                                releasedAt = event.changes.firstOrNull {
+                                    it.previousPressed && !it.pressed
+                                }?.position
+                                pointerReleased = releasedAt != null
+                            }
+                            when {
+                                activePoint != null -> {
+                                    touchFadeJob?.cancel()
+                                    touchPoint.value = activePoint
+                                }
+                                pointerReleased -> {
+                                    touchFadeJob?.cancel()
+                                    touchPoint.value = releasedAt
+                                    touchFadeJob = touchScope.launch {
+                                        delay(180)
+                                        touchPoint.value = null
+                                    }
+                                }
+                                else -> touchPoint.value = null
                             }
                         }
                     }
@@ -1053,12 +1148,40 @@ fun NrdAppBackground(
                             center = Offset(size.width * 0.76f, size.height * 0.96f),
                             radius = maxDimension * 0.45f
                         )
+                        val causticBrush = Brush.horizontalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.White.copy(alpha = if (expressiveGlass.isDark) 0.07f else 0.48f),
+                                Color(0xFF70D9FF).copy(alpha = if (expressiveGlass.isDark) 0.08f else 0.34f),
+                                Color.White.copy(alpha = if (expressiveGlass.isDark) 0.05f else 0.36f),
+                                Color.Transparent
+                            )
+                        )
+                        val causticPath = Path().apply {
+                            moveTo(-size.width * 0.10f, size.height * (0.30f + 0.04f * drift))
+                            cubicTo(
+                                size.width * 0.24f, size.height * (0.18f + 0.04f * drift),
+                                size.width * 0.58f, size.height * (0.44f - 0.06f * drift),
+                                size.width * 1.10f, size.height * (0.28f + 0.03f * drift)
+                            )
+                        }
+                        val lowerCausticPath = Path().apply {
+                            moveTo(-size.width * 0.08f, size.height * (0.82f - 0.04f * drift))
+                            cubicTo(
+                                size.width * 0.28f, size.height * (0.70f + 0.05f * drift),
+                                size.width * 0.66f, size.height * (0.92f - 0.06f * drift),
+                                size.width * 1.08f, size.height * (0.76f + 0.04f * drift)
+                            )
+                        }
                         onDrawBehind {
                             drawRect(brush = haloPrimary)
                             drawRect(brush = haloSecondary)
                             drawRect(brush = haloTertiary)
                             drawRect(brush = pearlLight)
                             drawRect(brush = lowerGlow)
+                            drawPath(causticPath, brush = causticBrush, style = Stroke(width = 8.dp.toPx()))
+                            drawPath(causticPath, color = Color.White.copy(alpha = if (expressiveGlass.isDark) 0.10f else 0.45f), style = Stroke(width = 1.5.dp.toPx()))
+                            drawPath(lowerCausticPath, brush = causticBrush, style = Stroke(width = 6.dp.toPx()))
                         }
                     },
                 content = {
