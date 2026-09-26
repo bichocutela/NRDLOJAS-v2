@@ -452,9 +452,9 @@ fun Modifier.expressiveLiquidGlass(
             val transition = rememberInfiniteTransition(label = "expressive-liquid-glass")
             transition.animateFloat(
                 initialValue = 0f,
-                targetValue = 1f,
+                targetValue = 6.2831855f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 5200, easing = LinearEasing),
+                    animation = tween(durationMillis = 3800, easing = LinearEasing),
                     repeatMode = RepeatMode.Reverse
                 ),
                 label = "liquid-refraction"
@@ -499,7 +499,7 @@ fun Modifier.expressiveLiquidGlass(
             }
             .drawWithCache {
                 // Read animated state during drawing so moving highlights invalidate the draw layer, not the whole card composition.
-                val motion = motionState?.value ?: 0.36f
+                val motion = motionState?.value?.let { (sin(it) + 1f) * 0.5f } ?: 0.36f
                 val rippleProgress = ripple.value
                 val rippleOrigin = rippleCenter
                 val outline = shape.createOutline(size, layoutDirection, this)
@@ -556,8 +556,8 @@ fun Modifier.expressiveLiquidGlass(
                         refraction.copy(alpha = (0.24f + 0.12f * fluidity) * safeIntensity),
                         Color.White.copy(alpha = (0.82f * safeIntensity).coerceAtMost(0.92f))
                     ),
-                    start = Offset(size.width * (0.04f + 0.08f * motion), size.height * 0.04f),
-                    end = Offset(size.width * (0.96f - 0.06f * motion), size.height * 0.96f)
+                    start = Offset(size.width * (0.04f + 0.18f * motion), size.height * 0.04f),
+                    end = Offset(size.width * (0.96f - 0.16f * motion), size.height * 0.96f)
                 )
                 val iridescentRim = Brush.sweepGradient(
                     colors = listOf(
@@ -586,7 +586,7 @@ fun Modifier.expressiveLiquidGlass(
                         Color.Transparent
                     ),
                     center = Offset(
-                        size.width * (0.42f + 0.08f * motion),
+                        size.width * (0.34f + 0.24f * motion),
                         size.height * (0.36f - 0.05f * motion)
                     ),
                     radius = maxDimension * (0.42f + 0.12f * fluidity)
@@ -598,29 +598,29 @@ fun Modifier.expressiveLiquidGlass(
                         Color.Transparent
                     ),
                     center = Offset(
-                        size.width * (0.66f - 0.08f * motion),
+                        size.width * (0.56f - 0.24f * motion),
                         size.height * (0.64f + 0.04f * motion)
                     ),
                     radius = maxDimension * (0.36f + 0.10f * fluidity)
                 )
                 val distortionHeight = size.height * (0.18f + 0.18f * fluidity)
                 val bottomLiquidPath = Path().apply {
-                    moveTo(0f, size.height - distortionHeight * (0.72f + 0.10f * motion))
+                    moveTo(0f, size.height - distortionHeight * (0.66f + 0.28f * motion))
                     cubicTo(
                         size.width * 0.18f,
-                        size.height - distortionHeight * (1.36f - 0.16f * motion),
+                        size.height - distortionHeight * (1.20f - 0.42f * motion),
                         size.width * 0.34f,
-                        size.height - distortionHeight * (0.34f + 0.12f * motion),
+                        size.height - distortionHeight * (0.24f + 0.36f * motion),
                         size.width * 0.52f,
-                        size.height - distortionHeight * (0.86f - 0.08f * motion)
+                        size.height - distortionHeight * (0.76f - 0.30f * motion)
                     )
                     cubicTo(
                         size.width * 0.68f,
-                        size.height - distortionHeight * (1.42f - 0.12f * motion),
+                        size.height - distortionHeight * (1.20f - 0.38f * motion),
                         size.width * 0.84f,
-                        size.height - distortionHeight * (0.18f + 0.10f * motion),
+                        size.height - distortionHeight * (0.20f + 0.30f * motion),
                         size.width,
-                        size.height - distortionHeight * (0.64f + 0.08f * motion)
+                        size.height - distortionHeight * (0.56f + 0.26f * motion)
                     )
                     lineTo(size.width, size.height)
                     lineTo(0f, size.height)
@@ -630,11 +630,11 @@ fun Modifier.expressiveLiquidGlass(
                     moveTo(0f, distortionHeight * (0.42f + 0.08f * motion))
                     cubicTo(
                         size.width * 0.24f,
-                        distortionHeight * (0.04f + 0.10f * motion),
+                        distortionHeight * (0.02f + 0.30f * motion),
                         size.width * 0.48f,
-                        distortionHeight * (0.84f - 0.14f * motion),
+                        distortionHeight * (0.70f - 0.34f * motion),
                         size.width * 0.70f,
-                        distortionHeight * (0.30f + 0.06f * motion)
+                        distortionHeight * (0.20f + 0.24f * motion)
                     )
                     cubicTo(
                         size.width * 0.82f,
