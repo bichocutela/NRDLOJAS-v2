@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TextButton
@@ -370,6 +371,7 @@ internal fun MestreSettingsHub(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MestreNoveltySettings() {
     val coroutineScope = rememberCoroutineScope()
