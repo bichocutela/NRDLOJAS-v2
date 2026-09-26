@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.matchParentSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,7 +68,7 @@ internal fun NossaGenteProfileAvatar(
             AsyncImage(
                 model = photoModel,
                 contentDescription = "Foto do perfil",
-                modifier = Modifier.matchParentSize().clip(shape),
+                modifier = Modifier.fillMaxSize().clip(shape),
                 contentScale = ContentScale.Crop,
                 onError = { photoFailed = true }
             )
@@ -110,7 +110,7 @@ internal fun NossaGenteProfilePhotoDialog(
                     AsyncImage(
                         model = photoModel,
                         contentDescription = "Foto ampliada do perfil",
-                        modifier = Modifier.matchParentSize(),
+                        modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
                 }
