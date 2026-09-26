@@ -845,7 +845,10 @@ object FirebaseService {
                         noveltyVersion = snapshot?.getString("noveltyVersion"),
                         noveltyModel = snapshot?.getString("noveltyModel"),
                         noveltyColor = snapshot?.getString("noveltyColor"),
-                        noveltySize = snapshot?.getString("noveltySize")
+                        noveltySize = snapshot?.getString("noveltySize"),
+                        noveltyLocation = snapshot?.getString("noveltyLocation"),
+                        noveltyStartDate = snapshot?.getString("noveltyStartDate"),
+                        noveltyEndDate = snapshot?.getString("noveltyEndDate")
                     )
                 )
             }
@@ -860,7 +863,10 @@ object FirebaseService {
         version: String,
         model: String = "ribbon",
         color: String = "red",
-        size: String = "medium"
+        size: String = "medium",
+        location: String = "menu",
+        startDate: String = "",
+        endDate: String = ""
     ): Boolean {
         if (!prepareManagementWrite("publicar a novidade")) return false
         if (text.isBlank()) {
@@ -879,7 +885,10 @@ object FirebaseService {
                         "noveltyVersion" to version.trim(),
                         "noveltyModel" to model,
                         "noveltyColor" to color,
-                        "noveltySize" to size
+                        "noveltySize" to size,
+                        "noveltyLocation" to location,
+                        "noveltyStartDate" to startDate.trim(),
+                        "noveltyEndDate" to endDate.trim()
                     ),
                     com.google.firebase.firestore.SetOptions.merge()
                 )

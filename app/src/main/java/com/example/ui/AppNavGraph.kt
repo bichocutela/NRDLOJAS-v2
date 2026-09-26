@@ -612,8 +612,13 @@ fun LoginDrawerContent(
     com.example.util.UpdateAvailabilityState.initialize(context)
     val drawerUpdateAvailable by com.example.util.UpdateAvailabilityState.available.collectAsState()
     val remoteHomeSettings by FirebaseService.observeHomeSettings().collectAsState(initial = RemoteHomeSettings())
+    val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+    val withinNoveltyDates = (remoteHomeSettings.noveltyStartDate.isNullOrBlank() || today >= remoteHomeSettings.noveltyStartDate.orEmpty()) &&
+        (remoteHomeSettings.noveltyEndDate.isNullOrBlank() || today <= remoteHomeSettings.noveltyEndDate.orEmpty())
     val noveltyVisible = remoteHomeSettings.noveltyEnabled == true &&
         !remoteHomeSettings.noveltyText.isNullOrBlank() &&
+        withinNoveltyDates &&
+        (remoteHomeSettings.noveltyLocation.isNullOrBlank() || remoteHomeSettings.noveltyLocation == "menu" || remoteHomeSettings.noveltyLocation == "all") &&
         when (remoteHomeSettings.noveltyTarget) {
             "new" -> com.example.BuildConfig.VERSION_NAME == remoteHomeSettings.noveltyVersion
             "previous" -> com.example.BuildConfig.VERSION_NAME != remoteHomeSettings.noveltyVersion

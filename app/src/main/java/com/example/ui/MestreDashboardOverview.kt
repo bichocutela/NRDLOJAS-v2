@@ -373,6 +373,9 @@ internal fun MestreNoveltySettings() {
     var model by rememberSaveable { mutableStateOf("ribbon") }
     var color by rememberSaveable { mutableStateOf("red") }
     var size by rememberSaveable { mutableStateOf("medium") }
+    var location by rememberSaveable { mutableStateOf("menu") }
+    var startDate by rememberSaveable { mutableStateOf("") }
+    var endDate by rememberSaveable { mutableStateOf("") }
     var enabled by rememberSaveable { mutableStateOf(true) }
 
     Text("Inserir Novidade", style = MaterialTheme.typography.titleMedium)
@@ -430,6 +433,16 @@ internal fun MestreNoveltySettings() {
                 Text(if (model == "ribbon") "Modelo: Fita" else "Modelo: Etiqueta")
             }
             Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(onClick = { location = when (location) { "menu" -> "home"; "home" -> "settings"; "settings" -> "all"; else -> "menu" } }, modifier = Modifier.fillMaxWidth()) {
+                Text("Local: ${when (location) { "home" -> "Home"; "settings" -> "Configurações"; "all" -> "Todas as áreas"; else -> "Menu" }}")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(value = startDate, onValueChange = { startDate = it }, label = { Text("Início (AAAA-MM-DD)") }, singleLine = true, modifier = Modifier.weight(1f))
+                OutlinedTextField(value = endDate, onValueChange = { endDate = it }, label = { Text("Fim (AAAA-MM-DD)") }, singleLine = true, modifier = Modifier.weight(1f))
+            }
+            Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(onClick = { color = when (color) { "red" -> "blue"; "blue" -> "green"; else -> "red" } }, modifier = Modifier.weight(1f)) {
                     Text("Cor: ${when (color) { "red" -> "Vermelha"; "blue" -> "Azul"; else -> "Verde" }}")
@@ -456,7 +469,10 @@ internal fun MestreNoveltySettings() {
                             version = targetVersion,
                             model = model,
                             color = color,
-                            size = size
+                            size = size,
+                            location = location,
+                            startDate = startDate,
+                            endDate = endDate
                         )
                         saveMessage = if (saved) "Novidade publicada para o público escolhido." else FirebaseService.lastError ?: "Não foi possível publicar a novidade."
                         isSaving = false
