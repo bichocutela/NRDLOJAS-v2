@@ -427,13 +427,13 @@ fun Modifier.expressiveLiquidGlass(
         val fluidity = style.fluidity.coerceIn(0f, 1f)
         val tint = accent ?: style.accent
         val secondaryTint = secondaryAccent ?: style.secondaryAccent
-        val motion = if (animated) {
+        val motion = if (animated || waves) {
             val transition = rememberInfiniteTransition(label = "expressive-liquid-glass")
             transition.animateFloat(
                 initialValue = 0f,
                 targetValue = 1f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 6200, easing = LinearEasing),
+                    animation = tween(durationMillis = 5200, easing = LinearEasing),
                     repeatMode = RepeatMode.Reverse
                 ),
                 label = "liquid-refraction"
@@ -657,12 +657,12 @@ fun Modifier.expressiveLiquidGlass(
                     radius = maxDimension * (0.34f + 0.14f * fluidity)
                 )
                 val bubble1 = Offset(
-                    x = size.width * (0.72f + 0.04f * ((bubbleSeed % 3 + 3) % 3)),
-                    y = size.height * (0.76f - 0.08f * ((bubbleSeed % 2 + 2) % 2))
+                    x = size.width * (0.72f + 0.04f * ((bubbleSeed % 3 + 3) % 3) + 0.055f * (motion - 0.5f)),
+                    y = size.height * (0.76f - 0.08f * ((bubbleSeed % 2 + 2) % 2) + 0.035f * (motion - 0.5f))
                 )
                 val bubble2 = Offset(
-                    x = size.width * (0.84f - 0.05f * ((bubbleSeed % 4 + 4) % 4)),
-                    y = size.height * (0.34f + 0.06f * ((bubbleSeed % 3 + 3) % 3))
+                    x = size.width * (0.84f - 0.05f * ((bubbleSeed % 4 + 4) % 4) - 0.045f * (motion - 0.5f)),
+                    y = size.height * (0.34f + 0.06f * ((bubbleSeed % 3 + 3) % 3) - 0.03f * (motion - 0.5f))
                 )
                 // Gotas pequenas: antes usávamos a largura do card e em cards largos viravam círculos gigantes.
                 val bubbleRadius1 = minDimension * (0.055f + 0.020f * fluidity)
