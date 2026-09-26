@@ -379,12 +379,10 @@ fun SearchScreen(
     ) {
         Brush.linearGradient(
             listOf(
-                Color.White.copy(alpha = 0.58f),
-                expressiveGlassStyle.accent.copy(alpha = 0.58f),
-                expressiveGlassStyle.secondaryAccent.copy(alpha = 0.30f),
-                Color.White.copy(alpha = 0.24f),
-                expressiveGlassStyle.tertiaryAccent.copy(alpha = 0.42f),
-                expressiveGlassStyle.accent.copy(alpha = 0.50f)
+                expressiveGlassStyle.accent.copy(alpha = 0.64f),
+                expressiveGlassStyle.secondaryAccent.copy(alpha = 0.34f),
+                expressiveGlassStyle.tertiaryAccent.copy(alpha = 0.46f),
+                expressiveGlassStyle.accent.copy(alpha = 0.56f)
             )
         )
     }
