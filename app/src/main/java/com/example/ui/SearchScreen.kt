@@ -2,6 +2,7 @@ package com.example.ui
 import androidx.compose.ui.composed
 import androidx.compose.ui.composed
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.geometry.Offset
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
