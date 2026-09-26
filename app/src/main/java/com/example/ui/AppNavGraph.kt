@@ -69,6 +69,8 @@ fun AppNavGraph(
     val nossaGenteCredentialStore = remember { com.example.data.NossaGenteCredentialStore(context.applicationContext) }
     var profileEnabled by remember { mutableStateOf(nossaGenteCredentialStore.isProfileEnabled()) }
     var promotionsEnabled by remember { mutableStateOf(nossaGenteCredentialStore.isPromotionsEnabled()) }
+    var drawerEmployeeProfile by remember { mutableStateOf<com.example.data.EmployeeProfile?>(null) }
+    var drawerProfilePhotoModel by remember { mutableStateOf<Any?>(null) }
     val firebaseAuth = remember { FirebaseAuth.getInstance() }
     val initialRole = remember(firebaseAuth) { managementRoleForEmail(firebaseAuth.currentUser?.email) }
     var isLoggedIn by remember { mutableStateOf(initialRole != null) }
@@ -100,6 +102,26 @@ fun AppNavGraph(
         }
         firebaseAuth.addAuthStateListener(listener)
         onDispose { firebaseAuth.removeAuthStateListener(listener) }
+    }
+
+    LaunchedEffect(profileEnabled) {
+        if (!profileEnabled || !nossaGenteApi.hasSession()) {
+            drawerEmployeeProfile = null
+            drawerProfilePhotoModel = null
+        } else {
+            when (val result = nossaGenteApi.fetchEmployeeProfile()) {
+                is com.example.data.NossaGenteProfileResult.Success -> {
+                    drawerEmployeeProfile = result.profile
+                    val photoUrl = result.profile.photoUrl
+                    drawerProfilePhotoModel = if (photoUrl.isNullOrBlank()) {
+                        null
+                    } else {
+                        nossaGenteApi.fetchProfilePhoto(photoUrl) ?: photoUrl
+                    }
+                }
+                else -> Unit
+            }
+        }
     }
 
     LaunchedEffect(openAboutFromNotification) {
@@ -150,6 +172,8 @@ fun AppNavGraph(
                     isLoggedIn = isLoggedIn,
                     userRole = userRole,
                     showMyProfile = nossaGenteApi.hasSession() && profileEnabled,
+                    myProfilePhotoModel = drawerProfilePhotoModel ?: drawerEmployeeProfile?.photoUrl,
+                    myProfileName = drawerEmployeeProfile?.name,
                     onLoginSuccess = { role ->
                         isLoggedIn = true
                         userRole = role
@@ -395,7 +419,9 @@ private fun DrawerActionButton(
     icon: ImageVector,
     onClick: () -> Unit,
     legacyOutlined: Boolean = false,
-    emphasized: Boolean = false
+    emphasized: Boolean = false,
+    photoModel: Any? = null,
+    onPhotoClick: (() -> Unit)? = null
 ) {
     val expressive = LocalExpressiveStyle.current.enabled
     val profile = rememberNrdScreenProfile()
@@ -433,26 +459,46 @@ private fun DrawerActionButton(
                     ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    shape = RoundedCornerShape(if (profile.compact) 11.dp else 13.dp),
-                    color = if (emphasized) {
-                        MaterialTheme.colorScheme.surfaceContainerHighest
-                    } else {
-                        MaterialTheme.colorScheme.primaryContainer
-                    },
-                    contentColor = if (emphasized) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    }
-                ) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .padding(if (profile.compact) 6.dp else 7.dp)
-                            .size(if (profile.compact) 17.dp else 19.dp)
+                if (photoModel != null) {
+                    NossaGenteProfileAvatar(
+                        photoModel = photoModel,
+                        size = if (profile.compact) 29.dp else 33.dp,
+                        iconSize = if (profile.compact) 17.dp else 19.dp,
+                        shape = RoundedCornerShape(if (profile.compact) 11.dp else 13.dp),
+                        backgroundColor = if (emphasized) {
+                            MaterialTheme.colorScheme.surfaceContainerHighest
+                        } else {
+                            MaterialTheme.colorScheme.primaryContainer
+                        },
+                        iconTint = if (emphasized) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        },
+                        onPhotoClick = onPhotoClick
                     )
+                } else {
+                    Surface(
+                        shape = RoundedCornerShape(if (profile.compact) 11.dp else 13.dp),
+                        color = if (emphasized) {
+                            MaterialTheme.colorScheme.surfaceContainerHighest
+                        } else {
+                            MaterialTheme.colorScheme.primaryContainer
+                        },
+                        contentColor = if (emphasized) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        }
+                    ) {
+                        Icon(
+                            icon,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .padding(if (profile.compact) 6.dp else 7.dp)
+                                .size(if (profile.compact) 17.dp else 19.dp)
+                        )
+                    }
                 }
                 Spacer(Modifier.width(if (profile.compact) 9.dp else 11.dp))
                 Text(
@@ -538,6 +584,8 @@ fun LoginDrawerContent(
     isLoggedIn: Boolean,
     userRole: String,
     showMyProfile: Boolean,
+    myProfilePhotoModel: Any?,
+    myProfileName: String?,
     onLoginSuccess: (String) -> Unit,
     onLogout: () -> Unit,
     onGoToAdmin: () -> Unit,
@@ -553,6 +601,7 @@ fun LoginDrawerContent(
     var loginStatus by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var loginExpanded by remember { mutableStateOf(false) }
+    var showMyProfilePhoto by remember(myProfilePhotoModel) { mutableStateOf(false) }
     val activeCategoryNames by viewModel.activeCategoryNames.collectAsState()
     var expandedCategory by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -568,6 +617,14 @@ fun LoginDrawerContent(
         if (isLoggedIn && userRole == "mestre") {
             com.example.util.UpdateAvailabilityState.refresh(context)
         }
+    }
+
+    if (showMyProfilePhoto && myProfilePhotoModel != null) {
+        NossaGenteProfilePhotoDialog(
+            photoModel = myProfilePhotoModel,
+            userName = myProfileName,
+            onDismiss = { showMyProfilePhoto = false }
+        )
     }
 
     Column(
@@ -586,7 +643,11 @@ fun LoginDrawerContent(
                     label = "Meu Perfil",
                     icon = Icons.Default.Person,
                     onClick = onGoToMyPoint,
-                    emphasized = true
+                    emphasized = true,
+                    photoModel = myProfilePhotoModel,
+                    onPhotoClick = if (myProfilePhotoModel != null) {
+                        { showMyProfilePhoto = true }
+                    } else null
                 )
                 Spacer(modifier = Modifier.height(10.dp))
             } else {

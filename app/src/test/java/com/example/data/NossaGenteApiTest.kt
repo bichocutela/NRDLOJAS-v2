@@ -45,7 +45,8 @@ class NossaGenteApiTest {
                 "matricula": "001234",
                 "nome": "COLABORADOR TESTE",
                 "dataAdmissao": "2019-03-14",
-                "tempoAnos": 7
+                "tempoAnos": 7,
+                "foto": "https://app.nordestao.com.br/media/perfis/42.jpg"
               }
             }
         """.trimIndent()
@@ -58,6 +59,27 @@ class NossaGenteApiTest {
         assertEquals(7, profile.tenureYears)
         assertEquals("42", profile.employeeId)
         assertEquals("001234", profile.registration)
+        assertEquals("https://app.nordestao.com.br/media/perfis/42.jpg", profile.photoUrl)
+    }
+
+    @Test
+    fun parsesNestedProfilePhotoAlias() {
+        val api = NossaGenteApi(ApplicationProvider.getApplicationContext())
+        val json = """
+            {
+              "user": {
+                "nome": "COLABORADOR FOTO",
+                "imagem": {
+                  "url": "https://app.nordestao.com.br/media/perfis/avatar.jpg"
+                }
+              }
+            }
+        """.trimIndent()
+
+        val profile = api.parseEmployeeProfileForTest(json)
+
+        assertEquals("COLABORADOR FOTO", profile.name)
+        assertEquals("https://app.nordestao.com.br/media/perfis/avatar.jpg", profile.photoUrl)
     }
 
     @Test

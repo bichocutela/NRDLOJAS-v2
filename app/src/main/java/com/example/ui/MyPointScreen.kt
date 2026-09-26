@@ -94,6 +94,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
     val contentPadding = if (configuration.screenWidthDp < 360) 10.dp else 16.dp
     val purchasesMaxHeight = (configuration.screenHeightDp * 0.42f).coerceIn(160f, 420f).dp
     var employeeProfile by remember { mutableStateOf<EmployeeProfile?>(null) }
+    var employeePhotoModel by remember { mutableStateOf<Any?>(null) }
     var point by remember { mutableStateOf<PointSummary?>(null) }
     var hours by remember { mutableStateOf<HoursSummary?>(null) }
     // O card permanece visível mesmo quando o endpoint ainda não devolveu
@@ -115,7 +116,17 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
         error = null
         scope.launch {
             when (val result = api.fetchEmployeeProfile()) {
-                is NossaGenteProfileResult.Success -> employeeProfile = result.profile
+                is NossaGenteProfileResult.Success -> {
+                    employeeProfile = result.profile
+                    val photoUrl = result.profile.photoUrl
+                    if (photoUrl.isNullOrBlank()) {
+                        employeePhotoModel = null
+                    } else {
+                        scope.launch {
+                            employeePhotoModel = api.fetchProfilePhoto(photoUrl) ?: photoUrl
+                        }
+                    }
+                }
                 NossaGenteProfileResult.Unauthorized -> {
                     onSignOut()
                     loading = false
@@ -218,6 +229,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                     employeeProfile?.let { profile ->
                         EmployeeProfileCard(
                             profile = profile,
+                            photoModel = employeePhotoModel ?: profile.photoUrl,
                             isExpressive = isExpressive,
                             glassEnabled = glassStyle.enabled,
                             expressiveGlassEnabled = expressiveGlassStyle.enabled
@@ -384,11 +396,13 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
 @Composable
 private fun EmployeeProfileCard(
     profile: EmployeeProfile,
+    photoModel: Any?,
     isExpressive: Boolean,
     glassEnabled: Boolean,
     expressiveGlassEnabled: Boolean
 ) {
     val expressiveGlass = LocalExpressiveGlassStyle.current
+    var showProfilePhoto by remember(photoModel) { mutableStateOf(false) }
     val shape = if (isExpressive) {
         RoundedCornerShape(topStart = 34.dp, topEnd = 24.dp, bottomEnd = 32.dp, bottomStart = 26.dp)
     } else {
@@ -428,23 +442,21 @@ private fun EmployeeProfileCard(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(if (isExpressive) 52.dp else 48.dp)
-                        .clip(RoundedCornerShape(if (isExpressive) 18.dp else 16.dp))
-                        .background(
-                            if (expressiveGlassEnabled) MaterialTheme.colorScheme.surface.copy(alpha = 0.46f)
-                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(if (isExpressive) 28.dp else 26.dp)
-                    )
-                }
+                NossaGenteProfileAvatar(
+                    photoModel = photoModel,
+                    size = if (isExpressive) 52.dp else 48.dp,
+                    iconSize = if (isExpressive) 28.dp else 26.dp,
+                    shape = RoundedCornerShape(if (isExpressive) 18.dp else 16.dp),
+                    backgroundColor = if (expressiveGlassEnabled) {
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.46f)
+                    } else {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    },
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    onPhotoClick = if (photoModel != null) {
+                        { showProfilePhoto = true }
+                    } else null
+                )
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -483,6 +495,14 @@ private fun EmployeeProfileCard(
                 )
             }
         }
+    }
+
+    if (showProfilePhoto && photoModel != null) {
+        NossaGenteProfilePhotoDialog(
+            photoModel = photoModel,
+            userName = profile.name,
+            onDismiss = { showProfilePhoto = false }
+        )
     }
 }
 

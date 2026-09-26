@@ -1,10 +1,12 @@
 package com.example.data
 
 import android.content.Context
+import android.util.Base64
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -15,12 +17,17 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.text.NumberFormat
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 /** Cliente mínimo para autenticar e consultar promoções da Nossa Gente.
  *  A senha é usada somente na requisição de login e nunca é persistida.
  */
 class NossaGenteApi(context: Context) {
+    private companion object {
+        const val MAX_PROFILE_PHOTO_BYTES = 8 * 1024 * 1024L
+    }
+
     @Volatile
     private var inMemoryToken: String? = null
     private val secureSession = NossaGenteSecureSession(context)
@@ -31,6 +38,7 @@ class NossaGenteApi(context: Context) {
         .writeTimeout(20, TimeUnit.SECONDS)
         .callTimeout(25, TimeUnit.SECONDS)
         .build()
+    private val profilePhotoCache = ConcurrentHashMap<String, ByteArray>()
 
     fun hasSession(): Boolean = !currentToken().isNullOrBlank()
 
@@ -121,6 +129,51 @@ class NossaGenteApi(context: Context) {
         } catch (_: Exception) {
             NossaGenteProfileResult.Error("Não foi possível carregar os dados do perfil. Verifique a internet.")
         }
+    }
+
+    /**
+     * Baixa a foto do colaborador usando a mesma sessão autenticada do Nossa Gente.
+     * A foto é opcional: qualquer falha mantém o boneco padrão sem afetar Meu Perfil.
+     */
+    suspend fun fetchProfilePhoto(photoUrl: String?): ByteArray? = withContext(Dispatchers.IO) {
+        val normalizedUrl = normalizeProfilePhotoUrl(photoUrl) ?: return@withContext null
+        profilePhotoCache[normalizedUrl]?.let { return@withContext it }
+
+        if (normalizedUrl.startsWith("data:image/", ignoreCase = true)) {
+            val encoded = normalizedUrl.substringAfter("base64,", missingDelimiterValue = "")
+            if (encoded.isBlank()) return@withContext null
+            return@withContext runCatching {
+                Base64.decode(encoded, Base64.DEFAULT)
+            }.getOrNull()?.takeIf { it.isNotEmpty() }?.also {
+                profilePhotoCache[normalizedUrl] = it
+            }
+        }
+
+        fun download(authorization: String?): ByteArray? {
+            val requestBuilder = Request.Builder()
+                .url(normalizedUrl)
+                .get()
+                .header("Accept", "image/*")
+                .header("Cache-Control", "no-cache")
+            if (!authorization.isNullOrBlank()) {
+                requestBuilder.header("Authorization", authorization)
+            }
+            return runCatching {
+                client.newCall(requestBuilder.build()).execute().use { response ->
+                    if (!response.isSuccessful) return@use null
+                    val body = response.body ?: return@use null
+                    val contentLength = body.contentLength()
+                    if (contentLength > MAX_PROFILE_PHOTO_BYTES) return@use null
+                    body.bytes().takeIf { bytes ->
+                        bytes.isNotEmpty() && bytes.size.toLong() <= MAX_PROFILE_PHOTO_BYTES
+                    }
+                }
+            }.getOrNull()
+        }
+
+        val bearer = currentToken()?.let { "Bearer $it" }
+        val bytes = download(bearer) ?: download(null)
+        bytes?.also { profilePhotoCache[normalizedUrl] = it }
     }
 
     /** Banco de horas do Nossa Gente. O contrato oficial usa SALDOTOTAL e MESES. */
@@ -223,13 +276,19 @@ class NossaGenteApi(context: Context) {
             "tempoAnos", "tempoCasaAnos", "tempo_casa_anos", "anos", "years"
         ).toIntOrNullSafe()
         val tenureText = source.textValue("tempo", "tempoCasa", "tempo_casa", "tempoEmpresa", "tempo_empresa")
+        val photoRaw = firstNonBlank(
+            source.profilePhotoValue(),
+            level1.profilePhotoValue(),
+            root.profilePhotoValue()
+        )
         return EmployeeProfile(
             name = source.textValue("nome", "NOME", "name", "nomeCompleto", "nome_completo", "fullName"),
             admissionDate = formatAdmissionDate(admissionRaw),
             tenure = normalizeTenureLabel(tenureText, tenureYears),
             tenureYears = tenureYears,
             employeeId = source.textValue("id", "codigoUsuario", "codigo_usuario", "userId", "usuarioId"),
-            registration = source.textValue("matricula", "MATRICULA", "registro", "registration")
+            registration = source.textValue("matricula", "MATRICULA", "registro", "registration"),
+            photoUrl = normalizeProfilePhotoUrl(photoRaw)
         ).withComputedTenure(admissionRaw)
     }
 
@@ -271,7 +330,8 @@ class NossaGenteApi(context: Context) {
             tenure = normalizeTenureLabel(tenureText, tenureYears) ?: base.tenure,
             tenureYears = tenureYears ?: base.tenureYears,
             employeeId = base.employeeId ?: candidate.textValue("id", "codigoUsuario", "codigo_usuario", "userId", "usuarioId"),
-            registration = base.registration ?: candidate.textValue("matricula", "MATRICULA", "registro", "registration")
+            registration = base.registration ?: candidate.textValue("matricula", "MATRICULA", "registro", "registration"),
+            photoUrl = base.photoUrl ?: normalizeProfilePhotoUrl(candidate.profilePhotoValue())
         ).withComputedTenure(admissionRaw)
     }
 
@@ -423,6 +483,45 @@ class NossaGenteApi(context: Context) {
             }
         }
         return JSONArray().put(parsed)
+    }
+
+    private fun JSONObject.profilePhotoValue(): String? {
+        val keys = arrayOf(
+            "foto", "fotoUrl", "foto_url", "urlFoto", "url_foto",
+            "photo", "photoUrl", "photo_url",
+            "avatar", "avatarUrl", "avatar_url",
+            "imagem", "image", "imageUrl", "image_url"
+        )
+        keys.forEach { key ->
+            when (val value = opt(key)) {
+                is JSONObject -> {
+                    value.textValue(
+                        "url", "uri", "src", "path",
+                        "foto", "fotoUrl", "imagem", "imageUrl", "photoUrl", "avatarUrl"
+                    )?.let { return it }
+                }
+                null, JSONObject.NULL -> Unit
+                else -> value.toString().trim()
+                    .takeIf { it.isNotBlank() && it != "null" }
+                    ?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun normalizeProfilePhotoUrl(raw: String?): String? {
+        val value = raw?.trim()?.trim('"')
+            ?.takeIf { it.isNotBlank() && it != "null" }
+            ?: return null
+        if (value.startsWith("data:image/", ignoreCase = true)) return value
+        if (value.startsWith("https://", ignoreCase = true) || value.startsWith("http://", ignoreCase = true)) {
+            return value
+        }
+        if (value.startsWith("//")) return "https:" + value
+
+        val base = BuildConfig.NOSSA_GENTE_API_BASE_URL.toHttpUrlOrNull() ?: return null
+        return base.resolve(value)?.toString()
+            ?: base.resolve("/" + value.trimStart('/'))?.toString()
     }
 
     private fun JSONObject.optValue(vararg keys: String): Any? {
@@ -635,6 +734,7 @@ class NossaGenteApi(context: Context) {
 
     internal fun parsePromotionsForTest(raw: String): List<Promotion> = parsePromotions(raw)
     internal fun parseEmployeeProfileForTest(raw: String): EmployeeProfile = parseEmployeeProfile(raw)
+    internal fun normalizeProfilePhotoUrlForTest(raw: String?): String? = normalizeProfilePhotoUrl(raw)
 
     /** Assinatura estável do conteúdo comercial; a ordem da resposta não altera o resultado. */
     private fun fingerprintPromotions(promotions: List<Promotion>): String = fingerprintPromotionsForTest(promotions)
@@ -929,7 +1029,8 @@ data class EmployeeProfile(
     val tenure: String? = null,
     val tenureYears: Int? = null,
     val employeeId: String? = null,
-    val registration: String? = null
+    val registration: String? = null,
+    val photoUrl: String? = null
 )
 
 data class BenefitSummary(
