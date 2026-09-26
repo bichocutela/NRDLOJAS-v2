@@ -6,6 +6,45 @@ import org.junit.Test
 class AppearanceSettingsTest {
 
     @Test
+    fun resolveEffectiveAppearance_usesGlobalForFirstInstallation() {
+        assertEquals(
+            "expressive",
+            resolveEffectiveAppearanceValue(
+                remoteValue = "expressive",
+                localValue = "multicolor",
+                hasLocalChoice = false,
+                forceGlobal = false
+            )
+        )
+    }
+
+    @Test
+    fun resolveEffectiveAppearance_keepsUserChoiceAfterCustomization() {
+        assertEquals(
+            "blue",
+            resolveEffectiveAppearanceValue(
+                remoteValue = "expressive",
+                localValue = "blue",
+                hasLocalChoice = true,
+                forceGlobal = false
+            )
+        )
+    }
+
+    @Test
+    fun resolveEffectiveAppearance_forceGlobalOverridesExistingChoice() {
+        assertEquals(
+            "expressive",
+            resolveEffectiveAppearanceValue(
+                remoteValue = "expressive",
+                localValue = "blue",
+                hasLocalChoice = true,
+                forceGlobal = true
+            )
+        )
+    }
+
+    @Test
     fun mostRecentAppearanceSettings_prefersNewerFirestoreRevision() {
         val manifest = AppearanceSettings(theme = "red", revision = 10L)
         val firestore = AppearanceSettings(theme = "blue", revision = 11L)

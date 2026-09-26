@@ -181,16 +181,18 @@ class MainActivity : ComponentActivity() {
                 .collectAsState(initial = false)
             val remoteAppearance by com.example.data.FirebaseService.observeAppearanceSettings()
                 .collectAsState(initial = AppearanceSettings())
-            val effectiveAppTheme = if (remoteAppearance.globalOverrideEnabled && !hasLocalThemeChoice) {
-                remoteAppearance.theme
-            } else {
-                appTheme
-            }
-            val effectiveAppearanceMode = if (remoteAppearance.globalOverrideEnabled && !hasLocalAppearanceChoice) {
-                remoteAppearance.appearanceMode
-            } else {
-                appearanceMode
-            }
+            val effectiveAppTheme = com.example.data.resolveEffectiveAppearanceValue(
+                remoteValue = remoteAppearance.theme,
+                localValue = appTheme,
+                hasLocalChoice = hasLocalThemeChoice,
+                forceGlobal = remoteAppearance.globalOverrideEnabled
+            )
+            val effectiveAppearanceMode = com.example.data.resolveEffectiveAppearanceValue(
+                remoteValue = remoteAppearance.appearanceMode,
+                localValue = appearanceMode,
+                hasLocalChoice = hasLocalAppearanceChoice,
+                forceGlobal = remoteAppearance.globalOverrideEnabled
+            )
             val latestFirebase by viewModel.latestProduct.collectAsState(null)
             val latestLocal by viewModel.latestProductLocal.collectAsState(null)
             val lastNotifiedCode by userPreferences.lastNotifiedProductCode.collectAsState("___LOADING___")

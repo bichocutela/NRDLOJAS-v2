@@ -22,9 +22,13 @@ class AppearanceSettings(
      */
     val overrideLocalTheme: Boolean = overrideLocalTheme
 
-    /** A aparência remota nunca substitui a preferência local do aparelho. */
+    /**
+     * Quando ativado pelo Mestre, a aparência global substitui também aparelhos
+     * que já fizeram uma escolha local. Quando desativado, o global continua sendo
+     * apenas o padrão de primeira instalação.
+     */
     val globalOverrideEnabled: Boolean
-        get() = false
+        get() = overrideLocalTheme
 
     /**
      * Retorna o fundo ativo/agendado pertencente ao tema escolhido localmente.
@@ -118,6 +122,13 @@ class AppearanceSettings(
         else -> "multicolor"
     }
 }
+
+internal fun resolveEffectiveAppearanceValue(
+    remoteValue: String,
+    localValue: String,
+    hasLocalChoice: Boolean,
+    forceGlobal: Boolean
+): String = if (forceGlobal || !hasLocalChoice) remoteValue else localValue
 
 internal fun mostRecentAppearanceSettings(
     publicManifest: AppearanceSettings?,

@@ -855,7 +855,7 @@ fun MestreScreen(
 
             if (currentPage == MestrePanelPage.APPEARANCE_SETTINGS) {
             MestrePageIntro(
-                description = "Gerencie os fundos disponíveis para cada tema. Tema e modo de aparência continuam sendo escolhas individuais em Configurações.",
+                description = "Defina o tema padrão de primeira instalação, o modo de aparência e os fundos de cada tema. O usuário continua podendo personalizar depois, salvo quando a aparência global for forçada.",
                 hasUnsavedChanges = appearanceHasChanges
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -869,7 +869,11 @@ fun MestreScreen(
                         }
                     )
                     Text(
-                        "Desativado, cada usuário mantém sua própria escolha em Configurações.",
+                        if (draftAppearanceSettings.overrideLocalTheme) {
+                            "Ativado: tema e modo global são aplicados a todos os aparelhos, inclusive quem já personalizou."
+                        } else {
+                            "Desativado: tema e modo global servem apenas como padrão para novas instalações. Depois, cada usuário pode escolher o seu em Configurações."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -877,9 +881,7 @@ fun MestreScreen(
                     ExposedDropdownMenuBox(
                         expanded = expandedRemoteTheme,
                         onExpandedChange = {
-                            if (draftAppearanceSettings.overrideLocalTheme) {
-                                expandedRemoteTheme = !expandedRemoteTheme
-                            }
+                            expandedRemoteTheme = !expandedRemoteTheme
                         }
                     ) {
                         OutlinedTextField(
@@ -889,7 +891,7 @@ fun MestreScreen(
                             label = { Text("Tema global") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRemoteTheme) },
                             modifier = Modifier.menuAnchor().fillMaxWidth(),
-                            enabled = draftAppearanceSettings.overrideLocalTheme
+                            enabled = true
                         )
                         ExposedDropdownMenu(
                             expanded = expandedRemoteTheme,
@@ -910,9 +912,7 @@ fun MestreScreen(
                     ExposedDropdownMenuBox(
                         expanded = expandedRemoteMode,
                         onExpandedChange = {
-                            if (draftAppearanceSettings.overrideLocalTheme) {
-                                expandedRemoteMode = !expandedRemoteMode
-                            }
+                            expandedRemoteMode = !expandedRemoteMode
                         }
                     ) {
                         OutlinedTextField(
@@ -922,7 +922,7 @@ fun MestreScreen(
                             label = { Text("Modo de aparência") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRemoteMode) },
                             modifier = Modifier.menuAnchor().fillMaxWidth(),
-                            enabled = draftAppearanceSettings.overrideLocalTheme
+                            enabled = true
                         )
                         ExposedDropdownMenu(
                             expanded = expandedRemoteMode,
