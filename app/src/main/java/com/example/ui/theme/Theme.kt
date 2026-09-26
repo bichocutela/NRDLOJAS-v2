@@ -1092,7 +1092,7 @@ fun NrdAppBackground(
                 expressiveGlass.isDark
             )
             val transition = rememberInfiniteTransition(label = "expressive-liquid-background")
-            val drift = transition.animateFloat(
+            val driftState = transition.animateFloat(
                 initialValue = 0f,
                 targetValue = 1f,
                 animationSpec = infiniteRepeatable(
@@ -1100,7 +1100,7 @@ fun NrdAppBackground(
                     repeatMode = RepeatMode.Reverse
                 ),
                 label = "expressive-background-drift"
-            ).value
+            )
             val touchPoint = remember { mutableStateOf<Offset?>(null) }
             val touchScope = rememberCoroutineScope()
             Box(
@@ -1157,8 +1157,8 @@ fun NrdAppBackground(
                                 Color.Transparent
                             ),
                             center = Offset(
-                                size.width * (0.18f + 0.18f * drift),
-                                size.height * (0.13f + 0.05f * drift)
+                                size.width * (0.18f + 0.18f * 0.5f),
+                                size.height * (0.13f + 0.05f * 0.5f)
                             ),
                             radius = maxDimension * 0.54f
                         )
@@ -1169,8 +1169,8 @@ fun NrdAppBackground(
                                 Color.Transparent
                             ),
                             center = Offset(
-                                size.width * (0.86f - 0.13f * drift),
-                                size.height * (0.34f + 0.08f * drift)
+                                size.width * (0.86f - 0.13f * 0.5f),
+                                size.height * (0.34f + 0.08f * 0.5f)
                             ),
                             radius = maxDimension * 0.50f
                         )
@@ -1180,8 +1180,8 @@ fun NrdAppBackground(
                                 Color.Transparent
                             ),
                             center = Offset(
-                                size.width * (0.26f + 0.14f * drift),
-                                size.height * (0.77f - 0.06f * drift)
+                                size.width * (0.26f + 0.14f * 0.5f),
+                                size.height * (0.77f - 0.06f * 0.5f)
                             ),
                             radius = maxDimension * 0.47f
                         )
@@ -1192,8 +1192,8 @@ fun NrdAppBackground(
                                 Color.Transparent
                             ),
                             center = Offset(
-                                size.width * (0.54f + 0.09f * drift),
-                                size.height * (0.55f - 0.07f * drift)
+                                size.width * (0.54f + 0.09f * 0.5f),
+                                size.height * (0.55f - 0.07f * 0.5f)
                             ),
                             radius = maxDimension * 0.39f
                         )
@@ -1215,30 +1215,44 @@ fun NrdAppBackground(
                             )
                         )
                         val causticPath = Path().apply {
-                            moveTo(-size.width * 0.10f, size.height * (0.30f + 0.04f * drift))
+                            moveTo(-size.width * 0.10f, size.height * (0.30f + 0.04f * 0.5f))
                             cubicTo(
-                                size.width * 0.24f, size.height * (0.18f + 0.04f * drift),
-                                size.width * 0.58f, size.height * (0.44f - 0.06f * drift),
-                                size.width * 1.10f, size.height * (0.28f + 0.03f * drift)
+                                size.width * 0.24f, size.height * (0.18f + 0.04f * 0.5f),
+                                size.width * 0.58f, size.height * (0.44f - 0.06f * 0.5f),
+                                size.width * 1.10f, size.height * (0.28f + 0.03f * 0.5f)
                             )
                         }
                         val lowerCausticPath = Path().apply {
-                            moveTo(-size.width * 0.08f, size.height * (0.82f - 0.04f * drift))
+                            moveTo(-size.width * 0.08f, size.height * (0.82f - 0.04f * 0.5f))
                             cubicTo(
-                                size.width * 0.28f, size.height * (0.70f + 0.05f * drift),
-                                size.width * 0.66f, size.height * (0.92f - 0.06f * drift),
-                                size.width * 1.08f, size.height * (0.76f + 0.04f * drift)
+                                size.width * 0.28f, size.height * (0.70f + 0.05f * 0.5f),
+                                size.width * 0.66f, size.height * (0.92f - 0.06f * 0.5f),
+                                size.width * 1.08f, size.height * (0.76f + 0.04f * 0.5f)
                             )
                         }
                         onDrawBehind {
-                            drawRect(brush = haloPrimary)
-                            drawRect(brush = haloSecondary)
-                            drawRect(brush = haloTertiary)
-                            drawRect(brush = pearlLight)
+                            // The animated state is observed in the draw phase, so the app content is not recomposed each frame.
+                            val driftTravel = driftState.value - 0.5f
+                            withTransform({ translate(left = size.width * 0.18f * driftTravel, top = size.height * 0.05f * driftTravel) }) {
+                                drawRect(brush = haloPrimary)
+                            }
+                            withTransform({ translate(left = -size.width * 0.13f * driftTravel, top = size.height * 0.08f * driftTravel) }) {
+                                drawRect(brush = haloSecondary)
+                            }
+                            withTransform({ translate(left = size.width * 0.14f * driftTravel, top = -size.height * 0.06f * driftTravel) }) {
+                                drawRect(brush = haloTertiary)
+                            }
+                            withTransform({ translate(left = size.width * 0.09f * driftTravel, top = -size.height * 0.07f * driftTravel) }) {
+                                drawRect(brush = pearlLight)
+                            }
                             drawRect(brush = lowerGlow)
-                            drawPath(causticPath, brush = causticBrush, style = Stroke(width = 8.dp.toPx()))
-                            drawPath(causticPath, color = Color.White.copy(alpha = if (expressiveGlass.isDark) 0.10f else 0.45f), style = Stroke(width = 1.5.dp.toPx()))
-                            drawPath(lowerCausticPath, brush = causticBrush, style = Stroke(width = 6.dp.toPx()))
+                            withTransform({ translate(top = size.height * 0.04f * driftTravel) }) {
+                                drawPath(causticPath, brush = causticBrush, style = Stroke(width = 8.dp.toPx()))
+                                drawPath(causticPath, color = Color.White.copy(alpha = if (expressiveGlass.isDark) 0.10f else 0.45f), style = Stroke(width = 1.5.dp.toPx()))
+                            }
+                            withTransform({ translate(top = -size.height * 0.04f * driftTravel) }) {
+                                drawPath(lowerCausticPath, brush = causticBrush, style = Stroke(width = 6.dp.toPx()))
+                            }
                         }
                     },
                 content = {
