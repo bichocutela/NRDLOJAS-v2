@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.onSizeChanged
@@ -834,15 +835,14 @@ fun GlassSoftBackground(
 
 
 private class AmbientLiquidBubble(
-    initialPosition: Offset,
-    initialVelocity: Offset,
+    var x: Float,
+    var y: Float,
+    var velocityX: Float,
+    var velocityY: Float,
     val radiusDp: Float,
     val color: Color,
     val phase: Float
-) {
-    var position by mutableStateOf(initialPosition)
-    var velocity: Offset = initialVelocity
-}
+)
 
 @Composable
 private fun AmbientLiquidBubbleLayer(
@@ -856,14 +856,37 @@ private fun AmbientLiquidBubbleLayer(
     touchPoint: MutableState<Offset?>
 ) {
     val density = LocalDensity.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val performanceProfile = remember(context) {
+        val activityManager = context.getSystemService(android.app.ActivityManager::class.java)
+        val powerManager = context.getSystemService(android.os.PowerManager::class.java)
+        val lowRam = activityManager?.isLowRamDevice == true
+        val powerSave = powerManager?.isPowerSaveMode == true
+        val refreshRate = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            context.display?.refreshRate ?: 60f
+        } else {
+            @Suppress("DEPRECATION")
+            (context.getSystemService(android.content.Context.WINDOW_SERVICE) as? android.view.WindowManager)
+                ?.defaultDisplay?.refreshRate ?: 60f
+        }
+        when {
+            lowRam || powerSave -> 8 to false
+            refreshRate <= 65f -> 10 to false
+            refreshRate <= 105f -> 14 to true
+            else -> 18 to true
+        }
+    }
+    val bubbleCount = performanceProfile.first
+    val enhancedLighting = performanceProfile.second
     val bubbles = remember { mutableStateListOf<AmbientLiquidBubble>() }
     var canvasSize by remember { mutableStateOf(Size.Zero) }
+    var frameTick by remember { mutableLongStateOf(0L) }
 
-    LaunchedEffect(canvasSize, primary, secondary, isDark, speedMultiplier) {
+    LaunchedEffect(canvasSize, primary, secondary, isDark, bubbleCount) {
         bubbles.clear()
         if (canvasSize.width > 0f && canvasSize.height > 0f) {
             val random = Random(primary.hashCode() xor secondary.hashCode() xor canvasSize.width.toInt())
-            repeat(18) { index ->
+            repeat(bubbleCount) { index ->
                 val radius = 21f + random.nextFloat() * 24f
                 val tint = when (index % 4) {
                     0 -> primary
@@ -871,14 +894,10 @@ private fun AmbientLiquidBubbleLayer(
                     else -> Color.White
                 }
                 bubbles += AmbientLiquidBubble(
-                    initialPosition = Offset(
-                        x = radius * density.density + random.nextFloat() * (canvasSize.width - radius * 2f * density.density).coerceAtLeast(1f),
-                        y = radius * density.density + random.nextFloat() * (canvasSize.height - radius * 2f * density.density).coerceAtLeast(1f)
-                    ),
-                    initialVelocity = Offset(
-                        x = (random.nextFloat() - 0.5f) * 16f * speedMultiplier,
-                        y = (random.nextFloat() - 0.5f) * 16f * speedMultiplier
-                    ),
+                    x = radius * density.density + random.nextFloat() * (canvasSize.width - radius * 2f * density.density).coerceAtLeast(1f),
+                    y = radius * density.density + random.nextFloat() * (canvasSize.height - radius * 2f * density.density).coerceAtLeast(1f),
+                    velocityX = (random.nextFloat() - 0.5f) * 16f,
+                    velocityY = (random.nextFloat() - 0.5f) * 16f,
                     radiusDp = radius,
                     phase = random.nextFloat() * 6.28318f,
                     color = tint.copy(alpha = if (isDark) 0.34f else 0.48f)
@@ -899,24 +918,24 @@ private fun AmbientLiquidBubbleLayer(
 
                     bubbles.forEach { bubble ->
                         val radius = with(density) { bubble.radiusDp.dp.toPx() }
-                        val dx = bubble.position.x - canvasSize.width * 0.5f
-                        val dy = bubble.position.y - canvasSize.height * 0.5f
+                        val dx = bubble.x - canvasSize.width * 0.5f
+                        val dy = bubble.y - canvasSize.height * 0.5f
                         val distance = hypot(dx, dy).coerceAtLeast(1f)
                         var vx = when (motion) {
                             "circular" -> -dy / distance * 42f * speedMultiplier
-                            "rise" -> bubble.velocity.x * 0.96f + sin(time * 0.7f + bubble.phase) * 9f * speedMultiplier
+                            "rise" -> bubble.velocityX * 0.96f + sin(time * 0.7f + bubble.phase) * 9f * speedMultiplier
                             "drift" -> 24f * speedMultiplier + sin(time * 0.24f + bubble.phase) * 10f
-                            else -> bubble.velocity.x + sin(time * 0.46f + bubble.phase) * (34f + 54f * turbulence) * dt
+                            else -> bubble.velocityX * speedMultiplier + sin(time * 0.46f + bubble.phase) * (34f + 54f * turbulence) * dt
                         }
                         var vy = when (motion) {
                             "circular" -> dx / distance * 42f * speedMultiplier
                             "rise" -> -34f * speedMultiplier + sin(time * 0.39f + bubble.phase) * 8f
                             "drift" -> sin(time * 0.39f + bubble.phase * 1.23f) * 7f
-                            else -> bubble.velocity.y + sin(time * 0.39f + bubble.phase * 1.23f) * (30f + 48f * turbulence) * dt
+                            else -> bubble.velocityY * speedMultiplier + sin(time * 0.39f + bubble.phase * 1.23f) * (30f + 48f * turbulence) * dt
                         }
                         touch?.let { point ->
-                            val dx = bubble.position.x - point.x
-                            val dy = bubble.position.y - point.y
+                            val dx = bubble.x - point.x
+                            val dy = bubble.y - point.y
                             val distance = hypot(dx, dy)
                             if (distance in 1f..touchRadius) {
                                 val force = (1f - distance / touchRadius) * (1500f + 2100f * turbulence) * dt
@@ -935,17 +954,20 @@ private fun AmbientLiquidBubbleLayer(
                             vy = vy / speed * maxSpeed
                         }
 
-                        var x = bubble.position.x + vx * dt
-                        var y = bubble.position.y + vy * dt
+                        var x = bubble.x + vx * dt
+                        var y = bubble.y + vy * dt
                         if (x < -radius) x = canvasSize.width + radius
                         if (x > canvasSize.width + radius) x = -radius
                         if (y < -radius) y = canvasSize.height + radius
                         if (y > canvasSize.height + radius) y = -radius
-                        bubble.velocity = Offset(vx, vy)
-                        bubble.position = Offset(x, y)
+                        bubble.velocityX = vx
+                        bubble.velocityY = vy
+                        bubble.x = x
+                        bubble.y = y
                     }
                 }
                 lastFrameNanos = frameNanos
+                frameTick = frameNanos
             }
         }
     }
@@ -955,85 +977,55 @@ private fun AmbientLiquidBubbleLayer(
             canvasSize = Size(it.width.toFloat(), it.height.toFloat())
         }
     ) {
+        val tick = frameTick
+        if (tick == 0L) return@Canvas
+        val rimWidth = 1.45.dp.toPx()
+        val highlightWidth = 3.1.dp.toPx()
+        val bounceWidth = 2.2.dp.toPx()
+        val primaryGlow = primary.copy(alpha = if (enhancedLighting) 0.13f else 0.07f)
+        val secondaryGlow = secondary.copy(alpha = if (enhancedLighting) 0.08f else 0.035f)
+        val cyanRim = Color(0xFF80D8FF).copy(alpha = if (enhancedLighting) 0.62f else 0.28f)
+        val roseRim = Color(0xFFFF80AB).copy(alpha = if (enhancedLighting) 0.48f else 0.18f)
+        val goldRim = Color(0xFFFFD54F).copy(alpha = if (enhancedLighting) 0.56f else 0.22f)
+        val whiteHighlight = Color.White.copy(alpha = if (isDark) 0.76f else 0.94f)
+        val whiteBounce = Color.White.copy(alpha = if (isDark) 0.20f else 0.40f)
         bubbles.forEach { bubble ->
-            val center = bubble.position
+            val center = Offset(bubble.x, bubble.y)
             val radius = with(density) { bubble.radiusDp.dp.toPx() }
             val lightCenter = Offset(center.x - radius * 0.30f, center.y - radius * 0.32f)
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        primary.copy(alpha = if (isDark) 0.14f else 0.24f),
-                        secondary.copy(alpha = if (isDark) 0.08f else 0.14f),
-                        Color.Transparent
-                    ),
-                    center = center,
-                    radius = radius * 1.28f
-                ),
-                radius = radius * 1.28f,
-                center = center
-            )
-            drawCircle(
-                color = bubble.color.copy(alpha = bubble.color.alpha * 0.28f),
-                radius = radius * 1.08f,
-                center = center,
-                style = Stroke(width = 1.6.dp.toPx())
-            )
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = if (isDark) 0.26f else 0.40f),
-                        bubble.color.copy(alpha = bubble.color.alpha * 0.72f),
-                        secondary.copy(alpha = if (isDark) 0.10f else 0.20f),
-                        Color.Transparent
-                    ),
-                    center = lightCenter,
-                    radius = radius
-                ),
-                radius = radius,
-                center = center
-            )
-            drawCircle(
-                brush = Brush.sweepGradient(
-                    colors = listOf(
-                        primary.copy(alpha = 0.72f),
-                        secondary.copy(alpha = 0.55f),
-                        bubble.color.copy(alpha = 0.66f),
-                        primary.copy(alpha = 0.72f)
-                    ),
-                    center = center
-                ),
-                radius = radius * 0.96f,
-                center = center,
-                style = Stroke(width = 1.5.dp.toPx())
-            )
+            if (enhancedLighting) {
+                drawCircle(primaryGlow, radius * 1.24f, center)
+                drawCircle(secondaryGlow, radius * 1.10f, center)
+            }
+            drawCircle(bubble.color.copy(alpha = bubble.color.alpha * 0.20f), radius * 0.98f, center)
+            drawCircle(Color.White.copy(alpha = if (isDark) 0.035f else 0.10f), radius * 0.72f, lightCenter)
+            if (enhancedLighting) {
+                drawArc(cyanRim, 195f, 58f, false, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f), style = Stroke(rimWidth))
+                drawArc(roseRim, 258f, 54f, false, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f), style = Stroke(rimWidth))
+                drawArc(goldRim, 318f, 56f, false, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f), style = Stroke(rimWidth))
+            } else {
+                drawCircle(Color.White.copy(alpha = 0.40f), radius * 0.98f, center, style = Stroke(rimWidth))
+            }
             drawArc(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Color.Transparent, Color.White.copy(alpha = if (isDark) 0.24f else 0.48f)),
-                    startY = center.y,
-                    endY = center.y + radius
-                ),
+                color = whiteBounce,
                 startAngle = 28f,
                 sweepAngle = 118f,
                 useCenter = false,
                 topLeft = Offset(center.x - radius * 0.84f, center.y - radius * 0.84f),
                 size = Size(radius * 1.68f, radius * 1.68f),
-                style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round)
+                style = Stroke(width = bounceWidth, cap = StrokeCap.Round)
             )
             drawArc(
-                brush = Brush.linearGradient(
-                    colors = listOf(Color.White.copy(alpha = 0.92f), Color.White.copy(alpha = 0.12f)),
-                    start = Offset(center.x - radius, center.y - radius),
-                    end = center
-                ),
+                color = whiteHighlight,
                 startAngle = 192f,
                 sweepAngle = 78f,
                 useCenter = false,
                 topLeft = Offset(center.x - radius * 0.78f, center.y - radius * 0.78f),
                 size = Size(radius * 1.56f, radius * 1.56f),
-                style = Stroke(width = 3.2.dp.toPx(), cap = StrokeCap.Round)
+                style = Stroke(width = highlightWidth, cap = StrokeCap.Round)
             )
             drawCircle(
-                color = Color.White.copy(alpha = if (isDark) 0.46f else 0.72f),
+                color = whiteHighlight,
                 radius = radius * 0.09f,
                 center = Offset(lightCenter.x - radius * 0.04f, lightCenter.y - radius * 0.04f)
             )
