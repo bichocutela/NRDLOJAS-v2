@@ -309,6 +309,23 @@ private fun expressiveGlassCardSecondary(style: ExpressiveGlassStyle, index: Int
     return signature[index % signature.size]
 }
 
+private fun expressiveGlassCategoryAccent(index: Int): Color = listOf(
+    Color(0xFFE53935), // Açougue
+    Color(0xFF1E88E5), // Cafeteria
+    Color(0xFFEC407A), // Frios
+    Color(0xFFFB8C00), // Hortifruti
+    Color(0xFF2E9D57), // Mercearia
+    Color(0xFFB8860B)  // Padaria
+)[index % 6]
+
+private fun expressiveGlassAvatarColors(index: Int): Pair<Color, Color> = listOf(
+    Color(0xFFFFE0E7) to Color(0xFFB4234D),
+    Color(0xFFDDEEFF) to Color(0xFF1769AA),
+    Color(0xFFFFE8D5) to Color(0xFFB85A16),
+    Color(0xFFFFF0C2) to Color(0xFF8A6500),
+    Color(0xFFDDF5E5) to Color(0xFF207A42)
+)[index % 5]
+
 @Composable
 private fun homeStrongColors(index: Int): Pair<Color, Color> {
     val isDark = LocalNrdDarkMode.current
@@ -953,6 +970,16 @@ fun SearchScreen(
                         .fillMaxWidth()
                         .height(expressiveGlassSearchButtonHeight)
                         .scale(primaryActionScale)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFFFFD54F),
+                                    Color(0xFFFFB300),
+                                    Color(0xFFF57F17)
+                                )
+                            ),
+                            shape = searchButtonShape
+                        )
                         .expressiveLiquidGlass(
                             shape = searchButtonShape,
                             accent = Color(0xFFF5AA00),
@@ -1613,7 +1640,7 @@ fun CategorySection(
             val colors = categoryColors[index % categoryColors.size]
             val dynamicColors = homeDynamicColors(index, appTheme, colors.first, colors.second)
             val strongColors = homeStrongColors(index)
-            val liquidAccent = expressiveGlassCardAccent(expressiveGlass, index)
+            val liquidAccent = expressiveGlassCategoryAccent(index)
             val categoryGlassFill = when {
                 glass.enabled -> glass.fill.copy(alpha = glass.alpha)
                 isExpressiveGlass -> expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.surfaceAlpha)
@@ -1648,12 +1675,12 @@ fun CategorySection(
                             Modifier
                                 .background(
                                     Brush.verticalGradient(
-                                        listOf(liquidAccent.first.copy(alpha = 0.96f), liquidAccent.first)
+                                        listOf(liquidAccent.copy(alpha = 0.96f), liquidAccent)
                                     )
                                 )
                                 .expressiveLiquidGlass(
                                     shape = categoryShape,
-                                    accent = liquidAccent.first,
+                                    accent = liquidAccent,
                                     secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
                                     intensity = 1.08f,
                                     elevation = 8.dp,
@@ -2278,6 +2305,7 @@ fun MiniProductCard(
         )
     }
     val strongAccent = if (isExpressiveGlass) cardAccent else homeStrongColors(index)
+    val avatarColors = expressiveGlassAvatarColors(index)
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(
@@ -2396,7 +2424,14 @@ fun MiniProductCard(
                             if (expressive) RoundedCornerShape(if (compactExpressive) 14.dp else 17.dp)
                             else CircleShape
                         )
-                        .background(cardAccent.first)
+                        .background(if (isExpressiveGlass) avatarColors.first else cardAccent.first)
+                        .then(
+                            if (isExpressiveGlass) Modifier.border(
+                                1.dp,
+                                Color.White.copy(alpha = 0.82f),
+                                RoundedCornerShape(if (compactExpressive) 14.dp else 17.dp)
+                            ) else Modifier
+                        )
                 )
             } else {
                 Box(
@@ -2412,7 +2447,14 @@ fun MiniProductCard(
                             if (expressive) RoundedCornerShape(if (compactExpressive) 14.dp else 17.dp)
                             else CircleShape
                         )
-                        .background(cardAccent.first),
+                        .background(if (isExpressiveGlass) avatarColors.first else cardAccent.first)
+                        .then(
+                            if (isExpressiveGlass) Modifier.border(
+                                1.dp,
+                                Color.White.copy(alpha = 0.82f),
+                                RoundedCornerShape(if (compactExpressive) 14.dp else 17.dp)
+                            ) else Modifier
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     StylizedText(
@@ -2420,7 +2462,7 @@ fun MiniProductCard(
                         baseStyle = MaterialTheme.typography.titleMedium.copy(fontSize = if (expressive) 18.sp else 14.sp),
                         boldOutline = textPreferences.boldOutline,
                         uppercaseBold = true,
-                        color = if (expressive) strongAccent.first else cardAccent.second
+                        color = if (isExpressiveGlass) avatarColors.second else if (expressive) strongAccent.first else cardAccent.second
                     )
                 }
             }
@@ -2433,12 +2475,18 @@ fun MiniProductCard(
                         modifier = Modifier
                             .then(
                                 if (isExpressiveGlass) {
-                                    Modifier.expressiveLiquidGlass(
-                                        shape = unitShape,
-                                        accent = cardAccent.first,
-                                        intensity = 0.76f,
-                                        elevation = 3.dp
-                                    )
+                                    Modifier
+                                        .background(
+                                            Brush.verticalGradient(listOf(Color(0xFFFFE082), Color(0xFFFFB300))),
+                                            unitShape
+                                        )
+                                        .expressiveLiquidGlass(
+                                            shape = unitShape,
+                                            accent = Color(0xFFFFB300),
+                                            secondaryAccent = Color(0xFFFFF1B8),
+                                            intensity = 0.90f,
+                                            elevation = 4.dp
+                                        )
                                 } else {
                                     Modifier
                                         .clip(unitShape)
@@ -2450,7 +2498,7 @@ fun MiniProductCard(
                         Text(
                             text = product.unit.uppercase(),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
-                            color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimaryContainer
+                            color = if (isExpressiveGlass) Color(0xFF4A3500) else MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
                 } else {
@@ -2516,7 +2564,7 @@ fun MiniProductCard(
                         else -> 16.sp
                     }
                 ),
-                color = MaterialTheme.colorScheme.primary,
+                color = if (isExpressiveGlass) Color(0xFFF57F17) else MaterialTheme.colorScheme.primary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -2525,12 +2573,18 @@ fun MiniProductCard(
                     modifier = Modifier
                         .then(
                             if (isExpressiveGlass) {
-                                Modifier.expressiveLiquidGlass(
-                                    shape = CircleShape,
-                                    accent = cardAccent.first,
-                                    intensity = 0.78f,
-                                    elevation = 3.dp
-                                )
+                                Modifier
+                                    .background(
+                                        Brush.verticalGradient(listOf(Color(0xFFFFE082), Color(0xFFFFB300))),
+                                        CircleShape
+                                    )
+                                    .expressiveLiquidGlass(
+                                        shape = CircleShape,
+                                        accent = Color(0xFFFFB300),
+                                        secondaryAccent = Color(0xFFFFF1B8),
+                                        intensity = 1.05f,
+                                        elevation = 5.dp
+                                    )
                             } else {
                                 Modifier
                                     .clip(CircleShape)
@@ -2543,7 +2597,7 @@ fun MiniProductCard(
                     Icon(
                         Icons.Default.ChevronRight,
                         contentDescription = "Abrir produto",
-                        tint = if (isExpressiveGlass) cardAccent.first else MaterialTheme.colorScheme.primary,
+                        tint = if (isExpressiveGlass) Color.White else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(if (compactExpressive) 16.dp else 18.dp)
                     )
                 }
@@ -2647,7 +2701,7 @@ fun HistoryItem(
                 ),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val historyIconShape = RoundedCornerShape(if (compactExpressive) 12.dp else 15.dp)
+            val historyIconShape = if (isExpressiveGlass) CircleShape else RoundedCornerShape(if (compactExpressive) 12.dp else 15.dp)
             Box(
                 modifier = Modifier
                     .size(if (compactExpressive) 38.dp else 46.dp)
