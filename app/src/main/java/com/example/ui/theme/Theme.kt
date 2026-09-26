@@ -455,7 +455,7 @@ fun Modifier.expressiveLiquidGlass(
                 targetValue = 6.2831855f,
                 animationSpec = infiniteRepeatable(
                     animation = tween(durationMillis = 3800, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
+                    repeatMode = RepeatMode.Restart
                 ),
                 label = "liquid-refraction"
             )
