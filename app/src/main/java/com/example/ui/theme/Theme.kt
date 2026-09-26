@@ -1,6 +1,17 @@
 package com.example.ui.theme
 
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.foundation.Canvas
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import kotlin.math.hypot
+import kotlin.math.sin
+import kotlin.random.Random
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -656,18 +667,6 @@ fun Modifier.expressiveLiquidGlass(
                     ),
                     radius = maxDimension * (0.34f + 0.14f * fluidity)
                 )
-                val bubble1 = Offset(
-                    x = size.width * (0.72f + 0.04f * ((bubbleSeed % 3 + 3) % 3) + 0.055f * (motion - 0.5f)),
-                    y = size.height * (0.76f - 0.08f * ((bubbleSeed % 2 + 2) % 2) + 0.035f * (motion - 0.5f))
-                )
-                val bubble2 = Offset(
-                    x = size.width * (0.84f - 0.05f * ((bubbleSeed % 4 + 4) % 4) - 0.045f * (motion - 0.5f)),
-                    y = size.height * (0.34f + 0.06f * ((bubbleSeed % 3 + 3) % 3) - 0.03f * (motion - 0.5f))
-                )
-                // Gotas pequenas: antes usávamos a largura do card e em cards largos viravam círculos gigantes.
-                val bubbleRadius1 = minDimension * (0.055f + 0.020f * fluidity)
-                val bubbleRadius2 = minDimension * (0.030f + 0.012f * fluidity)
-
                 onDrawWithContent {
                     drawPath(path = outlinePath, brush = baseBrush)
                     drawPath(path = outlinePath, brush = diffusionA)
@@ -682,31 +681,6 @@ fun Modifier.expressiveLiquidGlass(
                     if (waves) {
                         drawPath(path = upperLiquidPath, brush = upperCausticBrush)
                         drawPath(path = bottomLiquidPath, brush = liquidWaveBrush)
-                        drawCircle(
-                            color = Color.White.copy(alpha = ((0.62f + 0.18f * fluidity) * safeIntensity).coerceAtMost(0.92f)),
-                            radius = bubbleRadius1,
-                            center = bubble1,
-                            style = Stroke(width = (1.05f + 0.55f * fluidity).dp.toPx())
-                        )
-                        drawCircle(
-                            color = tint.copy(alpha = ((0.26f + 0.12f * fluidity) * safeIntensity).coerceAtMost(0.72f)),
-                            radius = bubbleRadius1 * 0.58f,
-                            center = bubble1
-                        )
-                        drawCircle(
-                            color = Color.White.copy(alpha = ((0.72f + 0.12f * fluidity) * safeIntensity).coerceAtMost(0.94f)),
-                            radius = bubbleRadius2,
-                            center = bubble2,
-                            style = Stroke(width = (0.85f + 0.40f * fluidity).dp.toPx())
-                        )
-                        drawCircle(
-                            color = Color.White.copy(alpha = (0.72f * safeIntensity).coerceAtMost(0.90f)),
-                            radius = bubbleRadius2 * 0.22f,
-                            center = Offset(
-                                bubble2.x - bubbleRadius2 * 0.34f,
-                                bubble2.y - bubbleRadius2 * 0.34f
-                            )
-                        )
                     }
                     if (rippleProgress < 1f) {
                         val maxRippleRadius = maxDimension * 0.92f
@@ -835,6 +809,145 @@ fun GlassSoftBackground(
 }
 
 
+private class AmbientLiquidBubble(
+    initialPosition: Offset,
+    initialVelocity: Offset,
+    val radiusDp: Float,
+    val phase: Float,
+    val color: Color
+) {
+    var position by mutableStateOf(initialPosition)
+    var velocity: Offset = initialVelocity
+}
+
+@Composable
+private fun AmbientLiquidBubbleLayer(
+    modifier: Modifier,
+    primary: Color,
+    secondary: Color,
+    turbulence: Float,
+    isDark: Boolean,
+    touchPoint: MutableState<Offset?>
+) {
+    val density = LocalDensity.current
+    val bubbles = remember { mutableStateListOf<AmbientLiquidBubble>() }
+    var canvasSize by remember { mutableStateOf(Size.Zero) }
+
+    LaunchedEffect(canvasSize, primary, secondary, isDark) {
+        bubbles.clear()
+        if (canvasSize.width > 0f && canvasSize.height > 0f) {
+            val random = Random(primary.hashCode() xor secondary.hashCode() xor canvasSize.width.toInt())
+            repeat(14) { index ->
+                val radius = 17f + random.nextFloat() * 20f
+                val tint = when (index % 4) {
+                    0 -> primary
+                    1 -> secondary
+                    else -> Color.White
+                }
+                bubbles += AmbientLiquidBubble(
+                    initialPosition = Offset(
+                        x = radius * density.density + random.nextFloat() * (canvasSize.width - radius * 2f * density.density).coerceAtLeast(1f),
+                        y = radius * density.density + random.nextFloat() * (canvasSize.height - radius * 2f * density.density).coerceAtLeast(1f)
+                    ),
+                    initialVelocity = Offset(
+                        x = (random.nextFloat() - 0.5f) * 16f,
+                        y = (random.nextFloat() - 0.5f) * 16f
+                    ),
+                    radiusDp = radius,
+                    phase = random.nextFloat() * 6.28318f,
+                    color = tint.copy(alpha = if (isDark) 0.24f else 0.32f)
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(canvasSize, turbulence) {
+        var lastFrameNanos = 0L
+        while (true) {
+            withFrameNanos { frameNanos ->
+                if (lastFrameNanos != 0L && canvasSize.width > 0f && canvasSize.height > 0f) {
+                    val dt = ((frameNanos - lastFrameNanos) / 1_000_000_000f).coerceIn(0f, 0.033f)
+                    val time = frameNanos / 1_000_000_000f
+                    val touch = touchPoint.value
+                    val touchRadius = with(density) { 250.dp.toPx() }
+
+                    bubbles.forEach { bubble ->
+                        val radius = with(density) { bubble.radiusDp.dp.toPx() }
+                        var vx = bubble.velocity.x + sin(time * 0.46f + bubble.phase) * (18f + 34f * turbulence) * dt
+                        var vy = bubble.velocity.y + sin(time * 0.39f + bubble.phase * 1.23f) * (16f + 30f * turbulence) * dt
+                        touch?.let { point ->
+                            val dx = bubble.position.x - point.x
+                            val dy = bubble.position.y - point.y
+                            val distance = hypot(dx, dy)
+                            if (distance in 1f..touchRadius) {
+                                val force = (1f - distance / touchRadius) * (850f + 1350f * turbulence) * dt
+                                vx += dx / distance * force
+                                vy += dy / distance * force
+                            }
+                        }
+
+                        val damping = kotlin.math.exp(-0.72f * dt)
+                        vx *= damping
+                        vy *= damping
+                        val speed = hypot(vx, vy)
+                        if (speed > 78f) {
+                            vx = vx / speed * 78f
+                            vy = vy / speed * 78f
+                        }
+
+                        var x = bubble.position.x + vx * dt
+                        var y = bubble.position.y + vy * dt
+                        if (x < -radius) x = canvasSize.width + radius
+                        if (x > canvasSize.width + radius) x = -radius
+                        if (y < -radius) y = canvasSize.height + radius
+                        if (y > canvasSize.height + radius) y = -radius
+                        bubble.velocity = Offset(vx, vy)
+                        bubble.position = Offset(x, y)
+                    }
+                }
+                lastFrameNanos = frameNanos
+            }
+        }
+    }
+
+    Canvas(
+        modifier = modifier.onSizeChanged {
+            canvasSize = Size(it.width.toFloat(), it.height.toFloat())
+        }
+    ) {
+        bubbles.forEach { bubble ->
+            val center = bubble.position
+            val radius = with(density) { bubble.radiusDp.dp.toPx() }
+            val lightCenter = Offset(center.x - radius * 0.30f, center.y - radius * 0.32f)
+            drawCircle(
+                color = bubble.color.copy(alpha = bubble.color.alpha * 0.28f),
+                radius = radius * 1.08f,
+                center = center,
+                style = Stroke(width = 1.6.dp.toPx())
+            )
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = if (isDark) 0.30f else 0.46f),
+                        bubble.color,
+                        bubble.color.copy(alpha = bubble.color.alpha * 0.38f),
+                        Color.Transparent
+                    ),
+                    center = lightCenter,
+                    radius = radius
+                ),
+                radius = radius,
+                center = center
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = if (isDark) 0.52f else 0.76f),
+                radius = radius * 0.12f,
+                center = Offset(lightCenter.x - radius * 0.04f, lightCenter.y - radius * 0.04f)
+            )
+        }
+    }
+}
+
 @Composable
 fun NrdAppBackground(
     modifier: Modifier = Modifier,
@@ -860,9 +973,18 @@ fun NrdAppBackground(
                 ),
                 label = "expressive-background-drift"
             ).value
+            val touchPoint = remember { mutableStateOf<Offset?>(null) }
             Box(
                 modifier = modifier
                     .fillMaxSize()
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                                touchPoint.value = event.changes.firstOrNull { it.pressed }?.position
+                            }
+                        }
+                    }
                     .background(
                         Brush.linearGradient(
                             colors = colors,
@@ -939,7 +1061,17 @@ fun NrdAppBackground(
                             drawRect(brush = lowerGlow)
                         }
                     },
-                content = { content() }
+                content = {
+                    AmbientLiquidBubbleLayer(
+                        modifier = Modifier.fillMaxSize(),
+                        primary = expressiveGlass.accent,
+                        secondary = expressiveGlass.secondaryAccent,
+                        turbulence = expressiveGlass.fluidity,
+                        isDark = expressiveGlass.isDark,
+                        touchPoint = touchPoint
+                    )
+                    Box(modifier = Modifier.fillMaxSize(), content = { content() })
+                }
             )
         }
         expressive.enabled -> {
