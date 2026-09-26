@@ -672,6 +672,56 @@ fun Modifier.expressiveLiquidGlass(
                             )
                         )
                     }
+                    if (rippleProgress < 1f) {
+                        val maxRippleRadius = maxDimension * 0.92f
+                        for (ring in 0..2) {
+                            val startDelay = ring * 0.13f
+                            val ringProgress = ((rippleProgress - startDelay) / (1f - startDelay))
+                                .coerceIn(0f, 1f)
+                            if (rippleProgress >= startDelay) {
+                                val fade = (1f - ringProgress) * (1f - ringProgress)
+                                val radius = maxRippleRadius * ringProgress
+                                drawCircle(
+                                    color = Color.White.copy(alpha = (0.54f * fade).coerceAtMost(0.54f)),
+                                    radius = radius,
+                                    center = rippleOrigin,
+                                    style = Stroke(width = (5.5f * (1f - ringProgress) + 1.2f).dp.toPx())
+                                )
+                                drawCircle(
+                                    color = refraction.copy(alpha = (0.38f * fade).coerceAtMost(0.38f)),
+                                    radius = radius * 0.97f,
+                                    center = rippleOrigin,
+                                    style = Stroke(width = (2.2f * (1f - ringProgress) + 0.7f).dp.toPx())
+                                )
+                            }
+                        }
+                        // Pequenas gotas acompanham a onda e se dispersam pelo vidro.
+                        val droplets = listOf(
+                            Offset(1f, 0f), Offset(0.72f, 0.69f), Offset(0f, 1f),
+                            Offset(-0.72f, 0.69f), Offset(-1f, 0f), Offset(-0.72f, -0.69f),
+                            Offset(0f, -1f), Offset(0.72f, -0.69f)
+                        )
+                        droplets.forEachIndexed { index, direction ->
+                            val delay = (index % 3) * 0.07f
+                            val progress = ((rippleProgress - delay) / (1f - delay)).coerceIn(0f, 1f)
+                            if (rippleProgress >= delay) {
+                                val fade = 1f - progress
+                                val radius = maxDimension * (0.016f + 0.012f * fade)
+                                val center = rippleOrigin + direction * (maxDimension * 0.34f * progress)
+                                drawCircle(
+                                    color = Color.White.copy(alpha = (0.78f * fade).coerceAtMost(0.78f)),
+                                    radius = radius,
+                                    center = center,
+                                    style = Stroke(width = (1.15f * fade + 0.45f).dp.toPx())
+                                )
+                                drawCircle(
+                                    color = refraction.copy(alpha = (0.25f * fade).coerceAtMost(0.25f)),
+                                    radius = radius * 0.42f,
+                                    center = center - Offset(radius * 0.28f, radius * 0.28f)
+                                )
+                            }
+                        }
+                    }
                     drawPath(
                         path = outlinePath,
                         brush = specularEdge,
