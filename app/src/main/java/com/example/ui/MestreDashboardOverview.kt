@@ -479,7 +479,7 @@ internal fun MestreNoveltySettings() {
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !isSaving && enabled && noveltyText.isNotBlank()
+                enabled = !isSaving && noveltyText.isNotBlank()
             ) {
                 Text(if (isSaving) "Salvando..." else "Salvar novidade")
             }
