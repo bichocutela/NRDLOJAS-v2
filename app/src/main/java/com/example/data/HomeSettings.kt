@@ -39,3 +39,13 @@ data class HomeSettings(
     val mostUsedLimit: Int = 8,
     val carouselIntervalSeconds: Int = 5
 )
+
+
+data class RemoteNovelty(
+    val id: String,
+    val text: String,
+    val enabled: Boolean,
+    val target: String,
+    val version: String,
+    val createdAt: Long
+)

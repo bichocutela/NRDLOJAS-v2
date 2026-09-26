@@ -856,6 +856,19 @@ object FirebaseService {
         awaitClose { registration.remove() }
     }
 
+    fun observeNovelties(): Flow<List<RemoteNovelty>> = callbackFlow {
+        if (!isFirebaseConfigured()) { trySend(emptyList()); close(); return@callbackFlow }
+        val registration = FirebaseFirestore.getInstance().collection("app_novelties")
+            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { Log.e("FirebaseService", "Erro ao observar novidades", error); return@addSnapshotListener }
+                trySend(snapshot?.documents.orEmpty().map { doc ->
+                    RemoteNovelty(doc.id, doc.getString("text").orEmpty(), doc.getBoolean("enabled") ?: false, doc.getString("target").orEmpty(), doc.getString("version").orEmpty(), doc.getLong("createdAt") ?: 0L)
+                })
+            }
+        awaitClose { registration.remove() }
+    }
+
     suspend fun saveNoveltySettings(
         text: String,
         enabled: Boolean,
@@ -874,7 +887,11 @@ object FirebaseService {
             return false
         }
         return try {
-            FirebaseFirestore.getInstance()
+            val firestore = FirebaseFirestore.getInstance()
+            firestore.collection("app_novelties").add(
+                mapOf("text" to text.trim(), "enabled" to enabled, "target" to target, "version" to version.trim(), "createdAt" to System.currentTimeMillis())
+            ).await()
+            firestore
                 .collection("config")
                 .document("appSettings")
                 .set(
