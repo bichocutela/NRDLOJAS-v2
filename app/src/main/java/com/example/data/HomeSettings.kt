@@ -16,7 +16,10 @@ data class RemoteHomeSettings(
     val noveltyText: String? = null,
     val noveltyEnabled: Boolean? = null,
     val noveltyTarget: String? = null,
-    val noveltyVersion: String? = null
+    val noveltyVersion: String? = null,
+    val noveltyModel: String? = null,
+    val noveltyColor: String? = null,
+    val noveltySize: String? = null
 )
 
 /**

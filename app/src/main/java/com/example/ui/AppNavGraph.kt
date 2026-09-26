@@ -892,16 +892,24 @@ fun LoginDrawerContent(
         ) {
             if (noveltyVisible) {
                 Surface(
-                    color = Color(0xFFD91C1C),
-                    shape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp, topEnd = 2.dp, bottomEnd = 2.dp),
+                    color = when (remoteHomeSettings.noveltyColor) {
+                        "blue" -> Color(0xFF1565C0)
+                        "green" -> Color(0xFF2E7D32)
+                        else -> Color(0xFFD91C1C)
+                    },
+                    shape = if (remoteHomeSettings.noveltyModel == "tag") RoundedCornerShape(10.dp) else RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp, topEnd = 2.dp, bottomEnd = 2.dp),
                     modifier = Modifier.weight(0.9f)
                 ) {
                     Text(
                         remoteHomeSettings.noveltyText.orEmpty(),
                         color = Color.White,
                         maxLines = 2,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+                        style = when (remoteHomeSettings.noveltySize) {
+                            "small" -> MaterialTheme.typography.labelSmall
+                            "large" -> MaterialTheme.typography.labelLarge
+                            else -> MaterialTheme.typography.labelMedium
+                        },
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = if (remoteHomeSettings.noveltySize == "large") 10.dp else 8.dp)
                     )
                 }
                 Spacer(modifier = Modifier.width(4.dp))

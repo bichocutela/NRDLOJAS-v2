@@ -370,6 +370,9 @@ internal fun MestreNoveltySettings() {
     var noveltyText by rememberSaveable { mutableStateOf("Tema Novo: Expressivo disponível") }
     var target by rememberSaveable { mutableStateOf("all") }
     var targetVersion by rememberSaveable { mutableStateOf(com.example.BuildConfig.VERSION_NAME) }
+    var model by rememberSaveable { mutableStateOf("ribbon") }
+    var color by rememberSaveable { mutableStateOf("red") }
+    var size by rememberSaveable { mutableStateOf("medium") }
     var enabled by rememberSaveable { mutableStateOf(true) }
 
     Text("Inserir Novidade", style = MaterialTheme.typography.titleMedium)
@@ -423,6 +426,19 @@ internal fun MestreNoveltySettings() {
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(8.dp))
+            Button(onClick = { model = if (model == "ribbon") "tag" else "ribbon" }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (model == "ribbon") "Modelo: Fita" else "Modelo: Etiqueta")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = { color = when (color) { "red" -> "blue"; "blue" -> "green"; else -> "red" } }, modifier = Modifier.weight(1f)) {
+                    Text("Cor: ${when (color) { "red" -> "Vermelha"; "blue" -> "Azul"; else -> "Verde" }}")
+                }
+                Button(onClick = { size = when (size) { "small" -> "medium"; "medium" -> "large"; else -> "small" } }, modifier = Modifier.weight(1f)) {
+                    Text("Tamanho: ${when (size) { "small" -> "P"; "medium" -> "M"; else -> "G" }}")
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Novidade ativa", modifier = Modifier.weight(1f))
                 Switch(checked = enabled, onCheckedChange = { enabled = it })
@@ -437,7 +453,10 @@ internal fun MestreNoveltySettings() {
                             text = noveltyText,
                             enabled = enabled,
                             target = target,
-                            version = targetVersion
+                            version = targetVersion,
+                            model = model,
+                            color = color,
+                            size = size
                         )
                         saveMessage = if (saved) "Novidade publicada para o público escolhido." else FirebaseService.lastError ?: "Não foi possível publicar a novidade."
                         isSaving = false

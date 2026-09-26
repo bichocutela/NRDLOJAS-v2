@@ -842,7 +842,10 @@ object FirebaseService {
                         noveltyText = snapshot?.getString("noveltyText"),
                         noveltyEnabled = snapshot?.getBoolean("noveltyEnabled"),
                         noveltyTarget = snapshot?.getString("noveltyTarget"),
-                        noveltyVersion = snapshot?.getString("noveltyVersion")
+                        noveltyVersion = snapshot?.getString("noveltyVersion"),
+                        noveltyModel = snapshot?.getString("noveltyModel"),
+                        noveltyColor = snapshot?.getString("noveltyColor"),
+                        noveltySize = snapshot?.getString("noveltySize")
                     )
                 )
             }
@@ -854,7 +857,10 @@ object FirebaseService {
         text: String,
         enabled: Boolean,
         target: String,
-        version: String
+        version: String,
+        model: String = "ribbon",
+        color: String = "red",
+        size: String = "medium"
     ): Boolean {
         if (!prepareManagementWrite("publicar a novidade")) return false
         if (text.isBlank()) {
@@ -870,7 +876,10 @@ object FirebaseService {
                         "noveltyText" to text.trim(),
                         "noveltyEnabled" to enabled,
                         "noveltyTarget" to target,
-                        "noveltyVersion" to version.trim()
+                        "noveltyVersion" to version.trim(),
+                        "noveltyModel" to model,
+                        "noveltyColor" to color,
+                        "noveltySize" to size
                     ),
                     com.google.firebase.firestore.SetOptions.merge()
                 )
