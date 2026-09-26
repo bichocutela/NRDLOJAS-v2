@@ -448,7 +448,7 @@ fun Modifier.expressiveLiquidGlass(
         val fluidity = style.fluidity.coerceIn(0f, 1f)
         val tint = accent ?: style.accent
         val secondaryTint = secondaryAccent ?: style.secondaryAccent
-        val motion = if (animated || waves) {
+        val motionState = if (animated || waves) {
             val transition = rememberInfiniteTransition(label = "expressive-liquid-glass")
             transition.animateFloat(
                 initialValue = 0f,
@@ -458,9 +458,9 @@ fun Modifier.expressiveLiquidGlass(
                     repeatMode = RepeatMode.Reverse
                 ),
                 label = "liquid-refraction"
-            ).value
+            )
         } else {
-            0.36f
+            null
         }
         val refraction = secondaryTint
         val highlightAlpha = (0.54f + 0.30f * fluidity) * safeIntensity
@@ -498,6 +498,8 @@ fun Modifier.expressiveLiquidGlass(
                 }
             }
             .drawWithCache {
+                // Read animated state during drawing so moving highlights invalidate the draw layer, not the whole card composition.
+                val motion = motionState?.value ?: 0.36f
                 val rippleProgress = ripple.value
                 val rippleOrigin = rippleCenter
                 val outline = shape.createOutline(size, layoutDirection, this)

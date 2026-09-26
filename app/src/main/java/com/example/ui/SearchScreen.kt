@@ -2343,7 +2343,7 @@ fun MiniProductCard(
                 }
             )
             .glassSoftShadow(cardShape)
-            .expressiveShadow(cardShape, 7.dp)
+            .then(if (isExpressiveGlass) Modifier else Modifier.expressiveShadow(cardShape, 7.dp))
             .clip(cardShape)
             .then(
                 if (isExpressiveGlass) {
@@ -2670,7 +2670,7 @@ fun HistoryItem(
                 .fillMaxWidth()
                 .heightIn(min = if (compactExpressive) 72.dp else 84.dp)
                 .glassSoftShadow(itemShape)
-                .expressiveShadow(itemShape, 6.dp)
+                .then(if (isExpressiveGlass) Modifier else Modifier.expressiveShadow(itemShape, 6.dp))
                 .clip(itemShape)
                 .then(
                     when {
