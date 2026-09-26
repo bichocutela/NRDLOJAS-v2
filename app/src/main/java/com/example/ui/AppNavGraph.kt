@@ -73,6 +73,7 @@ fun AppNavGraph(
     var promotionsEnabled by remember { mutableStateOf(nossaGenteCredentialStore.isPromotionsEnabled()) }
     var drawerEmployeeProfile by remember { mutableStateOf<com.example.data.EmployeeProfile?>(null) }
     var drawerProfilePhotoModel by remember { mutableStateOf<Any?>(null) }
+    var profileRefreshKey by remember { mutableIntStateOf(0) }
     val firebaseAuth = remember { FirebaseAuth.getInstance() }
     val initialRole = remember(firebaseAuth) { managementRoleForEmail(firebaseAuth.currentUser?.email) }
     var isLoggedIn by remember { mutableStateOf(initialRole != null) }
@@ -106,7 +107,7 @@ fun AppNavGraph(
         onDispose { firebaseAuth.removeAuthStateListener(listener) }
     }
 
-    LaunchedEffect(profileEnabled) {
+    LaunchedEffect(profileEnabled, profileRefreshKey) {
         if (!profileEnabled || !nossaGenteApi.hasSession()) {
             drawerEmployeeProfile = null
             drawerProfilePhotoModel = null
@@ -319,6 +320,7 @@ fun AppNavGraph(
                         onLoginSuccess = {
                             profileEnabled = true
                             nossaGenteCredentialStore.setProfileEnabled(true)
+                            profileRefreshKey++
                             navController.navigate("my_profile") { popUpTo("my_point_login") { inclusive = true }; launchSingleTop = true }
                         },
                         onNavigateBack = { navController.popBackStack() },

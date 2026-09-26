@@ -155,7 +155,7 @@ class NossaGenteApi(context: Context) {
 
         val endpointResult = runCatching {
             val request = Request.Builder()
-                .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/me/foto?_sync=${System.currentTimeMillis()}")
+                .url("${BuildConfig.NOSSA_GENTE_API_BASE_URL}/me/foto")
                 .get()
                 .header("Accept", "image/*, application/json;q=0.9, */*;q=0.8")
                 .header("X-Requested-With", "XMLHttpRequest")
@@ -185,10 +185,16 @@ class NossaGenteApi(context: Context) {
                                 ProfilePhotoEndpointResult.Photo(bytes)
                             }
                             else -> {
-                                val reference = parseProfilePhotoReference(bytes.toString(Charsets.UTF_8))
-                                val downloaded = downloadProfilePhotoReference(reference, token)
-                                if (downloaded != null) ProfilePhotoEndpointResult.Photo(downloaded)
-                                else ProfilePhotoEndpointResult.NoPhoto
+                                val rawPayload = bytes.toString(Charsets.UTF_8)
+                                val embedded = parseProfilePhotoBytes(rawPayload)
+                                if (embedded != null) {
+                                    ProfilePhotoEndpointResult.Photo(embedded)
+                                } else {
+                                    val reference = parseProfilePhotoReference(rawPayload)
+                                    val downloaded = downloadProfilePhotoReference(reference, token)
+                                    if (downloaded != null) ProfilePhotoEndpointResult.Photo(downloaded)
+                                    else ProfilePhotoEndpointResult.NoPhoto
+                                }
                             }
                         }
                     }
@@ -268,6 +274,41 @@ class NossaGenteApi(context: Context) {
             String(bytes, 0, 4, Charsets.US_ASCII) == "RIFF" &&
             String(bytes, 8, 4, Charsets.US_ASCII) == "WEBP"
         return jpeg || png || gif || webp
+    }
+
+    private fun parseProfilePhotoBytes(raw: String): ByteArray? {
+        val trimmed = raw.trim()
+        if (trimmed.isBlank()) return null
+
+        fun decodeCandidate(candidate: String?): ByteArray? {
+            val value = candidate?.trim()?.trim('"')?.takeIf { it.isNotBlank() } ?: return null
+            val encoded = when {
+                value.startsWith("data:image/", ignoreCase = true) ->
+                    value.substringAfter("base64,", missingDelimiterValue = "")
+                value.length >= 64 && value.matches(Regex("""^[A-Za-z0-9+/=_\\r\\n-]+$""")) -> value
+                else -> return null
+            }
+            if (encoded.isBlank()) return null
+            return runCatching { Base64.decode(encoded, Base64.DEFAULT) }.getOrNull()?.takeIf { bytes ->
+                bytes.isNotEmpty() && bytes.size.toLong() <= MAX_PROFILE_PHOTO_BYTES && looksLikeImageBytes(bytes)
+            }
+        }
+
+        decodeCandidate(trimmed)?.let { return it }
+        val parsed = runCatching { JSONTokener(trimmed).nextValue() }.getOrNull() ?: return null
+        fun find(value: Any?, depth: Int): ByteArray? {
+            if (depth > 6 || value == null || value == JSONObject.NULL) return null
+            return when (value) {
+                is String -> decodeCandidate(value)
+                is JSONObject -> {
+                    val keys = arrayOf("foto", "fotoBase64", "foto_base64", "base64", "photo", "photoBase64", "photo_base64", "avatar", "imagem", "image", "data", "resultado", "result", "payload")
+                    keys.firstNotNullOfOrNull { key -> if (value.has(key)) find(value.opt(key), depth + 1) else null }
+                }
+                is JSONArray -> (0 until value.length()).firstNotNullOfOrNull { index -> find(value.opt(index), depth + 1) }
+                else -> null
+            }
+        }
+        return find(parsed, 0)
     }
 
     private fun parseProfilePhotoReference(raw: String): String? {
@@ -890,6 +931,7 @@ class NossaGenteApi(context: Context) {
     internal fun parsePromotionsForTest(raw: String): List<Promotion> = parsePromotions(raw)
     internal fun parseEmployeeProfileForTest(raw: String): EmployeeProfile = parseEmployeeProfile(raw)
     internal fun normalizeProfilePhotoUrlForTest(raw: String?): String? = normalizeProfilePhotoUrl(raw)
+    internal fun parseProfilePhotoBytesForTest(raw: String): ByteArray? = parseProfilePhotoBytes(raw)
     internal fun parseProfilePhotoReferenceForTest(raw: String): String? = parseProfilePhotoReference(raw)
     internal fun looksLikeImageBytesForTest(bytes: ByteArray): Boolean = looksLikeImageBytes(bytes)
 

@@ -107,6 +107,16 @@ class NossaGenteApiTest {
     }
 
     @Test
+    fun decodesBase64PhotoReturnedByOfficialProfileEndpoint() {
+        val api = NossaGenteApi(ApplicationProvider.getApplicationContext())
+        val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte(), 1, 2, 3, 4)
+        val encoded = android.util.Base64.encodeToString(jpeg, android.util.Base64.NO_WRAP)
+
+        assertEquals(jpeg.toList(), api.parseProfilePhotoBytesForTest("""{"data":{"foto":"$encoded"}}""")?.toList())
+        assertEquals(jpeg.toList(), api.parseProfilePhotoBytesForTest("data:image/jpeg;base64,$encoded")?.toList())
+    }
+
+    @Test
     fun recognizesCommonImageSignaturesForAuthenticatedProfilePhoto() {
         val api = NossaGenteApi(ApplicationProvider.getApplicationContext())
 
