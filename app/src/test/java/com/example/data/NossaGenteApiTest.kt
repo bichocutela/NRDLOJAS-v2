@@ -100,7 +100,7 @@ class NossaGenteApiTest {
         )
         assertEquals(
             "https://cdn.example.com/perfil.jpg",
-            api.parseProfilePhotoReferenceForTest(""https://cdn.example.com/perfil.jpg"")
+            api.parseProfilePhotoReferenceForTest("\"https://cdn.example.com/perfil.jpg\"")
         )
     }
 
