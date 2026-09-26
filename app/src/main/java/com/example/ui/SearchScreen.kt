@@ -1096,78 +1096,158 @@ fun SearchScreen(
                 }
 
                 if (latestAdded.isNotEmpty()) {
-                    item {
-                        SectionHeader("Últimos Adicionados", textPreferences)
-                        Column(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            latestAdded.forEachIndexed { index, product ->
+                    if (isExpressiveGlassTheme) {
+                        item(key = "glass-home-latest-header") {
+                            SectionHeader("Últimos Adicionados", textPreferences)
+                        }
+                        itemsIndexed(
+                            latestAdded,
+                            key = { index, product -> "glass-home-latest-${product.code}-$index" }
+                        ) { index, product ->
+                            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                                 HistoryItem(product, viewModel, index, appTheme, textPreferences)
+                            }
+                        }
+                    } else {
+                        item {
+                            SectionHeader("Últimos Adicionados", textPreferences)
+                            Column(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                latestAdded.forEachIndexed { index, product ->
+                                    HistoryItem(product, viewModel, index, appTheme, textPreferences)
+                                }
                             }
                         }
                     }
                 }
 
                 if (homeSettings.showHistory && history.isNotEmpty()) {
-                    item {
-                        SectionHeader("Histórico Recente", textPreferences, actionLabel = "Limpar Histórico", onAction = { showClearHistoryDialog = true })
-                        Column(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            history.take(5).forEachIndexed { index, product ->
+                    val recentHistory = history.take(5)
+                    if (isExpressiveGlassTheme) {
+                        item(key = "glass-home-history-header") {
+                            SectionHeader("Histórico Recente", textPreferences, actionLabel = "Limpar Histórico", onAction = { showClearHistoryDialog = true })
+                        }
+                        itemsIndexed(
+                            recentHistory,
+                            key = { index, product -> "glass-home-history-${product.code}-$index" }
+                        ) { index, product ->
+                            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                                 HistoryItem(product, viewModel, index, appTheme, textPreferences)
+                            }
+                        }
+                    } else {
+                        item {
+                            SectionHeader("Histórico Recente", textPreferences, actionLabel = "Limpar Histórico", onAction = { showClearHistoryDialog = true })
+                            Column(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                recentHistory.forEachIndexed { index, product ->
+                                    HistoryItem(product, viewModel, index, appTheme, textPreferences)
+                                }
                             }
                         }
                     }
                 }
 
-                if (homeSettings.showFavorites) {
-                    item {
-                        SectionHeader("Meus Favoritos", textPreferences)
+                if (isExpressiveGlassTheme) {
+                    if (homeSettings.showFavorites) {
+                        item(key = "glass-home-favorites-header") {
+                            SectionHeader("Meus Favoritos", textPreferences)
+                        }
                         if (favorites.isEmpty()) {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp),
-                                shape = RoundedCornerShape(if (isExpressiveTheme) 22.dp else 16.dp),
-                                color = if (isExpressiveTheme) {
-                                    MaterialTheme.colorScheme.surfaceContainerLow
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-                                }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            item(key = "glass-home-favorites-empty") {
+    
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp),
+                                    shape = RoundedCornerShape(if (isExpressiveTheme) 22.dp else 16.dp),
+                                    color = if (isExpressiveTheme) {
+                                        MaterialTheme.colorScheme.surfaceContainerLow
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                                    }
                                 ) {
-                                    Icon(
-                                        Icons.Default.FavoriteBorder,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Text(
-                                        "Toque no coração de um produto para adicioná-lo aos seus favoritos.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.FavoriteBorder,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            "Toque no coração de um produto para adicioná-lo aos seus favoritos.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
+                            
                             }
                         } else {
-                            Column(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                favorites.forEachIndexed { index, product ->
+                            itemsIndexed(
+                                favorites,
+                                key = { index, product -> "glass-home-favorite-${product.code}-$index" }
+                            ) { index, product ->
+                                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                                     ProductCard(product, viewModel, index, appTheme, textPreferences)
                                 }
                             }
                         }
                     }
+                } else {
+    if (homeSettings.showFavorites) {
+                        item {
+                            SectionHeader("Meus Favoritos", textPreferences)
+                            if (favorites.isEmpty()) {
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp),
+                                    shape = RoundedCornerShape(if (isExpressiveTheme) 22.dp else 16.dp),
+                                    color = if (isExpressiveTheme) {
+                                        MaterialTheme.colorScheme.surfaceContainerLow
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                                    }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.FavoriteBorder,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            "Toque no coração de um produto para adicioná-lo aos seus favoritos.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            } else {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    favorites.forEachIndexed { index, product ->
+                                        ProductCard(product, viewModel, index, appTheme, textPreferences)
+                                    }
+                                }
+                            }
+                        }
+                    }
+    
                 }
-
                 if (!hasVisibleHomeSection) {
                     item {
                         Text(
@@ -2721,7 +2801,7 @@ fun HistoryItem(
                                     secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
                                     intensity = 1.12f,
                                     elevation = 7.dp,
-                                    waves = true,
+                                    waves = false,
                                     bubbleSeed = index + 149
                                 )
                         } else {
