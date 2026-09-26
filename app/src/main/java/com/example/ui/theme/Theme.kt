@@ -896,8 +896,8 @@ private fun AmbientLiquidBubbleLayer(
                 bubbles += AmbientLiquidBubble(
                     x = radius * density.density + random.nextFloat() * (canvasSize.width - radius * 2f * density.density).coerceAtLeast(1f),
                     y = radius * density.density + random.nextFloat() * (canvasSize.height - radius * 2f * density.density).coerceAtLeast(1f),
-                    velocityX = (random.nextFloat() - 0.5f) * 16f,
-                    velocityY = (random.nextFloat() - 0.5f) * 16f,
+                    velocityX = (random.nextFloat() - 0.5f) * 16f * speedMultiplier,
+                    velocityY = (random.nextFloat() - 0.5f) * 16f * speedMultiplier,
                     radiusDp = radius,
                     phase = random.nextFloat() * 6.28318f,
                     color = tint.copy(alpha = if (isDark) 0.34f else 0.48f)
@@ -925,13 +925,13 @@ private fun AmbientLiquidBubbleLayer(
                             "circular" -> -dy / distance * 42f * speedMultiplier
                             "rise" -> bubble.velocityX * 0.96f + sin(time * 0.7f + bubble.phase) * 9f * speedMultiplier
                             "drift" -> 24f * speedMultiplier + sin(time * 0.24f + bubble.phase) * 10f
-                            else -> bubble.velocityX * speedMultiplier + sin(time * 0.46f + bubble.phase) * (34f + 54f * turbulence) * dt
+                            else -> bubble.velocityX + sin(time * 0.46f + bubble.phase) * (34f + 54f * turbulence) * dt * speedMultiplier
                         }
                         var vy = when (motion) {
                             "circular" -> dx / distance * 42f * speedMultiplier
                             "rise" -> -34f * speedMultiplier + sin(time * 0.39f + bubble.phase) * 8f
                             "drift" -> sin(time * 0.39f + bubble.phase * 1.23f) * 7f
-                            else -> bubble.velocityY * speedMultiplier + sin(time * 0.39f + bubble.phase * 1.23f) * (30f + 48f * turbulence) * dt
+                            else -> bubble.velocityY + sin(time * 0.39f + bubble.phase * 1.23f) * (30f + 48f * turbulence) * dt * speedMultiplier
                         }
                         touch?.let { point ->
                             val dx = bubble.x - point.x
