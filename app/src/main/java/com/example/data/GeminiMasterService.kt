@@ -73,6 +73,22 @@ object GeminiMasterService {
         }
     }
 
+    /** Uses the protected Gemini endpoint to turn on-device OCR into a reviewable roster draft. */
+    suspend fun extractWorkSchedule(ocrText: String): Result<JSONObject> {
+        val cleanText = ocrText.trim()
+        if (cleanText.isEmpty()) return Result.failure(IllegalArgumentException("Não foi possível reconhecer texto na escala."))
+        val prompt = """
+            Leia a escala mensal de trabalho abaixo e responda SOMENTE com JSON válido, sem markdown.
+            Formato exato: {"year":2026,"month":11,"employees":[{"registration":"10000000","name":"Nome completo","shift":"horário/setor","daysOff":[1,8],"vacationDays":[10,11]}]}.
+            Inclua cada funcionário que tiver matrícula. Considere X como folga e FE/FÉRIAS como férias. Não invente matrícula, nome, data ou turno; use arrays vazios se não houver datas legíveis. Se ano/mês não estiver explícito, use 0. Texto OCR:
+            ${cleanText.take(3000)}
+        """.trimIndent()
+        return ask(prompt).mapCatching { reply ->
+            val raw = reply.text.substringAfter('{', missingDelimiterValue = "").let { "{" + it.substringBeforeLast('}', missingDelimiterValue = "") + "}" }
+            JSONObject(raw).also { require(it.optJSONArray("employees") != null) { "O Gemini não retornou funcionários da escala." } }
+        }
+    }
+
     /**
      * Pesquisa um EAN/GTIN candidato usando Gemini + Google Search.
      * O código só é útil como pista: a tela de revisão ainda precisa confirmá-lo

@@ -68,6 +68,13 @@ object NotificationHelper {
                 description = "Notificações de alterações no banco de horas"
             }
             notificationManager.createNotificationChannel(channelHoursUpdates)
+            notificationManager.createNotificationChannel(NotificationChannel("point_updates", "Atualizações de ponto", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Notificações de novos dados no espelho de ponto"
+            })
+
+            notificationManager.createNotificationChannel(NotificationChannel("schedule_reminders", "Escala e folgas", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Avisos pessoais de folgas e publicação de escalas"
+            })
 
             val channelInstallations = NotificationChannel("installation_updates", "Novas instalações", NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = "Notificações exclusivas do Mestre quando o NRD V2 é instalado em um aparelho novo"
@@ -134,6 +141,8 @@ object NotificationHelper {
         "PROMOTION_UPDATED" -> "promotion_updates"
         "BENEFIT_RELEASED", "BENEFIT_PURCHASE" -> "benefit_updates"
         "HOURS_UPDATED" -> "hours_updates"
+        "POINT_UPDATED" -> "point_updates"
+        "TODAY_OFF", "TOMORROW_OFF", "SCHEDULE_INSERTED", "SCHEDULE_CHANGED" -> "schedule_reminders"
         "NEW_INSTALLATION" -> "installation_updates"
         else -> null
     }

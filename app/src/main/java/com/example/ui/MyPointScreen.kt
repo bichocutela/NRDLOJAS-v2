@@ -34,6 +34,9 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,6 +47,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -70,6 +75,8 @@ import com.example.data.BenefitSummary
 import com.example.data.EmployeeProfile
 import com.example.data.HoursSummary
 import com.example.data.NossaGenteApi
+import com.example.data.FirebaseService
+import com.example.data.WorkSchedule
 import com.example.data.NossaGenteBenefitResult
 import com.example.data.NossaGenteHoursResult
 import com.example.data.NossaGentePointResult
@@ -107,6 +114,13 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
     var showBenefitDetails by remember { mutableStateOf(false) }
     var benefitNotifications by remember { mutableStateOf(false) }
     var hoursNotifications by remember { mutableStateOf(false) }
+    var dayOffNotifications by remember { mutableStateOf(false) }
+    var scheduleNotifications by remember { mutableStateOf(false) }
+    var pointNotifications by remember { mutableStateOf(false) }
+    var showProfileNotificationSettings by remember { mutableStateOf(false) }
+    var workSchedules by remember { mutableStateOf<List<WorkSchedule>>(emptyList()) }
+    var selectedScheduleKey by remember { mutableStateOf(currentMonthKey()) }
+    var daysOffExpanded by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val credentialStore = remember(context) { com.example.data.NossaGenteCredentialStore(context.applicationContext) }
@@ -149,6 +163,12 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                 NossaGenteBenefitResult.Unauthorized -> onSignOut()
                 is NossaGenteBenefitResult.Error -> if (error == null) error = result.message
             }
+            workSchedules = FirebaseService.fetchWorkSchedules()
+            val currentMonth = currentMonthKey()
+            selectedScheduleKey = workSchedules.firstOrNull { it.monthKey == currentMonth }?.monthKey
+                ?: workSchedules.firstOrNull()?.monthKey ?: currentMonth
+            val profileRegistration = employeeProfile?.registration.orEmpty().filter(Char::isDigit)
+            com.example.util.ScheduleReminderWorker.cacheSchedules(context, workSchedules, profileRegistration)
             loading = false
         }
     }
@@ -156,6 +176,9 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
     LaunchedEffect(Unit) {
         benefitNotifications = credentialStore.isBenefitNotificationsEnabled()
         hoursNotifications = credentialStore.isHoursNotificationsEnabled()
+        dayOffNotifications = credentialStore.isDayOffNotificationsEnabled()
+        scheduleNotifications = credentialStore.isScheduleNotificationsEnabled()
+        pointNotifications = credentialStore.isPointNotificationsEnabled()
         loading = false
         load()
     }
@@ -187,25 +210,13 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                     }
                 }
                 IconButton(
-                    onClick = {
-                        val enabled = !hoursNotifications
-                        hoursNotifications = enabled
-                        credentialStore.setHoursNotificationsEnabled(enabled)
-                        if (enabled) {
-                            com.example.util.HoursNotificationWorker.schedule(context, resetSnapshot = true)
-                        } else {
-                            com.example.util.HoursNotificationWorker.cancel(context)
-                        }
-                    },
+                    onClick = { showProfileNotificationSettings = true },
                     modifier = if (isExpressive) Modifier.background(
                         MaterialTheme.colorScheme.secondaryContainer,
                         RoundedCornerShape(16.dp)
                     ) else Modifier
                 ) {
-                    Icon(
-                        if (hoursNotifications) Icons.Default.Notifications else Icons.Default.NotificationsOff,
-                        if (hoursNotifications) "Desativar notificações do banco de horas" else "Ativar notificações do banco de horas"
-                    )
+                    Icon(Icons.Default.Settings, "Configurações de notificações do perfil")
                 }
                 TextButton(
                     onClick = onSignOut,
@@ -236,6 +247,14 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                         )
                         Spacer(Modifier.height(10.dp))
                     }
+                    MyDaysOffCard(
+                        schedules = workSchedules,
+                        selectedKey = selectedScheduleKey,
+                        expanded = daysOffExpanded,
+                        registration = employeeProfile?.registration,
+                        onToggle = { daysOffExpanded = !daysOffExpanded },
+                        onSelectMonth = { selectedScheduleKey = it }
+                    )
                     hours?.let { summary ->
                         val hoursShape = if (isExpressive) RoundedCornerShape(30.dp) else MaterialTheme.shapes.medium
                         Card(
@@ -360,24 +379,9 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                     )
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Ative as notificações", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Quando o saldo for atualizado, o app notificará sobre Convênio Liberado e Compras no Convênio.",
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                            Text("Notificações do Convênio", style = MaterialTheme.typography.titleMedium)
+                            Text("Gerencie as notificações do perfil pela engrenagem no topo da tela.", style = MaterialTheme.typography.bodySmall)
                         }
-                        Switch(
-                            checked = benefitNotifications,
-                            onCheckedChange = { enabled ->
-                                benefitNotifications = enabled
-                                credentialStore.setBenefitNotificationsEnabled(enabled)
-                                if (enabled) {
-                                    com.example.util.BenefitNotificationWorker.schedule(context, resetSnapshot = true)
-                                } else {
-                                    com.example.util.BenefitNotificationWorker.cancel(context)
-                                }
-                            }
-                        )
                     }
                     androidx.compose.material3.HorizontalDivider()
                     Text("Compras", style = MaterialTheme.typography.titleMedium)
@@ -391,6 +395,99 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
             }
         }
     }
+    if (showProfileNotificationSettings) {
+        Dialog(onDismissRequest = { showProfileNotificationSettings = false }) {
+            Card(shape = RoundedCornerShape(24.dp)) {
+                Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Notificações do Meu Perfil", style = MaterialTheme.typography.titleLarge)
+                    ProfileNotificationSwitch("Banco de horas", hoursNotifications) { enabled ->
+                        hoursNotifications = enabled; credentialStore.setHoursNotificationsEnabled(enabled)
+                        if (enabled) com.example.util.HoursNotificationWorker.schedule(context, resetSnapshot = true) else com.example.util.HoursNotificationWorker.cancel(context)
+                    }
+                    ProfileNotificationSwitch("Atualizações de ponto", pointNotifications) { enabled ->
+                        pointNotifications = enabled; credentialStore.setPointNotificationsEnabled(enabled)
+                        if (enabled) com.example.util.PointNotificationWorker.schedule(context, resetSnapshot = true) else com.example.util.PointNotificationWorker.cancel(context)
+                    }
+                    ProfileNotificationSwitch("Convênio", benefitNotifications) { enabled ->
+                        benefitNotifications = enabled; credentialStore.setBenefitNotificationsEnabled(enabled)
+                        if (enabled) com.example.util.BenefitNotificationWorker.schedule(context, resetSnapshot = true) else com.example.util.BenefitNotificationWorker.cancel(context)
+                    }
+                    ProfileNotificationSwitch("Lembretes de folga (véspera e no dia)", dayOffNotifications) { enabled ->
+                        dayOffNotifications = enabled; credentialStore.setDayOffNotificationsEnabled(enabled)
+                        if (enabled) com.example.util.ScheduleReminderWorker.schedule(context) else com.example.util.ScheduleReminderWorker.cancel(context)
+                    }
+                    ProfileNotificationSwitch("Escala inserida ou alterada", scheduleNotifications) { enabled ->
+                        scheduleNotifications = enabled; credentialStore.setScheduleNotificationsEnabled(enabled)
+                    }
+                    Text("Os lembretes de folga usam a escala publicada e a matrícula do perfil Nossa Gente.", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { showProfileNotificationSettings = false }) { Text("Concluir") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileNotificationSwitch(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun MyDaysOffCard(
+    schedules: List<WorkSchedule>, selectedKey: String, expanded: Boolean, registration: String?,
+    onToggle: () -> Unit, onSelectMonth: (String) -> Unit
+) {
+    var selectorExpanded by remember { mutableStateOf(false) }
+    val selected = schedules.firstOrNull { it.monthKey == selectedKey }
+    val digits = registration.orEmpty().filter(Char::isDigit)
+    val employee = selected?.employees?.firstOrNull { it.registration.filter(Char::isDigit) == digits }
+    Card(Modifier.fillMaxWidth(), shape = if (LocalExpressiveStyle.current.enabled) RoundedCornerShape(28.dp) else MaterialTheme.shapes.medium) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Minhas Folgas", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                IconButton(onClick = onToggle) { Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, "Expandir Minhas Folgas") }
+            }
+            if (expanded) {
+                androidx.compose.foundation.layout.Box {
+                    TextButton(onClick = { selectorExpanded = true }) {
+                        val label = selected?.let { "${monthName(it.month)}/${it.year}" } ?: "Escala do mês atual indisponível"
+                        Text("$label  ▾")
+                    }
+                    DropdownMenu(expanded = selectorExpanded, onDismissRequest = { selectorExpanded = false }) {
+                        schedules.forEach { schedule ->
+                            val label = "${monthName(schedule.month)}/${schedule.year}"
+                            DropdownMenuItem(text = { Text(label) }, onClick = { onSelectMonth(schedule.monthKey); selectorExpanded = false })
+                        }
+                    }
+                }
+                when {
+                    registration.isNullOrBlank() -> Text("A matrícula do perfil Nossa Gente não está disponível para localizar sua escala.")
+                    selected == null -> Text("Ainda não há escala publicada para este mês.")
+                    employee == null -> Text("Não encontramos a matrícula ${registration} nesta escala.")
+                    else -> {
+                        Text("${employee.name} • Matrícula ${employee.registration}", style = MaterialTheme.typography.bodyMedium)
+                        if (employee.shift.isNotBlank()) Text("${employee.shift}")
+                        Text(if (employee.daysOff.isEmpty()) "Nenhuma folga registrada." else "Folgas: ${employee.daysOff.sorted().joinToString(", ")}")
+                        if (employee.vacationDays.isNotEmpty()) Text("Férias: ${employee.vacationDays.sorted().joinToString(", ")}")
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun currentMonthKey(): String {
+    val calendar = java.util.Calendar.getInstance()
+    return "%04d-%02d".format(calendar.get(java.util.Calendar.YEAR), calendar.get(java.util.Calendar.MONTH) + 1)
+}
+
+private fun monthName(month: Int): String {
+    val calendar = java.util.Calendar.getInstance().apply { set(java.util.Calendar.MONTH, (month - 1).coerceIn(0, 11)) }
+    return calendar.getDisplayName(java.util.Calendar.MONTH, java.util.Calendar.LONG, java.util.Locale("pt", "BR"))
+        ?.replaceFirstChar { it.uppercase() } ?: "Mês"
 }
 
 @Composable

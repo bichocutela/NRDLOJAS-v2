@@ -133,7 +133,7 @@ async function listProductNames(account: Record<string, string>, accountProject:
 async function sendEvent(
   account: Record<string, string>,
   accountProject: string,
-  title: "Produto adicionado" | "Código alterado" | "Sugestão corrigida" | "Atualização disponível",
+  title: "Produto adicionado" | "Código alterado" | "Sugestão corrigida" | "Atualização disponível" | "Escala inserida" | "Escala alterada",
   messageBody: string,
   uid: string,
   productCode?: string,
@@ -141,7 +141,7 @@ async function sendEvent(
   mirrorToWeb = true,
 ) {
   const fcmToken = await accessToken(account, "https://www.googleapis.com/auth/firebase.messaging");
-  const type = title === "Código alterado" ? "CODE_CHANGED" : title === "Sugestão corrigida" ? "SUGGESTION_FIXED" : title === "Atualização disponível" ? "APP_UPDATE" : "NEW_PRODUCT";
+  const type = title === "Código alterado" ? "CODE_CHANGED" : title === "Sugestão corrigida" ? "SUGGESTION_FIXED" : title === "Atualização disponível" ? "APP_UPDATE" : title === "Escala inserida" ? "SCHEDULE_INSERTED" : title === "Escala alterada" ? "SCHEDULE_CHANGED" : "NEW_PRODUCT";
   const webLink = productCode ? "https://bichocutela.github.io/?product=" + encodeURIComponent(productCode) : "https://bichocutela.github.io/";
   const message = { data: { title, body: messageBody, type, productCode: productCode ?? "", url: webLink } };
   // Android recebe apenas o payload data-only. A notificação visual é criada pelo app,
@@ -223,6 +223,14 @@ serve(async (request) => {
     const role = roleFor(identity);
     if (!role) return json({ ok: false, error: "Usuário não autorizado para esta ação" }, 403);
     if (body.action === "VALIDATE_MANAGE_ACCESS") return json({ ok: true, role });
+    if (body.action === "PUBLISH_WORK_SCHEDULE") {
+      const title = body.title;
+      const messageBody = body.body;
+      if ((title !== "Escala inserida" && title !== "Escala alterada") || typeof messageBody !== "string" || messageBody.length < 1 || messageBody.length > 240) return json({ ok: false, error: "Invalid schedule notification" }, 400);
+      const notification = await sendEvent(account, accountProject, title, messageBody, identity.uid, undefined, "work_schedule_updates", false);
+      console.info("[send-fcm] Publicação de escala notificada", { uid: identity.uid, role, title });
+      return json({ ok: true, notification });
+    }
     if (body.action === "AUDIT_PRODUCT_NAMES") {
       const candidates = await listProductNames(account, accountProject);
       console.info("[send-fcm] Auditoria de nomes concluída", { uid: identity.uid, role, affected: candidates.length });
