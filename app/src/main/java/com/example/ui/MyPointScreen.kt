@@ -120,7 +120,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
     var showProfileNotificationSettings by remember { mutableStateOf(false) }
     var workSchedules by remember { mutableStateOf<List<WorkSchedule>>(emptyList()) }
     var selectedScheduleKey by remember { mutableStateOf(currentMonthKey()) }
-    var daysOffExpanded by remember { mutableStateOf(true) }
+    var daysOffExpanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val credentialStore = remember(context) { com.example.data.NossaGenteCredentialStore(context.applicationContext) }

@@ -84,6 +84,18 @@ object GeminiMasterService {
         }
     }
 
+    /** Interpreta uma escala colada como texto, usando a mesma revisão da foto. */
+    suspend fun extractWorkScheduleText(text: String): Result<JSONObject> {
+        val clean = text.trim()
+        if (clean.isBlank()) return Result.failure(IllegalArgumentException("Cole o texto da escala."))
+        return requestJson(
+            JSONObject().put("scheduleText", clean.take(60000)),
+            functionSlug = "gemini-work-schedule"
+        ).mapCatching { root ->
+            root.optJSONObject("schedule") ?: error("O Gemini não retornou uma escala para revisão.")
+        }
+    }
+
     /**
      * Pesquisa um EAN/GTIN candidato usando Gemini + Google Search.
      * O código só é útil como pista: a tela de revisão ainda precisa confirmá-lo

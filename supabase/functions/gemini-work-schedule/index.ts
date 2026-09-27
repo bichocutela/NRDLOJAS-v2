@@ -41,16 +41,23 @@ Deno.serve(async (req: Request) => {
     if (!key) return reply(req, { error: "Gemini não configurado no servidor." }, 503);
     const body = await req.json();
     const image = typeof body.imageBase64 === "string" ? body.imageBase64 : "";
-    if (!/^[A-Za-z0-9+/=]+$/.test(image) || image.length < 100 || image.length > 8_000_000)
-      return reply(req, { error: "Foto inválida ou grande demais." }, 400);
-    const prompt = `Leia esta FOTO de uma escala mensal. Cada linha pertence a um funcionário e as colunas são numeradas de 1 a 31. Analise visualmente cada cruzamento linha/coluna: X significa folga e FE significa férias. Não infira dias pelo dia da semana. Inclua apenas matrículas legíveis; não invente valores. Responda somente JSON: {"year":0,"month":0,"employees":[{"registration":"","name":"","shift":"","daysOff":[],"vacationDays":[]}]}. Se mês/ano não estiverem impressos de forma legível use 0. Uma célula sombreada ou vazia não significa folga. Verifique cada X diretamente na interseção da linha com o número da coluna, sem repetir padrões de outros funcionários. Se a célula estiver ambígua, deixe o dia de fora para revisão humana. A revisão humana é obrigatória.`;
+    const scheduleText = typeof body.scheduleText === "string" ? body.scheduleText.trim() : "";
+    if (scheduleText) {
+      if (scheduleText.length > 60000) return reply(req, { error: "Texto da escala grande demais." }, 400);
+    } else if (!/^[A-Za-z0-9+/=]+$/.test(image) || image.length < 100 || image.length > 8_000_000) {
+      return reply(req, { error: "Envie uma foto ou o texto da escala." }, 400);
+    }
+    const schema = `Responda somente JSON: {"year":0,"month":0,"employees":[{"registration":"","name":"","shift":"","daysOff":[],"vacationDays":[]}]}. Inclua apenas matrículas e nomes legíveis; não invente valores. Se mês/ano não estiverem expressos, use 0. X significa folga; FE significa férias. Dias ambíguos devem ficar de fora para revisão humana obrigatória.`;
+    const prompt = scheduleText
+      ? `Estruture este TEXTO de uma escala mensal. Associe cada funcionário à própria matrícula, horário, datas de folga e férias. Não deduza dias pelo dia da semana nem repita o padrão de outra pessoa. ${schema}\n\nTEXTO:\n${scheduleText}`
+      : `Leia esta FOTO de uma escala mensal. Cada linha pertence a um funcionário e as colunas são numeradas de 1 a 31. Analise visualmente cada cruzamento linha/coluna. Uma célula sombreada ou vazia não significa folga. Não deduza dias pelo dia da semana. ${schema}`;
     const models = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.5-flash-lite"];
     let result: any = null;
     let lastStatus = 0;
     for (const model of models) {
       const upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: image } }] }], generationConfig: { temperature: 0, maxOutputTokens: 16000, responseMimeType: "application/json" } }),
+        body: JSON.stringify({ contents: [{ role: "user", parts: scheduleText ? [{ text: prompt }] : [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: image } }] }], generationConfig: { temperature: 0, maxOutputTokens: 16000, responseMimeType: "application/json" } }),
       });
       const response = await upstream.json().catch(() => ({}));
       if (upstream.ok) { result = response; break; }
@@ -65,6 +72,6 @@ Deno.serve(async (req: Request) => {
     return reply(req, { schedule });
   } catch (error) {
     if (String(error).includes("unauthorized")) return reply(req, { error: "Acesso Mestre necessário." }, 403);
-    return reply(req, { error: "Não foi possível ler a escala. Confira a foto e tente novamente." }, 502);
+    return reply(req, { error: "Não foi possível interpretar a escala. Confira os dados e tente novamente." }, 502);
   }
 });

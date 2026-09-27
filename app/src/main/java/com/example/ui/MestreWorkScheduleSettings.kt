@@ -79,6 +79,12 @@ internal fun MestreWorkScheduleSettings() {
     var historyExpanded by remember { mutableStateOf(true) }
     val drafts = remember { ScheduleDraftStore(context.applicationContext) }
     var activePeriod by remember { mutableStateOf<String?>(null) }
+    var showManual by remember { mutableStateOf(false) }
+    var manualName by remember { mutableStateOf("") }
+    var manualRegistration by remember { mutableStateOf("") }
+    var manualShift by remember { mutableStateOf("") }
+    var showTextInput by remember { mutableStateOf(false) }
+    var scheduleText by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) { savedSchedules = FirebaseService.fetchWorkSchedules() }
     LaunchedEffect(activePeriod, employees.toList()) {
@@ -88,9 +94,61 @@ internal fun MestreWorkScheduleSettings() {
         if (activePeriod == null && employees.isNotEmpty()) activePeriod = schedulePeriod(month, year)
     }
 
+    fun addExtractedRows(json: JSONObject) {
+        val extractedMonth = json.optInt("month", 0)
+        val extractedYear = json.optInt("year", 0)
+        if (extractedMonth in 1..12) month = extractedMonth.toString()
+        if (extractedYear in 2000..2100) year = extractedYear.toString()
+        val key = schedulePeriod(month, year) ?: error("Escolha o mês e ano da escala.")
+        val rows = json.optJSONArray("employees") ?: error("A resposta não contém funcionários.")
+        val extracted = (0 until rows.length()).mapNotNull { index ->
+            val row = rows.optJSONObject(index) ?: return@mapNotNull null
+            val registration = row.optString("registration").filter(Char::isDigit)
+            val name = row.optString("name").trim()
+            if (registration.isBlank() || name.isBlank()) return@mapNotNull null
+            WorkScheduleEmployee(registration, name,
+                row.optString("shift").takeUnless { it == "null" }.orEmpty(),
+                row.intList("daysOff"), row.intList("vacationDays"))
+        }
+        require(extracted.isNotEmpty()) { "Nenhum funcionário com nome e matrícula foi identificado. Revise o conteúdo." }
+        val existing = if (activePeriod == key) employees.toList() else drafts.load(key)
+        // Preserve corrections already made in the current draft when importing another source.
+        val merged = (extracted + existing).associateBy { it.registration }.toMutableMap()
+        savedSchedules.firstOrNull { it.monthKey == key }?.employees?.filter { it.verified }?.forEach { saved ->
+            merged[saved.registration] = saved
+        }
+        employees.clear()
+        employees.addAll(merged.values.sortedBy { it.name.lowercase() })
+        activePeriod = key
+        drafts.save(key, employees.toList())
+    }
+
+    fun analyzeText() {
+        scope.launch {
+            busy = true
+            message = "Interpretando o texto da escala…"
+            GeminiMasterService.extractWorkScheduleText(scheduleText).onSuccess { json ->
+                runCatching { addExtractedRows(json) }
+                    .onSuccess {
+                        rowPreviews.values.forEach { preview ->
+                            preview.full.recycle(); preview.identity.recycle(); preview.marks.recycle()
+                        }
+                        rowPreviews.clear()
+                        selectedImage = null
+                        showTextInput = false
+                        message = "Texto interpretado. Revise as datas e confirme cada matrícula antes de salvar."
+                    }
+                    .onFailure { message = it.message ?: "Falha ao estruturar o texto." }
+            }.onFailure { message = it.message ?: "Falha ao interpretar o texto." }
+            busy = false
+        }
+    }
+
     fun analyzeImage(uri: android.net.Uri, rotation: Int) {
         scope.launch {
             busy = true
+            val previousRows = employees.toList()
+            val previousPeriod = activePeriod
             activePeriod = null
             message = "Lendo a imagem e estruturando a escala…"
             runCatching {
@@ -162,12 +220,14 @@ internal fun MestreWorkScheduleSettings() {
                 val extractedPeriod = schedulePeriod(month, year)
                 if (extractedPeriod != null) {
                     activePeriod = extractedPeriod
-                    val previouslySaved = FirebaseService.fetchWorkSchedules().firstOrNull { it.monthKey == extractedPeriod }
                     savedSchedules = FirebaseService.fetchWorkSchedules()
-                    previouslySaved?.employees?.filter { it.verified }?.forEach { saved ->
-                        val index = employees.indexOfFirst { it.registration == saved.registration }
-                        if (index >= 0) employees[index] = saved
+                    val pending = if (previousPeriod == extractedPeriod) previousRows else drafts.load(extractedPeriod)
+                    val merged = (employees.toList() + pending).associateBy { it.registration }.toMutableMap()
+                    savedSchedules.firstOrNull { it.monthKey == extractedPeriod }?.employees?.filter { it.verified }?.forEach { saved ->
+                        merged[saved.registration] = saved
                     }
+                    employees.clear()
+                    employees.addAll(merged.values.sortedBy { it.name.lowercase() })
                     drafts.save(extractedPeriod, employees.toList())
                 }
                 if (resized !== oriented) resized.recycle()
@@ -189,11 +249,72 @@ internal fun MestreWorkScheduleSettings() {
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Inserir Escala", style = MaterialTheme.typography.headlineSmall)
-        Text("Envie a foto. Revise o nome, matrícula e dias de cada linha; confirme na Nossa Gente e salve cada funcionário separadamente.", style = MaterialTheme.typography.bodyMedium)
-        Button(onClick = { imagePicker.launch("image/*") }, enabled = !busy) {
-            androidx.compose.material3.Icon(Icons.Default.CloudUpload, contentDescription = null)
-            Text("  Selecionar foto da escala")
+        Text("Escolha foto, cadastro manual ou texto. Revise os dias, confirme a matrícula na Nossa Gente e salve cada funcionário.", style = MaterialTheme.typography.bodyMedium)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Button(onClick = { imagePicker.launch("image/*") }, enabled = !busy, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp)) {
+                Text("Foto", maxLines = 1)
+            }
+            OutlinedButton(onClick = { showManual = true }, enabled = !busy, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp)) {
+                Text("Editar escala", maxLines = 1, style = MaterialTheme.typography.labelSmall)
+            }
+            OutlinedButton(onClick = { showTextInput = true }, enabled = !busy, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp)) {
+                Text("Enviar texto", maxLines = 1)
+            }
         }
+        if (showManual) AlertDialog(
+            onDismissRequest = { showManual = false },
+            title = { Text("Adicionar funcionário") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Escala de ${scheduleMonthName(month.toIntOrNull() ?: 1)}/$year. Depois selecione as folgas no calendário.", style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(manualName, { manualName = it }, label = { Text("Nome completo") }, singleLine = true)
+                    OutlinedTextField(manualRegistration, { manualRegistration = it.filter(Char::isDigit) }, label = { Text("Matrícula") }, singleLine = true)
+                    OutlinedTextField(manualShift, { manualShift = it }, label = { Text("Setor / horário (opcional)") }, singleLine = true)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val reg = manualRegistration.filter(Char::isDigit)
+                    val key = schedulePeriod(month, year)
+                    when {
+                        key == null -> message = "Escolha mês e ano antes de adicionar."
+                        reg.isBlank() || manualName.isBlank() -> message = "Informe nome e matrícula."
+                        savedSchedules.firstOrNull { it.monthKey == key }?.employees?.any { it.registration == reg && it.verified } == true ->
+                            message = "Esta matrícula já foi salva neste mês. Abra o histórico para ver ou corrigir."
+                        (if (activePeriod == key) employees.toList() else drafts.load(key)).any { it.registration == reg } ->
+                            message = "Esta matrícula já está na revisão. Abra a linha para corrigir."
+                        else -> {
+                            if (activePeriod != key) {
+                                employees.clear()
+                                employees.addAll(drafts.load(key))
+                                rowPreviews.clear()
+                                selectedImage = null
+                            }
+                            employees += WorkScheduleEmployee(reg, manualName.trim(), manualShift.trim())
+                            employees.sortBy { it.name.lowercase() }
+                            activePeriod = key
+                            showManual = false
+                            manualName = ""; manualRegistration = ""; manualShift = ""
+                            message = "Funcionário adicionado. Marque as folgas no calendário e consulte a matrícula antes de salvar."
+                        }
+                    }
+                }) { Text("Adicionar e marcar folgas") }
+            },
+            dismissButton = { TextButton(onClick = { showManual = false }) { Text("Cancelar") } }
+        )
+        if (showTextInput) AlertDialog(
+            onDismissRequest = { if (!busy) showTextInput = false },
+            title = { Text("Enviar escala por texto") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Cole nomes, matrículas, horários, folgas e férias. O Gemini organiza as linhas para você revisar.", style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(scheduleText, { scheduleText = it.take(60000) }, Modifier.fillMaxWidth().height(220.dp),
+                        label = { Text("Texto da escala") }, minLines = 8)
+                }
+            },
+            confirmButton = { TextButton(onClick = { analyzeText() }, enabled = !busy && scheduleText.isNotBlank()) { Text("Interpretar e revisar") } },
+            dismissButton = { TextButton(onClick = { showTextInput = false }, enabled = !busy) { Text("Cancelar") } }
+        )
         selectedImage?.let { uri ->
             TextButton(onClick = {
                 imageRotation = (imageRotation + 90) % 360
@@ -316,8 +437,8 @@ internal fun MestreWorkScheduleSettings() {
                                         Image(preview.marks.asImageBitmap(), contentDescription = "Marcações da linha de ${row.name}",
                                             modifier = Modifier.width(920.dp).height(66.dp), contentScale = ContentScale.FillBounds)
                                     }
-                                } ?: Text("Não foi possível localizar a matrícula na foto para mostrar a linha. Gire ou refaça a foto antes de confirmar.",
-                                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                } ?: Text("Sem recorte da foto nesta linha. Confira nome, matrícula e folgas antes de confirmar.",
+                                    style = MaterialTheme.typography.bodySmall)
                                 Text("Toque para marcar ou desmarcar a folga", style = MaterialTheme.typography.titleSmall)
                                 ScheduleDayGrid(row.daysOff, month.toIntOrNull(), year.toIntOrNull()) { day ->
                                     employees[index] = row.copy(daysOff = row.daysOff.toggle(day))
