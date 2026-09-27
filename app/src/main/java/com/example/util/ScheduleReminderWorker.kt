@@ -23,13 +23,15 @@ class ScheduleReminderWorker(context: Context, params: WorkerParameters) : Corou
             val fresh = com.example.data.FirebaseService.fetchWorkSchedules()
             for (schedule in fresh) {
                 val employee = schedule.employees.firstOrNull { it.registration.filter(Char::isDigit) == registration } ?: continue
-                val previous = store.getInt("revision_${schedule.monthKey}", 0)
-                if (previous > 0 && schedule.revision > previous) {
+                val fingerprint = "${employee.shift}|${employee.daysOff.sorted()}|${employee.vacationDays.sorted()}"
+                val key = "fingerprint_${schedule.monthKey}"
+                val previous = store.getString(key, null)
+                if (previous != null && previous != fingerprint) {
                     NotificationHelper.showNotification(applicationContext, "SCHEDULE_CHANGED", "Escala Alterada", "Confira as folgas de ${schedule.month}/${schedule.year} no Meu Perfil.")
-                } else if (previous == 0 && schedule.monthKey > "%04d-%02d".format(Calendar.getInstance().get(Calendar.YEAR), Calendar.getInstance().get(Calendar.MONTH) + 1)) {
+                } else if (previous == null && schedule.monthKey > "%04d-%02d".format(Calendar.getInstance().get(Calendar.YEAR), Calendar.getInstance().get(Calendar.MONTH) + 1)) {
                     NotificationHelper.showNotification(applicationContext, "SCHEDULE_NEW", "Escala de ${monthName(schedule.month)} Inserida", "Confira suas folgas no Meu Perfil.")
                 }
-                store.edit().putInt("revision_${schedule.monthKey}", schedule.revision).apply()
+                store.edit().putString(key, fingerprint).apply()
             }
             if (fresh.isNotEmpty()) cacheSchedules(applicationContext, fresh, registration)
         }

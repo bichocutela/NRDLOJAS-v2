@@ -111,6 +111,46 @@ object FirebaseService {
         }
     }
 
+    /** Saves one API-confirmed employee while preserving every other row in the month. */
+    suspend fun publishVerifiedWorkScheduleEmployee(year: Int, month: Int, row: WorkScheduleEmployee): Boolean {
+        if (!row.verified || row.registration.isBlank() || month !in 1..12 || year !in 2000..2100) {
+            lastError = "Confirme a matrícula na Nossa Gente e informe mês/ano válidos."
+            return false
+        }
+        if (!prepareManagementWrite("publicar folgas do funcionário")) return false
+        return try {
+            val monthKey = "%04d-%02d".format(year, month)
+            val ref = FirebaseFirestore.getInstance().collection("work_schedules").document(monthKey)
+            FirebaseFirestore.getInstance().runTransaction { transaction ->
+                val existing = transaction.get(ref)
+                val registration = row.registration.filter(Char::isDigit)
+                val others = (existing.get("employees") as? List<*>)?.mapNotNull { it as? Map<*, *> }
+                    ?.filterNot { (it["registration"] as? String)?.filter(Char::isDigit) == registration }
+                    ?.map { it.entries.associate { entry -> entry.key.toString() to entry.value } }.orEmpty()
+                val employee = mapOf(
+                    "registration" to registration,
+                    "name" to row.name,
+                    "shift" to row.shift,
+                    "daysOff" to row.daysOff.distinct().sorted(),
+                    "vacationDays" to row.vacationDays.distinct().sorted(),
+                    "verified" to true
+                )
+                transaction.set(ref, mapOf(
+                    "year" to year, "month" to month,
+                    "employees" to (others + employee),
+                    "updatedAt" to System.currentTimeMillis(),
+                    "revision" to ((existing.getLong("revision") ?: 0L) + 1L)
+                ))
+            }.await()
+            lastError = null
+            true
+        } catch (error: Exception) {
+            lastError = error.message
+            Log.e("FirebaseService", "Erro ao publicar folgas do funcionário", error)
+            false
+        }
+    }
+
     suspend fun registerGlobalProductView(productCode: String): Boolean {
         if (!isFirebaseConfigured() || productCode.isBlank()) return false
         return try {

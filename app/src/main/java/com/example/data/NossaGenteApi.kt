@@ -106,25 +106,32 @@ class NossaGenteApi(context: Context) {
     private suspend fun fetchEmployeeDirectoryOnce(allowSavedCredentialRecovery: Boolean): NossaGenteDirectoryResult {
         val token = currentToken() ?: return NossaGenteDirectoryResult.Unauthorized
         return try {
-            val response = authenticatedGet("/tempo-casa?limit=100&page=1", token)
-            if (response.code == 401 || response.code == 403) {
-                if (allowSavedCredentialRecovery && renewFromSavedCredentials()) {
-                    return fetchEmployeeDirectoryOnce(allowSavedCredentialRecovery = false)
+            val employees = mutableListOf<NossaGenteDirectoryEmployee>()
+            val seen = mutableSetOf<String>()
+            for (page in 1..30) {
+                val response = authenticatedGet("/tempo-casa?limit=100&page=$page", token)
+                if (response.code == 401 || response.code == 403) {
+                    if (allowSavedCredentialRecovery && renewFromSavedCredentials()) {
+                        return fetchEmployeeDirectoryOnce(allowSavedCredentialRecovery = false)
+                    }
+                    return NossaGenteDirectoryResult.Unauthorized
                 }
-                return NossaGenteDirectoryResult.Unauthorized
+                if (!response.successful) return NossaGenteDirectoryResult.Error("A API Nossa Gente não permitiu confirmar as matrículas.")
+                val array = payloadArray(response.body, "data", "resultado", "result", "payload", "items", "tempoCasa", "tempo_casa", "colaboradores", "employees")
+                var newRows = 0
+                for (index in 0 until array.length()) {
+                    val item = array.optJSONObject(index) ?: continue
+                    val registration = item.textValue("matricula", "MATRICULA", "registro", "registration")?.filter(Char::isDigit).orEmpty()
+                    val name = item.textValue("nome", "NOME", "name", "nomeCompleto", "nome_completo", "fullName").orEmpty().trim()
+                    if (registration.isBlank() || name.isBlank() || !seen.add(registration)) continue
+                    employees += NossaGenteDirectoryEmployee(
+                        registration = registration, name = name,
+                        employeeId = item.textValue("id", "codigoUsuario", "codigo_usuario", "userId", "usuarioId")
+                    )
+                    newRows++
+                }
+                if (array.length() < 100 || newRows == 0) break
             }
-            if (!response.successful) return NossaGenteDirectoryResult.Error("A API Nossa Gente não permitiu confirmar as matrículas.")
-            val array = payloadArray(response.body, "data", "resultado", "result", "payload", "items", "tempoCasa", "tempo_casa", "colaboradores", "employees")
-            val employees = (0 until array.length()).mapNotNull { index ->
-                val item = array.optJSONObject(index) ?: return@mapNotNull null
-                val registration = item.textValue("matricula", "MATRICULA", "registro", "registration")?.filter(Char::isDigit).orEmpty()
-                val name = item.textValue("nome", "NOME", "name", "nomeCompleto", "nome_completo", "fullName").orEmpty().trim()
-                if (registration.isBlank() || name.isBlank()) null else NossaGenteDirectoryEmployee(
-                    registration = registration,
-                    name = name,
-                    employeeId = item.textValue("id", "codigoUsuario", "codigo_usuario", "userId", "usuarioId")
-                )
-            }.distinctBy { it.registration }
             if (employees.isEmpty()) NossaGenteDirectoryResult.Error("A API Nossa Gente não retornou matrículas para conferência.")
             else NossaGenteDirectoryResult.Success(employees)
         } catch (_: Exception) {
