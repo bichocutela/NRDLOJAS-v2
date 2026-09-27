@@ -37,8 +37,9 @@ fun OfficialCategoryDropdown(
             enabled = enabled,
             label = { Text(label) },
             trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-            modifier = Modifier.fillMaxWidth().clickable(enabled = enabled) { expanded = !expanded },
+            modifier = Modifier.fillMaxWidth(),
         )
+        Box(Modifier.matchParentSize().clickable(enabled = enabled, onClick = { expanded = !expanded }))
         DropdownMenu(
             expanded = expanded && enabled,
             onDismissRequest = { expanded = false }

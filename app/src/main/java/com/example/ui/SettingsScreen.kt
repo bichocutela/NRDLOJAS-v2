@@ -261,11 +261,13 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     readOnly = true,
                     label = { Text("Selecione o Tema") },
                     trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth().clickable { expandedThemeMenu = !expandedThemeMenu }
+                    modifier = Modifier.fillMaxWidth()
                         .expressiveShadow(if (isExpressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraSmall, 5.dp),
                     shape = if (isExpressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraSmall,
                 )
+                Box(Modifier.matchParentSize().clickable(onClick = { expandedThemeMenu = !expandedThemeMenu }))
                 DropdownMenu(
+
                     expanded = expandedThemeMenu,
                     onDismissRequest = { expandedThemeMenu = false }
                 ) {
@@ -427,9 +429,11 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                     readOnly = true,
                                     label = { Text("Cor do vidro líquido") },
                                     trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                                    modifier = Modifier.fillMaxWidth().clickable { expandedExpressiveGlassColorMenu = !expandedExpressiveGlassColorMenu }
+                                    modifier = Modifier.fillMaxWidth()
                                 )
+                                Box(Modifier.matchParentSize().clickable(onClick = { expandedExpressiveGlassColorMenu = !expandedExpressiveGlassColorMenu }))
                                 DropdownMenu(
+
                                     expanded = expandedExpressiveGlassColorMenu,
                                     onDismissRequest = { expandedExpressiveGlassColorMenu = false }
                                 ) {
@@ -585,9 +589,11 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 readOnly = true,
                                 label = { Text("Cor do vidro") },
                                 trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                                modifier = Modifier.fillMaxWidth().clickable { expandedGlassColorMenu = !expandedGlassColorMenu }
+                                modifier = Modifier.fillMaxWidth()
                             )
+                            Box(Modifier.matchParentSize().clickable(onClick = { expandedGlassColorMenu = !expandedGlassColorMenu }))
                             DropdownMenu(
+
                                 expanded = expandedGlassColorMenu,
                                 onDismissRequest = { expandedGlassColorMenu = false }
                             ) {

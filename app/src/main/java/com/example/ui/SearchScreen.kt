@@ -98,7 +98,6 @@ import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.LocalExpressiveGlassStyle
 import com.example.ui.theme.LocalDevicePerformanceTier
-import com.example.ui.theme.LocalNrdHomeScrollInProgress
 import com.example.ui.theme.LocalNrdDarkMode
 import com.example.ui.theme.ExpressiveGlassStyle
 import com.example.ui.theme.glassSoftShadow
@@ -374,7 +373,6 @@ fun SearchScreen(
     val expressiveStyle = LocalExpressiveStyle.current
     val expressiveGlassStyle = LocalExpressiveGlassStyle.current
     val performanceTier = LocalDevicePerformanceTier.current
-    val homeScrollSignal = LocalNrdHomeScrollInProgress.current
     val isExpressiveTheme = expressiveStyle.enabled
     val isGlassSoftTheme = glassStyle.enabled
     val isExpressiveGlassTheme = expressiveGlassStyle.enabled
@@ -472,19 +470,6 @@ fun SearchScreen(
     val unreadNotifications = notificationHistory.count { !it.read }
     val mostUsedListState = rememberLazyListState()
     val homeListState = rememberLazyListState()
-    LaunchedEffect(homeListState, performanceTier.pausePhysicsOnScroll, homeScrollSignal) {
-        if (homeScrollSignal == null) return@LaunchedEffect
-        if (!performanceTier.pausePhysicsOnScroll) {
-            homeScrollSignal.value = false
-            return@LaunchedEffect
-        }
-        try {
-            snapshotFlow { homeListState.isScrollInProgress }
-                .collectLatest { isScrolling -> homeScrollSignal.value = isScrolling }
-        } finally {
-            homeScrollSignal.value = false
-        }
-    }
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }

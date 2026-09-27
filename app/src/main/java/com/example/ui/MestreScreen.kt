@@ -915,9 +915,11 @@ fun MestreScreen(
                                 readOnly = true,
                                 label = { Text("Modelo de movimento") },
                                 trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                                modifier = Modifier.fillMaxWidth().clickable { expandedBubbleMotion = !expandedBubbleMotion }
+                                modifier = Modifier.fillMaxWidth()
                             )
+                            Box(Modifier.matchParentSize().clickable(onClick = { expandedBubbleMotion = !expandedBubbleMotion }))
                             DropdownMenu(
+
                                 expanded = expandedBubbleMotion,
                                 onDismissRequest = { expandedBubbleMotion = false }
                             ) {
@@ -1065,10 +1067,12 @@ fun MestreScreen(
                             readOnly = true,
                             label = { Text("Tema global") },
                             trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth().clickable { expandedRemoteTheme = !expandedRemoteTheme },
+                            modifier = Modifier.fillMaxWidth(),
                             enabled = true
                         )
+                        Box(Modifier.matchParentSize().clickable(onClick = { expandedRemoteTheme = !expandedRemoteTheme }))
                         DropdownMenu(
+
                             expanded = expandedRemoteTheme,
                             onDismissRequest = { expandedRemoteTheme = false }
                         ) {
@@ -1091,10 +1095,12 @@ fun MestreScreen(
                             readOnly = true,
                             label = { Text("Modo de aparência") },
                             trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth().clickable { expandedRemoteMode = !expandedRemoteMode },
+                            modifier = Modifier.fillMaxWidth(),
                             enabled = true
                         )
+                        Box(Modifier.matchParentSize().clickable(onClick = { expandedRemoteMode = !expandedRemoteMode }))
                         DropdownMenu(
+
                             expanded = expandedRemoteMode,
                             onDismissRequest = { expandedRemoteMode = false }
                         ) {
