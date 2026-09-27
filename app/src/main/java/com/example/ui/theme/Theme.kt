@@ -4,13 +4,13 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import kotlin.math.hypot
+import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.random.Random
 import androidx.compose.animation.core.Animatable
@@ -1059,16 +1059,17 @@ private fun AmbientLiquidBubbleLayer(
                 ?.defaultDisplay?.refreshRate ?: 60f
         }
         when {
-            lowRam || powerSave -> Triple(8, false, 12)
-            refreshRate <= 65f -> Triple(10, false, 18)
-            refreshRate <= 105f -> Triple(12, true, 20)
-            else -> Triple(14, true, 24)
+            lowRam || powerSave || refreshRate <= 65f -> Triple(8, false, 8)
+            refreshRate < 120f -> Triple(8, true, 12)
+            else -> Triple(8, true, 16)
         }
     }
     val bubbleCount = (performanceProfile.first + additionalBubbles.coerceIn(0, 18))
         .coerceAtMost(performanceProfile.third)
     val enhancedLighting = performanceProfile.second
-    val bubbles = remember { mutableStateListOf<AmbientLiquidBubble>() }
+    // This list changes only when the surface/profile changes; frame updates
+    // mutate its preallocated bubble objects and invalidate drawing via frameTick.
+    val bubbles = remember { ArrayList<AmbientLiquidBubble>(16) }
     var canvasSize by remember { mutableStateOf(Size.Zero) }
     var frameTick by remember { mutableLongStateOf(0L) }
 
@@ -1098,25 +1099,25 @@ private fun AmbientLiquidBubbleLayer(
 
     LaunchedEffect(canvasSize, turbulence, speedMultiplier, motion, sizeMultiplier, homeScrollSignal) {
         var lastFrameNanos = 0L
-        val minimumFrameIntervalNanos = 16_000_000L
         while (true) {
             if (homeScrollSignal.value) {
                 snapshotFlow { homeScrollSignal.value }.first { isScrolling -> !isScrolling }
                 lastFrameNanos = 0L
             }
             withFrameNanos { frameNanos ->
-                val elapsedNanos = frameNanos - lastFrameNanos
-                if (lastFrameNanos != 0L && elapsedNanos < minimumFrameIntervalNanos) {
-                    return@withFrameNanos
-                }
                 if (lastFrameNanos != 0L && canvasSize.width > 0f && canvasSize.height > 0f) {
-                    val dt = ((frameNanos - lastFrameNanos) / 1_000_000_000f).coerceIn(0f, 0.033f)
+                    val dt = ((frameNanos - lastFrameNanos) / 1_000_000_000f)
+                        .coerceIn(0.005f, 0.033f)
+                    val damping = 0.955.toDouble()
+                        .pow((dt / 0.016f).toDouble()).toFloat()
                     val time = frameNanos / 1_000_000_000f
                     val touch = touchPoint.value
-                    val touchRadius = with(density) { 250.dp.toPx() }
+                    val touchRadius = 250f * density.density
 
-                    bubbles.forEach { bubble ->
-                        val radius = with(density) { (bubble.radiusDp * sizeMultiplier).dp.toPx() }
+                    var index = 0
+                    while (index < bubbles.size) {
+                        val bubble = bubbles[index]
+                        val radius = bubble.radiusDp * sizeMultiplier * density.density
                         val dx = bubble.x - canvasSize.width * 0.5f
                         val dy = bubble.y - canvasSize.height * 0.5f
                         val distance = hypot(dx, dy).coerceAtLeast(1f)
@@ -1143,7 +1144,6 @@ private fun AmbientLiquidBubbleLayer(
                             }
                         }
 
-                        val damping = kotlin.math.exp(-0.72f * dt)
                         vx *= damping
                         vy *= damping
                         val speed = hypot(vx, vy)
@@ -1163,6 +1163,7 @@ private fun AmbientLiquidBubbleLayer(
                         bubble.velocityY = vy
                         bubble.x = x
                         bubble.y = y
+                        index++
                     }
                 }
                 lastFrameNanos = frameNanos
@@ -1172,65 +1173,56 @@ private fun AmbientLiquidBubbleLayer(
     }
 
     Canvas(
-        modifier = modifier.onSizeChanged {
-            canvasSize = Size(it.width.toFloat(), it.height.toFloat())
-        }
-    ) {
-        val tick = frameTick
-        if (tick == 0L) return@Canvas
-        val rimWidth = 1.45.dp.toPx()
-        val highlightWidth = 3.1.dp.toPx()
-        val bounceWidth = 2.2.dp.toPx()
-        val lightStrength = brightness.coerceIn(0.25f, 2f)
-        val primaryGlow = primary.copy(alpha = (if (enhancedLighting) 0.13f else 0.07f) * lightStrength)
-        val secondaryGlow = secondary.copy(alpha = (if (enhancedLighting) 0.08f else 0.035f) * lightStrength)
-        val cyanRim = Color(0xFF80D8FF).copy(alpha = (if (enhancedLighting) 0.62f else 0.28f) * lightStrength)
-        val roseRim = Color(0xFFFF80AB).copy(alpha = (if (enhancedLighting) 0.48f else 0.18f) * lightStrength)
-        val goldRim = Color(0xFFFFD54F).copy(alpha = (if (enhancedLighting) 0.56f else 0.22f) * lightStrength)
-        val whiteHighlight = Color.White.copy(alpha = (if (isDark) 0.76f else 0.94f) * lightStrength)
-        val whiteBounce = Color.White.copy(alpha = (if (isDark) 0.20f else 0.40f) * lightStrength)
-        bubbles.forEach { bubble ->
-            val center = Offset(bubble.x, bubble.y)
-            val radius = with(density) { (bubble.radiusDp * sizeMultiplier).dp.toPx() }
-            val lightCenter = Offset(center.x - radius * 0.30f, center.y - radius * 0.32f)
-            if (enhancedLighting) {
-                drawCircle(primaryGlow, radius * 1.24f, center)
-                drawCircle(secondaryGlow, radius * 1.10f, center)
+        modifier = modifier
+            .onSizeChanged { canvasSize = Size(it.width.toFloat(), it.height.toFloat()) }
+            .drawWithCache {
+                val scale = density
+                val rimStroke = Stroke(width = 1.45f * scale)
+                val highlightStroke = Stroke(width = 3.1f * scale, cap = StrokeCap.Round)
+                val bounceStroke = Stroke(width = 2.2f * scale, cap = StrokeCap.Round)
+                val lightStrength = brightness.coerceIn(0.25f, 2f)
+                val primaryGlow = primary.copy(alpha = (if (enhancedLighting) 0.13f else 0.07f) * lightStrength)
+                val secondaryGlow = secondary.copy(alpha = (if (enhancedLighting) 0.08f else 0.035f) * lightStrength)
+                val cyanRim = Color(0xFF80D8FF).copy(alpha = (if (enhancedLighting) 0.62f else 0.28f) * lightStrength)
+                val roseRim = Color(0xFFFF80AB).copy(alpha = (if (enhancedLighting) 0.48f else 0.18f) * lightStrength)
+                val goldRim = Color(0xFFFFD54F).copy(alpha = (if (enhancedLighting) 0.56f else 0.22f) * lightStrength)
+                val whiteHighlight = Color.White.copy(alpha = (if (isDark) 0.76f else 0.94f) * lightStrength)
+                val whiteBounce = Color.White.copy(alpha = (if (isDark) 0.20f else 0.40f) * lightStrength)
+                val whiteFillAlpha = (if (isDark) 0.035f else 0.10f) * lightStrength
+                val whiteOutlineAlpha = (0.40f * lightStrength).coerceIn(0f, 0.9f)
+                onDrawBehind {
+                    if (frameTick == 0L) return@onDrawBehind
+                    var index = 0
+                    while (index < bubbles.size) {
+                        val bubble = bubbles[index]
+                        val cx = bubble.x
+                        val cy = bubble.y
+                        val radius = bubble.radiusDp * sizeMultiplier * scale
+                        val highlightX = cx - radius * 0.30f
+                        val highlightY = cy - radius * 0.32f
+                        if (enhancedLighting) {
+                            drawCircle(primaryGlow, radius * 1.24f, Offset(cx, cy))
+                            drawCircle(secondaryGlow, radius * 1.10f, Offset(cx, cy))
+                        }
+                        drawCircle(bubble.color, radius * 0.98f, Offset(cx, cy), alpha = (0.20f * lightStrength).coerceIn(0f, 0.75f))
+                        drawCircle(Color.White, radius * 0.72f, Offset(highlightX, highlightY), alpha = whiteFillAlpha)
+                        if (outlineEnabled) {
+                            if (enhancedLighting) {
+                                drawArc(cyanRim, 195f, 58f, false, Offset(cx - radius, cy - radius), Size(radius * 2f, radius * 2f), style = rimStroke)
+                                drawArc(roseRim, 258f, 54f, false, Offset(cx - radius, cy - radius), Size(radius * 2f, radius * 2f), style = rimStroke)
+                                drawArc(goldRim, 318f, 56f, false, Offset(cx - radius, cy - radius), Size(radius * 2f, radius * 2f), style = rimStroke)
+                            } else {
+                                drawCircle(Color.White, radius * 0.98f, Offset(cx, cy), alpha = whiteOutlineAlpha, style = rimStroke)
+                            }
+                        }
+                        drawArc(whiteBounce, 28f, 118f, false, Offset(cx - radius * 0.84f, cy - radius * 0.84f), Size(radius * 1.68f, radius * 1.68f), style = bounceStroke)
+                        drawArc(whiteHighlight, 192f, 78f, false, Offset(cx - radius * 0.78f, cy - radius * 0.78f), Size(radius * 1.56f, radius * 1.56f), style = highlightStroke)
+                        drawCircle(whiteHighlight, radius * 0.09f, Offset(highlightX - radius * 0.04f, highlightY - radius * 0.04f))
+                        index++
+                    }
+                }
             }
-            drawCircle(bubble.color.copy(alpha = (bubble.color.alpha * 0.20f * lightStrength).coerceIn(0f, 0.75f)), radius * 0.98f, center)
-            drawCircle(Color.White.copy(alpha = (if (isDark) 0.035f else 0.10f) * lightStrength), radius * 0.72f, lightCenter)
-            if (enhancedLighting && outlineEnabled) {
-                drawArc(cyanRim, 195f, 58f, false, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f), style = Stroke(rimWidth))
-                drawArc(roseRim, 258f, 54f, false, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f), style = Stroke(rimWidth))
-                drawArc(goldRim, 318f, 56f, false, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f), style = Stroke(rimWidth))
-            } else if (outlineEnabled) {
-                drawCircle(Color.White.copy(alpha = (0.40f * lightStrength).coerceIn(0f, 0.9f)), radius * 0.98f, center, style = Stroke(rimWidth))
-            }
-            drawArc(
-                color = whiteBounce,
-                startAngle = 28f,
-                sweepAngle = 118f,
-                useCenter = false,
-                topLeft = Offset(center.x - radius * 0.84f, center.y - radius * 0.84f),
-                size = Size(radius * 1.68f, radius * 1.68f),
-                style = Stroke(width = bounceWidth, cap = StrokeCap.Round)
-            )
-            drawArc(
-                color = whiteHighlight,
-                startAngle = 192f,
-                sweepAngle = 78f,
-                useCenter = false,
-                topLeft = Offset(center.x - radius * 0.78f, center.y - radius * 0.78f),
-                size = Size(radius * 1.56f, radius * 1.56f),
-                style = Stroke(width = highlightWidth, cap = StrokeCap.Round)
-            )
-            drawCircle(
-                color = whiteHighlight,
-                radius = radius * 0.09f,
-                center = Offset(lightCenter.x - radius * 0.04f, lightCenter.y - radius * 0.04f)
-            )
-        }
-    }
+    ) {}
 }
 
 @Composable

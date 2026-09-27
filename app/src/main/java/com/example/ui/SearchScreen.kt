@@ -1,6 +1,4 @@
 package com.example.ui
-import androidx.compose.ui.composed
-import androidx.compose.ui.composed
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.geometry.Offset
 
@@ -426,6 +424,7 @@ fun SearchScreen(
     val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
     val textPreferences = rememberHomeTextPreferences(viewModel.userPreferences)
     val vibrateOnFound by viewModel.userPreferences.vibrateOnFound.collectAsStateWithLifecycle(initialValue = true)
+    val vibrateOnClick by viewModel.userPreferences.vibrateOnClick.collectAsStateWithLifecycle(initialValue = true)
     val mostUsed by viewModel.mostUsed.collectAsStateWithLifecycle()
     val latestAdded by viewModel.latestAdded.collectAsStateWithLifecycle()
     val history by viewModel.history.collectAsStateWithLifecycle()
@@ -510,18 +509,21 @@ fun SearchScreen(
         if (mostUsed.isEmpty() || !homeSettings.showMostUsed) return@LaunchedEffect
         // Observe scrolling outside composition. collectLatest also cancels an
         // in-flight carousel animation as soon as vertical scrolling starts.
-        snapshotFlow {
-            !homeListState.isScrollInProgress &&
-                (!isExpressiveGlassTheme || homeListState.layoutInfo.visibleItemsInfo.any {
-                    it.key == "home-most-used"
-                })
-        }.collectLatest { canAutoScroll ->
-            if (canAutoScroll) {
-                while (true) {
-                    delay(homeSettings.carouselIntervalSeconds * 1000L)
-                    if (!mostUsedListState.isScrollInProgress) {
-                        val nextIndex = (mostUsedListState.firstVisibleItemIndex + 1) % mostUsed.size
-                        mostUsedListState.animateScrollToItem(nextIndex)
+        snapshotFlow { homeListState.isScrollInProgress }
+            .collectLatest { isScrolling ->
+                if (!isScrolling) {
+                    // Read visibility once after scrolling settles. Keeping layoutInfo
+                    // out of snapshotFlow avoids tracking every layout/scroll update.
+                    val sectionVisible = !isExpressiveGlassTheme ||
+                        homeListState.layoutInfo.visibleItemsInfo.any { it.key == "home-most-used" }
+                    if (sectionVisible) {
+                        while (true) {
+                            delay(homeSettings.carouselIntervalSeconds * 1000L)
+                            if (!mostUsedListState.isScrollInProgress) {
+                                val nextIndex = (mostUsedListState.firstVisibleItemIndex + 1) % mostUsed.size
+                                mostUsedListState.animateScrollToItem(nextIndex)
+                            }
+                        }
                     }
                 }
             }
@@ -610,7 +612,8 @@ fun SearchScreen(
                                         shape = CircleShape,
                                         accent = expressiveGlassStyle.accent,
                                         intensity = 0.92f,
-                                        elevation = 7.dp
+                                        elevation = 7.dp,
+                                        lightweight = true
                                     )
                                 else if (isExpressiveTheme) Modifier
                                     .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
@@ -652,7 +655,8 @@ fun SearchScreen(
                                         shape = CircleShape,
                                         accent = expressiveGlassStyle.accent,
                                         intensity = 0.92f,
-                                        elevation = 7.dp
+                                        elevation = 7.dp,
+                                        lightweight = true
                                     )
                                 else if (isExpressiveTheme) Modifier
                                     .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
@@ -720,7 +724,8 @@ fun SearchScreen(
                                     intensity = 0.92f,
                                     elevation = 5.dp,
                                     waves = false,
-                                    bubbleSeed = 41
+                                    bubbleSeed = 41,
+                                    lightweight = true
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
@@ -752,7 +757,8 @@ fun SearchScreen(
                                             intensity = 0.88f,
                                             elevation = 4.dp,
                                             waves = false,
-                                            bubbleSeed = 43
+                                            bubbleSeed = 43,
+                                            lightweight = true
                                         )
                                     } else Modifier
                                 )
@@ -789,7 +795,8 @@ fun SearchScreen(
                                                     intensity = 1.10f,
                                                     elevation = 8.dp,
                                                     waves = false,
-                                                    bubbleSeed = 47
+                                                    bubbleSeed = 47,
+                                                    lightweight = true
                                                 )
                                             } else {
                                                 Modifier
@@ -831,7 +838,8 @@ fun SearchScreen(
                                                 intensity = 0.86f,
                                                 elevation = 4.dp,
                                                 waves = false,
-                                                bubbleSeed = 53
+                                                bubbleSeed = 53,
+                                                lightweight = true
                                             )
                                         } else Modifier
                                     )
@@ -1077,7 +1085,7 @@ fun SearchScreen(
                     item { SearchEmptyState(onClear = { viewModel.updateSearchQuery("") }) }
                 } else {
                     itemsIndexed(searchResults, key = { _, it -> it.code }) { index, product ->
-                        ProductCard(product, viewModel, index, appTheme, textPreferences)
+                        ProductCard(product, viewModel, index, appTheme, textPreferences, lightweightGlass = isExpressiveGlassTheme, vibrateOnClick = vibrateOnClick, vibrator = vibrator)
                     }
                 }
             }
@@ -1124,7 +1132,9 @@ fun SearchScreen(
                                         viewModel.onProductSearched(selected)
                                         selectedMostUsedProduct = selected
                                     },
-                                    lightweightGlass = isExpressiveGlassTheme
+                                    lightweightGlass = isExpressiveGlassTheme,
+                                    vibrateOnClick = vibrateOnClick,
+                                    vibrator = vibrator
                                 )
                             }
                         }
@@ -1147,7 +1157,9 @@ fun SearchScreen(
                                     index = index,
                                     appTheme = appTheme,
                                     textPreferences = textPreferences,
-                                    lightweightGlass = true
+                                    lightweightGlass = true,
+                                    vibrateOnClick = vibrateOnClick,
+                                    vibrator = vibrator
                                 )
                             }
                         }
@@ -1159,7 +1171,7 @@ fun SearchScreen(
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 latestAdded.forEachIndexed { index, product ->
-                                    HistoryItem(product, viewModel, index, appTheme, textPreferences)
+                                    HistoryItem(product, viewModel, index, appTheme, textPreferences, vibrateOnClick = vibrateOnClick, vibrator = vibrator)
                                 }
                             }
                         }
@@ -1183,7 +1195,9 @@ fun SearchScreen(
                                     index = index,
                                     appTheme = appTheme,
                                     textPreferences = textPreferences,
-                                    lightweightGlass = true
+                                    lightweightGlass = true,
+                                    vibrateOnClick = vibrateOnClick,
+                                    vibrator = vibrator
                                 )
                             }
                         }
@@ -1195,7 +1209,7 @@ fun SearchScreen(
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 recentHistory.forEachIndexed { index, product ->
-                                    HistoryItem(product, viewModel, index, appTheme, textPreferences)
+                                    HistoryItem(product, viewModel, index, appTheme, textPreferences, vibrateOnClick = vibrateOnClick, vibrator = vibrator)
                                 }
                             }
                         }
@@ -1252,7 +1266,9 @@ fun SearchScreen(
                                         index = index,
                                         appTheme = appTheme,
                                         textPreferences = textPreferences,
-                                        lightweightGlass = true
+                                        lightweightGlass = true,
+                                        vibrateOnClick = vibrateOnClick,
+                                        vibrator = vibrator
                                     )
                                 }
                             }
@@ -1297,7 +1313,7 @@ fun SearchScreen(
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     favorites.forEachIndexed { index, product ->
-                                        ProductCard(product, viewModel, index, appTheme, textPreferences)
+                                        ProductCard(product, viewModel, index, appTheme, textPreferences, lightweightGlass = isExpressiveGlassTheme, vibrateOnClick = vibrateOnClick, vibrator = vibrator)
                                     }
                                 }
                             }
@@ -1412,7 +1428,7 @@ fun SearchScreen(
                     )
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(products, key = { _, item -> item.code }) { index, product ->
-                            ProductCard(product, viewModel, index, appTheme, textPreferences)
+                            ProductCard(product, viewModel, index, appTheme, textPreferences, lightweightGlass = isExpressiveGlassTheme, vibrateOnClick = vibrateOnClick, vibrator = vibrator)
                         }
                     }
                 }
@@ -1438,7 +1454,10 @@ fun SearchScreen(
                                 onProductClick = { selected ->
                                     viewModel.onProductSearched(selected)
                                     selectedMostUsedProduct = selected
-                                }
+                                },
+                                lightweightGlass = isExpressiveGlassTheme,
+                                vibrateOnClick = vibrateOnClick,
+                                vibrator = vibrator
                             )
                         }
                     }
@@ -1922,7 +1941,7 @@ fun CategoryProductsSheet(
             )
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed(products, key = { _, item -> item.code }) { index, product ->
-                    ProductCard(product, viewModel, index, appTheme, textPreferences)
+                    ProductCard(product, viewModel, index, appTheme, textPreferences, lightweightGlass = isExpressiveGlassTheme, vibrateOnClick = vibrateOnClick, vibrator = vibrator)
                 }
             }
         }
@@ -1957,7 +1976,7 @@ private fun FavoriteToggleButton(
         modifier = Modifier
             .size(if (compact) 34.dp else 38.dp)
             .then(
-                if (expressiveGlass.enabled) {
+                if (expressiveGlass.enabled && !lightweightGlass) {
                     Modifier
                         .then(if (lightweightGlass) Modifier else Modifier.expressiveShadow(CircleShape, 3.dp))
                         .expressiveLiquidGlass(
@@ -1993,7 +2012,9 @@ fun ProductCard(
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
     onProductClick: ((Product) -> Unit)? = null,
     animateGlass: Boolean = true,
-    lightweightGlass: Boolean = false
+    lightweightGlass: Boolean = false,
+    vibrateOnClick: Boolean = true,
+    vibrator: Vibrator? = null
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
@@ -2053,7 +2074,7 @@ fun ProductCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .glassSoftShadow(cardShape)
+            .then(if (isExpressiveGlass) Modifier else Modifier.glassSoftShadow(cardShape))
             .then(if (isExpressiveGlass && lightweightGlass) Modifier else Modifier.clip(cardShape))
             .then(
                 if (isExpressiveGlass) {
@@ -2063,7 +2084,7 @@ fun ProductCard(
                         secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
                         intensity = 1.30f,
                         elevation = 8.dp,
-                        waves = if (lightweightGlass) true else animateGlass,
+                        waves = if (lightweightGlass) false else animateGlass,
                         bubbleSeed = index,
                         lightweight = lightweightGlass
                     )
@@ -2092,7 +2113,8 @@ fun ProductCard(
                 cardHeight = it.height
             }
             .vibrateClickable(
-                viewModel = viewModel,
+                vibrateOnClick = vibrateOnClick,
+                vibrator = vibrator,
                 onLongClick = {
                     scope.launch {
                         val copied = copyHomeProductCardToClipboard(
@@ -2188,7 +2210,19 @@ fun ProductCard(
             Box(
                 modifier = Modifier
                     .then(
-                        if (isExpressiveGlass) {
+                        if (isExpressiveGlass && lightweightGlass) {
+                            Modifier
+                                .clip(codeShape)
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            cardAccent.first.copy(alpha = 0.82f),
+                                            cardAccent.first.copy(alpha = 0.60f)
+                                        )
+                                    )
+                                )
+                                .border(1.dp, Color.White.copy(alpha = 0.72f), codeShape)
+                        } else if (isExpressiveGlass) {
                             Modifier.expressiveLiquidGlass(
                                 shape = codeShape,
                                 accent = cardAccent.first,
@@ -2419,7 +2453,9 @@ fun MiniProductCard(
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
     onProductClick: ((Product) -> Unit)? = null,
     animateGlass: Boolean = true,
-    lightweightGlass: Boolean = false
+    lightweightGlass: Boolean = false,
+    vibrateOnClick: Boolean = true,
+    vibrator: Vibrator? = null
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
@@ -2493,7 +2529,7 @@ fun MiniProductCard(
                     else -> 132.dp
                 }
             )
-            .glassSoftShadow(cardShape)
+            .then(if (isExpressiveGlass) Modifier else Modifier.glassSoftShadow(cardShape))
             .then(if (isExpressiveGlass) Modifier else Modifier.expressiveShadow(cardShape, 7.dp))
             .then(if (isExpressiveGlass && lightweightGlass) Modifier else Modifier.clip(cardShape))
             .then(
@@ -2504,7 +2540,7 @@ fun MiniProductCard(
                         secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
                         intensity = 1.26f,
                         elevation = 7.dp,
-                        waves = if (lightweightGlass) true else animateGlass,
+                        waves = if (lightweightGlass) false else animateGlass,
                         bubbleSeed = index + 13,
                         lightweight = lightweightGlass
                     )
@@ -2528,7 +2564,7 @@ fun MiniProductCard(
                         )
                 }
             )
-            .vibrateClickable(viewModel) {
+            .vibrateClickable(vibrateOnClick, vibrator) {
                 if (onProductClick != null) {
                     onProductClick(product)
                 } else {
@@ -2632,14 +2668,7 @@ fun MiniProductCard(
                                             Brush.verticalGradient(listOf(Color(0xFFFFE082), Color(0xFFFFB300))),
                                             unitShape
                                         )
-                                        .expressiveLiquidGlass(
-                                            shape = unitShape,
-                                            accent = Color(0xFFFFB300),
-                                            secondaryAccent = Color(0xFFFFF1B8),
-                                            intensity = 0.90f,
-                                            elevation = 4.dp,
-                                            lightweight = lightweightGlass
-                                        )
+                                    .border(1.dp, Color.White.copy(alpha = 0.78f), unitShape)
                                 } else {
                                     Modifier
                                         .clip(unitShape)
@@ -2731,14 +2760,7 @@ fun MiniProductCard(
                                         Brush.verticalGradient(listOf(Color(0xFFFFE082), Color(0xFFFFB300))),
                                         CircleShape
                                     )
-                                    .expressiveLiquidGlass(
-                                        shape = CircleShape,
-                                        accent = Color(0xFFFFB300),
-                                        secondaryAccent = Color(0xFFFFF1B8),
-                                        intensity = 1.05f,
-                                        elevation = 5.dp,
-                                        lightweight = lightweightGlass
-                                    )
+                                    .border(1.dp, Color.White.copy(alpha = 0.78f), CircleShape)
                             } else {
                                 Modifier
                                     .clip(CircleShape)
@@ -2768,7 +2790,9 @@ fun HistoryItem(
     appTheme: String = "multicolor",
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
     animateGlass: Boolean = true,
-    lightweightGlass: Boolean = false
+    lightweightGlass: Boolean = false,
+    vibrateOnClick: Boolean = true,
+    vibrator: Vibrator? = null
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
@@ -2825,7 +2849,7 @@ fun HistoryItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = if (compactExpressive) 72.dp else 84.dp)
-                .glassSoftShadow(itemShape)
+                .then(if (isExpressiveGlass) Modifier else Modifier.glassSoftShadow(itemShape))
                 .then(if (isExpressiveGlass) Modifier else Modifier.expressiveShadow(itemShape, 6.dp))
                 .then(if (isExpressiveGlass && lightweightGlass) Modifier else Modifier.clip(itemShape))
                 .then(
@@ -2836,7 +2860,7 @@ fun HistoryItem(
                             secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
                             intensity = 1.30f,
                             elevation = 7.dp,
-                            waves = if (lightweightGlass) true else animateGlass,
+                            waves = if (lightweightGlass) false else animateGlass,
                             bubbleSeed = index + 29,
                             lightweight = lightweightGlass
                         )
@@ -2848,7 +2872,7 @@ fun HistoryItem(
                             .border(1.dp, strongColors.first.copy(alpha = 0.52f), itemShape)
                     }
                 )
-                .vibrateClickable(viewModel) {
+                .vibrateClickable(vibrateOnClick, vibrator) {
                     viewModel.onProductSearched(product)
                     showDialog = true
                 }
@@ -2870,16 +2894,6 @@ fun HistoryItem(
                                         colors = listOf(Color.White.copy(alpha = 0.40f), dynColors.first, dynColors.first.copy(alpha = 0.92f)),
                                         center = Offset(18f, 14f)
                                     ), historyIconShape
-                                )
-                                .expressiveLiquidGlass(
-                                    shape = historyIconShape,
-                                    accent = dynColors.first,
-                                    secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
-                                    intensity = 1.12f,
-                                    elevation = 7.dp,
-                                    waves = false,
-                                    bubbleSeed = index + 149,
-                                    lightweight = lightweightGlass
                                 )
                         } else {
                             Modifier
@@ -2954,17 +2968,7 @@ fun HistoryItem(
             Spacer(modifier = Modifier.width(4.dp))
             FavoriteToggleButton(product, viewModel, compact = compactExpressive, lightweightGlass = lightweightGlass)
             Box(
-                modifier = Modifier.then(
-                    if (isExpressiveGlass) {
-                        Modifier.expressiveLiquidGlass(
-                            shape = CircleShape,
-                            accent = dynColors.first,
-                            intensity = 0.70f,
-                            elevation = 2.dp,
-                            lightweight = lightweightGlass
-                        )
-                    } else Modifier
-                ),
+                modifier = Modifier,
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -2994,7 +2998,7 @@ fun HistoryItem(
                 if (glass.enabled) glass.border else dynColors.first,
                 itemShape
             )
-            .vibrateClickable(viewModel) {
+            .vibrateClickable(vibrateOnClick, vibrator) {
                 viewModel.onProductSearched(product)
                 showDialog = true
             }
@@ -3213,32 +3217,29 @@ fun ThemeBanner(
 
 @OptIn(ExperimentalFoundationApi::class)
 fun Modifier.vibrateClickable(
-    viewModel: MainViewModel,
+    vibrateOnClick: Boolean,
+    vibrator: Vibrator?,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
-): Modifier = composed {
-    val vibrateOnClick by viewModel.userPreferences.vibrateOnClick.collectAsState(initial = true)
-    val context = LocalContext.current
-    val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
-
+): Modifier {
     fun vibrate() {
-        if (vibrateOnClick) {
+        if (vibrateOnClick && vibrator != null) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+                vibrator.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
             } else {
                 @Suppress("DEPRECATION")
-                vibrator?.vibrate(50)
+                vibrator.vibrate(50)
             }
         }
     }
 
-    if (onLongClick == null) {
-        this.clickable {
+    return if (onLongClick == null) {
+        clickable {
             vibrate()
             onClick()
         }
     } else {
-        this.combinedClickable(
+        combinedClickable(
             onClick = {
                 vibrate()
                 onClick()
