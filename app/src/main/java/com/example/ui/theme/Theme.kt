@@ -1123,6 +1123,7 @@ private fun createAmbientBubbleSprite(
             strokeWidth = 2.3f
             shader = android.graphics.SweepGradient(
                 center,
+                center,
                 intArrayOf(
                     Color.White.copy(alpha = 0.96f).toArgb(),
                     Color(0xFF80D8FF).copy(alpha = 0.70f).toArgb(),
