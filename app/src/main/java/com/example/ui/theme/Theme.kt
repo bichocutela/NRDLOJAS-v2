@@ -1030,400 +1030,27 @@ fun GlassSoftBackground(
 }
 
 
-/**
- * Particle storage uses primitive arrays so the frame loop does not allocate
- * per particle. These values are read only by the animation coroutine and Draw.
- */
-private class AmbientBubbleBuffer(capacity: Int) {
-    val x = FloatArray(capacity)
-    val y = FloatArray(capacity)
-    val velocityX = FloatArray(capacity)
-    val velocityY = FloatArray(capacity)
-    val radiusPx = FloatArray(capacity)
-    val spriteIndex = IntArray(capacity)
-    var count: Int = 0
-}
-
-/**
- * Builds fixed bubble textures once when the theme/tier changes. The entry tier
- * uses one inexpensive sprite; high-end devices get three accent variants.
- */
-@Composable
-private fun rememberAmbientBubbleSprites(
-    primary: Color,
-    secondary: Color,
-    isDark: Boolean,
-    complexLighting: Boolean,
-    brightness: Float,
-    outlineEnabled: Boolean
-): Array<androidx.compose.ui.graphics.ImageBitmap> {
-    val density = LocalDensity.current.density
-    return remember(primary, secondary, isDark, complexLighting, density, brightness, outlineEnabled) {
-        if (complexLighting) {
-            arrayOf(
-                createAmbientBubbleSprite(primary, isDark, complexLighting = true, brightness = brightness, outlineEnabled = outlineEnabled),
-                createAmbientBubbleSprite(secondary, isDark, complexLighting = true, brightness = brightness, outlineEnabled = outlineEnabled),
-                createAmbientBubbleSprite(Color.White, isDark, complexLighting = true, brightness = brightness, outlineEnabled = outlineEnabled)
-            )
-        } else {
-            val simpleSprite = createAmbientBubbleSprite(
-                tint = Color.White,
-                isDark = isDark,
-                complexLighting = false,
-                brightness = brightness,
-                outlineEnabled = outlineEnabled
-            )
-            arrayOf(simpleSprite, simpleSprite, simpleSprite)
-        }
-    }
-}
-
-/** Pre-renders gradients and reflections once into a bitmap, never in the frame loop. */
-private fun createAmbientBubbleSprite(
-    tint: Color,
-    isDark: Boolean,
-    complexLighting: Boolean,
-    brightness: Float,
-    outlineEnabled: Boolean
-): androidx.compose.ui.graphics.ImageBitmap {
-    val bitmapSize = 128
-    val bitmap = android.graphics.Bitmap.createBitmap(
-        bitmapSize,
-        bitmapSize,
-        android.graphics.Bitmap.Config.ARGB_8888
-    )
-    val androidCanvas = android.graphics.Canvas(bitmap)
-    val center = bitmapSize * 0.5f
-    val sphereRadius = bitmapSize * 0.44f
-    val lightStrength = brightness.coerceIn(0.25f, 2f)
-
-    val fillPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-    if (complexLighting) {
-        fillPaint.shader = android.graphics.RadialGradient(
-            center * 0.72f,
-            center * 0.68f,
-            sphereRadius * 1.55f,
-            intArrayOf(
-                Color.White.copy(alpha = ((if (isDark) 0.62f else 0.88f) * lightStrength).coerceIn(0f, 1f)).toArgb(),
-                tint.copy(alpha = ((if (isDark) 0.46f else 0.64f) * lightStrength).coerceIn(0f, 1f)).toArgb(),
-                tint.copy(alpha = ((if (isDark) 0.28f else 0.42f) * lightStrength).coerceIn(0f, 1f)).toArgb()
-            ),
-            floatArrayOf(0f, 0.58f, 1f),
-            android.graphics.Shader.TileMode.CLAMP
-        )
-    } else {
-        fillPaint.color = Color.White.copy(alpha = 0.35f).toArgb()
-    }
-    androidCanvas.drawCircle(center, center, sphereRadius, fillPaint)
-
-    if (complexLighting) {
-        if (outlineEnabled) {
-        val rimPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            style = android.graphics.Paint.Style.STROKE
-            strokeWidth = 2.3f
-            shader = android.graphics.SweepGradient(
-                center,
-                center,
-                intArrayOf(
-                    Color.White.copy(alpha = 0.96f).toArgb(),
-                    Color(0xFF80D8FF).copy(alpha = 0.70f).toArgb(),
-                    Color(0xFFFF80AB).copy(alpha = 0.62f).toArgb(),
-                    Color(0xFFFFE082).copy(alpha = 0.78f).toArgb(),
-                    Color.White.copy(alpha = 0.96f).toArgb()
-                ),
-                null
-            )
-        }
-        androidCanvas.drawCircle(
-            center,
-            center,
-            sphereRadius,
-            rimPaint
-        )
-
-        val highlightPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.White.copy(alpha = ((if (isDark) 0.74f else 0.90f) * lightStrength).coerceIn(0f, 1f)).toArgb()
-            style = android.graphics.Paint.Style.STROKE
-            strokeWidth = 4.2f
-            strokeCap = android.graphics.Paint.Cap.ROUND
-        }
-        val highlightBounds = android.graphics.RectF(
-            center - sphereRadius * 0.76f,
-            center - sphereRadius * 0.76f,
-            center + sphereRadius * 0.76f,
-            center + sphereRadius * 0.76f
-        )
-        androidCanvas.drawArc(highlightBounds, 205f, 88f, false, highlightPaint)
-        }
-
-        val glintPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.White.copy(alpha = (0.92f * lightStrength).coerceIn(0f, 1f)).toArgb()
-        }
-        androidCanvas.drawCircle(
-            center - sphereRadius * 0.34f,
-            center - sphereRadius * 0.38f,
-            sphereRadius * 0.105f,
-            glintPaint
-        )
-        androidCanvas.drawCircle(
-            center - sphereRadius * 0.12f,
-            center - sphereRadius * 0.52f,
-            sphereRadius * 0.045f,
-            glintPaint
-        )
-    } else {
-        val rimPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.White.copy(alpha = 0.62f).toArgb()
-            style = android.graphics.Paint.Style.STROKE
-            strokeWidth = 2.5f
-        }
-        androidCanvas.drawCircle(center, center, sphereRadius, rimPaint)
-
-        val glintPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.White.copy(alpha = (0.58f * lightStrength).coerceIn(0f, 1f)).toArgb()
-        }
-        androidCanvas.drawCircle(
-            center - sphereRadius * 0.34f,
-            center - sphereRadius * 0.38f,
-            sphereRadius * 0.10f,
-            glintPaint
-        )
-    }
-
-    return bitmap.asImageBitmap()
-}
-
+/** Dispatches to the selected liquid renderer. */
 @Composable
 private fun AdaptiveWaterContainer(
     modifier: Modifier,
     primary: Color,
     secondary: Color,
-    turbulence: Float,
-    speedMultiplier: Float,
-    motion: String,
-    sizeMultiplier: Float,
-    brightness: Float,
-    outlineEnabled: Boolean,
-    isDark: Boolean,
-    touchPoint: MutableState<Offset?>
+    isDark: Boolean
 ) {
-    val density = LocalDensity.current.density
     val tier = LocalDevicePerformanceTier.current
-    val bubbleCount = tier.maxBackgroundBubbles.coerceIn(1, 16)
-    val complexLighting = tier.enableComplexShaders
-    val sprites = rememberAmbientBubbleSprites(
+    val engineConfig = LocalLiquidEngineConfig.current
+
+    LiquidEngine(
+        type = engineConfig.type,
+        modifier = modifier,
+        bubbleCount = tier.maxBackgroundBubbles,
         primary = primary,
         secondary = secondary,
-        isDark = isDark,
-        complexLighting = complexLighting,
-        brightness = brightness,
-        outlineEnabled = outlineEnabled
+        lottieAssetName = engineConfig.lottieAssetName,
+        riveResourceId = engineConfig.riveResourceId,
+        riveStateMachineName = engineConfig.riveStateMachineName
     )
-
-    // Size changes are infrequent. Frame updates never write Compose state
-    // observed by composition or measurement.
-    var canvasWidth by remember { mutableFloatStateOf(0f) }
-    var canvasHeight by remember { mutableFloatStateOf(0f) }
-
-    val particles = remember { AmbientBubbleBuffer(16) }
-    var drawFrame by remember { mutableLongStateOf(0L) }
-
-    LaunchedEffect(
-        canvasWidth,
-        canvasHeight,
-        bubbleCount,
-        complexLighting,
-        primary,
-        secondary,
-        speedMultiplier,
-        sizeMultiplier,
-        motion,
-        turbulence
-    ) {
-        particles.count = 0
-        if (canvasWidth > 0f && canvasHeight > 0f) {
-            val random = Random(
-                primary.hashCode() xor
-                    secondary.hashCode() xor
-                    canvasWidth.toInt()
-            )
-            val count = bubbleCount.coerceAtMost(particles.x.size)
-
-            var index = 0
-            while (index < count) {
-                val radiusDp = 21f + random.nextFloat() * 24f
-                val radius = radiusDp * density * sizeMultiplier
-                val safeWidth =
-                    (canvasWidth - radius * 2f).coerceAtLeast(1f)
-                val safeHeight =
-                    (canvasHeight - radius * 2f).coerceAtLeast(1f)
-
-                particles.radiusPx[index] = radius
-                particles.x[index] =
-                    radius + random.nextFloat() * safeWidth
-                particles.y[index] = random.nextFloat() * safeHeight
-                particles.spriteIndex[index] = index % sprites.size
-
-                if (!complexLighting) {
-                    // Entry tier: continuous upward drift with very light sway.
-                    particles.velocityX[index] =
-                        (random.nextFloat() - 0.5f) *
-                            4f * speedMultiplier
-                    particles.velocityY[index] =
-                        -(12f + random.nextFloat() * 8f) *
-                            speedMultiplier
-                } else {
-                    val drift = (18f + 26f * turbulence) * speedMultiplier
-                    when (motion) {
-                        "rise" -> {
-                            particles.velocityX[index] =
-                                (random.nextFloat() - 0.5f) * 10f * speedMultiplier
-                            particles.velocityY[index] =
-                                -(28f + random.nextFloat() * 20f) * speedMultiplier
-                        }
-                        "drift" -> {
-                            particles.velocityX[index] = drift
-                            particles.velocityY[index] =
-                                (random.nextFloat() - 0.5f) * 10f * speedMultiplier
-                        }
-                        "circular" -> {
-                            // Fixed diagonal vectors approximate orbital movement
-                            // without per-frame trig or object creation.
-                            particles.velocityX[index] =
-                                if (index % 2 == 0) drift else -drift
-                            particles.velocityY[index] =
-                                if (index % 2 == 0) -drift else drift
-                        }
-                        else -> {
-                            particles.velocityX[index] =
-                                (random.nextFloat() - 0.5f) * drift
-                            particles.velocityY[index] =
-                                (random.nextFloat() - 0.5f) * drift
-                        }
-                    }
-                }
-
-                index++
-            }
-            particles.count = count
-            drawFrame++
-        }
-    }
-
-    LaunchedEffect(
-        canvasWidth,
-        canvasHeight,
-        bubbleCount,
-        turbulence,
-        speedMultiplier,
-        sizeMultiplier,
-        complexLighting
-    ) {
-        var lastNanos = 0L
-
-        while (true) {
-            withFrameNanos { nowNanos ->
-                if (
-                    lastNanos != 0L &&
-                    canvasWidth > 0f &&
-                    canvasHeight > 0f
-                ) {
-                    val dt = ((nowNanos - lastNanos) / 1_000_000_000f)
-                        .coerceIn(0.005f, 0.020f)
-                    val touch = touchPoint.value
-                    val touchRadius = 250f * density
-                    val touchRadiusSquared = touchRadius * touchRadius
-
-                    var index = 0
-                    while (index < particles.count) {
-                        val radius = particles.radiusPx[index]
-                        var vx = particles.velocityX[index]
-                        var vy = particles.velocityY[index]
-
-                        // Touch adds a small impulse; it never pauses the animation.
-                        if (touch != null) {
-                            val dx = particles.x[index] - touch.x
-                            val dy = particles.y[index] - touch.y
-                            val distanceSquared = dx * dx + dy * dy
-                            if (distanceSquared > 1f &&
-                                distanceSquared < touchRadiusSquared
-                            ) {
-                                val distance = kotlin.math.sqrt(distanceSquared)
-                                val strength =
-                                    (1f - distance / touchRadius) *
-                                        (120f + 180f * turbulence) * dt
-                                vx += dx / distance * strength
-                                vy += dy / distance * strength
-                            }
-                        }
-
-                        particles.x[index] += vx * dt
-                        particles.y[index] += vy * dt
-
-                        val x = particles.x[index]
-                        val y = particles.y[index]
-                        if (x < -radius) {
-                            particles.x[index] = canvasWidth + radius
-                        } else if (x > canvasWidth + radius) {
-                            particles.x[index] = -radius
-                        }
-
-                        if (y < -radius) {
-                            particles.y[index] = canvasHeight + radius
-                        } else if (y > canvasHeight + radius) {
-                            particles.y[index] = -radius
-                        }
-
-                        particles.velocityX[index] = vx
-                        particles.velocityY[index] = vy
-                        index++
-                    }
-                }
-
-                lastNanos = nowNanos
-
-                // Read only inside onDrawBehind below: this schedules Draw,
-                // not composition or layout.
-                drawFrame = nowNanos
-            }
-        }
-    }
-
-    Canvas(
-        modifier = modifier
-            .onSizeChanged {
-                canvasWidth = it.width.toFloat()
-                canvasHeight = it.height.toFloat()
-            }
-            .graphicsLayer { clip = true }
-            .drawWithCache {
-                val lowFilter = androidx.compose.ui.graphics.FilterQuality.Low
-                val spriteSet = sprites
-
-                onDrawBehind {
-                    if (drawFrame == 0L) return@onDrawBehind
-
-                    var index = 0
-                    while (index < particles.count) {
-                        val diameter = (particles.radiusPx[index] * 2f).toInt()
-                        val left =
-                            (particles.x[index] - diameter * 0.5f).toInt()
-                        val top =
-                            (particles.y[index] - diameter * 0.5f).toInt()
-                        val sprite =
-                            spriteSet[particles.spriteIndex[index]]
-
-                        drawImage(
-                            image = sprite,
-                            dstOffset = androidx.compose.ui.unit.IntOffset(left, top),
-                            dstSize = androidx.compose.ui.unit.IntSize(diameter, diameter),
-                            filterQuality = lowFilter
-                        )
-                        index++
-                    }
-                }
-            }
-    ) {}
 }
 
 @Composable
@@ -1615,14 +1242,7 @@ fun NrdAppBackground(
                         modifier = Modifier.fillMaxSize(),
                         primary = expressiveGlass.accent,
                         secondary = expressiveGlass.secondaryAccent,
-                        turbulence = expressiveGlass.fluidity,
-                        speedMultiplier = expressiveGlass.bubbleSpeed,
-                        motion = expressiveGlass.bubbleMotion,
-                        sizeMultiplier = expressiveGlass.bubbleSize,
-                        brightness = expressiveGlass.bubbleBrightness,
-                        outlineEnabled = expressiveGlass.bubbleOutline,
-                        isDark = expressiveGlass.isDark,
-                        touchPoint = touchPoint
+                        isDark = expressiveGlass.isDark
                     )
                     Box(modifier = Modifier.fillMaxSize(), content = { content() })
                 }
@@ -1924,6 +1544,7 @@ fun MyApplicationTheme(
     expressiveGlassBubbleExtraCount: Int = 0,
     expressiveGlassBubbleBrightness: Float = 1f,
     expressiveGlassBubbleOutline: Boolean = true,
+    liquidEngineConfig: LiquidEngineConfig = LiquidEngineConfig(),
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (appearanceMode) {
@@ -1999,7 +1620,8 @@ fun MyApplicationTheme(
         LocalDevicePerformanceTier provides performanceTier,
         LocalExpressiveGlassStyle provides expressiveGlassStyle,
         LocalExpressiveGlassMotion provides expressiveGlassMotion,
-        LocalNrdDarkMode provides darkTheme
+        LocalNrdDarkMode provides darkTheme,
+        LocalLiquidEngineConfig provides liquidEngineConfig
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
