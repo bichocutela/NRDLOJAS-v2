@@ -1,6 +1,5 @@
 package com.example.ui
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.geometry.Offset
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -591,13 +590,8 @@ fun SearchScreen(
                                     .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                     .border(1.dp, glassStyle.borderColor, CircleShape)
                                 else if (isExpressiveGlassTheme) Modifier
-                                    .expressiveLiquidGlass(
-                                        shape = CircleShape,
-                                        accent = expressiveGlassStyle.accent,
-                                        intensity = 0.92f,
-                                        elevation = 7.dp,
-                                        lightweight = true
-                                    )
+                                    .background(Color.White.copy(alpha = 0.65f), CircleShape)
+                                    .border(1.dp, expressiveGlassStyle.accent.copy(alpha = 0.45f), CircleShape)
                                 else if (isExpressiveTheme) Modifier
                                     .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                                 else Modifier.background(Color.Transparent)
@@ -634,13 +628,8 @@ fun SearchScreen(
                                     .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                     .border(1.dp, glassStyle.borderColor, CircleShape)
                                 else if (isExpressiveGlassTheme) Modifier
-                                    .expressiveLiquidGlass(
-                                        shape = CircleShape,
-                                        accent = expressiveGlassStyle.accent,
-                                        intensity = 0.92f,
-                                        elevation = 7.dp,
-                                        lightweight = true
-                                    )
+                                    .background(Color.White.copy(alpha = 0.65f), CircleShape)
+                                    .border(1.dp, expressiveGlassStyle.accent.copy(alpha = 0.45f), CircleShape)
                                 else if (isExpressiveTheme) Modifier
                                     .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                                 else Modifier
@@ -700,16 +689,8 @@ fun SearchScreen(
                         Box(
                             modifier = Modifier
                                 .size(if (compactExpressive) 38.dp else 42.dp)
-                                .expressiveLiquidGlass(
-                                    shape = CircleShape,
-                                    accent = expressiveGlassStyle.accent,
-                                    secondaryAccent = expressiveGlassStyle.secondaryAccent,
-                                    intensity = 0.92f,
-                                    elevation = 5.dp,
-                                    waves = false,
-                                    bubbleSeed = 41,
-                                    lightweight = true
-                                ),
+                                .background(Color.White.copy(alpha = 0.65f), CircleShape)
+                                .border(1.dp, expressiveGlassStyle.accent.copy(alpha = 0.45f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -734,15 +715,9 @@ fun SearchScreen(
                                 onClick = { viewModel.updateSearchQuery("") },
                                 modifier = Modifier.then(
                                     if (isExpressiveGlassTheme) {
-                                        Modifier.expressiveLiquidGlass(
-                                            shape = CircleShape,
-                                            accent = expressiveGlassStyle.secondaryAccent,
-                                            intensity = 0.88f,
-                                            elevation = 4.dp,
-                                            waves = false,
-                                            bubbleSeed = 43,
-                                            lightweight = true
-                                        )
+                                        Modifier
+                                            .background(Color.White.copy(alpha = 0.65f), CircleShape)
+                                            .border(1.dp, expressiveGlassStyle.secondaryAccent.copy(alpha = 0.45f), CircleShape)
                                     } else Modifier
                                 )
                             ) {
@@ -771,16 +746,9 @@ fun SearchScreen(
                                         .scale(quickAddScale)
                                         .then(
                                             if (isExpressiveGlassTheme) {
-                                                Modifier.expressiveLiquidGlass(
-                                                    shape = CircleShape,
-                                                    accent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFFFF8E9) else expressiveGlassStyle.accent,
-                                                    secondaryAccent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFFFD56A) else expressiveGlassStyle.tertiaryAccent,
-                                                    intensity = 1.10f,
-                                                    elevation = 8.dp,
-                                                    waves = false,
-                                                    bubbleSeed = 47,
-                                                    lightweight = true
-                                                )
+                                                Modifier
+                                                    .background(Color.White.copy(alpha = 0.65f), CircleShape)
+                                                    .border(1.dp, expressiveGlassStyle.accent.copy(alpha = 0.55f), CircleShape)
                                             } else {
                                                 Modifier
                                                     .clip(CircleShape)
@@ -814,16 +782,9 @@ fun SearchScreen(
                                     .size(if (isExpressiveTheme) 42.dp else 48.dp)
                                     .then(
                                         if (isExpressiveGlassTheme) {
-                                            Modifier.expressiveLiquidGlass(
-                                                shape = CircleShape,
-                                                accent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFFFF8E9) else expressiveGlassStyle.tertiaryAccent,
-                                                secondaryAccent = if (expressiveGlassStyle.accentName == "gold") Color(0xFF9ECFFF) else expressiveGlassStyle.accent,
-                                                intensity = 0.86f,
-                                                elevation = 4.dp,
-                                                waves = false,
-                                                bubbleSeed = 53,
-                                                lightweight = true
-                                            )
+                                            Modifier
+                                                .background(Color.White.copy(alpha = 0.65f), CircleShape)
+                                                .border(1.dp, expressiveGlassStyle.tertiaryAccent.copy(alpha = 0.45f), CircleShape)
                                         } else Modifier
                                     )
                             ) {
@@ -849,17 +810,8 @@ fun SearchScreen(
                     .then(
                         when {
                             isExpressiveGlassTheme -> Modifier
-                                .expressiveShadow(searchFieldShape, 10.dp)
-                                .expressiveLiquidGlass(
-                                    shape = searchFieldShape,
-                                    accent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFFFF7F1) else expressiveGlassStyle.accent,
-                                    secondaryAccent = if (expressiveGlassStyle.accentName == "gold") Color(0xFF8EC9FF) else expressiveGlassStyle.secondaryAccent,
-                                    intensity = 1.18f,
-                                    elevation = 10.dp,
-                                    waves = true,
-                                    bubbleSeed = 59,
-                                    lightweight = true
-                                )
+                                .background(Color.White.copy(alpha = 0.65f), searchFieldShape)
+                                .border(1.dp, expressiveGlassStyle.accent.copy(alpha = 0.45f), searchFieldShape)
                             isGlassSoftTheme -> Modifier.glassSoftShadow(searchFieldShape)
                             isExpressiveTheme -> Modifier.expressiveShadow(searchFieldShape, 8.dp)
                             else -> Modifier
@@ -1632,16 +1584,9 @@ fun SectionHeader(
                         .size(if (compactExpressive) 30.dp else 34.dp)
                         .then(
                             if (isExpressiveGlass) {
-                                Modifier.expressiveShadow(headerIconShape, 5.dp).expressiveLiquidGlass(
-                                    shape = headerIconShape,
-                                    accent = sectionAccent,
-                                    secondaryAccent = expressiveGlass.secondaryAccent,
-                                    intensity = 0.92f,
-                                    elevation = 5.dp,
-                                    waves = true,
-                                    bubbleSeed = title.hashCode(),
-                                    lightweight = true
-                                )
+                                Modifier
+                                    .background(Color.White.copy(alpha = 0.65f), headerIconShape)
+                                    .border(1.dp, sectionAccent.copy(alpha = 0.45f), headerIconShape)
                             } else {
                                 Modifier
                                     .clip(headerIconShape)
@@ -1677,12 +1622,9 @@ fun SectionHeader(
                 onClick = onAction,
                 modifier = Modifier.then(
                     if (isExpressiveGlass) {
-                        Modifier.expressiveLiquidGlass(
-                            shape = actionShape,
-                            accent = sectionAccent,
-                            intensity = 0.72f,
-                            elevation = 3.dp
-                        )
+                        Modifier
+                            .background(Color.White.copy(alpha = 0.65f), actionShape)
+                            .border(1.dp, sectionAccent.copy(alpha = 0.40f), actionShape)
                     } else Modifier
                 ),
                 shape = actionShape,
@@ -2053,11 +1995,8 @@ fun ProductCard(
             .then(
                 if (isExpressiveGlass) {
                     Modifier
-                        .background(
-                            Brush.horizontalGradient(listOf(cardAccent.first.copy(alpha = 0.22f), Color.White.copy(alpha = 0.68f))),
-                            cardShape
-                        )
-                        .border(1.2.dp, Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.95f), Color(0xFF80D8FF).copy(alpha = 0.60f))), cardShape)
+                        .background(Color.White.copy(alpha = 0.65f), cardShape)
+                        .border(1.dp, Color.White.copy(alpha = 0.85f), cardShape)
                 } else {
                     Modifier
                         .background(
@@ -2184,15 +2123,7 @@ fun ProductCard(
                     .then(
                         if (isExpressiveGlass) {
                             Modifier
-                                .clip(codeShape)
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            cardAccent.first.copy(alpha = 0.82f),
-                                            cardAccent.first.copy(alpha = 0.60f)
-                                        )
-                                    )
-                                )
+                                .background(cardAccent.first.copy(alpha = 0.72f), codeShape)
                                 .border(1.dp, Color.White.copy(alpha = 0.72f), codeShape)
                         } else {
                             Modifier
@@ -2488,8 +2419,8 @@ fun MiniProductCard(
             .then(
                 if (isExpressiveGlass) {
                     Modifier
-                        .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.72f), Color.White.copy(alpha = 0.58f))), cardShape)
-                        .border(1.3.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.95f), Color(0xFF80D8FF).copy(alpha = 0.50f))), cardShape)
+                        .background(Color.White.copy(alpha = 0.65f), cardShape)
+                        .border(1.dp, Color.White.copy(alpha = 0.85f), cardShape)
                 } else {
                     Modifier
                         .background(
@@ -2795,8 +2726,8 @@ fun HistoryItem(
                 .then(
                     when {
                         isExpressiveGlass -> Modifier
-                            .background(Brush.horizontalGradient(listOf(dynColors.first.copy(alpha = 0.28f), Color.White.copy(alpha = 0.72f), Color.White.copy(alpha = 0.60f))), itemShape)
-                            .border(1.2.dp, Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.95f), Color(0xFF80D8FF).copy(alpha = 0.60f), Color.White.copy(alpha = 0.80f))), itemShape)
+                            .background(Color.White.copy(alpha = 0.65f), itemShape)
+                            .border(1.dp, Color.White.copy(alpha = 0.85f), itemShape)
                         glass.enabled -> Modifier
                             .background(glass.fill.copy(alpha = glass.alpha))
                             .border(1.dp, strongColors.first.copy(alpha = 0.42f), itemShape)
@@ -2823,13 +2754,7 @@ fun HistoryItem(
                     .then(
                         if (isExpressiveGlass) {
                             Modifier
-                                .background(
-                                    Brush.radialGradient(
-                                        listOf(Color.White.copy(alpha = 0.56f), dynColors.first, dynColors.first.copy(alpha = 0.76f)),
-                                        center = Offset(16f, 12f)
-                                    ),
-                                    CircleShape
-                                )
+                                .background(dynColors.first, CircleShape)
                                 .border(1.2.dp, Color.White.copy(alpha = 0.85f), CircleShape)
                         } else {
                             Modifier
