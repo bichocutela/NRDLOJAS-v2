@@ -2696,7 +2696,7 @@ fun MiniProductCard(
                             .then(
                                 if (isExpressiveGlass) {
                                     if (performanceTier.enableComplexShaders) Modifier
-                                        .background(Brush.verticalGradient(listOf(Color(0xFFFFE082), Color(0xFFFFB300))), unitShape)
+                                        .background(expressiveGlass.accent, unitShape)
                                         .border(1.dp, Color.White.copy(alpha = 0.78f), unitShape)
                                     else Modifier
                                         .background(Color.White.copy(alpha = 0.85f), unitShape)
@@ -2712,7 +2712,7 @@ fun MiniProductCard(
                         Text(
                             text = product.unit.uppercase(),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
-                            color = if (isExpressiveGlass) expressiveGlass.onAccent else MaterialTheme.colorScheme.onPrimaryContainer
+                            color = if (isExpressiveGlass && performanceTier.enableComplexShaders) expressiveGlass.onAccent else MaterialTheme.colorScheme.onSurface
                         )
                     }
                 } else {
