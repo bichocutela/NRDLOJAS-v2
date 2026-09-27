@@ -32,7 +32,7 @@ fun rememberDevicePerformanceTier(): DevicePerformanceTier {
 
         DevicePerformanceTier(
             isEntryLevel = isEntryLevel,
-            maxBackgroundBubbles = if (isEntryLevel) 4 else 16,
+            maxBackgroundBubbles = if (isEntryLevel) 6 else 16,
             enableComplexShaders = !isEntryLevel,
             pausePhysicsOnScroll = isEntryLevel,
             pausePhysicsOnDrawer = true
