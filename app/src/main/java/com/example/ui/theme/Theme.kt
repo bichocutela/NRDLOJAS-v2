@@ -44,7 +44,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
@@ -157,7 +157,6 @@ val LocalExpressiveGlassStyle = staticCompositionLocalOf { ExpressiveGlassStyle(
 val LocalExpressiveGlassMotion = staticCompositionLocalOf<MutableState<Float>?> { null }
 
 /** Shared scroll signal so Glass Expressivo can suspend ambient animation during Home gestures. */
-val LocalNrdHomeScrollInProgress = staticCompositionLocalOf<MutableStateFlow<Boolean>?> { null }
 val LocalNrdDrawerIsOpen = staticCompositionLocalOf<MutableStateFlow<Boolean>?> { null }
 val LocalDevicePerformanceTier = staticCompositionLocalOf {
     DevicePerformanceTier(
@@ -1052,16 +1051,13 @@ private fun AdaptiveWaterContainer(
     touchPoint: MutableState<Offset?>
 ) {
     val density = LocalDensity.current
-    val homeScrollSignal = LocalNrdHomeScrollInProgress.current ?: remember { MutableStateFlow(false) }
     val drawerOpenSignal = LocalNrdDrawerIsOpen.current ?: remember { MutableStateFlow(false) }
     val performanceTier = LocalDevicePerformanceTier.current
     val bubbleCount = performanceTier.maxBackgroundBubbles
     val enhancedLighting = performanceTier.enableComplexShaders
-    val pausePhysics = remember(performanceTier, homeScrollSignal, drawerOpenSignal) {
-        combine(homeScrollSignal, drawerOpenSignal) { scrolling, drawerOpen ->
-            (performanceTier.pausePhysicsOnScroll && scrolling) ||
-                (performanceTier.pausePhysicsOnDrawer && drawerOpen)
-        }
+    // Keep the bubbles moving during list gestures; only modal drawer coverage pauses them.
+    val pausePhysics = remember(performanceTier.pausePhysicsOnDrawer, drawerOpenSignal) {
+        drawerOpenSignal.map { drawerOpen -> performanceTier.pausePhysicsOnDrawer && drawerOpen }
     }
     // This list changes only when the surface/profile changes; frame updates
     // mutate its preallocated bubble objects and invalidate drawing via frameTick.
@@ -1104,7 +1100,7 @@ private fun AdaptiveWaterContainer(
             withFrameNanos { frameNanos ->
                 if (lastFrameNanos != 0L && canvasSize.width > 0f && canvasSize.height > 0f) {
                     val dt = ((frameNanos - lastFrameNanos) / 1_000_000_000f)
-                        .coerceIn(0.005f, 0.033f)
+                        .coerceIn(0.005f, 0.020f)
                     var index = 0
                     while (index < bubbles.size) {
                         val bubble = bubbles[index]
@@ -1195,6 +1191,8 @@ private fun AdaptiveWaterContainer(
                 val whiteBounce = Color.White.copy(alpha = (if (isDark) 0.20f else 0.35f) * lightStrength)
                 val whiteFillAlpha = (if (isDark) 0.035f else 0.10f) * lightStrength
                 val whiteOutlineAlpha = (0.40f * lightStrength).coerceIn(0f, 0.9f)
+                val entryBubbleFill = Color.White.copy(alpha = 0.35f)
+                val entryBubbleRim = Color.White.copy(alpha = 0.55f)
                 onDrawBehind {
                     if (frameTick == 0L) return@onDrawBehind
                     var index = 0
@@ -1204,8 +1202,8 @@ private fun AdaptiveWaterContainer(
                         val cy = bubble.y
                         val radius = bubble.radiusDp * sizeMultiplier * scale
                         if (!enhancedLighting) {
-                            drawCircle(Color.White.copy(alpha = 0.35f), radius * 0.96f, Offset(cx, cy))
-                            drawCircle(Color.White.copy(alpha = 0.55f), radius * 0.96f, Offset(cx, cy), style = rimStroke)
+                            drawCircle(entryBubbleFill, radius * 0.96f, Offset(cx, cy))
+                            drawCircle(entryBubbleRim, radius * 0.96f, Offset(cx, cy), style = rimStroke)
                             index++
                             continue
                         }
@@ -1242,7 +1240,6 @@ fun NrdAppBackground(
     val glass = LocalGlassSoftStyle.current
     val expressive = LocalExpressiveStyle.current
     val expressiveGlass = LocalExpressiveGlassStyle.current
-    val homeScrollInProgress = LocalNrdHomeScrollInProgress.current
     when {
         glass.enabled -> GlassSoftBackground(modifier = modifier, content = content)
         expressiveGlass.enabled -> {
@@ -1394,7 +1391,7 @@ fun NrdAppBackground(
                         val lowerCausticStroke = Stroke(width = 6.dp.toPx())
                         onDrawBehind {
                             // The animated state is observed in the draw phase, so the app content is not recomposed each frame.
-                            val driftTravel = if (homeScrollInProgress?.value == true) 0f else driftState.value - 0.5f
+                            val driftTravel = driftState.value - 0.5f
                             withTransform({ translate(left = size.width * 0.18f * driftTravel, top = size.height * 0.05f * driftTravel) }) {
                                 drawRect(brush = haloPrimary)
                             }
@@ -1739,7 +1736,11 @@ fun MyApplicationTheme(
         "dark" -> true
         else -> isSystemInDarkTheme()
     }
-    val normalizedExpressiveStyle = expressiveStyle.takeIf { it in setOf("solid", "glass") } ?: "solid"
+    val performanceTier = rememberDevicePerformanceTier()
+    val normalizedExpressiveStyle = expressiveStyle
+        .takeIf { it in setOf("solid", "glass") }
+        ?.takeIf { it != "glass" || performanceTier.enableComplexShaders }
+        ?: "solid"
     val isExpressive = appTheme == "expressive"
     val isGlassSoft = appTheme == "glass"
     val isExpressiveGlass = isExpressive && normalizedExpressiveStyle == "glass"
@@ -1776,8 +1777,6 @@ fun MyApplicationTheme(
         else -> MaterialTheme.shapes
     }
 
-    val performanceTier = rememberDevicePerformanceTier()
-    val homeScrollInProgress = remember { MutableStateFlow(false) }
     val drawerIsOpen = remember { MutableStateFlow(false) }
     val expressiveGlassMotion = remember { mutableStateOf(0f) }
     LaunchedEffect(isExpressiveGlass, performanceTier.enableComplexShaders) {
@@ -1802,7 +1801,6 @@ fun MyApplicationTheme(
     CompositionLocalProvider(
         LocalGlassSoftStyle provides glassStyle,
         LocalExpressiveStyle provides expressive,
-        LocalNrdHomeScrollInProgress provides homeScrollInProgress,
         LocalNrdDrawerIsOpen provides drawerIsOpen,
         LocalDevicePerformanceTier provides performanceTier,
         LocalExpressiveGlassStyle provides expressiveGlassStyle,

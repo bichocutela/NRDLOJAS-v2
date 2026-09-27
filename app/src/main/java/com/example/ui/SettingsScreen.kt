@@ -36,7 +36,7 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    
+
     val vibrateOnClick by viewModel.userPreferences.vibrateOnClick.collectAsState(initial = true)
     val vibrateOnFound by viewModel.userPreferences.vibrateOnFound.collectAsState(initial = true)
     val largeText by viewModel.userPreferences.largeText.collectAsState(initial = false)
@@ -56,8 +56,14 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val expressiveGlassTransparency by viewModel.userPreferences.expressiveGlassTransparency.collectAsState(initial = 0.58f)
     val expressiveGlassFluidity by viewModel.userPreferences.expressiveGlassFluidity.collectAsState(initial = 0.68f)
     val glassStyle = LocalGlassSoftStyle.current
+    val performanceTier = com.example.ui.theme.LocalDevicePerformanceTier.current
     val expressiveGlassStyleValue = LocalExpressiveGlassStyle.current
     val currentExpressiveStyle = LocalExpressiveStyle.current
+    LaunchedEffect(performanceTier.enableComplexShaders, expressiveStyle) {
+        if (!performanceTier.enableComplexShaders && expressiveStyle == "glass") {
+            viewModel.userPreferences.setExpressiveStyle("solid")
+        }
+    }
     val isExpressive = currentExpressiveStyle.enabled
     val isExpressiveGlass = currentExpressiveStyle.isGlass
     val expressiveSliderColors = SliderDefaults.colors(
@@ -79,7 +85,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
         uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         uncheckedBorderColor = MaterialTheme.colorScheme.outline
     )
-    
+
     val notificationsEnabled by viewModel.userPreferences.notificationsEnabled.collectAsState(initial = true)
     val notificationsProductAddedEnabled by viewModel.userPreferences.notificationsProductAddedEnabled.collectAsState(initial = true)
     val notificationsCodeChangedEnabled by viewModel.userPreferences.notificationsCodeChangedEnabled.collectAsState(initial = true)
@@ -130,7 +136,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            
+
             SettingsSectionHeader(
                 title = "Aparência",
                 summary = "Fonte, temas, modo de aparência e vibração",
@@ -222,7 +228,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 Text("Aumentar letras da tela inicial", modifier = Modifier.weight(1f))
                 Switch(checked = largeText, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setLargeText(it) } }, colors = expressiveSwitchColors)
             }
-            
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Letras em contorno negrito", modifier = Modifier.weight(1f))
                 Switch(checked = boldOutline, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setBoldOutline(it) } }, colors = expressiveSwitchColors)
@@ -232,11 +238,11 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 Text("Todas letras maiúsculas em negrito", modifier = Modifier.weight(1f))
                 Switch(checked = uppercaseBold, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setUppercaseBold(it) } }, colors = expressiveSwitchColors)
             }
-            
+
             HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
-            
+
             Text("Tema do Aplicativo", style = MaterialTheme.typography.titleMedium, color = getDynamicThemeColor(1, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first)
-            
+
             var expandedThemeMenu by remember { mutableStateOf(false) }
             val themeOptions = listOf(
                 "multicolor" to "Multicolorido",
@@ -248,25 +254,23 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 "glass" to "Glass Soft",
                 "expressive" to "Expressivo"
             )
-            
-            ExposedDropdownMenuBox(
-                expanded = expandedThemeMenu,
-                onExpandedChange = { expandedThemeMenu = !expandedThemeMenu }
-            ) {
+
+            Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = themeOptions.find { it.first == appTheme }?.second ?: "Multicolorido",
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Selecione o Tema") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedThemeMenu) },
+                    trailingIcon = { Text(if (expandedThemeMenu) "▴" else "▾") },
+
                     modifier = Modifier
-                        .menuAnchor()
+
                         .fillMaxWidth()
                         .expressiveShadow(if (isExpressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraSmall, 5.dp),
                     shape = if (isExpressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraSmall,
-                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
-                )
-                ExposedDropdownMenu(
+                    )
+                Box(Modifier.matchParentSize().clickable(onClick = { expandedThemeMenu = !expandedThemeMenu }))
+                DropdownMenu(
                     expanded = expandedThemeMenu,
                     onDismissRequest = { expandedThemeMenu = false }
                 ) {
@@ -299,10 +303,11 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    listOf(
-                        "solid" to "Sólido",
-                        "glass" to "Glass Expressivo"
-                    ).forEach { (styleKey, styleLabel) ->
+                    (if (performanceTier.enableComplexShaders) {
+                        listOf("solid" to "Sólido", "glass" to "Glass Expressivo")
+                    } else {
+                        listOf("solid" to "Sólido")
+                    }).forEach { (styleKey, styleLabel) ->
                         val selected = expressiveStyle == styleKey
                         val previewShape = RoundedCornerShape(28.dp)
                         Card(
@@ -422,19 +427,18 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 "blue" to "Azul",
                                 "gold" to "Dourado"
                             )
-                            ExposedDropdownMenuBox(
-                                expanded = expandedExpressiveGlassColorMenu,
-                                onExpandedChange = { expandedExpressiveGlassColorMenu = !expandedExpressiveGlassColorMenu }
-                            ) {
+                            Box(modifier = Modifier.fillMaxWidth()) {
                                 OutlinedTextField(
                                     value = expressiveGlassColorOptions.find { it.first == expressiveGlassAccentColor }?.second ?: "Multicolorido",
                                     onValueChange = {},
                                     readOnly = true,
                                     label = { Text("Cor do vidro líquido") },
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedExpressiveGlassColorMenu) },
-                                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                                    trailingIcon = { Text(if (expandedExpressiveGlassColorMenu) "▴" else "▾") },
+
+                                    modifier = Modifier.fillMaxWidth()
                                 )
-                                ExposedDropdownMenu(
+                                Box(Modifier.matchParentSize().clickable(onClick = { expandedExpressiveGlassColorMenu = !expandedExpressiveGlassColorMenu }))
+                                DropdownMenu(
                                     expanded = expandedExpressiveGlassColorMenu,
                                     onDismissRequest = { expandedExpressiveGlassColorMenu = false }
                                 ) {
@@ -583,19 +587,18 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             "orange" to "Laranja",
                             "cyan" to "Ciano"
                         )
-                        ExposedDropdownMenuBox(
-                            expanded = expandedGlassColorMenu,
-                            onExpandedChange = { expandedGlassColorMenu = !expandedGlassColorMenu }
-                        ) {
+                        Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedTextField(
                                 value = glassColorOptions.find { it.first == glassAccentColor }?.second ?: "Multicolorido",
                                 onValueChange = {},
                                 readOnly = true,
                                 label = { Text("Cor do vidro") },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedGlassColorMenu) },
-                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                                trailingIcon = { Text(if (expandedGlassColorMenu) "▴" else "▾") },
+
+                                modifier = Modifier.fillMaxWidth()
                             )
-                            ExposedDropdownMenu(
+                            Box(Modifier.matchParentSize().clickable(onClick = { expandedGlassColorMenu = !expandedGlassColorMenu }))
+                            DropdownMenu(
                                 expanded = expandedGlassColorMenu,
                                 onDismissRequest = { expandedGlassColorMenu = false }
                             ) {
@@ -697,7 +700,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     }
                 }
             }
-            
+
                         Spacer(modifier = Modifier.height(4.dp))
             Text(
                 "Modo de aparência",
@@ -770,7 +773,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
             Text("Vibração", style = MaterialTheme.typography.titleMedium, color = getDynamicThemeColor(3, appTheme, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary).first)
 
-            
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Vibrar ao clicar no balão", modifier = Modifier.weight(1f))
                 Switch(checked = vibrateOnClick, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setVibrateOnClick(it) } }, colors = expressiveSwitchColors)
@@ -780,7 +783,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 Text("Vibrar ao achar produto", modifier = Modifier.weight(1f))
                 Switch(checked = vibrateOnFound, onCheckedChange = { coroutineScope.launch { viewModel.userPreferences.setVibrateOnFound(it) } }, colors = expressiveSwitchColors)
             }
-            
+
                             }
             }
 
@@ -793,7 +796,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
             if (notificationsExpanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
 
-            
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Notificações Gerais", modifier = Modifier.weight(1f))
                 Switch(

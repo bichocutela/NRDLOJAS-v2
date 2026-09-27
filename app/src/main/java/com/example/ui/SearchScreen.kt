@@ -98,7 +98,6 @@ import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.LocalExpressiveGlassStyle
 import com.example.ui.theme.LocalDevicePerformanceTier
-import com.example.ui.theme.LocalNrdHomeScrollInProgress
 import com.example.ui.theme.LocalNrdDarkMode
 import com.example.ui.theme.ExpressiveGlassStyle
 import com.example.ui.theme.glassSoftShadow
@@ -374,7 +373,6 @@ fun SearchScreen(
     val expressiveStyle = LocalExpressiveStyle.current
     val expressiveGlassStyle = LocalExpressiveGlassStyle.current
     val performanceTier = LocalDevicePerformanceTier.current
-    val homeScrollSignal = LocalNrdHomeScrollInProgress.current
     val isExpressiveTheme = expressiveStyle.enabled
     val isGlassSoftTheme = glassStyle.enabled
     val isExpressiveGlassTheme = expressiveGlassStyle.enabled
@@ -472,19 +470,6 @@ fun SearchScreen(
     val unreadNotifications = notificationHistory.count { !it.read }
     val mostUsedListState = rememberLazyListState()
     val homeListState = rememberLazyListState()
-    LaunchedEffect(homeListState, performanceTier.pausePhysicsOnScroll, homeScrollSignal) {
-        if (homeScrollSignal == null) return@LaunchedEffect
-        if (!performanceTier.pausePhysicsOnScroll) {
-            homeScrollSignal.value = false
-            return@LaunchedEffect
-        }
-        try {
-            snapshotFlow { homeListState.isScrollInProgress }
-                .collectLatest { isScrolling -> homeScrollSignal.value = isScrolling }
-        } finally {
-            homeScrollSignal.value = false
-        }
-    }
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
@@ -936,9 +921,9 @@ fun SearchScreen(
                     disabledIndicatorColor = Color.Transparent
                 )
             )
-            
+
             Spacer(modifier = Modifier.height(if (screenProfile.veryCompact) 8.dp else 16.dp))
-            
+
             val searchButtonShape = when {
                 isExpressiveGlassTheme -> RoundedCornerShape(26.dp)
                 isExpressiveTheme -> RoundedCornerShape(30.dp)
@@ -1249,7 +1234,7 @@ fun SearchScreen(
                         }
                         if (favorites.isEmpty()) {
                             item(key = "glass-home-favorites-empty") {
-    
+
                                 Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -1278,7 +1263,7 @@ fun SearchScreen(
                                         )
                                     }
                                 }
-                            
+
                             }
                         } else {
                             itemsIndexed(
@@ -1345,7 +1330,7 @@ fun SearchScreen(
                             }
                         }
                     }
-    
+
                 }
                 if (!hasVisibleHomeSection) {
                     item {
@@ -2191,7 +2176,7 @@ fun ProductCard(
                     showDialog = true
                 }
             }
-            
+
             .padding(if (compactExpressive) 12.dp else 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -2606,7 +2591,7 @@ fun MiniProductCard(
                     showDialog = true
                 }
             }
-            
+
             .padding(
                 when {
                     compactExpressive -> 9.dp
@@ -2913,7 +2898,7 @@ fun HistoryItem(
                     viewModel.onProductSearched(product)
                     showDialog = true
                 }
-                
+
                 .padding(
                     horizontal = if (compactExpressive) 8.dp else 10.dp,
                     vertical = if (compactExpressive) 7.dp else 9.dp
@@ -3173,7 +3158,7 @@ fun generateBarcodeBitmap(data: String, profile: String = "Padrão"): ImageBitma
     try {
         val writer = MultiFormatWriter()
         val hints = java.util.EnumMap<EncodeHintType, Any>(EncodeHintType::class.java)
-        
+
         val margin = when(profile) {
             "Symbol" -> 20
             "Datalogic" -> 10
@@ -3202,7 +3187,7 @@ fun generateBarcodeBitmap(data: String, profile: String = "Padrão"): ImageBitma
         val width = bitMatrix.width
         val height = bitMatrix.height
         val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
-        
+
         for (x in 0 until width) {
             for (y in 0 until height) {
                 bitmap.setPixel(x, y, if (bitMatrix.get(x, y)) android.graphics.Color.BLACK else android.graphics.Color.WHITE)

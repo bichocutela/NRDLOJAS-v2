@@ -26,15 +26,16 @@ fun rememberDevicePerformanceTier(): DevicePerformanceTier {
             activityManager != null && memoryInfo.totalMem > 0L
         }.getOrDefault(false)
         val totalMemoryBytes = if (hasMemoryInfo) memoryInfo.totalMem else 0L
-        val entryMemoryLimitBytes = (3.5 * 1024.0 * 1024.0 * 1024.0).toLong()
+        // Android reports usable physical RAM, commonly a little below the advertised 8 GB.
+        val expressiveGlassMinimumBytes = (7.2 * 1024.0 * 1024.0 * 1024.0).toLong()
         val isEntryLevel = activityManager?.isLowRamDevice == true ||
-            !hasMemoryInfo || totalMemoryBytes <= entryMemoryLimitBytes
+            !hasMemoryInfo || totalMemoryBytes < expressiveGlassMinimumBytes
 
         DevicePerformanceTier(
             isEntryLevel = isEntryLevel,
-            maxBackgroundBubbles = if (isEntryLevel) 4 else 16,
+            maxBackgroundBubbles = if (isEntryLevel) 6 else 16,
             enableComplexShaders = !isEntryLevel,
-            pausePhysicsOnScroll = isEntryLevel,
+            pausePhysicsOnScroll = false,
             pausePhysicsOnDrawer = true
         )
     }

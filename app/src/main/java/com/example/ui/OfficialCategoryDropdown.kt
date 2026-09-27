@@ -1,10 +1,11 @@
 package com.example.ui
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.foundation.layout.matchParentSize
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -15,7 +16,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.data.ProductStandards
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OfficialCategoryDropdown(
     selectedCategory: String,
@@ -27,26 +27,21 @@ fun OfficialCategoryDropdown(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    ExposedDropdownMenuBox(
-        expanded = expanded && enabled,
-        onExpandedChange = {
-            if (enabled) expanded = !expanded
-        },
-        modifier = modifier
-    ) {
+    Box(modifier = modifier.fillMaxWidth()) {
         OutlinedTextField(
             value = selectedCategory,
             onValueChange = {},
             readOnly = true,
             enabled = enabled,
             label = { Text(label) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded && enabled) },
-            modifier = Modifier
-                .menuAnchor()
-                .fillMaxWidth(),
-            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+            modifier = Modifier.fillMaxWidth()
         )
-        ExposedDropdownMenu(
+        Box(
+            Modifier
+                .matchParentSize()
+                .clickable(enabled = enabled, onClick = { expanded = !expanded })
+        )
+        DropdownMenu(
             expanded = expanded && enabled,
             onDismissRequest = { expanded = false }
         ) {
