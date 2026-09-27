@@ -531,9 +531,6 @@ fun SearchScreen(
     Column(
             modifier = Modifier
                 .fillMaxSize()
-                // Isolate Home drawing from the animated background. This is a
-                // retained display list, not an offscreen bitmap or card capture.
-                .then(if (isExpressiveGlassTheme) Modifier.graphicsLayer() else Modifier)
                 .then(
                     if (isGlassSoftTheme || isExpressiveTheme) Modifier.background(Color.Transparent)
                     else Modifier.background(MaterialTheme.colorScheme.background)
@@ -1809,15 +1806,16 @@ fun CategorySection(
             Box(
                 modifier = Modifier
                     .glassSoftShadow(categoryShape)
-                    .expressiveShadow(categoryShape, 6.dp)
-                    .clip(categoryShape)
+                    .then(if (isExpressiveGlass) Modifier else Modifier.expressiveShadow(categoryShape, 6.dp))
+                    // The expressive glass modifier clips this surface itself.
+                    .then(if (isExpressiveGlass) Modifier else Modifier.clip(categoryShape))
                     .then(
                         if (isExpressiveGlass) {
                             Modifier
                                 .background(
                                     Brush.verticalGradient(
                                         listOf(liquidAccent.copy(alpha = 0.96f), liquidAccent)
-                                    )
+                                    ), categoryShape
                                 )
                                 .expressiveLiquidGlass(
                                     shape = categoryShape,
@@ -1961,7 +1959,7 @@ private fun FavoriteToggleButton(
             .then(
                 if (expressiveGlass.enabled) {
                     Modifier
-                        .expressiveShadow(CircleShape, 3.dp)
+                        .then(if (lightweightGlass) Modifier else Modifier.expressiveShadow(CircleShape, 3.dp))
                         .expressiveLiquidGlass(
                             shape = CircleShape,
                             accent = heartAccent,
@@ -2056,7 +2054,7 @@ fun ProductCard(
         modifier = Modifier
             .fillMaxWidth()
             .glassSoftShadow(cardShape)
-            .clip(cardShape)
+            .then(if (isExpressiveGlass && lightweightGlass) Modifier else Modifier.clip(cardShape))
             .then(
                 if (isExpressiveGlass) {
                     Modifier.expressiveLiquidGlass(
@@ -2497,7 +2495,7 @@ fun MiniProductCard(
             )
             .glassSoftShadow(cardShape)
             .then(if (isExpressiveGlass) Modifier else Modifier.expressiveShadow(cardShape, 7.dp))
-            .clip(cardShape)
+            .then(if (isExpressiveGlass && lightweightGlass) Modifier else Modifier.clip(cardShape))
             .then(
                 if (isExpressiveGlass) {
                     Modifier.expressiveLiquidGlass(
@@ -2829,7 +2827,7 @@ fun HistoryItem(
                 .heightIn(min = if (compactExpressive) 72.dp else 84.dp)
                 .glassSoftShadow(itemShape)
                 .then(if (isExpressiveGlass) Modifier else Modifier.expressiveShadow(itemShape, 6.dp))
-                .clip(itemShape)
+                .then(if (isExpressiveGlass && lightweightGlass) Modifier else Modifier.clip(itemShape))
                 .then(
                     when {
                         isExpressiveGlass -> Modifier.expressiveLiquidGlass(
@@ -2867,12 +2865,11 @@ fun HistoryItem(
                     .then(
                         if (isExpressiveGlass) {
                             Modifier
-                                .clip(historyIconShape)
                                 .background(
                                     Brush.radialGradient(
                                         colors = listOf(Color.White.copy(alpha = 0.40f), dynColors.first, dynColors.first.copy(alpha = 0.92f)),
                                         center = Offset(18f, 14f)
-                                    )
+                                    ), historyIconShape
                                 )
                                 .expressiveLiquidGlass(
                                     shape = historyIconShape,
