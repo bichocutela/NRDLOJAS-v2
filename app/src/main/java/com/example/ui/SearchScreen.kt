@@ -1031,7 +1031,7 @@ fun SearchScreen(
                                 if (performanceTier.enableComplexShaders) {
                                     Modifier.background(
                                         Brush.verticalGradient(
-                                            listOf(Color(0xFFFFE082), Color(0xFFFFB300), Color(0xFFF57F17))
+                                            listOf(Color(0xFFFFE082), Color(0xFFFFB300), MaterialTheme.colorScheme.onSurface)
                                         )
                                     )
                                 } else {
@@ -2235,7 +2235,7 @@ fun ProductCard(
                 Text(
                     text = if (isExpressiveGlass) "•" else getCategoryIcon(product.category),
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isExpressiveGlass) Color(0xFFD84315) else Color.Unspecified
+                    color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 StylizedText(
@@ -2243,7 +2243,7 @@ fun ProductCard(
                     baseStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
                     boldOutline = textPreferences.boldOutline,
                     uppercaseBold = true,
-                    color = if (isExpressiveGlass) Color(0xFFD84315) else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -2258,7 +2258,7 @@ fun ProductCard(
                     .then(
                         if (isExpressiveGlass) {
                             Modifier
-                                .background(cardAccent.first.copy(alpha = 0.72f), codeShape)
+                                .background(cardAccent.first, codeShape)
                                 .border(1.dp, Color.White.copy(alpha = 0.72f), codeShape)
                         } else {
                             Modifier
@@ -2284,12 +2284,12 @@ fun ProductCard(
                     Text(
                         text = product.code,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
-                        color = if (isExpressiveGlass) Color(0xFFF57F17) else if (expressive) cardAccent.second else MaterialTheme.colorScheme.onPrimaryContainer
+                        color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurface else if (expressive) cardAccent.second else MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
                         text = product.unit.uppercase(),
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Black),
-                        color = if (isExpressiveGlass) Color(0xFF5D4037) else if (expressive) cardAccent.second.copy(alpha = 0.78f) else MaterialTheme.colorScheme.primary
+                        color = if (isExpressiveGlass) expressiveGlass.onAccent else if (expressive) cardAccent.second.copy(alpha = 0.78f) else MaterialTheme.colorScheme.primary
                     )
                 }
             }
@@ -2712,7 +2712,7 @@ fun MiniProductCard(
                         Text(
                             text = product.unit.uppercase(),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
-                            color = if (isExpressiveGlass) Color(0xFF5D4037) else MaterialTheme.colorScheme.onPrimaryContainer
+                            color = if (isExpressiveGlass) expressiveGlass.onAccent else MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
                 } else {
@@ -2746,7 +2746,7 @@ fun MiniProductCard(
             Text(
                 text = if (isExpressiveGlass) "•" else getCategoryIcon(product.category),
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                color = if (isExpressiveGlass) Color(0xFFD84315) else Color.Unspecified
+                color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified
             )
             Spacer(modifier = Modifier.width(4.dp))
             StylizedText(
@@ -2758,7 +2758,7 @@ fun MiniProductCard(
                 ),
                 boldOutline = textPreferences.boldOutline,
                 uppercaseBold = true,
-                color = if (isExpressiveGlass) Color(0xFFD84315) else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -2779,7 +2779,7 @@ fun MiniProductCard(
                         else -> 16.sp
                     }
                 ),
-                color = if (isExpressiveGlass) Color(0xFFF57F17) else MaterialTheme.colorScheme.primary,
+                color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -2806,7 +2806,7 @@ fun MiniProductCard(
                     Icon(
                         Icons.Default.ChevronRight,
                         contentDescription = "Abrir produto",
-                        tint = if (isExpressiveGlass) Color.White else MaterialTheme.colorScheme.primary,
+                        tint = if (isExpressiveGlass) expressiveGlass.onAccent else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(if (compactExpressive) 16.dp else 18.dp)
                     )
                 }
@@ -2983,7 +2983,7 @@ fun HistoryItem(
                     Text(
                         text = if (isExpressiveGlass) "•" else getCategoryIcon(product.category),
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                        color = if (isExpressiveGlass) Color(0xFFD84315) else Color.Unspecified
+                        color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     StylizedText(
@@ -2995,7 +2995,7 @@ fun HistoryItem(
                         ),
                         boldOutline = textPreferences.boldOutline,
                         uppercaseBold = true,
-                        color = if (isExpressiveGlass) Color(0xFFD84315) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -3003,7 +3003,7 @@ fun HistoryItem(
                 Text(
                     text = "Código: ${product.code}",
                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = if (isExpressiveGlass) Color(0xFFF57F17) else MaterialTheme.colorScheme.primary
+                    color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary
                 )
             }
             Spacer(modifier = Modifier.width(4.dp))
