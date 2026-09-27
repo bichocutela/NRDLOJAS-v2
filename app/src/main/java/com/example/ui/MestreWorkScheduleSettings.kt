@@ -224,13 +224,13 @@ internal fun MestreWorkScheduleSettings() {
                                 if (editVacation) ScheduleDayGrid(row.vacationDays, month.toIntOrNull(), year.toIntOrNull()) { day ->
                                     employees[index] = row.copy(vacationDays = row.vacationDays.toggle(day))
                                 }
-                                Text("A conferência usa a conta autenticada em Meu Perfil e confirma somente o titular dessa conta.",
+                                Text("A conferência consulta o cadastro de colaboradores com a sessão Nossa Gente autenticada em Meu Perfil.",
                                     style = MaterialTheme.typography.bodySmall)
                                 Button(onClick = {
                                     scope.launch {
                                         busy = true
                                         val result = NossaGenteApi(context.applicationContext)
-                                            .verifyCurrentEmployeeRegistration(row.registration)
+                                            .findEmployeeByRegistration(row.registration)
                                         when (result) {
                                             NossaGenteDirectoryResult.Unauthorized -> message = "Entre no Nossa Gente para consultar a matrícula."
                                             is NossaGenteDirectoryResult.Error -> message = result.message
@@ -239,7 +239,7 @@ internal fun MestreWorkScheduleSettings() {
                                                     it.registration.filter(Char::isDigit) == row.registration.filter(Char::isDigit)
                                                 }
                                                 matchedName = official?.name
-                                                message = if (official == null) "A sessão atual não confirmou esta matrícula. Não foi salva."
+                                                message = if (official == null) "A API não confirmou esta matrícula. Não foi salva."
                                                     else "Funcionário encontrado: ${official.name}. Confira o nome e confirme para salvar."
                                             }
                                         }

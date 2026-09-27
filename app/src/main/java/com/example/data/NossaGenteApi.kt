@@ -109,6 +109,54 @@ class NossaGenteApi(context: Context) {
         }
     }
 
+    /** Consulta o cadastro de colaboradores com a sessão Nossa Gente do Mestre. */
+    suspend fun findEmployeeByRegistration(registration: String): NossaGenteDirectoryResult = withContext(Dispatchers.IO) {
+        val expected = registration.filter(Char::isDigit)
+        if (expected.isBlank()) return@withContext NossaGenteDirectoryResult.Error("Informe uma matrícula antes de consultar.")
+        findEmployeeByRegistrationOnce(expected, allowSavedCredentialRecovery = true)
+    }
+
+    private suspend fun findEmployeeByRegistrationOnce(
+        expected: String,
+        allowSavedCredentialRecovery: Boolean
+    ): NossaGenteDirectoryResult {
+        val token = currentToken() ?: return NossaGenteDirectoryResult.Unauthorized
+        return try {
+            var previousPage: String? = null
+            for (page in 1..100) {
+                val response = authenticatedGet("/colaboradores?limit=100&page=$page", token)
+                if (response.code == 401) {
+                    if (allowSavedCredentialRecovery && renewFromSavedCredentials()) {
+                        return findEmployeeByRegistrationOnce(expected, false)
+                    }
+                    return NossaGenteDirectoryResult.Unauthorized
+                }
+                if (response.code == 403) return NossaGenteDirectoryResult.Error(
+                    "Sua conta Nossa Gente não tem permissão para consultar o cadastro de colaboradores. Solicite acesso à API para o Mestre."
+                )
+                if (!response.successful) return NossaGenteDirectoryResult.Error(
+                    "A consulta de colaboradores falhou (HTTP ${response.code}). Tente novamente."
+                )
+                if (response.body == previousPage) return NossaGenteDirectoryResult.Error(
+                    "A API repetiu a mesma página de colaboradores. A matrícula ainda não foi confirmada."
+                )
+                previousPage = response.body
+                val parsed = parseCollaboratorsPage(response.body) ?: return NossaGenteDirectoryResult.Error(
+                    "A API de colaboradores retornou um formato inesperado. Nenhuma matrícula foi confirmada."
+                )
+                parsed.employees.firstOrNull { it.registration == expected }?.let {
+                    return NossaGenteDirectoryResult.Success(listOf(it))
+                }
+                if (!parsed.hasNext) return NossaGenteDirectoryResult.Error(
+                    "Matrícula $expected não encontrada no cadastro de colaboradores da Nossa Gente."
+                )
+            }
+            NossaGenteDirectoryResult.Error("A consulta atingiu o limite de páginas. A matrícula ainda não foi confirmada.")
+        } catch (_: Exception) {
+            NossaGenteDirectoryResult.Error("Não foi possível consultar os colaboradores. Verifique a internet e tente novamente.")
+        }
+    }
+
     private suspend fun fetchEmployeeProfileOnce(allowSavedCredentialRecovery: Boolean): NossaGenteProfileResult {
         val token = currentToken() ?: return NossaGenteProfileResult.Unauthorized
         return try {
@@ -1249,6 +1297,44 @@ internal fun matchAuthenticatedProfile(profile: EmployeeProfile, registration: S
         )
         else -> NossaGenteDirectoryResult.Success(listOf(NossaGenteDirectoryEmployee(actual, profile.name, profile.employeeId)))
     }
+}
+
+internal data class CollaboratorsPage(val employees: List<NossaGenteDirectoryEmployee>, val hasNext: Boolean)
+
+internal fun parseCollaboratorsPage(raw: String): CollaboratorsPage? {
+    val root = runCatching { JSONTokener(raw.trim()).nextValue() }.getOrNull() ?: return null
+    fun locate(value: Any?, depth: Int = 0): Pair<JSONArray, JSONObject?>? {
+        if (value is JSONArray) return value to null
+        if (value !is JSONObject || depth > 4) return null
+        for (key in arrayOf("data", "colaboradores", "funcionarios", "employees", "results", "items", "rows", "records", "resultado", "payload")) {
+            locate(value.opt(key), depth + 1)?.let { return it.first to (it.second ?: value) }
+        }
+        return null
+    }
+    val (array, envelope) = locate(root) ?: return null
+    val employees = (0 until array.length()).mapNotNull { index ->
+        val item = array.optJSONObject(index) ?: return@mapNotNull null
+        fun field(vararg names: String): String? = names.firstNotNullOfOrNull { key ->
+            item.opt(key)?.takeIf { it != JSONObject.NULL }?.toString()?.trim()?.takeIf(String::isNotBlank)
+        }
+        val registration = field("matricula", "MATRICULA", "registro", "registration", "numeroMatricula", "numero_matricula")
+            ?.filter(Char::isDigit).orEmpty()
+        val name = field("nome", "NOME", "name", "nomeCompleto", "nome_completo", "fullName")
+        if (registration.isBlank() || name.isNullOrBlank()) null
+        else NossaGenteDirectoryEmployee(registration, name, field("id", "codigoUsuario", "codigo_usuario"))
+    }
+    // Paginated Laravel-style responses expose last_page, next_page_url or links.next.
+    val meta = (root as? JSONObject)?.optJSONObject("meta") ?: envelope
+    val current = meta?.optInt("current_page", meta.optInt("page", 0)) ?: 0
+    val last = meta?.optInt("last_page", meta.optInt("total_pages", 0)) ?: 0
+    val next = meta?.optString("next_page_url")?.takeIf { it.isNotBlank() && it != "null" }
+        ?: (root as? JSONObject)?.optJSONObject("links")?.optString("next")?.takeIf { it.isNotBlank() && it != "null" }
+    val hasNext = when {
+        last > 0 && current > 0 -> current < last
+        next != null -> true
+        else -> array.length() >= 100
+    }
+    return CollaboratorsPage(employees, hasNext)
 }
 
 data class EmployeeProfile(

@@ -15,6 +15,17 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 class NossaGenteApiTest {
     @Test
+    fun parsesPaginatedCollaboratorsAndFindsOtherEmployees() {
+        val first = parseCollaboratorsPage("""{"data":[{"nome":"Alessandro Paulo da Silva","matricula":"10293613"}],"current_page":1,"last_page":2}""")!!
+        assertEquals("10293613", first.employees.single().registration)
+        assertEquals(true, first.hasNext)
+        val second = parseCollaboratorsPage("""{"data":[{"nome":"Luciana Gloria Almeida Ribeiro","matricula":10294749}],"current_page":2,"last_page":2}""")!!
+        assertEquals("Luciana Gloria Almeida Ribeiro", second.employees.single().name)
+        assertEquals(false, second.hasNext)
+        assertEquals(null, parseCollaboratorsPage("""{"message":"unauthorized"}"""))
+    }
+
+    @Test
     fun confirmsOnlyTheAuthenticatedProfilesRegistration() {
         val profile = EmployeeProfile(name = "Alessandro Paulo da Silva", registration = "10293613")
         val found = matchAuthenticatedProfile(profile, "10293613")
