@@ -1233,7 +1233,7 @@ private fun AdaptiveWaterContainer(
                 onDrawBehind {
                     // Read the frame clock only during drawing. The mutable particle
                     // positions are also observed only here, never from composition.
-                    if (frameTick == Long.MIN_VALUE) return@onDrawBehind
+                    if (frameTick == 0L) return@onDrawBehind
                     var index = 0
                     while (index < bubbles.size) {
                         val bubble = bubbles[index]
