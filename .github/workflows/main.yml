@@ -9,6 +9,18 @@ on:
     paths-ignore:
       - ".github/workflows/add-padaria-products.yml"
       - ".github/data-jobs/**"
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "app/**"
+      - "gradle/**"
+      - "gradlew"
+      - "gradle.properties"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - "firestore.rules"
+      - "supabase/functions/send-fcm/**"
+      - ".github/workflows/main.yml"
   workflow_dispatch:
 
 jobs:

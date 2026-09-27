@@ -3,6 +3,7 @@ package com.example.util
 import android.util.Log
 import com.example.data.NotificationSettings
 import com.example.data.UserPreferences
+import com.example.data.NossaGenteCredentialStore
 import com.example.data.FirebaseService
 import com.example.util.FcmTopicSubscription
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -61,6 +62,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 TYPE_SUGGESTION_FIXED -> remoteSettings.suggestionFixedEnabled
                 TYPE_APP_UPDATE -> remoteSettings.appUpdateEnabled
                 TYPE_PROMOTION_UPDATED -> remoteSettings.promotionUpdatedEnabled
+                TYPE_SCHEDULE_INSERTED, TYPE_SCHEDULE_CHANGED -> true
                 else -> false
             }
             if (!remoteTypeEnabled) {
@@ -74,6 +76,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 TYPE_SUGGESTION_FIXED -> true
                 TYPE_APP_UPDATE -> true
                 TYPE_PROMOTION_UPDATED -> true
+                TYPE_SCHEDULE_INSERTED, TYPE_SCHEDULE_CHANGED -> NossaGenteCredentialStore(applicationContext).isScheduleNotificationsEnabled()
                 else -> false
             }
 
@@ -134,6 +137,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             )
             val installationId = preferences.getOrCreateInstallationId()
             FcmTopicSubscription.reconcileSuggestionTopic(effectiveNotificationsEnabled, installationId)
+            FcmTopicSubscription.reconcileWorkSchedules(effectiveNotificationsEnabled && NossaGenteCredentialStore(applicationContext).isScheduleNotificationsEnabled())
         }
     }
 
@@ -144,12 +148,16 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         const val TYPE_SUGGESTION_FIXED = "SUGGESTION_FIXED"
         const val TYPE_APP_UPDATE = "APP_UPDATE"
         const val TYPE_PROMOTION_UPDATED = "PROMOTION_UPDATED"
+        const val TYPE_SCHEDULE_INSERTED = "SCHEDULE_INSERTED"
+        const val TYPE_SCHEDULE_CHANGED = "SCHEDULE_CHANGED"
         val SUPPORTED_TYPES = setOf(
             TYPE_NEW_PRODUCT,
             TYPE_CODE_CHANGED,
             TYPE_SUGGESTION_FIXED,
             TYPE_APP_UPDATE,
-            TYPE_PROMOTION_UPDATED
+            TYPE_PROMOTION_UPDATED,
+            TYPE_SCHEDULE_INSERTED,
+            TYPE_SCHEDULE_CHANGED
         )
     }
 }

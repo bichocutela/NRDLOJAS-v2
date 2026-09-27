@@ -10,6 +10,14 @@ object FcmTopicSubscription {
     private const val PRODUCTS_TOPIC = "products"
     private const val MASTER_UPDATES_TOPIC = "master_updates"
     private const val SUGGESTION_TOPIC_PREFIX = "suggestion_"
+    private const val WORK_SCHEDULE_TOPIC = "work_schedule_updates"
+
+    suspend fun reconcileWorkSchedules(enabled: Boolean) {
+        runCatching {
+            if (enabled) FirebaseMessaging.getInstance().subscribeToTopic(WORK_SCHEDULE_TOPIC).await()
+            else FirebaseMessaging.getInstance().unsubscribeFromTopic(WORK_SCHEDULE_TOPIC).await()
+        }.onFailure { Log.e(TAG, "Falha ao atualizar inscrição de notificações de escala", it) }
+    }
 
     fun isMasterAuthenticated(): Boolean =
         FirebaseAuth.getInstance().currentUser?.email

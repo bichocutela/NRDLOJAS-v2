@@ -30,6 +30,87 @@ object FirebaseService {
     var lastError: String? = null
     private var appContext: android.content.Context? = null
 
+    suspend fun fetchWorkSchedules(): List<WorkSchedule> {
+        if (!isFirebaseConfigured()) return emptyList()
+        return runCatching {
+            FirebaseFirestore.getInstance().collection("work_schedules").get().await().documents.mapNotNull documentMap@{ doc ->
+                val year = (doc.getLong("year") ?: return@documentMap null).toInt()
+                val month = (doc.getLong("month") ?: return@documentMap null).toInt()
+                val employees = (doc.get("employees") as? List<*>)?.mapNotNull employeeMap@{ raw ->
+                    val row = raw as? Map<*, *> ?: return@employeeMap null
+                    val reg = row["registration"] as? String ?: return@employeeMap null
+                    val name = row["name"] as? String ?: return@employeeMap null
+                    WorkScheduleEmployee(
+                        registration = reg,
+                        name = name,
+                        shift = row["shift"] as? String ?: "",
+                        daysOff = (row["daysOff"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() }.orEmpty(),
+                        vacationDays = (row["vacationDays"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() }.orEmpty(),
+                        verified = row["verified"] as? Boolean ?: false
+                    )
+                }.orEmpty()
+                WorkSchedule(doc.id, year, month, employees, doc.getLong("updatedAt") ?: 0L, (doc.getLong("revision") ?: 1L).toInt())
+            }.sortedByDescending { it.monthKey }
+        }.getOrElse { error ->
+            lastError = error.message
+            Log.e("FirebaseService", "Erro ao carregar escalas", error)
+            emptyList()
+        }
+    }
+
+    suspend fun publishWorkSchedule(schedule: WorkSchedule): Boolean {
+        if (!prepareManagementWrite("publicar escala")) return false
+        return try {
+            val firestore = FirebaseFirestore.getInstance()
+            val ref = firestore.collection("work_schedules").document(schedule.monthKey)
+            val existing = ref.get().await()
+            val revision = (existing.getLong("revision") ?: 0L).toInt() + 1
+            val now = System.currentTimeMillis()
+            ref.set(mapOf(
+                "year" to schedule.year,
+                "month" to schedule.month,
+                "employees" to schedule.employees.map { row -> mapOf(
+                    "registration" to row.registration.filter(Char::isDigit),
+                    "name" to row.name,
+                    "shift" to row.shift,
+                    "daysOff" to row.daysOff.distinct().sorted(),
+                    "vacationDays" to row.vacationDays.distinct().sorted(),
+                    "verified" to row.verified
+                ) },
+                "updatedAt" to now,
+                "revision" to revision
+            )).await()
+            runCatching {
+                val supabaseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
+                val supabaseKey = BuildConfig.SUPABASE_ANON_KEY.trim()
+                val firebaseToken = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
+                if (supabaseUrl.isNotBlank() && supabaseKey.isNotBlank() && !firebaseToken.isNullOrBlank()) {
+                    val monthName = java.util.Calendar.getInstance().apply { set(java.util.Calendar.MONTH, schedule.month - 1) }
+                        .getDisplayName(java.util.Calendar.MONTH, java.util.Calendar.LONG, java.util.Locale("pt", "BR")) ?: "${schedule.month}"
+                    val title = if (existing.exists()) "Escala alterada" else "Escala inserida"
+                    val payload = org.json.JSONObject().put("action", "PUBLISH_WORK_SCHEDULE")
+                        .put("title", title)
+                        .put("body", "Escala de ${monthName.replaceFirstChar { it.uppercase() }}/${schedule.year} ${if (existing.exists()) "alterada" else "inserida"}.")
+                    val request = okhttp3.Request.Builder().url("$supabaseUrl/functions/v1/send-fcm")
+                        .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                        .addHeader("Authorization", "Bearer $supabaseKey").addHeader("apikey", supabaseKey)
+                        .addHeader("x-firebase-token", firebaseToken).build()
+                    withContext(Dispatchers.IO) {
+                        okHttpClient.newCall(request).execute().use { response ->
+                            if (!response.isSuccessful) Log.w("FirebaseService", "Escala publicada, mas aviso push falhou: HTTP ${response.code}")
+                        }
+                    }
+                }
+            }.onFailure { Log.w("FirebaseService", "Escala publicada, mas não foi possível notificar o tópico", it) }
+            lastError = null
+            true
+        } catch (error: Exception) {
+            lastError = error.message
+            Log.e("FirebaseService", "Erro ao publicar escala", error)
+            false
+        }
+    }
+
     suspend fun registerGlobalProductView(productCode: String): Boolean {
         if (!isFirebaseConfigured() || productCode.isBlank()) return false
         return try {

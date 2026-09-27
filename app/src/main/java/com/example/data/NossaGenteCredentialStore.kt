@@ -83,6 +83,13 @@ class NossaGenteCredentialStore(context: Context) {
         preferences.edit().putBoolean(KEY_HOURS_NOTIFICATIONS, enabled).apply()
     }
 
+    fun isDayOffNotificationsEnabled(): Boolean = preferences.getBoolean(KEY_DAY_OFF_NOTIFICATIONS, false)
+    fun setDayOffNotificationsEnabled(enabled: Boolean) { preferences.edit().putBoolean(KEY_DAY_OFF_NOTIFICATIONS, enabled).apply() }
+    fun isScheduleNotificationsEnabled(): Boolean = preferences.getBoolean(KEY_SCHEDULE_NOTIFICATIONS, false)
+    fun setScheduleNotificationsEnabled(enabled: Boolean) { preferences.edit().putBoolean(KEY_SCHEDULE_NOTIFICATIONS, enabled).apply() }
+    fun isPointNotificationsEnabled(): Boolean = preferences.getBoolean(KEY_POINT_NOTIFICATIONS, false)
+    fun setPointNotificationsEnabled(enabled: Boolean) { preferences.edit().putBoolean(KEY_POINT_NOTIFICATIONS, enabled).apply() }
+
     private fun getOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
         (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
@@ -107,6 +114,9 @@ class NossaGenteCredentialStore(context: Context) {
         const val KEY_PROMOTIONS_ENABLED = "promotions_enabled_v1"
         const val KEY_BENEFIT_NOTIFICATIONS = "benefit_notifications_v1"
         const val KEY_HOURS_NOTIFICATIONS = "hours_notifications_v1"
+        const val KEY_DAY_OFF_NOTIFICATIONS = "day_off_notifications_v1"
+        const val KEY_SCHEDULE_NOTIFICATIONS = "schedule_notifications_v1"
+        const val KEY_POINT_NOTIFICATIONS = "point_notifications_v1"
         const val KEY_ALIAS = "nrd_nossa_gente_credentials_v1"
         const val KEYSTORE_PROVIDER = "AndroidKeyStore"
         const val TRANSFORMATION = "AES/GCM/NoPadding"

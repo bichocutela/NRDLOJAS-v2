@@ -98,6 +98,40 @@ class NossaGenteApi(context: Context) {
         fetchEmployeeProfileOnce(allowSavedCredentialRecovery = true)
     }
 
+    /** Confirms roster registrations against the authenticated employee directory endpoint already used by /me. */
+    suspend fun fetchEmployeeDirectory(): NossaGenteDirectoryResult = withContext(Dispatchers.IO) {
+        fetchEmployeeDirectoryOnce(allowSavedCredentialRecovery = true)
+    }
+
+    private suspend fun fetchEmployeeDirectoryOnce(allowSavedCredentialRecovery: Boolean): NossaGenteDirectoryResult {
+        val token = currentToken() ?: return NossaGenteDirectoryResult.Unauthorized
+        return try {
+            val response = authenticatedGet("/tempo-casa?limit=100&page=1", token)
+            if (response.code == 401 || response.code == 403) {
+                if (allowSavedCredentialRecovery && renewFromSavedCredentials()) {
+                    return fetchEmployeeDirectoryOnce(allowSavedCredentialRecovery = false)
+                }
+                return NossaGenteDirectoryResult.Unauthorized
+            }
+            if (!response.successful) return NossaGenteDirectoryResult.Error("A API Nossa Gente não permitiu confirmar as matrículas.")
+            val array = payloadArray(response.body, "data", "resultado", "result", "payload", "items", "tempoCasa", "tempo_casa", "colaboradores", "employees")
+            val employees = (0 until array.length()).mapNotNull { index ->
+                val item = array.optJSONObject(index) ?: return@mapNotNull null
+                val registration = item.textValue("matricula", "MATRICULA", "registro", "registration")?.filter(Char::isDigit).orEmpty()
+                val name = item.textValue("nome", "NOME", "name", "nomeCompleto", "nome_completo", "fullName").orEmpty().trim()
+                if (registration.isBlank() || name.isBlank()) null else NossaGenteDirectoryEmployee(
+                    registration = registration,
+                    name = name,
+                    employeeId = item.textValue("id", "codigoUsuario", "codigo_usuario", "userId", "usuarioId")
+                )
+            }.distinctBy { it.registration }
+            if (employees.isEmpty()) NossaGenteDirectoryResult.Error("A API Nossa Gente não retornou matrículas para conferência.")
+            else NossaGenteDirectoryResult.Success(employees)
+        } catch (_: Exception) {
+            NossaGenteDirectoryResult.Error("Não foi possível consultar o diretório Nossa Gente. Verifique a conexão.")
+        }
+    }
+
     private suspend fun fetchEmployeeProfileOnce(allowSavedCredentialRecovery: Boolean): NossaGenteProfileResult {
         val token = currentToken() ?: return NossaGenteProfileResult.Unauthorized
         return try {

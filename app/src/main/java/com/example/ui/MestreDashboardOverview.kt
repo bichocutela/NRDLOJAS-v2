@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddBox
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory
@@ -328,7 +329,8 @@ internal fun MestreSettingsHub(
     onOpenBubbles: () -> Unit,
     onOpenConsultationAppearance: () -> Unit,
     onOpenNotifications: () -> Unit,
-    onOpenNovelties: () -> Unit
+    onOpenNovelties: () -> Unit,
+    onOpenWorkSchedule: () -> Unit
 ) {
     Text("Escolha o que deseja configurar", style = MaterialTheme.typography.titleMedium)
     Text(
@@ -377,6 +379,13 @@ internal fun MestreSettingsHub(
         description = "Crie avisos visuais por versão do aplicativo",
         icon = Icons.Default.NewReleases,
         onClick = onOpenNovelties
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+    PanelAreaCard(
+        title = "Inserir Escala",
+        description = "Ler foto, conferir matrículas na Nossa Gente e publicar folgas",
+        icon = Icons.Default.CalendarMonth,
+        onClick = onOpenWorkSchedule
     )
 }
 
