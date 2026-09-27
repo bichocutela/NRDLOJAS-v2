@@ -79,6 +79,7 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
@@ -461,6 +462,16 @@ fun SearchScreen(
     val notificationHistory by viewModel.notificationHistory.collectAsStateWithLifecycle()
     val unreadNotifications = notificationHistory.count { !it.read }
     val mostUsedListState = rememberLazyListState()
+    val homeListState = rememberLazyListState()
+    val animateHomeGlass by remember(isExpressiveGlassTheme) {
+        derivedStateOf { !isExpressiveGlassTheme || !homeListState.isScrollInProgress }
+    }
+    val animateMostUsedGlass by remember(isExpressiveGlassTheme) {
+        derivedStateOf {
+            !isExpressiveGlassTheme ||
+                (!homeListState.isScrollInProgress && !mostUsedListState.isScrollInProgress)
+        }
+    }
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
@@ -1054,6 +1065,7 @@ fun SearchScreen(
                 (homeSettings.showHistory && history.isNotEmpty()) ||
                 homeSettings.showFavorites
             LazyColumn(
+                state = homeListState,
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentPadding = PaddingValues(bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -1088,7 +1100,8 @@ fun SearchScreen(
                                     onProductClick = { selected ->
                                         viewModel.onProductSearched(selected)
                                         selectedMostUsedProduct = selected
-                                    }
+                                    },
+                                    animateGlass = animateMostUsedGlass
                                 )
                             }
                         }
@@ -1105,7 +1118,14 @@ fun SearchScreen(
                             key = { index, product -> "glass-home-latest-${product.code}-$index" }
                         ) { index, product ->
                             Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                                HistoryItem(product, viewModel, index, appTheme, textPreferences)
+                                HistoryItem(
+                                    product = product,
+                                    viewModel = viewModel,
+                                    index = index,
+                                    appTheme = appTheme,
+                                    textPreferences = textPreferences,
+                                    animateGlass = animateHomeGlass
+                                )
                             }
                         }
                     } else {
@@ -1134,7 +1154,14 @@ fun SearchScreen(
                             key = { index, product -> "glass-home-history-${product.code}-$index" }
                         ) { index, product ->
                             Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                                HistoryItem(product, viewModel, index, appTheme, textPreferences)
+                                HistoryItem(
+                                    product = product,
+                                    viewModel = viewModel,
+                                    index = index,
+                                    appTheme = appTheme,
+                                    textPreferences = textPreferences,
+                                    animateGlass = animateHomeGlass
+                                )
                             }
                         }
                     } else {
@@ -1196,7 +1223,14 @@ fun SearchScreen(
                                 key = { index, product -> "glass-home-favorite-${product.code}-$index" }
                             ) { index, product ->
                                 Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                                    ProductCard(product, viewModel, index, appTheme, textPreferences)
+                                    ProductCard(
+                                        product = product,
+                                        viewModel = viewModel,
+                                        index = index,
+                                        appTheme = appTheme,
+                                        textPreferences = textPreferences,
+                                        animateGlass = animateHomeGlass
+                                    )
                                 }
                             }
                         }
@@ -1927,7 +1961,8 @@ fun ProductCard(
     index: Int = 0,
     appTheme: String = "multicolor",
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
-    onProductClick: ((Product) -> Unit)? = null
+    onProductClick: ((Product) -> Unit)? = null,
+    animateGlass: Boolean = true
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
@@ -1996,7 +2031,7 @@ fun ProductCard(
                         secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
                         intensity = 1.30f,
                         elevation = 8.dp,
-                        waves = true,
+                        waves = animateGlass,
                         bubbleSeed = index
                     )
                 } else {
@@ -2348,7 +2383,8 @@ fun MiniProductCard(
     index: Int = 0,
     appTheme: String = "multicolor",
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
-    onProductClick: ((Product) -> Unit)? = null
+    onProductClick: ((Product) -> Unit)? = null,
+    animateGlass: Boolean = true
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
@@ -2433,7 +2469,7 @@ fun MiniProductCard(
                         secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
                         intensity = 1.26f,
                         elevation = 7.dp,
-                        waves = true,
+                        waves = animateGlass,
                         bubbleSeed = index + 13
                     )
                 } else {
@@ -2692,7 +2728,8 @@ fun HistoryItem(
     viewModel: MainViewModel,
     index: Int = 0,
     appTheme: String = "multicolor",
-    textPreferences: HomeTextPreferences = HomeTextPreferences()
+    textPreferences: HomeTextPreferences = HomeTextPreferences(),
+    animateGlass: Boolean = true
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
@@ -2760,7 +2797,7 @@ fun HistoryItem(
                             secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
                             intensity = 1.30f,
                             elevation = 7.dp,
-                            waves = true,
+                            waves = animateGlass,
                             bubbleSeed = index + 29
                         )
                         glass.enabled -> Modifier

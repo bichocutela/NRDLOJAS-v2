@@ -149,6 +149,9 @@ data class ExpressiveGlassStyle(
 
 val LocalExpressiveGlassStyle = staticCompositionLocalOf { ExpressiveGlassStyle() }
 
+/** Shared 60 Hz clock for all expressive liquid surfaces. */
+val LocalExpressiveGlassMotion = staticCompositionLocalOf<MutableState<Float>?> { null }
+
 internal val ExpressiveGlassAccentNames = listOf("multicolor", "red", "green", "orange", "blue", "gold")
 
 private fun normalizeExpressiveGlassAccentName(name: String): String =
@@ -463,16 +466,7 @@ fun Modifier.expressiveLiquidGlass(
         val tint = accent ?: style.accent
         val secondaryTint = secondaryAccent ?: style.secondaryAccent
         val motionState = if (animated || waves) {
-            val transition = rememberInfiniteTransition(label = "expressive-liquid-glass")
-            transition.animateFloat(
-                initialValue = 0f,
-                targetValue = 6.2831855f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 3800, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "liquid-refraction"
-            )
+            LocalExpressiveGlassMotion.current
         } else {
             null
         }
@@ -913,8 +907,8 @@ private fun AmbientLiquidBubbleLayer(
         when {
             lowRam || powerSave -> Triple(8, false, 12)
             refreshRate <= 65f -> Triple(10, false, 18)
-            refreshRate <= 105f -> Triple(14, true, 26)
-            else -> Triple(18, true, 36)
+            refreshRate <= 105f -> Triple(12, true, 20)
+            else -> Triple(14, true, 24)
         }
     }
     val bubbleCount = (performanceProfile.first + additionalBubbles.coerceIn(0, 18))
@@ -950,8 +944,13 @@ private fun AmbientLiquidBubbleLayer(
 
     LaunchedEffect(canvasSize, turbulence, speedMultiplier, motion, sizeMultiplier) {
         var lastFrameNanos = 0L
+        val minimumFrameIntervalNanos = 16_000_000L
         while (true) {
             withFrameNanos { frameNanos ->
+                val elapsedNanos = frameNanos - lastFrameNanos
+                if (lastFrameNanos != 0L && elapsedNanos < minimumFrameIntervalNanos) {
+                    return@withFrameNanos
+                }
                 if (lastFrameNanos != 0L && canvasSize.width > 0f && canvasSize.height > 0f) {
                     val dt = ((frameNanos - lastFrameNanos) / 1_000_000_000f).coerceIn(0f, 0.033f)
                     val time = frameNanos / 1_000_000_000f
@@ -1614,10 +1613,31 @@ fun MyApplicationTheme(
         else -> MaterialTheme.shapes
     }
 
+    val expressiveGlassMotion = remember { mutableStateOf(0f) }
+    LaunchedEffect(isExpressiveGlass) {
+        if (!isExpressiveGlass) {
+            expressiveGlassMotion.value = 0f
+            return@LaunchedEffect
+        }
+        var lastUpdateNanos = 0L
+        val minimumFrameIntervalNanos = 16_000_000L
+        while (true) {
+            withFrameNanos { frameNanos ->
+                if (lastUpdateNanos == 0L || frameNanos - lastUpdateNanos >= minimumFrameIntervalNanos) {
+                    val cycleNanos = 3_800_000_000L
+                    val cycleProgress = (frameNanos % cycleNanos).toFloat() / cycleNanos.toFloat()
+                    expressiveGlassMotion.value = cycleProgress * 6.2831855f
+                    lastUpdateNanos = frameNanos
+                }
+            }
+        }
+    }
+
     CompositionLocalProvider(
         LocalGlassSoftStyle provides glassStyle,
         LocalExpressiveStyle provides expressive,
         LocalExpressiveGlassStyle provides expressiveGlassStyle,
+        LocalExpressiveGlassMotion provides expressiveGlassMotion,
         LocalNrdDarkMode provides darkTheme
     ) {
         MaterialTheme(
