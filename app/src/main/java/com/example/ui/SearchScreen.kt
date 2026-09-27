@@ -79,7 +79,6 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
@@ -463,15 +462,6 @@ fun SearchScreen(
     val unreadNotifications = notificationHistory.count { !it.read }
     val mostUsedListState = rememberLazyListState()
     val homeListState = rememberLazyListState()
-    val animateHomeGlass by remember(isExpressiveGlassTheme) {
-        derivedStateOf { !isExpressiveGlassTheme || !homeListState.isScrollInProgress }
-    }
-    val animateMostUsedGlass by remember(isExpressiveGlassTheme) {
-        derivedStateOf {
-            !isExpressiveGlassTheme ||
-                (!homeListState.isScrollInProgress && !mostUsedListState.isScrollInProgress)
-        }
-    }
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
@@ -501,7 +491,7 @@ fun SearchScreen(
         if (mostUsed.isEmpty() || !homeSettings.showMostUsed) return@LaunchedEffect
         while (true) {
             delay(homeSettings.carouselIntervalSeconds * 1000L)
-            if (!mostUsedListState.isScrollInProgress) {
+            if (!homeListState.isScrollInProgress && !mostUsedListState.isScrollInProgress) {
                 val nextIndex = (mostUsedListState.firstVisibleItemIndex + 1) % mostUsed.size
                 mostUsedListState.animateScrollToItem(nextIndex)
             }
@@ -1101,7 +1091,7 @@ fun SearchScreen(
                                         viewModel.onProductSearched(selected)
                                         selectedMostUsedProduct = selected
                                     },
-                                    animateGlass = animateMostUsedGlass
+                                    lightweightGlass = isExpressiveGlassTheme
                                 )
                             }
                         }
@@ -1124,7 +1114,7 @@ fun SearchScreen(
                                     index = index,
                                     appTheme = appTheme,
                                     textPreferences = textPreferences,
-                                    animateGlass = animateHomeGlass
+                                    lightweightGlass = true
                                 )
                             }
                         }
@@ -1160,7 +1150,7 @@ fun SearchScreen(
                                     index = index,
                                     appTheme = appTheme,
                                     textPreferences = textPreferences,
-                                    animateGlass = animateHomeGlass
+                                    lightweightGlass = true
                                 )
                             }
                         }
@@ -1229,7 +1219,7 @@ fun SearchScreen(
                                         index = index,
                                         appTheme = appTheme,
                                         textPreferences = textPreferences,
-                                        animateGlass = animateHomeGlass
+                                        lightweightGlass = true
                                     )
                                 }
                             }
@@ -1962,7 +1952,8 @@ fun ProductCard(
     appTheme: String = "multicolor",
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
     onProductClick: ((Product) -> Unit)? = null,
-    animateGlass: Boolean = true
+    animateGlass: Boolean = true,
+    lightweightGlass: Boolean = false
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
@@ -2031,8 +2022,9 @@ fun ProductCard(
                         secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
                         intensity = 1.30f,
                         elevation = 8.dp,
-                        waves = animateGlass,
-                        bubbleSeed = index
+                        waves = if (lightweightGlass) true else animateGlass,
+                        bubbleSeed = index,
+                        lightweight = lightweightGlass
                     )
                 } else {
                     Modifier
@@ -2164,7 +2156,8 @@ fun ProductCard(
                                 intensity = 0.90f,
                                 elevation = 4.dp,
                                 waves = false,
-                                bubbleSeed = index + 101
+                                bubbleSeed = index + 101,
+                                lightweight = lightweightGlass
                             )
                         } else {
                             Modifier
@@ -2384,7 +2377,8 @@ fun MiniProductCard(
     appTheme: String = "multicolor",
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
     onProductClick: ((Product) -> Unit)? = null,
-    animateGlass: Boolean = true
+    animateGlass: Boolean = true,
+    lightweightGlass: Boolean = false
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
@@ -2469,8 +2463,9 @@ fun MiniProductCard(
                         secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
                         intensity = 1.26f,
                         elevation = 7.dp,
-                        waves = animateGlass,
-                        bubbleSeed = index + 13
+                        waves = if (lightweightGlass) true else animateGlass,
+                        bubbleSeed = index + 13,
+                        lightweight = lightweightGlass
                     )
                 } else {
                     Modifier
@@ -2601,7 +2596,8 @@ fun MiniProductCard(
                                             accent = Color(0xFFFFB300),
                                             secondaryAccent = Color(0xFFFFF1B8),
                                             intensity = 0.90f,
-                                            elevation = 4.dp
+                                            elevation = 4.dp,
+                                            lightweight = lightweightGlass
                                         )
                                 } else {
                                     Modifier
@@ -2699,7 +2695,8 @@ fun MiniProductCard(
                                         accent = Color(0xFFFFB300),
                                         secondaryAccent = Color(0xFFFFF1B8),
                                         intensity = 1.05f,
-                                        elevation = 5.dp
+                                        elevation = 5.dp,
+                                        lightweight = lightweightGlass
                                     )
                             } else {
                                 Modifier
@@ -2729,7 +2726,8 @@ fun HistoryItem(
     index: Int = 0,
     appTheme: String = "multicolor",
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
-    animateGlass: Boolean = true
+    animateGlass: Boolean = true,
+    lightweightGlass: Boolean = false
 ) {
     val glass = rememberGlassVisualStyle()
     val expressive = LocalExpressiveStyle.current.enabled
@@ -2797,8 +2795,9 @@ fun HistoryItem(
                             secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
                             intensity = 1.30f,
                             elevation = 7.dp,
-                            waves = animateGlass,
-                            bubbleSeed = index + 29
+                            waves = if (lightweightGlass) true else animateGlass,
+                            bubbleSeed = index + 29,
+                            lightweight = lightweightGlass
                         )
                         glass.enabled -> Modifier
                             .background(glass.fill.copy(alpha = glass.alpha))
@@ -2839,7 +2838,8 @@ fun HistoryItem(
                                     intensity = 1.12f,
                                     elevation = 7.dp,
                                     waves = false,
-                                    bubbleSeed = index + 149
+                                    bubbleSeed = index + 149,
+                                    lightweight = lightweightGlass
                                 )
                         } else {
                             Modifier
@@ -2920,7 +2920,8 @@ fun HistoryItem(
                             shape = CircleShape,
                             accent = dynColors.first,
                             intensity = 0.70f,
-                            elevation = 2.dp
+                            elevation = 2.dp,
+                            lightweight = lightweightGlass
                         )
                     } else Modifier
                 ),

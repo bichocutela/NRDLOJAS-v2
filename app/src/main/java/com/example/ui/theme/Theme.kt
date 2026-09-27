@@ -455,7 +455,8 @@ fun Modifier.expressiveLiquidGlass(
     elevation: Dp? = null,
     animated: Boolean = false,
     waves: Boolean = false,
-    bubbleSeed: Int = 0
+    bubbleSeed: Int = 0,
+    lightweight: Boolean = false
 ): Modifier = composed {
     val style = LocalExpressiveGlassStyle.current
     if (!style.enabled) {
@@ -465,6 +466,16 @@ fun Modifier.expressiveLiquidGlass(
         val fluidity = style.fluidity.coerceIn(0f, 1f)
         val tint = accent ?: style.accent
         val secondaryTint = secondaryAccent ?: style.secondaryAccent
+        if (lightweight) {
+            return@composed this.expressiveLightweightLiquidGlass(
+                shape = shape,
+                tint = tint,
+                secondaryTint = secondaryTint,
+                intensity = safeIntensity,
+                waves = waves,
+                bubbleSeed = bubbleSeed
+            )
+        }
         val motionState = if (animated || waves) {
             LocalExpressiveGlassMotion.current
         } else {
@@ -806,6 +817,143 @@ fun Modifier.expressiveLiquidGlass(
                 }
             }
     }
+}
+
+/**
+ * Renderizador dos cartões repetidos da Home. Mantém a leitura de água/vidro e
+ * a dispersão ao toque, mas evita sombra offscreen e a pilha óptica completa
+ * usada pelos controles de destaque. Isso torna cada item barato para o
+ * LazyColumn mover e criar durante uma rolagem.
+ */
+private fun Modifier.expressiveLightweightLiquidGlass(
+    shape: Shape,
+    tint: Color,
+    secondaryTint: Color,
+    intensity: Float,
+    waves: Boolean,
+    bubbleSeed: Int
+): Modifier = composed {
+    val style = LocalExpressiveGlassStyle.current
+    val fluidity = style.fluidity.coerceIn(0f, 1f)
+    val ripple = remember { Animatable(1f) }
+    var rippleCenter by remember { mutableStateOf(Offset.Zero) }
+    val rippleScope = rememberCoroutineScope()
+
+    this
+        .clip(shape)
+        .pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                if (up != null) {
+                    rippleCenter = up.position
+                    rippleScope.launch {
+                        ripple.snapTo(0f)
+                        ripple.animateTo(
+                            targetValue = 1f,
+                            animationSpec = tween(durationMillis = 760, easing = LinearEasing)
+                        )
+                    }
+                }
+            }
+        }
+        .drawWithCache {
+            val outline = shape.createOutline(size, layoutDirection, this)
+            val outlinePath = Path().apply {
+                when (outline) {
+                    is androidx.compose.ui.graphics.Outline.Rectangle -> addRect(outline.rect)
+                    is androidx.compose.ui.graphics.Outline.Rounded -> addRoundRect(outline.roundRect)
+                    is androidx.compose.ui.graphics.Outline.Generic -> addPath(outline.path)
+                }
+            }
+            val maxDimension = maxOf(size.width, size.height).coerceAtLeast(1f)
+            val seedShift = (((bubbleSeed % 7) + 7) % 7) / 7f
+            val baseBrush = Brush.linearGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = if (style.isDark) 0.10f else 0.48f),
+                    tint.copy(alpha = (0.30f + 0.16f * fluidity) * intensity),
+                    style.surfaceBase.copy(alpha = (style.surfaceAlpha * 0.28f).coerceIn(0f, 1f)),
+                    secondaryTint.copy(alpha = (0.18f + 0.10f * fluidity) * intensity)
+                ),
+                start = Offset.Zero,
+                end = Offset(size.width, size.height)
+            )
+            val lensBrush = Brush.radialGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = (0.62f * intensity).coerceAtMost(0.82f)),
+                    Color.White.copy(alpha = 0.12f),
+                    Color.Transparent
+                ),
+                center = Offset(size.width * (0.18f + seedShift * 0.12f), size.height * 0.05f),
+                radius = maxDimension * 0.62f
+            )
+            val waveBrush = Brush.horizontalGradient(
+                colors = listOf(
+                    tint.copy(alpha = if (waves) 0.18f * intensity else 0f),
+                    Color.White.copy(alpha = if (waves) 0.30f * intensity else 0f),
+                    secondaryTint.copy(alpha = if (waves) 0.24f * intensity else 0f),
+                    Color.Transparent
+                )
+            )
+            val wavePath = Path().apply {
+                moveTo(0f, size.height * 0.73f)
+                cubicTo(
+                    size.width * 0.24f, size.height * 0.55f,
+                    size.width * 0.55f, size.height * 0.90f,
+                    size.width, size.height * 0.63f
+                )
+                lineTo(size.width, size.height)
+                lineTo(0f, size.height)
+                close()
+            }
+            val rimBrush = Brush.linearGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = 0.88f),
+                    tint.copy(alpha = 0.44f),
+                    secondaryTint.copy(alpha = 0.36f),
+                    Color.White.copy(alpha = 0.72f)
+                ),
+                start = Offset.Zero,
+                end = Offset(size.width, size.height)
+            )
+
+            onDrawWithContent {
+                drawPath(outlinePath, baseBrush)
+                clipPath(outlinePath) { drawRect(lensBrush) }
+                drawContent()
+                if (waves) drawPath(wavePath, waveBrush)
+
+                val progress = ripple.value
+                if (progress < 1f) {
+                    val fade = (1f - progress) * (1f - progress)
+                    val radius = maxDimension * 0.82f * progress
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.48f * fade),
+                        radius = radius,
+                        center = rippleCenter,
+                        style = Stroke(width = (4.2f * (1f - progress) + 1f).dp.toPx())
+                    )
+                    val directions = listOf(
+                        Offset(1f, 0f), Offset(0f, 1f), Offset(-1f, 0f), Offset(0f, -1f)
+                    )
+                    directions.forEach { direction ->
+                        val dropRadius = maxDimension * (0.012f + 0.010f * fade)
+                        drawCircle(
+                            color = Color.White.copy(alpha = 0.72f * fade),
+                            radius = dropRadius,
+                            center = rippleCenter + direction * (maxDimension * 0.30f * progress),
+                            style = Stroke(width = 0.9.dp.toPx())
+                        )
+                    }
+                }
+                drawPath(outlinePath, rimBrush, style = Stroke(width = 1.6.dp.toPx()))
+                drawPath(
+                    outlinePath,
+                    Color.White.copy(alpha = 0.46f),
+                    style = Stroke(width = 0.8.dp.toPx())
+                )
+            }
+        }
 }
 
 fun Modifier.expressiveShadow(
