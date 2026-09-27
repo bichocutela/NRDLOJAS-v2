@@ -589,8 +589,7 @@ fun SearchScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(headerHeight)
-                    .glassSoftShadow(headerShape)
-                    .expressiveShadow(headerShape, 8.dp)
+                    .then(if (isExpressiveGlassTheme) Modifier else Modifier.glassSoftShadow(headerShape).expressiveShadow(headerShape, 8.dp))
                     .clip(headerShape)
                     .background(
                         if (isGlassSoftTheme) {
@@ -1857,17 +1856,6 @@ fun CategorySection(
                     .then(
                         if (isExpressiveGlass) {
                             Modifier
-                                .expressiveLiquidGlass(
-                                    shape = categoryShape,
-                                    accent = liquidAccent,
-                                    secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
-                                    intensity = 0.55f,
-                                    elevation = 0.dp,
-                                    animated = false,
-                                    waves = false,
-                                    bubbleSeed = index,
-                                    lightweight = true
-                                )
                                 .jellyGlassSurface(
                                     shape = categoryShape,
                                     fill = Brush.verticalGradient(
@@ -2122,17 +2110,7 @@ fun ProductCard(
             .then(if (isExpressiveGlass && lightweightGlass) Modifier else Modifier.clip(cardShape))
             .then(
                 if (isExpressiveGlass) {
-                    Modifier.expressiveLiquidGlass(
-                        shape = cardShape,
-                        accent = cardAccent.first,
-                        secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
-                        intensity = 0.92f,
-                        elevation = 0.dp,
-                        animated = false,
-                        waves = false,
-                        bubbleSeed = index,
-                        lightweight = lightweightGlass
-                    ).jellyGlassSurface(
+                    Modifier.jellyGlassSurface(
                         shape = cardShape,
                         fill = Brush.horizontalGradient(listOf(cardAccent.first.copy(alpha = 0.22f), Color.White.copy(alpha = 0.68f))),
                         rim = Brush.sweepGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFF80D8FF), Color(0xFFFF80AB), Color(0xFFFFE082), Color.White.copy(alpha = 0.96f))),
@@ -2192,7 +2170,7 @@ fun ProductCard(
                     showDialog = true
                 }
             }
-            .then(if (isExpressiveGlass) Modifier.graphicsLayer { shape = cardShape; clip = true } else Modifier)
+            
             .padding(if (compactExpressive) 12.dp else 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -2579,17 +2557,7 @@ fun MiniProductCard(
             .then(if (isExpressiveGlass && lightweightGlass) Modifier else Modifier.clip(cardShape))
             .then(
                 if (isExpressiveGlass) {
-                    Modifier.expressiveLiquidGlass(
-                        shape = cardShape,
-                        accent = cardAccent.first,
-                        secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
-                        intensity = 1.26f,
-                        elevation = 0.dp,
-                        animated = false,
-                        waves = false,
-                        bubbleSeed = index + 13,
-                        lightweight = lightweightGlass
-                    ).jellyGlassSurface(
+                    Modifier.jellyGlassSurface(
                         shape = cardShape,
                         fill = Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.70f), Color.White.copy(alpha = 0.60f))),
                         rim = Brush.sweepGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFF80D8FF), Color(0xFFFF80AB), Color(0xFFFFE082), Color.White.copy(alpha = 0.96f))),
@@ -2624,7 +2592,7 @@ fun MiniProductCard(
                     showDialog = true
                 }
             }
-            .then(if (isExpressiveGlass) Modifier.graphicsLayer { shape = cardShape; clip = true } else Modifier)
+            
             .padding(
                 when {
                     compactExpressive -> 9.dp
@@ -2900,17 +2868,7 @@ fun HistoryItem(
                 .then(if (isExpressiveGlass && lightweightGlass) Modifier else Modifier.clip(itemShape))
                 .then(
                     when {
-                        isExpressiveGlass -> Modifier.expressiveLiquidGlass(
-                            shape = itemShape,
-                            accent = dynColors.first,
-                            secondaryAccent = expressiveGlassCardSecondary(expressiveGlass, index),
-                            intensity = 1.30f,
-                            elevation = 0.dp,
-                            animated = false,
-                            waves = false,
-                            bubbleSeed = index + 29,
-                            lightweight = lightweightGlass
-                        ).jellyGlassSurface(
+                        isExpressiveGlass -> Modifier.jellyGlassSurface(
                             shape = itemShape,
                             fill = Brush.horizontalGradient(listOf(dynColors.first.copy(alpha = 0.30f), Color.White.copy(alpha = 0.68f))),
                             rim = Brush.sweepGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFF80D8FF), Color(0xFFFF80AB), Color(0xFFFFE082), Color.White.copy(alpha = 0.96f))),
@@ -2929,7 +2887,7 @@ fun HistoryItem(
                     viewModel.onProductSearched(product)
                     showDialog = true
                 }
-                .then(if (isExpressiveGlass) Modifier.graphicsLayer { shape = itemShape; clip = true } else Modifier)
+                
                 .padding(
                     horizontal = if (compactExpressive) 8.dp else 10.dp,
                     vertical = if (compactExpressive) 7.dp else 9.dp
