@@ -52,51 +52,35 @@ A arquitetura mantém a interface separada das camadas de dados e integra recurs
 
 ## Visual e temas
 
-Os visuais abaixo usam **arquivos que já fazem parte do próprio aplicativo**. Todos são exibidos com a mesma largura no README e sem altura fixa, preservando a proporção original, sem crop e sem deformação.
+Uma galeria dos banners do NRD Códigos, organizada por paleta e estilo. As oito imagens usam fundo transparente e proporção original de **3:1**, sem recorte ou deformação.
 
-### Multicolorido
+### Temas por cor
 
-<p align="center">
-  <img src="app/src/main/res/drawable-nodpi/theme_multicolor_header.png" width="92%" alt="Tema Multicolorido" />
-</p>
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>Multicolorido</strong><br /><img src="docs/images/banners/multicolorido.webp" width="100%" alt="Banner do tema Multicolorido com fundo transparente" /></td>
+    <td width="50%" align="center"><strong>Vermelho</strong><br /><img src="docs/images/banners/vermelho.webp" width="100%" alt="Banner do tema Vermelho com fundo transparente" /></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><strong>Verde</strong><br /><img src="docs/images/banners/verde.webp" width="100%" alt="Banner do tema Verde com fundo transparente" /></td>
+    <td width="50%" align="center"><strong>Laranja</strong><br /><img src="docs/images/banners/laranja.webp" width="100%" alt="Banner do tema Laranja com fundo transparente" /></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><strong>Azul</strong><br /><img src="docs/images/banners/azul.webp" width="100%" alt="Banner do tema Azul com fundo transparente" /></td>
+    <td width="50%" align="center"><strong>Dourado</strong><br /><img src="docs/images/banners/dourado.webp" width="100%" alt="Banner do tema Dourado com fundo transparente" /></td>
+  </tr>
+</table>
 
-### Vermelho
+### Temas de vidro
 
-<p align="center">
-  <img src="app/src/main/assets/themes/theme_red.jpg" width="92%" alt="Tema Vermelho" />
-</p>
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>Glass Expressivo</strong><br /><img src="docs/images/banners/glass-expressivo.webp" width="100%" alt="Banner do Glass Expressivo com fundo transparente" /></td>
+    <td width="50%" align="center"><strong>Glass Soft</strong><br /><img src="docs/images/banners/glass-soft.webp" width="100%" alt="Banner do Glass Soft com fundo transparente" /></td>
+  </tr>
+</table>
 
-### Verde
-
-<p align="center">
-  <img src="app/src/main/assets/themes/theme_green.jpg" width="92%" alt="Tema Verde" />
-</p>
-
-### Laranja
-
-<p align="center">
-  <img src="app/src/main/assets/themes/theme_orange.jpg" width="92%" alt="Tema Laranja" />
-</p>
-
-### Azul
-
-<p align="center">
-  <img src="app/src/main/assets/themes/theme_blue.jpg" width="92%" alt="Tema Azul" />
-</p>
-
-### Dourado
-
-<p align="center">
-  <img src="app/src/main/assets/themes/theme_gold.jpg" width="92%" alt="Tema Dourado" />
-</p>
-
-### Glass Soft
-
-<p align="center">
-  <img src="app/src/main/res/drawable-nodpi/hero_banner.png" width="92%" alt="Glass Soft" />
-</p>
-
-O **Glass Soft** também possui superfícies, transparências e gradientes gerados dinamicamente pelo tema do aplicativo; o banner acima é o recurso visual interno usado na apresentação do projeto.
+O **Glass Expressivo** destaca superfícies líquidas, reflexos e formas de vidro. O **Glass Soft** apresenta uma composição translúcida mais suave. Os banners são imagens de apresentação; os efeitos dos temas são aplicados dinamicamente no aplicativo.
 
 ---
 
@@ -111,7 +95,7 @@ O **Glass Soft** também possui superfícies, transparências e gradientes gerad
 | **Abas e categorias** | Abas dinâmicas e categorias gerenciáveis dentro do aplicativo. |
 | **Notificações** | Firebase Cloud Messaging, notificações de produtos, alterações e atualizações do aplicativo. |
 | **Atualizações** | Verificação de novas versões e distribuição de APKs por GitHub Releases. |
-| **Aparência** | Temas por cor, fundos personalizados, modo escuro e estilo Glass Soft. |
+| **Aparência** | Temas por cor, fundos personalizados, modo escuro, Glass Soft e Glass Expressivo. |
 | **Painel administrativo** | Áreas protegidas para administração, gerenciamento de produtos e configurações operacionais. |
 | **Painel Mestre** | Gestão avançada de catálogo, abas, aparência global, sugestões e recursos administrativos. |
 | **Banners** | Recursos para envio, validação, pré-visualização e aplicação de banners temáticos. |
