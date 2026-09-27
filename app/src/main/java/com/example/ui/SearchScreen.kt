@@ -1794,7 +1794,8 @@ fun CategorySection(
                                     elevation = 8.dp,
                                     animated = true,
                                     waves = true,
-                                    bubbleSeed = index
+                                    bubbleSeed = index,
+                                    lightweight = true
                                 )
                         } else {
                             Modifier
