@@ -1042,10 +1042,16 @@ fun SearchScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(
+                            .then(
                                 if (performanceTier.enableComplexShaders) {
-                                    Brush.verticalGradient(listOf(Color(0xFFFFE082), Color(0xFFFFB300), Color(0xFFF57F17)))
-                                } else Color(0xFFFFB300)
+                                    Modifier.background(
+                                        Brush.verticalGradient(
+                                            listOf(Color(0xFFFFE082), Color(0xFFFFB300), Color(0xFFF57F17))
+                                        )
+                                    )
+                                } else {
+                                    Modifier.background(Color(0xFFFFB300))
+                                }
                             ),
                         contentAlignment = Alignment.Center
                     ) {
