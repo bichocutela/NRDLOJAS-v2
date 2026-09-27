@@ -98,44 +98,14 @@ class NossaGenteApi(context: Context) {
         fetchEmployeeProfileOnce(allowSavedCredentialRecovery = true)
     }
 
-    /** Confirms roster registrations against the authenticated employee directory endpoint already used by /me. */
-    suspend fun fetchEmployeeDirectory(): NossaGenteDirectoryResult = withContext(Dispatchers.IO) {
-        fetchEmployeeDirectoryOnce(allowSavedCredentialRecovery = true)
-    }
-
-    private suspend fun fetchEmployeeDirectoryOnce(allowSavedCredentialRecovery: Boolean): NossaGenteDirectoryResult {
-        val token = currentToken() ?: return NossaGenteDirectoryResult.Unauthorized
-        return try {
-            val employees = mutableListOf<NossaGenteDirectoryEmployee>()
-            val seen = mutableSetOf<String>()
-            for (page in 1..30) {
-                val response = authenticatedGet("/tempo-casa?limit=100&page=$page", token)
-                if (response.code == 401 || response.code == 403) {
-                    if (allowSavedCredentialRecovery && renewFromSavedCredentials()) {
-                        return fetchEmployeeDirectoryOnce(allowSavedCredentialRecovery = false)
-                    }
-                    return NossaGenteDirectoryResult.Unauthorized
-                }
-                if (!response.successful) return NossaGenteDirectoryResult.Error("A API Nossa Gente não permitiu confirmar as matrículas.")
-                val array = payloadArray(response.body, "data", "resultado", "result", "payload", "items", "tempoCasa", "tempo_casa", "colaboradores", "employees")
-                var newRows = 0
-                for (index in 0 until array.length()) {
-                    val item = array.optJSONObject(index) ?: continue
-                    val registration = item.textValue("matricula", "MATRICULA", "registro", "registration")?.filter(Char::isDigit).orEmpty()
-                    val name = item.textValue("nome", "NOME", "name", "nomeCompleto", "nome_completo", "fullName").orEmpty().trim()
-                    if (registration.isBlank() || name.isBlank() || !seen.add(registration)) continue
-                    employees += NossaGenteDirectoryEmployee(
-                        registration = registration, name = name,
-                        employeeId = item.textValue("id", "codigoUsuario", "codigo_usuario", "userId", "usuarioId")
-                    )
-                    newRows++
-                }
-                if (array.length() < 100 || newRows == 0) break
-            }
-            if (employees.isEmpty()) NossaGenteDirectoryResult.Error("A API Nossa Gente não retornou matrículas para conferência.")
-            else NossaGenteDirectoryResult.Success(employees)
-        } catch (_: Exception) {
-            NossaGenteDirectoryResult.Error("Não foi possível consultar o diretório Nossa Gente. Verifique a conexão.")
+    /** /me is the authoritative identity of the active Nossa Gente session. */
+    suspend fun verifyCurrentEmployeeRegistration(registration: String): NossaGenteDirectoryResult {
+        val expected = registration.filter(Char::isDigit)
+        if (expected.isBlank()) return NossaGenteDirectoryResult.Error("Informe uma matrícula antes de consultar.")
+        return when (val result = fetchEmployeeProfile()) {
+            NossaGenteProfileResult.Unauthorized -> NossaGenteDirectoryResult.Unauthorized
+            is NossaGenteProfileResult.Error -> NossaGenteDirectoryResult.Error(result.message)
+            is NossaGenteProfileResult.Success -> matchAuthenticatedProfile(result.profile, expected)
         }
     }
 
@@ -1262,6 +1232,24 @@ data class PointEntry(
 
 data class HoursSummary(val total: String, val months: List<HoursMonth>)
 data class HoursMonth(val year: Int, val month: String, val balance: String)
+
+internal fun matchAuthenticatedProfile(profile: EmployeeProfile, registration: String): NossaGenteDirectoryResult {
+    val expected = registration.filter(Char::isDigit)
+    val actual = profile.registration?.filter(Char::isDigit).orEmpty()
+    return when {
+        actual.isBlank() -> NossaGenteDirectoryResult.Error(
+            "A API Nossa Gente não informou a matrícula desta sessão. Não é possível confirmar este funcionário."
+        )
+        actual != expected -> NossaGenteDirectoryResult.Error(
+            "A sessão Nossa Gente está em ${profile.name ?: "outro funcionário"} (matrícula $actual). " +
+                "Entre com os dados da matrícula $expected no Meu Perfil para confirmar este registro."
+        )
+        profile.name.isNullOrBlank() -> NossaGenteDirectoryResult.Error(
+            "A API confirmou a matrícula, mas não informou o nome do funcionário."
+        )
+        else -> NossaGenteDirectoryResult.Success(listOf(NossaGenteDirectoryEmployee(actual, profile.name, profile.employeeId)))
+    }
+}
 
 data class EmployeeProfile(
     val name: String? = null,

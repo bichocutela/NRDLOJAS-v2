@@ -45,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import com.example.data.GeminiMasterService
 import com.example.data.NossaGenteApi
 import com.example.data.NossaGenteDirectoryResult
-import com.example.data.NossaGenteDirectoryEmployee
 import com.example.data.WorkScheduleEmployee
 import com.example.data.FirebaseService
 import kotlinx.coroutines.launch
@@ -66,7 +65,6 @@ internal fun MestreWorkScheduleSettings() {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val rowPreviews = remember { mutableStateMapOf<String, RosterLinePreview>() }
-    var directoryCache by remember { mutableStateOf<List<NossaGenteDirectoryEmployee>?>(null) }
     var selectedImage by remember { mutableStateOf<android.net.Uri?>(null) }
     var imageRotation by remember { mutableIntStateOf(0) }
 
@@ -226,21 +224,22 @@ internal fun MestreWorkScheduleSettings() {
                                 if (editVacation) ScheduleDayGrid(row.vacationDays, month.toIntOrNull(), year.toIntOrNull()) { day ->
                                     employees[index] = row.copy(vacationDays = row.vacationDays.toggle(day))
                                 }
+                                Text("A conferência usa a conta autenticada em Meu Perfil e confirma somente o titular dessa conta.",
+                                    style = MaterialTheme.typography.bodySmall)
                                 Button(onClick = {
                                     scope.launch {
                                         busy = true
-                                        val result = directoryCache?.let { NossaGenteDirectoryResult.Success(it) }
-                                            ?: NossaGenteApi(context.applicationContext).fetchEmployeeDirectory()
+                                        val result = NossaGenteApi(context.applicationContext)
+                                            .verifyCurrentEmployeeRegistration(row.registration)
                                         when (result) {
                                             NossaGenteDirectoryResult.Unauthorized -> message = "Entre no Nossa Gente para consultar a matrícula."
                                             is NossaGenteDirectoryResult.Error -> message = result.message
                                             is NossaGenteDirectoryResult.Success -> {
-                                                directoryCache = result.employees
                                                 val official = result.employees.firstOrNull {
                                                     it.registration.filter(Char::isDigit) == row.registration.filter(Char::isDigit)
                                                 }
                                                 matchedName = official?.name
-                                                message = if (official == null) "Matrícula não encontrada na Nossa Gente. Não foi salva."
+                                                message = if (official == null) "A sessão atual não confirmou esta matrícula. Não foi salva."
                                                     else "Funcionário encontrado: ${official.name}. Confira o nome e confirme para salvar."
                                             }
                                         }
