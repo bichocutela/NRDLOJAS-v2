@@ -77,7 +77,6 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -99,7 +98,6 @@ import com.example.ui.theme.getDynamicThemeColor
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.LocalExpressiveGlassStyle
-import com.example.ui.theme.LocalNrdHomeScrollInProgress
 import com.example.ui.theme.LocalNrdDarkMode
 import com.example.ui.theme.ExpressiveGlassStyle
 import com.example.ui.theme.glassSoftShadow
@@ -119,12 +117,8 @@ import com.example.R
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 
 
@@ -135,7 +129,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
 import android.os.Vibrator
 import android.content.Context
 import android.os.VibrationEffect
@@ -191,16 +184,6 @@ data class HomeTextPreferences(
     val uppercaseBold: Boolean = false,
     val largeText: Boolean = false
 )
-
-/** A single static fill and rim for repeated Glass Expressivo surfaces. */
-private fun Modifier.jellyGlassSurface(
-    shape: Shape,
-    fill: Brush,
-    rim: Brush,
-    rimWidth: androidx.compose.ui.unit.Dp
-): Modifier = this
-    .background(fill, shape)
-    .border(rimWidth, rim, shape)
 
 @Composable
 fun rememberHomeTextPreferences(userPreferences: com.example.data.UserPreferences): HomeTextPreferences {
@@ -392,7 +375,6 @@ fun SearchScreen(
     val isExpressiveTheme = expressiveStyle.enabled
     val isGlassSoftTheme = glassStyle.enabled
     val isExpressiveGlassTheme = expressiveGlassStyle.enabled
-    val homeScrollSignal = LocalNrdHomeScrollInProgress.current
     val isStandaloneGlassTheme = isGlassSoftTheme
     val appTheme = if (isStandaloneGlassTheme) "glass" else localAppTheme
     val glassActionBrush = remember(glassStyle.accent, glassStyle.secondaryAccent) {
@@ -487,13 +469,6 @@ fun SearchScreen(
     val unreadNotifications = notificationHistory.count { !it.read }
     val mostUsedListState = rememberLazyListState()
     val homeListState = rememberLazyListState()
-    DisposableEffect(homeScrollSignal) {
-        onDispose { homeScrollSignal?.value = false }
-    }
-    LaunchedEffect(isExpressiveGlassTheme, homeListState, homeScrollSignal) {
-        snapshotFlow { isExpressiveGlassTheme && homeListState.isScrollInProgress }
-            .collectLatest { scrolling -> homeScrollSignal?.value = scrolling }
-    }
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
@@ -1831,20 +1806,18 @@ fun CategorySection(
                 modifier = Modifier
                     .then(if (isExpressiveGlass) Modifier else Modifier.glassSoftShadow(categoryShape))
                     .then(if (isExpressiveGlass) Modifier else Modifier.expressiveShadow(categoryShape, 6.dp))
-                    // The expressive glass modifier clips this surface itself.
                     .then(if (isExpressiveGlass) Modifier else Modifier.clip(categoryShape))
                     .then(
                         if (isExpressiveGlass) {
                             Modifier
-                                .jellyGlassSurface(
-                                    shape = categoryShape,
-                                    fill = Brush.verticalGradient(
-                                        listOf(liquidAccent.copy(alpha = 0.96f), liquidAccent.copy(alpha = 0.90f))
-                                    ),
-                                    rim = Brush.horizontalGradient(
-                                        listOf(Color.White.copy(alpha = 0.92f), Color.White.copy(alpha = 0.36f))
-                                    ),
-                                    rimWidth = 1.2.dp
+                                .background(
+                                    Brush.verticalGradient(listOf(liquidAccent.copy(alpha = 0.96f), liquidAccent.copy(alpha = 0.90f))),
+                                    categoryShape
+                                )
+                                .border(
+                                    1.2.dp,
+                                    Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.92f), Color.White.copy(alpha = 0.36f))),
+                                    categoryShape
                                 )
                         } else {
                             Modifier
@@ -1975,11 +1948,10 @@ private fun normalizeNotificationText(value: String): String =
 private fun FavoriteToggleButton(
     product: Product,
     viewModel: MainViewModel,
-    compact: Boolean = false,
-    lightweightGlass: Boolean = false
+    compact: Boolean = false
 ) {
     val expressiveGlass = LocalExpressiveGlassStyle.current
-    val isExpressiveGlass = expressiveGlass.enabled && lightweightGlass
+    val isExpressiveGlass = expressiveGlass.enabled
     val heartScale by animateFloatAsState(
         targetValue = if (product.isFavorite) 1.10f else 1f,
         animationSpec = spring(
@@ -1994,19 +1966,10 @@ private fun FavoriteToggleButton(
         modifier = Modifier
             .size(if (compact) 34.dp else 38.dp)
             .then(
-                if (expressiveGlass.enabled && !lightweightGlass) {
+                if (expressiveGlass.enabled) {
                     Modifier
-                        .then(if (lightweightGlass) Modifier else Modifier.expressiveShadow(CircleShape, 3.dp))
-                        .expressiveLiquidGlass(
-                            shape = CircleShape,
-                            accent = heartAccent,
-                            secondaryAccent = expressiveGlass.secondaryAccent,
-                            intensity = if (product.isFavorite) 0.94f else 0.72f,
-                            elevation = if (product.isFavorite) 5.dp else 3.dp,
-                            waves = false,
-                            bubbleSeed = product.code.hashCode(),
-                            lightweight = lightweightGlass
-                        )
+                        .background(heartAccent.copy(alpha = 0.18f), CircleShape)
+                        .border(1.dp, Color.White.copy(alpha = 0.72f), CircleShape)
                 } else Modifier
             )
     ) {
@@ -2089,12 +2052,12 @@ fun ProductCard(
             .then(if (isExpressiveGlass && lightweightGlass) Modifier else Modifier.clip(cardShape))
             .then(
                 if (isExpressiveGlass) {
-                    Modifier.jellyGlassSurface(
-                        shape = cardShape,
-                        fill = Brush.horizontalGradient(listOf(cardAccent.first.copy(alpha = 0.22f), Color.White.copy(alpha = 0.68f))),
-                        rim = Brush.linearGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFF80D8FF), Color(0xFFFF80AB), Color(0xFFFFE082), Color.White.copy(alpha = 0.96f))),
-                        rimWidth = 1.5.dp
-                    )
+                    Modifier
+                        .background(
+                            Brush.horizontalGradient(listOf(cardAccent.first.copy(alpha = 0.22f), Color.White.copy(alpha = 0.68f))),
+                            cardShape
+                        )
+                        .border(1.2.dp, Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.95f), Color(0xFF80D8FF).copy(alpha = 0.60f))), cardShape)
                 } else {
                     Modifier
                         .background(
@@ -2214,12 +2177,12 @@ fun ProductCard(
         Spacer(modifier = Modifier.width(if (compactExpressive) 8.dp else 12.dp))
 
         Column(horizontalAlignment = Alignment.End) {
-            FavoriteToggleButton(product, viewModel, compact = compactExpressive, lightweightGlass = lightweightGlass)
+            FavoriteToggleButton(product, viewModel, compact = compactExpressive)
             val codeShape = if (expressive) RoundedCornerShape(20.dp) else RoundedCornerShape(16.dp)
             Box(
                 modifier = Modifier
                     .then(
-                        if (isExpressiveGlass && lightweightGlass) {
+                        if (isExpressiveGlass) {
                             Modifier
                                 .clip(codeShape)
                                 .background(
@@ -2231,17 +2194,6 @@ fun ProductCard(
                                     )
                                 )
                                 .border(1.dp, Color.White.copy(alpha = 0.72f), codeShape)
-                        } else if (isExpressiveGlass) {
-                            Modifier.expressiveLiquidGlass(
-                                shape = codeShape,
-                                accent = cardAccent.first,
-                                secondaryAccent = expressiveGlass.secondaryAccent,
-                                intensity = 0.90f,
-                                elevation = 4.dp,
-                                waves = false,
-                                bubbleSeed = index + 101,
-                                lightweight = lightweightGlass
-                            )
                         } else {
                             Modifier
                                 .clip(codeShape)
@@ -2535,12 +2487,9 @@ fun MiniProductCard(
             .then(if (isExpressiveGlass && lightweightGlass) Modifier else Modifier.clip(cardShape))
             .then(
                 if (isExpressiveGlass) {
-                    Modifier.jellyGlassSurface(
-                        shape = cardShape,
-                        fill = Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.70f), Color.White.copy(alpha = 0.60f))),
-                        rim = Brush.linearGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFF80D8FF), Color(0xFFFF80AB), Color(0xFFFFE082), Color.White.copy(alpha = 0.96f))),
-                        rimWidth = 1.5.dp
-                    )
+                    Modifier
+                        .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.72f), Color.White.copy(alpha = 0.58f))), cardShape)
+                        .border(1.3.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.95f), Color(0xFF80D8FF).copy(alpha = 0.50f))), cardShape)
                 } else {
                     Modifier
                         .background(
@@ -2654,7 +2603,7 @@ fun MiniProductCard(
             }
 
             Column(horizontalAlignment = Alignment.End) {
-                FavoriteToggleButton(product, viewModel, compact = compactExpressive, lightweightGlass = lightweightGlass)
+                FavoriteToggleButton(product, viewModel, compact = compactExpressive)
                 if (expressive) {
                     val unitShape = RoundedCornerShape(14.dp)
                     Box(
@@ -2845,12 +2794,9 @@ fun HistoryItem(
                 .then(if (isExpressiveGlass && lightweightGlass) Modifier else Modifier.clip(itemShape))
                 .then(
                     when {
-                        isExpressiveGlass -> Modifier.jellyGlassSurface(
-                            shape = itemShape,
-                            fill = Brush.horizontalGradient(listOf(dynColors.first.copy(alpha = 0.30f), Color.White.copy(alpha = 0.68f))),
-                            rim = Brush.linearGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFF80D8FF), Color(0xFFFF80AB), Color(0xFFFFE082), Color.White.copy(alpha = 0.96f))),
-                            rimWidth = 1.3.dp
-                        )
+                        isExpressiveGlass -> Modifier
+                            .background(Brush.horizontalGradient(listOf(dynColors.first.copy(alpha = 0.28f), Color.White.copy(alpha = 0.72f), Color.White.copy(alpha = 0.60f))), itemShape)
+                            .border(1.2.dp, Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.95f), Color(0xFF80D8FF).copy(alpha = 0.60f), Color.White.copy(alpha = 0.80f))), itemShape)
                         glass.enabled -> Modifier
                             .background(glass.fill.copy(alpha = glass.alpha))
                             .border(1.dp, strongColors.first.copy(alpha = 0.42f), itemShape)
@@ -2877,16 +2823,14 @@ fun HistoryItem(
                     .then(
                         if (isExpressiveGlass) {
                             Modifier
-                                .jellyGlassSurface(
-                                    shape = CircleShape,
-                                    fill = Brush.radialGradient(
-                                        colors = listOf(Color.White.copy(alpha = 0.56f), dynColors.first, dynColors.first.copy(alpha = 0.76f)),
+                                .background(
+                                    Brush.radialGradient(
+                                        listOf(Color.White.copy(alpha = 0.56f), dynColors.first, dynColors.first.copy(alpha = 0.76f)),
                                         center = Offset(16f, 12f)
                                     ),
-                                    rim = Brush.linearGradient(listOf(Color.White, Color(0xFF80D8FF), Color(0xFFFF80AB), Color(0xFFFFE082), Color.White)),
-                                    rimWidth = 1.2.dp
+                                    CircleShape
                                 )
-                                .graphicsLayer { shape = CircleShape; clip = true }
+                                .border(1.2.dp, Color.White.copy(alpha = 0.85f), CircleShape)
                         } else {
                             Modifier
                                 .clip(historyIconShape)
@@ -2959,7 +2903,7 @@ fun HistoryItem(
                 )
             }
             Spacer(modifier = Modifier.width(4.dp))
-            FavoriteToggleButton(product, viewModel, compact = compactExpressive, lightweightGlass = lightweightGlass)
+            FavoriteToggleButton(product, viewModel, compact = compactExpressive)
             Box(
                 modifier = Modifier,
                 contentAlignment = Alignment.Center
@@ -3040,7 +2984,7 @@ fun HistoryItem(
                 )
             }
         }
-        FavoriteToggleButton(product, viewModel, compact = true, lightweightGlass = lightweightGlass)
+        FavoriteToggleButton(product, viewModel, compact = true)
     }
 }
 
