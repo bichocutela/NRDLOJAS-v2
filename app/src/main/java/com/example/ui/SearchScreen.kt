@@ -1031,7 +1031,7 @@ fun SearchScreen(
                                 if (performanceTier.enableComplexShaders) {
                                     Modifier.background(
                                         Brush.verticalGradient(
-                                            listOf(Color(0xFFFFE082), Color(0xFFFFB300), MaterialTheme.colorScheme.onSurface)
+                                            listOf(Color(0xFFFFE082), Color(0xFFFFB300), Color(0xFFF57F17))
                                         )
                                     )
                                 } else {
@@ -2243,7 +2243,7 @@ fun ProductCard(
                     baseStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
                     boldOutline = textPreferences.boldOutline,
                     uppercaseBold = true,
-                    color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -2284,7 +2284,7 @@ fun ProductCard(
                     Text(
                         text = product.code,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
-                        color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurface else if (expressive) cardAccent.second else MaterialTheme.colorScheme.onPrimaryContainer
+                        color = if (isExpressiveGlass) expressiveGlass.onAccent else if (expressive) cardAccent.second else MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
                         text = product.unit.uppercase(),
