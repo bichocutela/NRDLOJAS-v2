@@ -175,7 +175,7 @@ private fun normalizeExpressiveGlassAccentName(name: String): String =
     name.trim().lowercase().takeIf { it in ExpressiveGlassAccentNames } ?: "multicolor"
 
 private fun expressiveGlassContentColor(background: Color): Color {
-    val dark = Color(0xFF17202A)
+    val dark = Color.Black
     val backgroundLuminance = background.luminance()
     val whiteContrast = 1.05f / (backgroundLuminance + 0.05f)
     val darkContrast = (backgroundLuminance + 0.05f) / (dark.luminance() + 0.05f)
