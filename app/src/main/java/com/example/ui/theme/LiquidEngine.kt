@@ -15,8 +15,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import app.rive.runtime.kotlin.RiveAnimationView
@@ -119,6 +121,10 @@ private fun ParametricLiquidEngine(
             Color.White.copy(alpha = if (index % 2 == 0) 0.55f else 0.38f)
         }
     }
+    val strokeWidthPx = with(LocalDensity.current) { 1.dp.toPx() }
+    val rimStrokes = remember(count, strokeWidthPx) {
+        Array(count) { Stroke(width = strokeWidthPx) }
+    }
     val glintColors = remember(count) {
         Array(count) { index ->
             Color.White.copy(alpha = if (index % 2 == 0) 0.46f else 0.30f)
@@ -149,9 +155,7 @@ private fun ParametricLiquidEngine(
                         color = rimColors[index],
                         radius = radius,
                         center = androidx.compose.ui.geometry.Offset(centerX, centerY),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(
-                            width = (radius * 0.055f).coerceAtLeast(0.7f)
-                        )
+                        style = rimStrokes[index]
                     )
                     drawCircle(
                         color = glintColors[index],
@@ -202,24 +206,34 @@ private fun RiveLiquidEngine(
     resourceId: Int,
     stateMachineName: String?
 ) {
-    val context = LocalContext.current
     val machineName = stateMachineName?.takeIf(String::isNotBlank)
-    val view = remember(context, resourceId, machineName) {
-        RiveAnimationView(context).apply {
-            setRiveResource(
-                resId = resourceId,
-                stateMachineName = machineName,
-                autoplay = true,
-                fit = Fit.COVER,
-                loop = Loop.LOOP
-            )
-        }
-    }
+    val viewKey = "$resourceId:$machineName"
 
     AndroidView(
-        factory = { view },
+        factory = { context ->
+            RiveAnimationView(context).apply {
+                tag = viewKey
+                setRiveResource(
+                    resId = resourceId,
+                    stateMachineName = machineName,
+                    autoplay = true,
+                    fit = Fit.COVER,
+                    loop = Loop.LOOP
+                )
+            }
+        },
         modifier = modifier.fillMaxSize(),
         update = { riveView ->
+            if (riveView.tag != viewKey) {
+                riveView.setRiveResource(
+                    resId = resourceId,
+                    stateMachineName = machineName,
+                    autoplay = true,
+                    fit = Fit.COVER,
+                    loop = Loop.LOOP
+                )
+                riveView.tag = viewKey
+            }
             riveView.isClickable = true
             riveView.isFocusable = true
         }
