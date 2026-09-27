@@ -22,11 +22,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
@@ -49,6 +51,9 @@ import com.example.data.WorkScheduleEmployee
 import com.example.data.FirebaseService
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
+import com.example.data.WorkSchedule
+import org.json.JSONArray
 import org.json.JSONObject
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
@@ -60,17 +65,33 @@ internal fun MestreWorkScheduleSettings() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val employees = remember { mutableStateListOf<WorkScheduleEmployee>() }
-    var month by remember { mutableStateOf("") }
-    var year by remember { mutableStateOf("") }
+    val today = remember { java.util.Calendar.getInstance() }
+    var month by remember { mutableStateOf((today.get(java.util.Calendar.MONTH) + 1).toString()) }
+    var year by remember { mutableStateOf(today.get(java.util.Calendar.YEAR).toString()) }
+    var showMonthPicker by remember { mutableStateOf(false) }
+    var pickerYear by remember { mutableIntStateOf(today.get(java.util.Calendar.YEAR)) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val rowPreviews = remember { mutableStateMapOf<String, RosterLinePreview>() }
     var selectedImage by remember { mutableStateOf<android.net.Uri?>(null) }
     var imageRotation by remember { mutableIntStateOf(0) }
+    var savedSchedules by remember { mutableStateOf<List<WorkSchedule>>(emptyList()) }
+    var historyExpanded by remember { mutableStateOf(true) }
+    val drafts = remember { ScheduleDraftStore(context.applicationContext) }
+    var activePeriod by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) { savedSchedules = FirebaseService.fetchWorkSchedules() }
+    LaunchedEffect(activePeriod, employees.toList()) {
+        if (activePeriod != null && employees.isNotEmpty()) drafts.save(activePeriod!!, employees.toList())
+    }
+    LaunchedEffect(month, year, employees.size) {
+        if (activePeriod == null && employees.isNotEmpty()) activePeriod = schedulePeriod(month, year)
+    }
 
     fun analyzeImage(uri: android.net.Uri, rotation: Int) {
         scope.launch {
             busy = true
+            activePeriod = null
             message = "Lendo a imagem e estruturando a escala…"
             runCatching {
                 val image = android.graphics.BitmapFactory.decodeStream(context.contentResolver.openInputStream(uri))
@@ -138,6 +159,17 @@ internal fun MestreWorkScheduleSettings() {
                 }
                 require(employees.isNotEmpty()) { "Gemini não extraiu registros com matrícula e nome. Revise a foto." }
                 employees.sortBy { it.name.lowercase() }
+                val extractedPeriod = schedulePeriod(month, year)
+                if (extractedPeriod != null) {
+                    activePeriod = extractedPeriod
+                    val previouslySaved = FirebaseService.fetchWorkSchedules().firstOrNull { it.monthKey == extractedPeriod }
+                    savedSchedules = FirebaseService.fetchWorkSchedules()
+                    previouslySaved?.employees?.filter { it.verified }?.forEach { saved ->
+                        val index = employees.indexOfFirst { it.registration == saved.registration }
+                        if (index >= 0) employees[index] = saved
+                    }
+                    drafts.save(extractedPeriod, employees.toList())
+                }
                 if (resized !== oriented) resized.recycle()
                 if (oriented !== image) oriented.recycle()
                 image.recycle()
@@ -168,18 +200,89 @@ internal fun MestreWorkScheduleSettings() {
                 analyzeImage(uri, imageRotation)
             }, enabled = !busy) { Text("Girar foto 90° e reler escala") }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(month, { month = it.filter(Char::isDigit).take(2); }, Modifier.weight(1f), label = { Text("Mês (1–12)") }, singleLine = true)
-            OutlinedTextField(year, { year = it.filter(Char::isDigit).take(4); }, Modifier.weight(1f), label = { Text("Ano") }, singleLine = true)
+        OutlinedButton(onClick = { pickerYear = year.toIntOrNull() ?: today.get(java.util.Calendar.YEAR); showMonthPicker = true }, Modifier.fillMaxWidth()) {
+            androidx.compose.material3.Icon(Icons.Default.FactCheck, contentDescription = null)
+            Text("  Mês da escala: ${scheduleMonthName(month.toIntOrNull() ?: 1)}/$year  ▾")
+        }
+        if (showMonthPicker) AlertDialog(
+            onDismissRequest = { showMonthPicker = false },
+            title = { Text("Escolha o mês da escala") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        TextButton(onClick = { if (pickerYear > 2000) pickerYear-- }) { Text("‹ Anterior") }
+                        Text(pickerYear.toString(), style = MaterialTheme.typography.titleLarge)
+                        TextButton(onClick = { if (pickerYear < 2100) pickerYear++ }) { Text("Próximo ›") }
+                    }
+                    (1..12).chunked(3).forEach { months ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            months.forEach { chosen ->
+                                val label = scheduleMonthName(chosen).take(3)
+                                val selected = chosen == month.toIntOrNull() && pickerYear == year.toIntOrNull()
+                                Box(Modifier.weight(1f).height(46.dp)
+                                    .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                        RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        val nextPeriod = schedulePeriod(chosen.toString(), pickerYear.toString())
+                                        if (activePeriod != null && activePeriod != nextPeriod && employees.any { it.verified }) {
+                                            employees.clear()
+                                            message = "Mês alterado. Abra o histórico desse período ou selecione a foto para iniciar outra escala."
+                                            activePeriod = null
+                                        } else if (employees.isNotEmpty()) activePeriod = nextPeriod
+                                        month = chosen.toString()
+                                        year = pickerYear.toString()
+                                        showMonthPicker = false
+                                    }, contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                    Text(label, color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                    Text("Ao escolher, o calendário das folgas usará este mês e ano.", style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = { TextButton(onClick = { showMonthPicker = false }) { Text("Fechar") } }
+        )
+        if (savedSchedules.isNotEmpty() || drafts.periods().isNotEmpty()) {
+            TextButton(onClick = { historyExpanded = !historyExpanded }) {
+                Text(if (historyExpanded) "Histórico e rascunhos  ▴" else "Histórico e rascunhos  ▾")
+            }
+            if (historyExpanded) {
+                (savedSchedules.map { it.monthKey } + drafts.periods()).distinct().sortedDescending().forEach { key ->
+                    val schedule = savedSchedules.firstOrNull { it.monthKey == key }
+                    val draft = drafts.load(key)
+                    val completed = schedule?.employees?.filter { it.verified }.orEmpty()
+                    val pending = draft.filterNot { row -> completed.any { it.registration == row.registration } }
+                        .map { it.copy(verified = false) }
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(schedulePeriodLabel(key), style = MaterialTheme.typography.titleMedium)
+                            Text("${completed.size} salvos • ${pending.size} aguardando revisão", style = MaterialTheme.typography.bodySmall)
+                            if (completed.isNotEmpty()) Text("Salvos: ${completed.joinToString(", ") { it.name }}", style = MaterialTheme.typography.bodySmall)
+                            if (pending.isNotEmpty()) Text("Rascunho: ${pending.joinToString(", ") { it.name }}", style = MaterialTheme.typography.bodySmall)
+                            TextButton(onClick = {
+                                year = key.take(4)
+                                month = key.takeLast(2).toInt().toString()
+                                employees.clear()
+                                employees.addAll((pending + completed).sortedBy { it.name.lowercase() })
+                                activePeriod = key
+                                rowPreviews.clear()
+                                message = "${schedulePeriodLabel(key)} recuperado. Os dados foram preservados; a foto precisa ser selecionada novamente para ver a linha original."
+                            }) { Text("Abrir escala e continuar") }
+                        }
+                    }
+                }
+            }
         }
         if (busy) CircularProgressIndicator()
         message?.let { Text(it, color = if (it.contains("Falha", true) || it.contains("não ", true) || it.contains("erro", true)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
 
         if (employees.isNotEmpty()) {
-            Text("Revisão (${employees.size}) — ordem A–Z", style = MaterialTheme.typography.titleMedium)
+            Text("Revisão (${employees.count { !it.verified }} pendentes • ${employees.count { it.verified }} salvos) — ordem A–Z", style = MaterialTheme.typography.titleMedium)
             LazyColumn(Modifier.fillMaxWidth().height(430.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed(employees, key = { index, row -> "${row.registration}-$index" }) { index, row ->
-                    var expanded by remember(row.registration) { mutableStateOf(false) }
+                    var expanded by remember(row.registration) { mutableStateOf(!row.verified) }
                     var editVacation by remember(row.registration) { mutableStateOf(row.vacationDays.isNotEmpty()) }
                     var matchedName by remember(row.registration, month, year) { mutableStateOf<String?>(null) }
                     Card(Modifier.fillMaxWidth()) {
@@ -188,10 +291,11 @@ internal fun MestreWorkScheduleSettings() {
                                 Column(Modifier.weight(1f)) {
                                     Text(row.name, style = MaterialTheme.typography.titleMedium)
                                     Text("Matrícula ${row.registration} • ${row.shift}", style = MaterialTheme.typography.bodySmall)
+                                    Text(if (row.verified) "✓ Salvo/Corrigido" else "Pendente de revisão", color = if (row.verified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
                                     Text("Folgas: ${row.daysOff.joinToString(", ").ifBlank { "nenhuma" }}", style = MaterialTheme.typography.bodyMedium)
                                     if (row.vacationDays.isNotEmpty()) Text("Férias: ${row.vacationDays.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
                                 }
-                                TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Fechar" else "Corrigir") }
+                                TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Fechar" else if (row.verified) "Ver/Corrigir" else "Corrigir") }
                             }
                             if (expanded) {
                                 Text(if (row.verified) "✓ Matrícula confirmada pela Nossa Gente" else "Matrícula pendente de confirmação",
@@ -257,9 +361,14 @@ internal fun MestreWorkScheduleSettings() {
                                                 return@launch
                                             }
                                             busy = true
+                                            activePeriod = schedulePeriod(month, year)
                                             val confirmed = row.copy(name = official, verified = true)
                                             val saved = FirebaseService.publishVerifiedWorkScheduleEmployee(y, m, confirmed)
-                                            if (saved) employees[index] = confirmed
+                                            if (saved) {
+                                                employees[index] = confirmed
+                                                expanded = false
+                                                savedSchedules = FirebaseService.fetchWorkSchedules()
+                                            }
                                             message = if (saved) "${official}: folgas salvas no perfil da matrícula ${row.registration}."
                                                 else FirebaseService.lastError ?: "Não foi possível salvar este funcionário."
                                             busy = false
@@ -275,6 +384,43 @@ internal fun MestreWorkScheduleSettings() {
         }
         Spacer(Modifier.height(8.dp))
     }
+}
+
+private fun schedulePeriod(month: String, year: String): String? {
+    val m = month.toIntOrNull() ?: return null
+    val y = year.toIntOrNull() ?: return null
+    return if (m in 1..12 && y in 2000..2100) "%04d-%02d".format(y, m) else null
+}
+
+private fun schedulePeriodLabel(key: String): String =
+    "${scheduleMonthName(key.takeLast(2).toIntOrNull() ?: 1)}/${key.take(4)}"
+
+/** Rascunhos ficam neste aparelho; as linhas confirmadas continuam no Firestore. */
+private class ScheduleDraftStore(context: android.content.Context) {
+    private val prefs = context.getSharedPreferences("work_schedule_drafts", android.content.Context.MODE_PRIVATE)
+
+    fun periods(): List<String> = prefs.all.keys.filter { it.matches(Regex("\\d{4}-\\d{2}")) }
+
+    fun save(period: String, rows: List<WorkScheduleEmployee>) {
+        val json = JSONArray()
+        rows.forEach { row ->
+            json.put(JSONObject().put("registration", row.registration).put("name", row.name)
+                .put("shift", row.shift).put("daysOff", JSONArray(row.daysOff))
+                .put("vacationDays", JSONArray(row.vacationDays)).put("verified", row.verified))
+        }
+        prefs.edit().putString(period, json.toString()).apply()
+    }
+
+    fun load(period: String): List<WorkScheduleEmployee> = runCatching {
+        val json = JSONArray(prefs.getString(period, "[]"))
+        (0 until json.length()).mapNotNull { index ->
+            val row = json.optJSONObject(index) ?: return@mapNotNull null
+            val registration = row.optString("registration").filter(Char::isDigit)
+            if (registration.isBlank()) return@mapNotNull null
+            WorkScheduleEmployee(registration, row.optString("name"), row.optString("shift"),
+                row.intList("daysOff"), row.intList("vacationDays"), row.optBoolean("verified"))
+        }
+    }.getOrDefault(emptyList())
 }
 
 private fun JSONObject.intList(key: String): List<Int> = optJSONArray(key)?.let { a -> (0 until a.length()).mapNotNull { a.optInt(it).takeIf { day -> day in 1..31 } }.distinct().sorted() }.orEmpty()

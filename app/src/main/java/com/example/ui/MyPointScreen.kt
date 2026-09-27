@@ -456,9 +456,13 @@ private fun MyDaysOffCard(
             }
             if (expanded) {
                 androidx.compose.foundation.layout.Box {
-                    TextButton(onClick = { selectorExpanded = true }) {
-                        val label = selected?.let { "${monthName(it.month)}/${it.year}" } ?: "Escala do mês atual indisponível"
-                        Text("$label  ▾")
+                    Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
+                        TextButton(onClick = { selectorExpanded = true }, modifier = Modifier.padding(horizontal = 6.dp)) {
+                            val label = selected?.let { "${monthName(it.month)}/${it.year}" } ?: "Escala do mês atual indisponível"
+                            Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("$label  ▾", style = MaterialTheme.typography.titleSmall)
+                        }
                     }
                     DropdownMenu(expanded = selectorExpanded, onDismissRequest = { selectorExpanded = false }) {
                         schedules.forEach { schedule ->
@@ -472,10 +476,37 @@ private fun MyDaysOffCard(
                     selected == null -> Text("Ainda não há escala publicada para este mês.")
                     employee == null -> Text("Não encontramos a matrícula ${registration} nesta escala.")
                     else -> {
-                        Text("${employee.name} • Matrícula ${employee.registration}", style = MaterialTheme.typography.bodyMedium)
-                        if (employee.shift.isNotBlank()) Text("${employee.shift}")
-                        Text(if (employee.daysOff.isEmpty()) "Nenhuma folga registrada." else "Folgas: ${employee.daysOff.sorted().joinToString(", ")}")
-                        if (employee.vacationDays.isNotEmpty()) Text("Férias: ${employee.vacationDays.sorted().joinToString(", ")}")
+                        Spacer(Modifier.height(14.dp))
+                        Text("Matrícula ${employee.registration}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (employee.shift.isNotBlank()) Text(employee.shift, style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(12.dp))
+                        Text("Folgas", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        Spacer(Modifier.height(8.dp))
+                        if (employee.daysOff.isEmpty()) Text("Nenhuma folga registrada.")
+                        else employee.daysOff.distinct().sorted().chunked(4).forEach { week ->
+                            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                week.forEach { day ->
+                                    val sunday = java.util.GregorianCalendar(selected.year, selected.month - 1, day)
+                                        .get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SUNDAY
+                                    Box(Modifier.weight(1f).height(66.dp).background(
+                                        if (sunday) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                        RoundedCornerShape(14.dp)
+                                    ), contentAlignment = Alignment.Center) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(day.toString().padStart(2, '0'), style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                            if (sunday) Text("Domingo", style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary)
+                                        }
+                                    }
+                                }
+                                repeat(4 - week.size) { Spacer(Modifier.weight(1f)) }
+                            }
+                        }
+                        if (employee.vacationDays.isNotEmpty()) {
+                            Spacer(Modifier.height(6.dp))
+                            Text("Férias (FE): ${employee.vacationDays.sorted().joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
             }
