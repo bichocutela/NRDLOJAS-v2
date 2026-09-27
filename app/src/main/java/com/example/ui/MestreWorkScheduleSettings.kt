@@ -255,7 +255,7 @@ internal fun MestreWorkScheduleSettings() {
                 Text("Foto", maxLines = 1)
             }
             OutlinedButton(onClick = { showManual = true }, enabled = !busy, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp)) {
-                Text("Manual", maxLines = 1)
+                Text("Editar escala", maxLines = 1, style = MaterialTheme.typography.labelSmall)
             }
             OutlinedButton(onClick = { showTextInput = true }, enabled = !busy, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp)) {
                 Text("Enviar texto", maxLines = 1)
