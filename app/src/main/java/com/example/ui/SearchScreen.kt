@@ -830,16 +830,18 @@ fun SearchScreen(
                     )
                     .then(
                         when {
-                            isExpressiveGlassTheme -> Modifier.expressiveLiquidGlass(
-                                shape = searchFieldShape,
-                                accent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFFFF7F1) else expressiveGlassStyle.accent,
-                                secondaryAccent = if (expressiveGlassStyle.accentName == "gold") Color(0xFF8EC9FF) else expressiveGlassStyle.secondaryAccent,
-                                intensity = 1.18f,
-                                elevation = 10.dp,
-                                animated = true,
-                                waves = true,
-                                bubbleSeed = 59
-                            )
+                            isExpressiveGlassTheme -> Modifier
+                                .expressiveShadow(searchFieldShape, 10.dp)
+                                .expressiveLiquidGlass(
+                                    shape = searchFieldShape,
+                                    accent = if (expressiveGlassStyle.accentName == "gold") Color(0xFFFFF7F1) else expressiveGlassStyle.accent,
+                                    secondaryAccent = if (expressiveGlassStyle.accentName == "gold") Color(0xFF8EC9FF) else expressiveGlassStyle.secondaryAccent,
+                                    intensity = 1.18f,
+                                    elevation = 10.dp,
+                                    waves = true,
+                                    bubbleSeed = 59,
+                                    lightweight = true
+                                )
                             isGlassSoftTheme -> Modifier.glassSoftShadow(searchFieldShape)
                             isExpressiveTheme -> Modifier.expressiveShadow(searchFieldShape, 8.dp)
                             else -> Modifier
@@ -984,15 +986,16 @@ fun SearchScreen(
                             ),
                             shape = searchButtonShape
                         )
+                        .expressiveShadow(searchButtonShape, 13.dp)
                         .expressiveLiquidGlass(
                             shape = searchButtonShape,
                             accent = Color(0xFFF5AA00),
                             secondaryAccent = Color(0xFFFFE27A),
                             intensity = 1.40f,
                             elevation = 13.dp,
-                            animated = true,
                             waves = true,
-                            bubbleSeed = 61
+                            bubbleSeed = 61,
+                            lightweight = true
                         ),
                     shape = searchButtonShape,
                     color = Color.Transparent,
