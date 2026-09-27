@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -249,24 +250,19 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 "expressive" to "Expressivo"
             )
             
-            ExposedDropdownMenuBox(
-                expanded = expandedThemeMenu,
-                onExpandedChange = { expandedThemeMenu = !expandedThemeMenu }
-            ) {
+            Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = themeOptions.find { it.first == appTheme }?.second ?: "Multicolorido",
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Selecione o Tema") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedThemeMenu) },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth()
+                    trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                    modifier = Modifier.fillMaxWidth().clickable { expandedThemeMenu = !expandedThemeMenu }
                         .expressiveShadow(if (isExpressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraSmall, 5.dp),
                     shape = if (isExpressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraSmall,
                     colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
                 )
-                ExposedDropdownMenu(
+                DropdownMenu(
                     expanded = expandedThemeMenu,
                     onDismissRequest = { expandedThemeMenu = false }
                 ) {
@@ -422,19 +418,16 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 "blue" to "Azul",
                                 "gold" to "Dourado"
                             )
-                            ExposedDropdownMenuBox(
-                                expanded = expandedExpressiveGlassColorMenu,
-                                onExpandedChange = { expandedExpressiveGlassColorMenu = !expandedExpressiveGlassColorMenu }
-                            ) {
+                            Box(modifier = Modifier.fillMaxWidth()) {
                                 OutlinedTextField(
                                     value = expressiveGlassColorOptions.find { it.first == expressiveGlassAccentColor }?.second ?: "Multicolorido",
                                     onValueChange = {},
                                     readOnly = true,
                                     label = { Text("Cor do vidro líquido") },
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedExpressiveGlassColorMenu) },
-                                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                                    trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                                    modifier = Modifier.fillMaxWidth().clickable { expandedThemeMenu = !expandedThemeMenu }
                                 )
-                                ExposedDropdownMenu(
+                                DropdownMenu(
                                     expanded = expandedExpressiveGlassColorMenu,
                                     onDismissRequest = { expandedExpressiveGlassColorMenu = false }
                                 ) {
@@ -583,19 +576,16 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             "orange" to "Laranja",
                             "cyan" to "Ciano"
                         )
-                        ExposedDropdownMenuBox(
-                            expanded = expandedGlassColorMenu,
-                            onExpandedChange = { expandedGlassColorMenu = !expandedGlassColorMenu }
-                        ) {
+                        Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedTextField(
                                 value = glassColorOptions.find { it.first == glassAccentColor }?.second ?: "Multicolorido",
                                 onValueChange = {},
                                 readOnly = true,
                                 label = { Text("Cor do vidro") },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedGlassColorMenu) },
-                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                                trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                                modifier = Modifier.fillMaxWidth().clickable { expandedThemeMenu = !expandedThemeMenu }
                             )
-                            ExposedDropdownMenu(
+                            DropdownMenu(
                                 expanded = expandedGlassColorMenu,
                                 onDismissRequest = { expandedGlassColorMenu = false }
                             ) {
