@@ -59,11 +59,22 @@ internal fun MestreWorkScheduleSettings() {
             busy = true
             message = "Lendo a imagem e estruturando a escala…"
             runCatching {
-                val image = InputImage.fromFilePath(context, uri)
-                val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-                val text = try { recognizer.process(image).await().text } finally { recognizer.close() }
-                check(text.isNotBlank()) { "Nenhum texto foi reconhecido. Tente uma foto mais nítida e sem inclinação." }
-                val json = GeminiMasterService.extractWorkSchedule(text).getOrThrow()
+                val image = android.graphics.BitmapFactory.decodeStream(context.contentResolver.openInputStream(uri))
+                    ?: error("Não foi possível abrir a foto da escala.")
+                val maxSide = 2200f
+                val ratio = (maxSide / maxOf(image.width, image.height)).coerceAtMost(1f)
+                val resized = if (ratio < 1f) android.graphics.Bitmap.createScaledBitmap(
+                    image, (image.width * ratio).toInt(), (image.height * ratio).toInt(), true
+                ) else image
+                val bytes = java.io.ByteArrayOutputStream().use { stream ->
+                    resized.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, stream)
+                    stream.toByteArray()
+                }
+                if (resized !== image) resized.recycle()
+                image.recycle()
+                val json = GeminiMasterService.extractWorkSchedule(
+                    android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                ).getOrThrow()
                 val extractedMonth = json.optInt("month", 0)
                 val extractedYear = json.optInt("year", 0)
                 if (extractedMonth in 1..12) month = extractedMonth.toString()
@@ -94,7 +105,7 @@ internal fun MestreWorkScheduleSettings() {
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Inserir Escala", style = MaterialTheme.typography.headlineSmall)
-        Text("Envie uma foto da escala. O texto será lido no aparelho e estruturado pelo Gemini. Revise tudo e confirme cada matrícula na API Nossa Gente antes de publicar.", style = MaterialTheme.typography.bodyMedium)
+        Text("Envie uma foto da escala. A foto será analisada pelo Gemini, incluindo as colunas dos dias. Revise tudo e confirme cada matrícula na API Nossa Gente antes de publicar.", style = MaterialTheme.typography.bodyMedium)
         Button(onClick = { imagePicker.launch("image/*") }, enabled = !busy) {
             androidx.compose.material3.Icon(Icons.Default.CloudUpload, contentDescription = null)
             Text("  Selecionar foto da escala")
@@ -104,7 +115,7 @@ internal fun MestreWorkScheduleSettings() {
             OutlinedTextField(year, { year = it.filter(Char::isDigit).take(4); verified = false }, Modifier.weight(1f), label = { Text("Ano") }, singleLine = true)
         }
         if (busy) CircularProgressIndicator()
-        message?.let { Text(it, color = if (it.contains("Falha") || it.contains("não ", true)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
+        message?.let { Text(it, color = if (it.contains("Falha", true) || it.contains("não ", true) || it.contains("erro", true)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
 
         if (employees.isNotEmpty()) {
             Text("Revisão (${employees.size}) — ordem A–Z", style = MaterialTheme.typography.titleMedium)

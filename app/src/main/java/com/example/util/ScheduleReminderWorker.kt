@@ -17,9 +17,23 @@ class ScheduleReminderWorker(context: Context, params: WorkerParameters) : Corou
     override suspend fun doWork(): Result {
         val store = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val credentials = com.example.data.NossaGenteCredentialStore(applicationContext)
-        if (!credentials.isDayOffNotificationsEnabled()) return Result.success()
         val registration = store.getString(KEY_REGISTRATION, null)?.filter(Char::isDigit).orEmpty()
         if (registration.isBlank()) return Result.success()
+        if (credentials.isScheduleNotificationsEnabled()) {
+            val fresh = com.example.data.FirebaseService.fetchWorkSchedules()
+            for (schedule in fresh) {
+                val employee = schedule.employees.firstOrNull { it.registration.filter(Char::isDigit) == registration } ?: continue
+                val previous = store.getInt("revision_${schedule.monthKey}", 0)
+                if (previous > 0 && schedule.revision > previous) {
+                    NotificationHelper.showNotification(applicationContext, "SCHEDULE_CHANGED", "Escala Alterada", "Confira as folgas de ${schedule.month}/${schedule.year} no Meu Perfil.")
+                } else if (previous == 0 && schedule.monthKey > "%04d-%02d".format(Calendar.getInstance().get(Calendar.YEAR), Calendar.getInstance().get(Calendar.MONTH) + 1)) {
+                    NotificationHelper.showNotification(applicationContext, "SCHEDULE_NEW", "Escala de ${monthName(schedule.month)} Inserida", "Confira suas folgas no Meu Perfil.")
+                }
+                store.edit().putInt("revision_${schedule.monthKey}", schedule.revision).apply()
+            }
+            if (fresh.isNotEmpty()) cacheSchedules(applicationContext, fresh, registration)
+        }
+        if (!credentials.isDayOffNotificationsEnabled()) return Result.success()
         val today = Calendar.getInstance()
         val tomorrow = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 1) }
         val candidates = listOf(today to "TODAY_OFF", tomorrow to "TOMORROW_OFF")
@@ -67,6 +81,10 @@ class ScheduleReminderWorker(context: Context, params: WorkerParameters) : Corou
             context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putString(KEY_REGISTRATION, registration).putString(KEY_SCHEDULES, json.toString()).apply()
         }
+
+        private fun monthName(month: Int): String = Calendar.getInstance().apply { set(Calendar.MONTH, month - 1) }
+            .getDisplayName(Calendar.MONTH, Calendar.LONG, java.util.Locale("pt", "BR"))
+            ?.replaceFirstChar { it.uppercase() } ?: "mês"
 
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<ScheduleReminderWorker>(15, TimeUnit.MINUTES).build()

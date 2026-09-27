@@ -169,6 +169,8 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                 ?: workSchedules.firstOrNull()?.monthKey ?: currentMonth
             val profileRegistration = employeeProfile?.registration.orEmpty().filter(Char::isDigit)
             com.example.util.ScheduleReminderWorker.cacheSchedules(context, workSchedules, profileRegistration)
+            if (credentialStore.isDayOffNotificationsEnabled() || credentialStore.isScheduleNotificationsEnabled())
+                com.example.util.ScheduleReminderWorker.schedule(context)
             loading = false
         }
     }
@@ -414,10 +416,12 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                     }
                     ProfileNotificationSwitch("Lembretes de folga (véspera e no dia)", dayOffNotifications) { enabled ->
                         dayOffNotifications = enabled; credentialStore.setDayOffNotificationsEnabled(enabled)
-                        if (enabled) com.example.util.ScheduleReminderWorker.schedule(context) else com.example.util.ScheduleReminderWorker.cancel(context)
+                        if (enabled) com.example.util.ScheduleReminderWorker.schedule(context) else if (!scheduleNotifications) com.example.util.ScheduleReminderWorker.cancel(context)
                     }
                     ProfileNotificationSwitch("Escala inserida ou alterada", scheduleNotifications) { enabled ->
                         scheduleNotifications = enabled; credentialStore.setScheduleNotificationsEnabled(enabled)
+                        if (enabled) com.example.util.ScheduleReminderWorker.schedule(context)
+                        else if (!dayOffNotifications) com.example.util.ScheduleReminderWorker.cancel(context)
                     }
                     Text("Os lembretes de folga usam a escala publicada e a matrícula do perfil Nossa Gente.", style = MaterialTheme.typography.bodySmall)
                     TextButton(onClick = { showProfileNotificationSettings = false }) { Text("Concluir") }
