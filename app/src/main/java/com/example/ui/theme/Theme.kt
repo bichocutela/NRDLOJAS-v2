@@ -1053,21 +1053,25 @@ private fun rememberAmbientBubbleSprites(
     primary: Color,
     secondary: Color,
     isDark: Boolean,
-    complexLighting: Boolean
+    complexLighting: Boolean,
+    brightness: Float,
+    outlineEnabled: Boolean
 ): Array<androidx.compose.ui.graphics.ImageBitmap> {
     val density = LocalDensity.current.density
-    return remember(primary, secondary, isDark, complexLighting, density) {
+    return remember(primary, secondary, isDark, complexLighting, density, brightness, outlineEnabled) {
         if (complexLighting) {
             arrayOf(
-                createAmbientBubbleSprite(primary, isDark, complexLighting = true),
-                createAmbientBubbleSprite(secondary, isDark, complexLighting = true),
-                createAmbientBubbleSprite(Color.White, isDark, complexLighting = true)
+                createAmbientBubbleSprite(primary, isDark, complexLighting = true, brightness = brightness, outlineEnabled = outlineEnabled),
+                createAmbientBubbleSprite(secondary, isDark, complexLighting = true, brightness = brightness, outlineEnabled = outlineEnabled),
+                createAmbientBubbleSprite(Color.White, isDark, complexLighting = true, brightness = brightness, outlineEnabled = outlineEnabled)
             )
         } else {
             val simpleSprite = createAmbientBubbleSprite(
                 tint = Color.White,
                 isDark = isDark,
-                complexLighting = false
+                complexLighting = false,
+                brightness = brightness,
+                outlineEnabled = outlineEnabled
             )
             arrayOf(simpleSprite, simpleSprite, simpleSprite)
         }
@@ -1078,7 +1082,9 @@ private fun rememberAmbientBubbleSprites(
 private fun createAmbientBubbleSprite(
     tint: Color,
     isDark: Boolean,
-    complexLighting: Boolean
+    complexLighting: Boolean,
+    brightness: Float,
+    outlineEnabled: Boolean
 ): androidx.compose.ui.graphics.ImageBitmap {
     val bitmapSize = 128
     val bitmap = android.graphics.Bitmap.createBitmap(
@@ -1089,6 +1095,7 @@ private fun createAmbientBubbleSprite(
     val androidCanvas = android.graphics.Canvas(bitmap)
     val center = bitmapSize * 0.5f
     val sphereRadius = bitmapSize * 0.44f
+    val lightStrength = brightness.coerceIn(0.25f, 2f)
 
     val fillPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
     if (complexLighting) {
@@ -1097,9 +1104,9 @@ private fun createAmbientBubbleSprite(
             center * 0.68f,
             sphereRadius * 1.55f,
             intArrayOf(
-                Color.White.copy(alpha = if (isDark) 0.62f else 0.88f).toArgb(),
-                tint.copy(alpha = if (isDark) 0.46f else 0.64f).toArgb(),
-                tint.copy(alpha = if (isDark) 0.28f else 0.42f).toArgb()
+                Color.White.copy(alpha = ((if (isDark) 0.62f else 0.88f) * lightStrength).coerceIn(0f, 1f)).toArgb(),
+                tint.copy(alpha = ((if (isDark) 0.46f else 0.64f) * lightStrength).coerceIn(0f, 1f)).toArgb(),
+                tint.copy(alpha = ((if (isDark) 0.28f else 0.42f) * lightStrength).coerceIn(0f, 1f)).toArgb()
             ),
             floatArrayOf(0f, 0.58f, 1f),
             android.graphics.Shader.TileMode.CLAMP
@@ -1110,6 +1117,7 @@ private fun createAmbientBubbleSprite(
     androidCanvas.drawCircle(center, center, sphereRadius, fillPaint)
 
     if (complexLighting) {
+        if (outlineEnabled) {
         val rimPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             style = android.graphics.Paint.Style.STROKE
             strokeWidth = 2.3f
@@ -1133,7 +1141,7 @@ private fun createAmbientBubbleSprite(
         )
 
         val highlightPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.White.copy(alpha = if (isDark) 0.74f else 0.90f).toArgb()
+            color = Color.White.copy(alpha = ((if (isDark) 0.74f else 0.90f) * lightStrength).coerceIn(0f, 1f)).toArgb()
             style = android.graphics.Paint.Style.STROKE
             strokeWidth = 4.2f
             strokeCap = android.graphics.Paint.Cap.ROUND
@@ -1145,9 +1153,10 @@ private fun createAmbientBubbleSprite(
             center + sphereRadius * 0.76f
         )
         androidCanvas.drawArc(highlightBounds, 205f, 88f, false, highlightPaint)
+        }
 
         val glintPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.White.copy(alpha = 0.92f).toArgb()
+            color = Color.White.copy(alpha = (0.92f * lightStrength).coerceIn(0f, 1f)).toArgb()
         }
         androidCanvas.drawCircle(
             center - sphereRadius * 0.34f,
@@ -1170,7 +1179,7 @@ private fun createAmbientBubbleSprite(
         androidCanvas.drawCircle(center, center, sphereRadius, rimPaint)
 
         val glintPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.White.copy(alpha = 0.58f).toArgb()
+            color = Color.White.copy(alpha = (0.58f * lightStrength).coerceIn(0f, 1f)).toArgb()
         }
         androidCanvas.drawCircle(
             center - sphereRadius * 0.34f,
@@ -1205,7 +1214,9 @@ private fun AdaptiveWaterContainer(
         primary = primary,
         secondary = secondary,
         isDark = isDark,
-        complexLighting = complexLighting
+        complexLighting = complexLighting,
+        brightness = brightness,
+        outlineEnabled = outlineEnabled
     )
 
     // Size changes are infrequent. Frame updates never write Compose state
@@ -1302,6 +1313,7 @@ private fun AdaptiveWaterContainer(
         canvasWidth,
         canvasHeight,
         bubbleCount,
+        turbulence,
         speedMultiplier,
         sizeMultiplier,
         complexLighting
