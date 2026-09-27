@@ -260,7 +260,6 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().clickable { expandedThemeMenu = !expandedThemeMenu }
                         .expressiveShadow(if (isExpressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraSmall, 5.dp),
                     shape = if (isExpressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraSmall,
-                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
                 )
                 DropdownMenu(
                     expanded = expandedThemeMenu,
