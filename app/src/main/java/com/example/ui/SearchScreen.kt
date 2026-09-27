@@ -79,6 +79,7 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
@@ -99,6 +100,7 @@ import com.example.ui.theme.getDynamicThemeColor
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.LocalExpressiveGlassStyle
+import com.example.ui.theme.LocalNrdHomeScrollInProgress
 import com.example.ui.theme.LocalNrdDarkMode
 import com.example.ui.theme.ExpressiveGlassStyle
 import com.example.ui.theme.glassSoftShadow
@@ -371,6 +373,7 @@ fun SearchScreen(
     val isExpressiveTheme = expressiveStyle.enabled
     val isGlassSoftTheme = glassStyle.enabled
     val isExpressiveGlassTheme = expressiveGlassStyle.enabled
+    val homeScrollSignal = LocalNrdHomeScrollInProgress.current
     val isStandaloneGlassTheme = isGlassSoftTheme
     val appTheme = if (isStandaloneGlassTheme) "glass" else localAppTheme
     val glassActionBrush = remember(glassStyle.accent, glassStyle.secondaryAccent) {
@@ -464,6 +467,12 @@ fun SearchScreen(
     val unreadNotifications = notificationHistory.count { !it.read }
     val mostUsedListState = rememberLazyListState()
     val homeListState = rememberLazyListState()
+    DisposableEffect(homeScrollSignal) {
+        onDispose { homeScrollSignal?.value = false }
+    }
+    LaunchedEffect(isExpressiveGlassTheme, homeListState.isScrollInProgress, homeScrollSignal) {
+        homeScrollSignal?.value = isExpressiveGlassTheme && homeListState.isScrollInProgress
+    }
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
