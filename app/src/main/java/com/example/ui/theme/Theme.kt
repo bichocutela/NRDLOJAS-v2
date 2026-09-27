@@ -185,13 +185,10 @@ private fun expressiveGlassActionColors(name: String, isDark: Boolean): List<Col
 
 internal fun expressiveGlassBackgroundColors(name: String, isDark: Boolean): List<Color> {
     val normalized = normalizeExpressiveGlassAccentName(name)
-    val light = mapOf(
-        "multicolor" to listOf(Color(0xFFCDEBFF), Color(0xFFE5F5FF), Color(0xFFD6F4FF), Color(0xFFF2EBFF), Color(0xFFDBFAF2)),
-        "red" to listOf(Color(0xFFFFE4E7), Color(0xFFFFD9D5), Color(0xFFFFE9F1), Color(0xFFFFF1E8)),
-        "green" to listOf(Color(0xFFDFF7E8), Color(0xFFD9F7EF), Color(0xFFE4F3FF), Color(0xFFF0F9E6)),
-        "orange" to listOf(Color(0xFFFFE8D0), Color(0xFFFFF0D5), Color(0xFFFFE1D6), Color(0xFFFFF6E8)),
-        "blue" to listOf(Color(0xFFDDEEFF), Color(0xFFE5F6FF), Color(0xFFE8E5FF), Color(0xFFE2F7F3)),
-        "gold" to listOf(Color(0xFFFFE7A8), Color(0xFFFFF4CF), Color(0xFFFFD980), Color(0xFFFFF9E8), Color(0xFFFFEAB8))
+    // The light Glass Expressivo theme uses one consistent clear-water base;
+    // accent selection remains visible in the controls and bubble refractions.
+    val light = listOf(
+        Color(0xFFE1F5FE), Color(0xFF81D4FA), Color(0xFFE0F7FA), Color(0xFFB2EBF2)
     )
     val dark = mapOf(
         "multicolor" to listOf(Color(0xFF190F18), Color(0xFF0E1C30), Color(0xFF2B2110), Color(0xFF0F291F), Color(0xFF21172F)),
@@ -201,7 +198,7 @@ internal fun expressiveGlassBackgroundColors(name: String, isDark: Boolean): Lis
         "blue" to listOf(Color(0xFF0D1B2C), Color(0xFF102C42), Color(0xFF171A38), Color(0xFF102B2A)),
         "gold" to listOf(Color(0xFF2B220E), Color(0xFF3B2D11), Color(0xFF2A2619), Color(0xFF221D12))
     )
-    return (if (isDark) dark else light).getValue(normalized)
+    return if (isDark) dark.getValue(normalized) else light
 }
 
 internal fun resolveExpressiveGlassStyle(
@@ -1029,7 +1026,7 @@ private class AmbientLiquidBubble(
 )
 
 @Composable
-private fun AmbientLiquidBubbleLayer(
+private fun AdaptiveWaterContainer(
     modifier: Modifier,
     primary: Color,
     secondary: Color,
@@ -1059,9 +1056,9 @@ private fun AmbientLiquidBubbleLayer(
                 ?.defaultDisplay?.refreshRate ?: 60f
         }
         when {
-            lowRam || powerSave || refreshRate <= 65f -> Triple(8, false, 8)
-            refreshRate < 120f -> Triple(8, true, 12)
-            else -> Triple(8, true, 16)
+            lowRam || powerSave || refreshRate < 90f -> Triple(8, false, 8)
+            refreshRate < 120f -> Triple(12, false, 12)
+            else -> Triple(16, true, 16)
         }
     }
     val bubbleCount = (performanceProfile.first + additionalBubbles.coerceIn(0, 18))
@@ -1108,7 +1105,7 @@ private fun AmbientLiquidBubbleLayer(
                 if (lastFrameNanos != 0L && canvasSize.width > 0f && canvasSize.height > 0f) {
                     val dt = ((frameNanos - lastFrameNanos) / 1_000_000_000f)
                         .coerceIn(0.005f, 0.033f)
-                    val damping = 0.955.toDouble()
+                    val damping = 0.955f.toDouble()
                         .pow((dt / 0.016f).toDouble()).toFloat()
                     val time = frameNanos / 1_000_000_000f
                     val touch = touchPoint.value
@@ -1183,11 +1180,11 @@ private fun AmbientLiquidBubbleLayer(
                 val lightStrength = brightness.coerceIn(0.25f, 2f)
                 val primaryGlow = primary.copy(alpha = (if (enhancedLighting) 0.13f else 0.07f) * lightStrength)
                 val secondaryGlow = secondary.copy(alpha = (if (enhancedLighting) 0.08f else 0.035f) * lightStrength)
-                val cyanRim = Color(0xFF80D8FF).copy(alpha = (if (enhancedLighting) 0.62f else 0.28f) * lightStrength)
-                val roseRim = Color(0xFFFF80AB).copy(alpha = (if (enhancedLighting) 0.48f else 0.18f) * lightStrength)
-                val goldRim = Color(0xFFFFD54F).copy(alpha = (if (enhancedLighting) 0.56f else 0.22f) * lightStrength)
-                val whiteHighlight = Color.White.copy(alpha = (if (isDark) 0.76f else 0.94f) * lightStrength)
-                val whiteBounce = Color.White.copy(alpha = (if (isDark) 0.20f else 0.40f) * lightStrength)
+                val iridescentRim = Brush.sweepGradient(
+                    listOf(Color.White.copy(alpha = 0.88f), Color(0xFF80D8FF).copy(alpha = 0.72f), Color(0xFFFF80AB).copy(alpha = 0.64f), Color(0xFFFFE082).copy(alpha = 0.76f), Color.White.copy(alpha = 0.88f))
+                )
+                val whiteHighlight = Color.White.copy(alpha = (if (isDark) 0.76f else 0.85f) * lightStrength)
+                val whiteBounce = Color.White.copy(alpha = (if (isDark) 0.20f else 0.35f) * lightStrength)
                 val whiteFillAlpha = (if (isDark) 0.035f else 0.10f) * lightStrength
                 val whiteOutlineAlpha = (0.40f * lightStrength).coerceIn(0f, 0.9f)
                 onDrawBehind {
@@ -1208,15 +1205,13 @@ private fun AmbientLiquidBubbleLayer(
                         drawCircle(Color.White, radius * 0.72f, Offset(highlightX, highlightY), alpha = whiteFillAlpha)
                         if (outlineEnabled) {
                             if (enhancedLighting) {
-                                drawArc(cyanRim, 195f, 58f, false, Offset(cx - radius, cy - radius), Size(radius * 2f, radius * 2f), style = rimStroke)
-                                drawArc(roseRim, 258f, 54f, false, Offset(cx - radius, cy - radius), Size(radius * 2f, radius * 2f), style = rimStroke)
-                                drawArc(goldRim, 318f, 56f, false, Offset(cx - radius, cy - radius), Size(radius * 2f, radius * 2f), style = rimStroke)
+                                drawCircle(iridescentRim, radius * 0.98f, Offset(cx, cy), style = rimStroke)
                             } else {
                                 drawCircle(Color.White, radius * 0.98f, Offset(cx, cy), alpha = whiteOutlineAlpha, style = rimStroke)
                             }
                         }
                         drawArc(whiteBounce, 28f, 118f, false, Offset(cx - radius * 0.84f, cy - radius * 0.84f), Size(radius * 1.68f, radius * 1.68f), style = bounceStroke)
-                        drawArc(whiteHighlight, 192f, 78f, false, Offset(cx - radius * 0.78f, cy - radius * 0.78f), Size(radius * 1.56f, radius * 1.56f), style = highlightStroke)
+                        drawArc(whiteHighlight, 190f, 85f, false, Offset(cx - radius * 0.78f, cy - radius * 0.78f), Size(radius * 1.56f, radius * 1.56f), style = highlightStroke)
                         drawCircle(whiteHighlight, radius * 0.09f, Offset(highlightX - radius * 0.04f, highlightY - radius * 0.04f))
                         index++
                     }
@@ -1287,13 +1282,7 @@ fun NrdAppBackground(
                             }
                         }
                     }
-                    .background(
-                        Brush.linearGradient(
-                            colors = colors,
-                            start = Offset(0f, 0f),
-                            end = Offset(1450f, 2200f)
-                        )
-                    )
+                    .background(Brush.verticalGradient(colors = colors))
                     .drawWithCache {
                         val maxDimension = maxOf(size.width, size.height).coerceAtLeast(1f)
                         val lightScale = if (expressiveGlass.isDark) 0.52f else 1f
@@ -1380,6 +1369,9 @@ fun NrdAppBackground(
                                 size.width * 1.08f, size.height * (0.76f + 0.04f * 0.5f)
                             )
                         }
+                        val causticStroke = Stroke(width = 8.dp.toPx())
+                        val causticHighlightStroke = Stroke(width = 1.5.dp.toPx())
+                        val lowerCausticStroke = Stroke(width = 6.dp.toPx())
                         onDrawBehind {
                             // The animated state is observed in the draw phase, so the app content is not recomposed each frame.
                             val driftTravel = if (homeScrollInProgress?.value == true) 0f else driftState.value - 0.5f
@@ -1397,16 +1389,16 @@ fun NrdAppBackground(
                             }
                             drawRect(brush = lowerGlow)
                             withTransform({ translate(top = size.height * 0.04f * driftTravel) }) {
-                                drawPath(causticPath, brush = causticBrush, style = Stroke(width = 8.dp.toPx()))
-                                drawPath(causticPath, color = Color.White.copy(alpha = if (expressiveGlass.isDark) 0.10f else 0.45f), style = Stroke(width = 1.5.dp.toPx()))
+                                drawPath(causticPath, brush = causticBrush, style = causticStroke)
+                                drawPath(causticPath, color = Color.White.copy(alpha = if (expressiveGlass.isDark) 0.10f else 0.45f), style = causticHighlightStroke)
                             }
                             withTransform({ translate(top = -size.height * 0.04f * driftTravel) }) {
-                                drawPath(lowerCausticPath, brush = causticBrush, style = Stroke(width = 6.dp.toPx()))
+                                drawPath(lowerCausticPath, brush = causticBrush, style = lowerCausticStroke)
                             }
                         }
                     },
                 content = {
-                    AmbientLiquidBubbleLayer(
+                    AdaptiveWaterContainer(
                         modifier = Modifier.fillMaxSize(),
                         primary = expressiveGlass.accent,
                         secondary = expressiveGlass.secondaryAccent,
