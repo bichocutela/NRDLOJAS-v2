@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -42,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
@@ -151,6 +153,9 @@ val LocalExpressiveGlassStyle = staticCompositionLocalOf { ExpressiveGlassStyle(
 
 /** Shared 60 Hz clock for all expressive liquid surfaces. */
 val LocalExpressiveGlassMotion = staticCompositionLocalOf<MutableState<Float>?> { null }
+
+/** Shared scroll signal so Glass Expressivo can suspend ambient animation during Home gestures. */
+val LocalNrdHomeScrollInProgress = staticCompositionLocalOf<MutableState<Boolean>?> { null }
 
 internal val ExpressiveGlassAccentNames = listOf("multicolor", "red", "green", "orange", "blue", "gold")
 
@@ -1039,6 +1044,7 @@ private fun AmbientLiquidBubbleLayer(
     touchPoint: MutableState<Offset?>
 ) {
     val density = LocalDensity.current
+    val homeScrollSignal = LocalNrdHomeScrollInProgress.current ?: remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val performanceProfile = remember(context) {
         val activityManager = context.getSystemService(android.app.ActivityManager::class.java)
@@ -1090,10 +1096,14 @@ private fun AmbientLiquidBubbleLayer(
         }
     }
 
-    LaunchedEffect(canvasSize, turbulence, speedMultiplier, motion, sizeMultiplier) {
+    LaunchedEffect(canvasSize, turbulence, speedMultiplier, motion, sizeMultiplier, homeScrollSignal) {
         var lastFrameNanos = 0L
         val minimumFrameIntervalNanos = 16_000_000L
         while (true) {
+            if (homeScrollSignal.value) {
+                snapshotFlow { homeScrollSignal.value }.first { isScrolling -> !isScrolling }
+                lastFrameNanos = 0L
+            }
             withFrameNanos { frameNanos ->
                 val elapsedNanos = frameNanos - lastFrameNanos
                 if (lastFrameNanos != 0L && elapsedNanos < minimumFrameIntervalNanos) {
@@ -1231,6 +1241,7 @@ fun NrdAppBackground(
     val glass = LocalGlassSoftStyle.current
     val expressive = LocalExpressiveStyle.current
     val expressiveGlass = LocalExpressiveGlassStyle.current
+    val homeScrollInProgress = LocalNrdHomeScrollInProgress.current
     when {
         glass.enabled -> GlassSoftBackground(modifier = modifier, content = content)
         expressiveGlass.enabled -> {
@@ -1379,7 +1390,7 @@ fun NrdAppBackground(
                         }
                         onDrawBehind {
                             // The animated state is observed in the draw phase, so the app content is not recomposed each frame.
-                            val driftTravel = driftState.value - 0.5f
+                            val driftTravel = if (homeScrollInProgress?.value == true) 0f else driftState.value - 0.5f
                             withTransform({ translate(left = size.width * 0.18f * driftTravel, top = size.height * 0.05f * driftTravel) }) {
                                 drawRect(brush = haloPrimary)
                             }
@@ -1761,6 +1772,7 @@ fun MyApplicationTheme(
         else -> MaterialTheme.shapes
     }
 
+    val homeScrollInProgress = remember { mutableStateOf(false) }
     val expressiveGlassMotion = remember { mutableStateOf(0f) }
     LaunchedEffect(isExpressiveGlass) {
         if (!isExpressiveGlass) {
@@ -1784,6 +1796,7 @@ fun MyApplicationTheme(
     CompositionLocalProvider(
         LocalGlassSoftStyle provides glassStyle,
         LocalExpressiveStyle provides expressive,
+        LocalNrdHomeScrollInProgress provides homeScrollInProgress,
         LocalExpressiveGlassStyle provides expressiveGlassStyle,
         LocalExpressiveGlassMotion provides expressiveGlassMotion,
         LocalNrdDarkMode provides darkTheme
