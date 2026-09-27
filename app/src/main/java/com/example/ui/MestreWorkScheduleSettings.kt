@@ -2,6 +2,9 @@ package com.example.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,14 +22,17 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.data.GeminiMasterService
@@ -35,12 +41,8 @@ import com.example.data.NossaGenteDirectoryResult
 import com.example.data.WorkSchedule
 import com.example.data.WorkScheduleEmployee
 import com.example.data.FirebaseService
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
 
 @Composable
@@ -53,24 +55,31 @@ internal fun MestreWorkScheduleSettings() {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var verified by remember { mutableStateOf(false) }
+    var selectedImage by remember { mutableStateOf<android.net.Uri?>(null) }
+    var imageRotation by remember { mutableIntStateOf(0) }
 
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) scope.launch {
+    fun analyzeImage(uri: android.net.Uri, rotation: Int) {
+        scope.launch {
             busy = true
             message = "Lendo a imagem e estruturando a escala…"
             runCatching {
                 val image = android.graphics.BitmapFactory.decodeStream(context.contentResolver.openInputStream(uri))
                     ?: error("Não foi possível abrir a foto da escala.")
-                val maxSide = 2200f
-                val ratio = (maxSide / maxOf(image.width, image.height)).coerceAtMost(1f)
-                val resized = if (ratio < 1f) android.graphics.Bitmap.createScaledBitmap(
-                    image, (image.width * ratio).toInt(), (image.height * ratio).toInt(), true
+                val oriented = if (rotation != 0) android.graphics.Bitmap.createBitmap(
+                    image, 0, 0, image.width, image.height,
+                    android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }, true
                 ) else image
+                val maxSide = 3000f
+                val ratio = (maxSide / maxOf(oriented.width, oriented.height)).coerceAtMost(1f)
+                val resized = if (ratio < 1f) android.graphics.Bitmap.createScaledBitmap(
+                    oriented, (oriented.width * ratio).toInt(), (oriented.height * ratio).toInt(), true
+                ) else oriented
                 val bytes = java.io.ByteArrayOutputStream().use { stream ->
                     resized.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, stream)
                     stream.toByteArray()
                 }
-                if (resized !== image) resized.recycle()
+                if (resized !== oriented) resized.recycle()
+                if (oriented !== image) oriented.recycle()
                 image.recycle()
                 val json = GeminiMasterService.extractWorkSchedule(
                     android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
@@ -103,12 +112,26 @@ internal fun MestreWorkScheduleSettings() {
         }
     }
 
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            selectedImage = uri
+            imageRotation = 0
+            analyzeImage(uri, imageRotation)
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Inserir Escala", style = MaterialTheme.typography.headlineSmall)
         Text("Envie uma foto da escala. A foto será analisada pelo Gemini, incluindo as colunas dos dias. Revise tudo e confirme cada matrícula na API Nossa Gente antes de publicar.", style = MaterialTheme.typography.bodyMedium)
         Button(onClick = { imagePicker.launch("image/*") }, enabled = !busy) {
             androidx.compose.material3.Icon(Icons.Default.CloudUpload, contentDescription = null)
             Text("  Selecionar foto da escala")
+        }
+        selectedImage?.let { uri ->
+            TextButton(onClick = {
+                imageRotation = (imageRotation + 90) % 360
+                analyzeImage(uri, imageRotation)
+            }, enabled = !busy) { Text("Girar foto 90° e reler escala") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(month, { month = it.filter(Char::isDigit).take(2); verified = false }, Modifier.weight(1f), label = { Text("Mês (1–12)") }, singleLine = true)
@@ -148,14 +171,37 @@ internal fun MestreWorkScheduleSettings() {
             }
             LazyColumn(Modifier.fillMaxWidth().height(430.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed(employees, key = { index, row -> "${row.registration}-$index" }) { index, row ->
+                    var expanded by remember(row.registration) { mutableStateOf(false) }
+                    var editVacation by remember(row.registration) { mutableStateOf(row.vacationDays.isNotEmpty()) }
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(if (row.verified) "✓ Confirmado pela Nossa Gente" else "Pendente de confirmação", color = if (row.verified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
-                            OutlinedTextField(row.name, { employees[index] = row.copy(name = it, verified = false); verified = false }, Modifier.fillMaxWidth(), label = { Text("Nome") }, singleLine = true)
-                            OutlinedTextField(row.registration, { employees[index] = row.copy(registration = it.filter(Char::isDigit), verified = false); verified = false }, Modifier.fillMaxWidth(), label = { Text("Matrícula") }, singleLine = true)
-                            OutlinedTextField(row.shift, { employees[index] = row.copy(shift = it) }, Modifier.fillMaxWidth(), label = { Text("Setor / horário") }, singleLine = true)
-                            OutlinedTextField(row.daysOff.joinToString(","), { employees[index] = row.copy(daysOff = it.parseDays(), verified = false); verified = false }, Modifier.fillMaxWidth(), label = { Text("Folgas (dias do mês, separados por vírgula)") }, singleLine = true)
-                            OutlinedTextField(row.vacationDays.joinToString(","), { employees[index] = row.copy(vacationDays = it.parseDays(), verified = false); verified = false }, Modifier.fillMaxWidth(), label = { Text("Férias (dias do mês)") }, singleLine = true)
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(row.name, style = MaterialTheme.typography.titleMedium)
+                                    Text("Matrícula ${row.registration} • ${row.shift}", style = MaterialTheme.typography.bodySmall)
+                                    Text("Folgas: ${row.daysOff.joinToString(", ").ifBlank { "nenhuma" }}", style = MaterialTheme.typography.bodyMedium)
+                                    if (row.vacationDays.isNotEmpty()) Text("Férias: ${row.vacationDays.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+                                }
+                                TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Fechar" else "Corrigir") }
+                            }
+                            if (expanded) {
+                                Text(if (row.verified) "✓ Matrícula confirmada pela Nossa Gente" else "Matrícula pendente de confirmação",
+                                    color = if (row.verified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.labelMedium)
+                                OutlinedTextField(row.name, { employees[index] = row.copy(name = it, verified = false); verified = false }, Modifier.fillMaxWidth(), label = { Text("Nome") }, singleLine = true)
+                                OutlinedTextField(row.registration, { employees[index] = row.copy(registration = it.filter(Char::isDigit), verified = false); verified = false }, Modifier.fillMaxWidth(), label = { Text("Matrícula") }, singleLine = true)
+                                OutlinedTextField(row.shift, { employees[index] = row.copy(shift = it) }, Modifier.fillMaxWidth(), label = { Text("Setor / horário") }, singleLine = true)
+                                Text("Toque para marcar ou desmarcar a folga", style = MaterialTheme.typography.titleSmall)
+                                ScheduleDayGrid(row.daysOff, month.toIntOrNull(), year.toIntOrNull()) { day ->
+                                    employees[index] = row.copy(daysOff = row.daysOff.toggle(day))
+                                }
+                                TextButton(onClick = { editVacation = !editVacation }) {
+                                    Text(if (editVacation) "Ocultar férias (FE)" else "Editar férias (FE)")
+                                }
+                                if (editVacation) ScheduleDayGrid(row.vacationDays, month.toIntOrNull(), year.toIntOrNull()) { day ->
+                                    employees[index] = row.copy(vacationDays = row.vacationDays.toggle(day))
+                                }
+                            }
                         }
                     }
                 }
@@ -179,7 +225,35 @@ internal fun MestreWorkScheduleSettings() {
 }
 
 private fun JSONObject.intList(key: String): List<Int> = optJSONArray(key)?.let { a -> (0 until a.length()).mapNotNull { a.optInt(it).takeIf { day -> day in 1..31 } }.distinct().sorted() }.orEmpty()
-private fun String.parseDays(): List<Int> = split(',', ';', ' ').mapNotNull { it.trim().toIntOrNull()?.takeIf { day -> day in 1..31 } }.distinct().sorted()
+private fun List<Int>.toggle(day: Int): List<Int> =
+    (if (day in this) filterNot { it == day } else this + day).distinct().sorted()
+
+@Composable
+private fun ScheduleDayGrid(selected: List<Int>, month: Int?, year: Int?, onToggle: (Int) -> Unit) {
+    val lastDay = if (month != null && month in 1..12 && year != null && year in 2000..2100)
+        java.util.GregorianCalendar(year, month!! - 1, 1).getActualMaximum(java.util.Calendar.DAY_OF_MONTH) else 31
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        (1..lastDay).chunked(7).forEach { week ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                week.forEach { day ->
+                    val active = day in selected
+                    Box(
+                        Modifier.weight(1f).height(38.dp)
+                            .background(
+                                if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                RoundedCornerShape(10.dp)
+                            )
+                            .clickable { onToggle(day) },
+                        contentAlignment = androidx.compose.ui.Alignment.Center
+                    ) {
+                        Text(day.toString(), color = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
 private fun scheduleMonthName(month: Int): String = java.util.Calendar.getInstance()
     .apply { set(java.util.Calendar.MONTH, (month - 1).coerceIn(0, 11)) }
     .getDisplayName(java.util.Calendar.MONTH, java.util.Calendar.LONG, java.util.Locale("pt", "BR"))
