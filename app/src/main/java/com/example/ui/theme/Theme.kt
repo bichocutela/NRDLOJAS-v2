@@ -54,6 +54,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
@@ -173,6 +174,14 @@ internal val ExpressiveGlassAccentNames = listOf("multicolor", "red", "green", "
 private fun normalizeExpressiveGlassAccentName(name: String): String =
     name.trim().lowercase().takeIf { it in ExpressiveGlassAccentNames } ?: "multicolor"
 
+private fun expressiveGlassContentColor(background: Color): Color {
+    val dark = Color.Black
+    val backgroundLuminance = background.luminance()
+    val whiteContrast = 1.05f / (backgroundLuminance + 0.05f)
+    val darkContrast = (backgroundLuminance + 0.05f) / (dark.luminance() + 0.05f)
+    return if (whiteContrast >= darkContrast) Color.White else dark
+}
+
 private fun expressiveGlassActionColors(name: String, isDark: Boolean): List<Color> {
     val normalized = normalizeExpressiveGlassAccentName(name)
     val light = mapOf(
@@ -243,7 +252,7 @@ internal fun resolveExpressiveGlassStyle(
         accent = actions[0],
         secondaryAccent = actions[1],
         tertiaryAccent = actions[2],
-        onAccent = if (isDark || normalized in setOf("gold", "orange")) Color(0xFF17202A) else Color.White,
+        onAccent = expressiveGlassContentColor(actions[0]),
         surfaceAlpha = surfaceAlpha,
         strongSurfaceAlpha = (surfaceAlpha + 0.10f).coerceAtMost(0.82f),
         borderColor = Color.White.copy(alpha = (0.62f + 0.24f * safeFluidity).coerceAtMost(0.90f)),
