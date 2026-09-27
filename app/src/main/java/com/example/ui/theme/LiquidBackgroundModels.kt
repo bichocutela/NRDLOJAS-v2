@@ -17,3 +17,4 @@ data class LiquidEngineConfig(
     val riveStateMachineName: String? = null
 )
 
+val LocalLiquidEngineConfig = androidx.compose.runtime.staticCompositionLocalOf { LiquidEngineConfig() }
