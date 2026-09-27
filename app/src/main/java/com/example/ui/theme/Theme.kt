@@ -1056,7 +1056,8 @@ private fun AdaptiveWaterContainer(
     val homeScrollSignal = LocalNrdHomeScrollInProgress.current ?: remember { MutableStateFlow(false) }
     val drawerOpenSignal = LocalNrdDrawerIsOpen.current ?: remember { MutableStateFlow(false) }
     val performanceTier = LocalDevicePerformanceTier.current
-    val bubbleCount = (4 + additionalBubbles.coerceAtLeast(0))
+    val normalizedExtraBubbles = additionalBubbles.coerceIn(0, 18)
+    val bubbleCount = (4 + ((normalizedExtraBubbles * 12 + 9) / 18))
         .coerceAtMost(performanceTier.maxBackgroundBubbles)
     val enhancedLighting = performanceTier.enableComplexShaders
     val pausePhysics = remember(performanceTier, homeScrollSignal, drawerOpenSignal) {
