@@ -52,33 +52,27 @@ A arquitetura mantém a interface separada das camadas de dados e integra recurs
 
 ## Visual e temas
 
-Uma galeria dos banners do NRD Códigos, organizada por paleta e estilo. As oito imagens usam fundo transparente e proporção original de **3:1**, sem recorte ou deformação.
+Uma galeria dos banners do NRD Códigos, organizada por paleta e estilo. As oito imagens PNG usam fundo transparente e proporção original de **3:1**, sem recorte ou deformação.
 
 ### Temas por cor
 
-<table>
-  <tr>
-    <td width="50%" align="center"><strong>Multicolorido</strong><br /><img src="docs/images/banners/multicolorido.webp" width="100%" alt="Banner do tema Multicolorido com fundo transparente" /></td>
-    <td width="50%" align="center"><strong>Vermelho</strong><br /><img src="docs/images/banners/vermelho.webp" width="100%" alt="Banner do tema Vermelho com fundo transparente" /></td>
-  </tr>
-  <tr>
-    <td width="50%" align="center"><strong>Verde</strong><br /><img src="docs/images/banners/verde.webp" width="100%" alt="Banner do tema Verde com fundo transparente" /></td>
-    <td width="50%" align="center"><strong>Laranja</strong><br /><img src="docs/images/banners/laranja.webp" width="100%" alt="Banner do tema Laranja com fundo transparente" /></td>
-  </tr>
-  <tr>
-    <td width="50%" align="center"><strong>Azul</strong><br /><img src="docs/images/banners/azul.webp" width="100%" alt="Banner do tema Azul com fundo transparente" /></td>
-    <td width="50%" align="center"><strong>Dourado</strong><br /><img src="docs/images/banners/dourado.webp" width="100%" alt="Banner do tema Dourado com fundo transparente" /></td>
-  </tr>
-</table>
+| **Multicolorido** | **Vermelho** |
+|:--:|:--:|
+| ![Banner Multicolorido](docs/images/banners/multicolorido.webp) | ![Banner Vermelho](docs/images/banners/vermelho.webp) |
+
+| **Verde** | **Laranja** |
+|:--:|:--:|
+| ![Banner Verde](docs/images/banners/verde.webp) | ![Banner Laranja](docs/images/banners/laranja.webp) |
+
+| **Azul** | **Dourado** |
+|:--:|:--:|
+| ![Banner Azul](docs/images/banners/azul.webp) | ![Banner Dourado](docs/images/banners/dourado.webp) |
 
 ### Temas de vidro
 
-<table>
-  <tr>
-    <td width="50%" align="center"><strong>Glass Expressivo</strong><br /><img src="docs/images/banners/glass-expressivo.webp" width="100%" alt="Banner do Glass Expressivo com fundo transparente" /></td>
-    <td width="50%" align="center"><strong>Glass Soft</strong><br /><img src="docs/images/banners/glass-soft.webp" width="100%" alt="Banner do Glass Soft com fundo transparente" /></td>
-  </tr>
-</table>
+| **Glass Expressivo** | **Glass Soft** |
+|:--:|:--:|
+| ![Banner Glass Expressivo](docs/images/banners/glass-expressivo.png) | ![Banner Glass Soft](docs/images/banners/glass-soft.png) |
 
 O **Glass Expressivo** destaca superfícies líquidas, reflexos e formas de vidro. O **Glass Soft** apresenta uma composição translúcida mais suave. Os banners são imagens de apresentação; os efeitos dos temas são aplicados dinamicamente no aplicativo.
 
