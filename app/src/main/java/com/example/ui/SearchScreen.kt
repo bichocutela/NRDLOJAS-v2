@@ -80,6 +80,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
@@ -365,7 +366,10 @@ fun SearchScreen(
 ) {
     val bannerImageUri by viewModel.userPreferences.bannerImageUri.collectAsState(initial = null)
     val localAppTheme by viewModel.userPreferences.appTheme.collectAsStateWithLifecycle(initialValue = "multicolor")
-    val remoteAppearance by FirebaseService.observeAppearanceSettings()
+    // Keep one remote subscription for this screen. Recreating callbackFlow here
+    // restarts both the Firestore listener and the uncached manifest request.
+    val appearanceSettingsFlow = remember { FirebaseService.observeAppearanceSettings() }
+    val remoteAppearance by appearanceSettingsFlow
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
     val glassStyle = LocalGlassSoftStyle.current
     val expressiveStyle = LocalExpressiveStyle.current
@@ -470,8 +474,9 @@ fun SearchScreen(
     DisposableEffect(homeScrollSignal) {
         onDispose { homeScrollSignal?.value = false }
     }
-    LaunchedEffect(isExpressiveGlassTheme, homeListState.isScrollInProgress, homeScrollSignal) {
-        homeScrollSignal?.value = isExpressiveGlassTheme && homeListState.isScrollInProgress
+    LaunchedEffect(isExpressiveGlassTheme, homeListState, homeScrollSignal) {
+        snapshotFlow { isExpressiveGlassTheme && homeListState.isScrollInProgress }
+            .collectLatest { scrolling -> homeScrollSignal?.value = scrolling }
     }
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -498,14 +503,27 @@ fun SearchScreen(
         hadSearchResults = hasSearchResults
     }
 
-    LaunchedEffect(mostUsed, homeSettings.carouselIntervalSeconds, homeListState.isScrollInProgress) {
-        if (homeListState.isScrollInProgress) return@LaunchedEffect
+    LaunchedEffect(
+        mostUsed, homeSettings.carouselIntervalSeconds, homeSettings.showMostUsed,
+        homeListState, mostUsedListState, isExpressiveGlassTheme
+    ) {
         if (mostUsed.isEmpty() || !homeSettings.showMostUsed) return@LaunchedEffect
-        while (true) {
-            delay(homeSettings.carouselIntervalSeconds * 1000L)
-            if (!homeListState.isScrollInProgress && !mostUsedListState.isScrollInProgress) {
-                val nextIndex = (mostUsedListState.firstVisibleItemIndex + 1) % mostUsed.size
-                mostUsedListState.animateScrollToItem(nextIndex)
+        // Observe scrolling outside composition. collectLatest also cancels an
+        // in-flight carousel animation as soon as vertical scrolling starts.
+        snapshotFlow {
+            !homeListState.isScrollInProgress &&
+                (!isExpressiveGlassTheme || homeListState.layoutInfo.visibleItemsInfo.any {
+                    it.key == "home-most-used"
+                })
+        }.collectLatest { canAutoScroll ->
+            if (canAutoScroll) {
+                while (true) {
+                    delay(homeSettings.carouselIntervalSeconds * 1000L)
+                    if (!mostUsedListState.isScrollInProgress) {
+                        val nextIndex = (mostUsedListState.firstVisibleItemIndex + 1) % mostUsed.size
+                        mostUsedListState.animateScrollToItem(nextIndex)
+                    }
+                }
             }
         }
     }
@@ -513,6 +531,9 @@ fun SearchScreen(
     Column(
             modifier = Modifier
                 .fillMaxSize()
+                // Isolate Home drawing from the animated background. This is a
+                // retained display list, not an offscreen bitmap or card capture.
+                .then(if (isExpressiveGlassTheme) Modifier.graphicsLayer() else Modifier)
                 .then(
                     if (isGlassSoftTheme || isExpressiveTheme) Modifier.background(Color.Transparent)
                     else Modifier.background(MaterialTheme.colorScheme.background)
@@ -1088,7 +1109,7 @@ fun SearchScreen(
                 }
 
                 if (homeSettings.showMostUsed && mostUsed.isNotEmpty()) {
-                    item {
+                    item(key = "home-most-used") {
                         SectionHeader("Mais Utilizados", textPreferences, actionLabel = "VER TODOS", onAction = { showMostUsedSheet = true })
                         LazyRow(
                             state = mostUsedListState,
