@@ -97,6 +97,8 @@ import com.example.ui.theme.getDynamicThemeColor
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.LocalExpressiveGlassStyle
+import com.example.ui.theme.LocalDevicePerformanceTier
+import com.example.ui.theme.LocalNrdHomeScrollInProgress
 import com.example.ui.theme.LocalNrdDarkMode
 import com.example.ui.theme.ExpressiveGlassStyle
 import com.example.ui.theme.glassSoftShadow
@@ -371,6 +373,8 @@ fun SearchScreen(
     val glassStyle = LocalGlassSoftStyle.current
     val expressiveStyle = LocalExpressiveStyle.current
     val expressiveGlassStyle = LocalExpressiveGlassStyle.current
+    val performanceTier = LocalDevicePerformanceTier.current
+    val homeScrollSignal = LocalNrdHomeScrollInProgress.current
     val isExpressiveTheme = expressiveStyle.enabled
     val isGlassSoftTheme = glassStyle.enabled
     val isExpressiveGlassTheme = expressiveGlassStyle.enabled
@@ -468,6 +472,19 @@ fun SearchScreen(
     val unreadNotifications = notificationHistory.count { !it.read }
     val mostUsedListState = rememberLazyListState()
     val homeListState = rememberLazyListState()
+    LaunchedEffect(homeListState, performanceTier.pausePhysicsOnScroll, homeScrollSignal) {
+        if (homeScrollSignal == null) return@LaunchedEffect
+        if (!performanceTier.pausePhysicsOnScroll) {
+            homeScrollSignal.value = false
+            return@LaunchedEffect
+        }
+        try {
+            snapshotFlow { homeListState.isScrollInProgress }
+                .collectLatest { isScrolling -> homeScrollSignal.value = isScrolling }
+        } finally {
+            homeScrollSignal.value = false
+        }
+    }
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
@@ -589,9 +606,17 @@ fun SearchScreen(
                                     .glassSoftShadow(CircleShape, 4.dp)
                                     .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                     .border(1.dp, glassStyle.borderColor, CircleShape)
-                                else if (isExpressiveGlassTheme) Modifier
-                                    .background(Color.White.copy(alpha = 0.65f), CircleShape)
-                                    .border(1.dp, expressiveGlassStyle.accent.copy(alpha = 0.45f), CircleShape)
+                                else if (isExpressiveGlassTheme) {
+                                    if (performanceTier.enableComplexShaders) Modifier.expressiveLiquidGlass(
+                                        shape = CircleShape,
+                                        accent = expressiveGlassStyle.accent,
+                                        intensity = 0.92f,
+                                        elevation = 7.dp,
+                                        lightweight = true
+                                    ) else Modifier
+                                        .background(Color.White.copy(alpha = 0.85f), CircleShape)
+                                        .border(1.dp, Color.White, CircleShape)
+                                }
                                 else if (isExpressiveTheme) Modifier
                                     .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                                 else Modifier.background(Color.Transparent)
@@ -627,9 +652,17 @@ fun SearchScreen(
                                     .glassSoftShadow(CircleShape, 4.dp)
                                     .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                     .border(1.dp, glassStyle.borderColor, CircleShape)
-                                else if (isExpressiveGlassTheme) Modifier
-                                    .background(Color.White.copy(alpha = 0.65f), CircleShape)
-                                    .border(1.dp, expressiveGlassStyle.accent.copy(alpha = 0.45f), CircleShape)
+                                else if (isExpressiveGlassTheme) {
+                                    if (performanceTier.enableComplexShaders) Modifier.expressiveLiquidGlass(
+                                        shape = CircleShape,
+                                        accent = expressiveGlassStyle.accent,
+                                        intensity = 0.92f,
+                                        elevation = 7.dp,
+                                        lightweight = true
+                                    ) else Modifier
+                                        .background(Color.White.copy(alpha = 0.85f), CircleShape)
+                                        .border(1.dp, Color.White, CircleShape)
+                                }
                                 else if (isExpressiveTheme) Modifier
                                     .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                                 else Modifier
@@ -689,8 +722,18 @@ fun SearchScreen(
                         Box(
                             modifier = Modifier
                                 .size(if (compactExpressive) 38.dp else 42.dp)
-                                .background(Color.White.copy(alpha = 0.65f), CircleShape)
-                                .border(1.dp, expressiveGlassStyle.accent.copy(alpha = 0.45f), CircleShape),
+                                .then(if (performanceTier.enableComplexShaders) Modifier.expressiveLiquidGlass(
+                                    shape = CircleShape,
+                                    accent = expressiveGlassStyle.accent,
+                                    secondaryAccent = expressiveGlassStyle.secondaryAccent,
+                                    intensity = 0.92f,
+                                    elevation = 5.dp,
+                                    waves = false,
+                                    bubbleSeed = 41,
+                                    lightweight = true
+                                ) else Modifier
+                                    .background(Color.White.copy(alpha = 0.85f), CircleShape)
+                                    .border(1.dp, Color.White, CircleShape)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -715,9 +758,17 @@ fun SearchScreen(
                                 onClick = { viewModel.updateSearchQuery("") },
                                 modifier = Modifier.then(
                                     if (isExpressiveGlassTheme) {
-                                        Modifier
-                                            .background(Color.White.copy(alpha = 0.65f), CircleShape)
-                                            .border(1.dp, expressiveGlassStyle.secondaryAccent.copy(alpha = 0.45f), CircleShape)
+                                        if (performanceTier.enableComplexShaders) Modifier.expressiveLiquidGlass(
+                                            shape = CircleShape,
+                                            accent = expressiveGlassStyle.secondaryAccent,
+                                            intensity = 0.88f,
+                                            elevation = 4.dp,
+                                            waves = false,
+                                            bubbleSeed = 43,
+                                            lightweight = true
+                                        ) else Modifier
+                                            .background(Color.White.copy(alpha = 0.85f), CircleShape)
+                                            .border(1.dp, Color.White, CircleShape)
                                     } else Modifier
                                 )
                             ) {
@@ -746,9 +797,18 @@ fun SearchScreen(
                                         .scale(quickAddScale)
                                         .then(
                                             if (isExpressiveGlassTheme) {
-                                                Modifier
-                                                    .background(Color.White.copy(alpha = 0.65f), CircleShape)
-                                                    .border(1.dp, expressiveGlassStyle.accent.copy(alpha = 0.55f), CircleShape)
+                                                if (performanceTier.enableComplexShaders) Modifier.expressiveLiquidGlass(
+                                                    shape = CircleShape,
+                                                    accent = expressiveGlassStyle.accent,
+                                                    secondaryAccent = expressiveGlassStyle.tertiaryAccent,
+                                                    intensity = 1.10f,
+                                                    elevation = 8.dp,
+                                                    waves = false,
+                                                    bubbleSeed = 47,
+                                                    lightweight = true
+                                                ) else Modifier
+                                                    .background(Color.White.copy(alpha = 0.85f), CircleShape)
+                                                    .border(1.dp, Color.White, CircleShape)
                                             } else {
                                                 Modifier
                                                     .clip(CircleShape)
@@ -782,9 +842,18 @@ fun SearchScreen(
                                     .size(if (isExpressiveTheme) 42.dp else 48.dp)
                                     .then(
                                         if (isExpressiveGlassTheme) {
-                                            Modifier
-                                                .background(Color.White.copy(alpha = 0.65f), CircleShape)
-                                                .border(1.dp, expressiveGlassStyle.tertiaryAccent.copy(alpha = 0.45f), CircleShape)
+                                            if (performanceTier.enableComplexShaders) Modifier.expressiveLiquidGlass(
+                                                shape = CircleShape,
+                                                accent = expressiveGlassStyle.tertiaryAccent,
+                                                secondaryAccent = expressiveGlassStyle.accent,
+                                                intensity = 0.86f,
+                                                elevation = 4.dp,
+                                                waves = false,
+                                                bubbleSeed = 53,
+                                                lightweight = true
+                                            ) else Modifier
+                                                .background(Color.White.copy(alpha = 0.85f), CircleShape)
+                                                .border(1.dp, Color.White, CircleShape)
                                         } else Modifier
                                     )
                             ) {
@@ -809,9 +878,21 @@ fun SearchScreen(
                     )
                     .then(
                         when {
-                            isExpressiveGlassTheme -> Modifier
-                                .background(Color.White.copy(alpha = 0.65f), searchFieldShape)
-                                .border(1.dp, expressiveGlassStyle.accent.copy(alpha = 0.45f), searchFieldShape)
+                            isExpressiveGlassTheme -> if (performanceTier.enableComplexShaders) {
+                                Modifier.expressiveShadow(searchFieldShape, 10.dp)
+                                    .expressiveLiquidGlass(
+                                        shape = searchFieldShape,
+                                        accent = expressiveGlassStyle.accent,
+                                        secondaryAccent = expressiveGlassStyle.secondaryAccent,
+                                        intensity = 1.18f,
+                                        elevation = 10.dp,
+                                        waves = true,
+                                        bubbleSeed = 59,
+                                        lightweight = true
+                                    )
+                            } else Modifier
+                                .background(Color.White.copy(alpha = 0.85f), searchFieldShape)
+                                .border(1.dp, Color.White, searchFieldShape)
                             isGlassSoftTheme -> Modifier.glassSoftShadow(searchFieldShape)
                             isExpressiveTheme -> Modifier.expressiveShadow(searchFieldShape, 8.dp)
                             else -> Modifier
@@ -935,42 +1016,50 @@ fun SearchScreen(
                         .fillMaxWidth()
                         .height(expressiveGlassSearchButtonHeight)
                         .scale(primaryActionScale)
-                        .shadow(
-                            elevation = 12.dp,
-                            shape = searchButtonShape,
-                            clip = false,
-                            ambientColor = Color(0xFFFFB300).copy(alpha = 0.34f),
-                            spotColor = Color(0xFFFFB300).copy(alpha = 0.60f)
+                        .then(
+                            if (performanceTier.enableComplexShaders) Modifier.shadow(
+                                elevation = 12.dp,
+                                shape = searchButtonShape,
+                                clip = false,
+                                ambientColor = Color(0xFFFFB300).copy(alpha = 0.34f),
+                                spotColor = Color(0xFFFFB300).copy(alpha = 0.60f)
+                            ) else Modifier
                         )
                         .graphicsLayer { shape = searchButtonShape; clip = true },
                     shape = searchButtonShape,
                     color = Color.Transparent,
                     contentColor = Color.White,
-                    border = BorderStroke(
-                        2.dp,
-                        Brush.verticalGradient(
-                            listOf(Color.White.copy(alpha = 0.95f), Color(0xFFFFE082).copy(alpha = 0.55f), Color.White.copy(alpha = 0.78f))
+                    border = if (performanceTier.enableComplexShaders) {
+                        BorderStroke(
+                            2.dp,
+                            Brush.verticalGradient(
+                                listOf(Color.White.copy(alpha = 0.95f), Color(0xFFFFE082).copy(alpha = 0.55f), Color.White.copy(alpha = 0.78f))
+                            )
                         )
-                    ),
+                    } else BorderStroke(2.dp, Color.White),
                     interactionSource = primaryActionInteraction
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(
-                                Brush.verticalGradient(listOf(Color(0xFFFFE082), Color(0xFFFFB300), Color(0xFFF57F17)))
+                                if (performanceTier.enableComplexShaders) {
+                                    Brush.verticalGradient(listOf(Color(0xFFFFE082), Color(0xFFFFB300), Color(0xFFF57F17)))
+                                } else Color(0xFFFFB300)
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            Modifier
-                                .align(Alignment.TopCenter)
-                                .fillMaxWidth()
-                                .height(17.dp)
-                                .background(
-                                    Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.68f), Color.White.copy(alpha = 0.16f), Color.Transparent))
-                                )
-                        )
+                        if (performanceTier.enableComplexShaders) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.TopCenter)
+                                    .fillMaxWidth()
+                                    .height(17.dp)
+                                    .background(
+                                        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.68f), Color.White.copy(alpha = 0.16f), Color.Transparent))
+                                    )
+                            )
+                        }
                         Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Search, contentDescription = null, tint = Color.White)
                             Spacer(modifier = Modifier.width(8.dp))
@@ -981,7 +1070,7 @@ fun SearchScreen(
                                 color = Color.White,
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Black,
-                                    shadow = Shadow(Color(0x55000000), blurRadius = 4f)
+                                    shadow = if (performanceTier.enableComplexShaders) Shadow(Color(0x55000000), blurRadius = 4f) else null
                                 )
                             )
                         }
@@ -1547,6 +1636,7 @@ fun SectionHeader(
     val expressive = LocalExpressiveStyle.current.enabled
     val expressiveGlass = LocalExpressiveGlassStyle.current
     val isExpressiveGlass = expressiveGlass.enabled
+    val performanceTier = LocalDevicePerformanceTier.current
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
     val sectionIcon = when {
@@ -1584,9 +1674,21 @@ fun SectionHeader(
                         .size(if (compactExpressive) 30.dp else 34.dp)
                         .then(
                             if (isExpressiveGlass) {
-                                Modifier
-                                    .background(Color.White.copy(alpha = 0.65f), headerIconShape)
-                                    .border(1.dp, sectionAccent.copy(alpha = 0.45f), headerIconShape)
+                                if (performanceTier.enableComplexShaders) {
+                                    Modifier.expressiveLiquidGlass(
+                                        shape = headerIconShape,
+                                        accent = sectionAccent,
+                                        intensity = 0.92f,
+                                        elevation = 5.dp,
+                                        waves = true,
+                                        bubbleSeed = title.hashCode(),
+                                        lightweight = true
+                                    )
+                                } else {
+                                    Modifier
+                                        .background(Color.White.copy(alpha = 0.85f), headerIconShape)
+                                        .border(1.dp, Color.White, headerIconShape)
+                                }
                             } else {
                                 Modifier
                                     .clip(headerIconShape)
@@ -1622,9 +1724,18 @@ fun SectionHeader(
                 onClick = onAction,
                 modifier = Modifier.then(
                     if (isExpressiveGlass) {
-                        Modifier
-                            .background(Color.White.copy(alpha = 0.65f), actionShape)
-                            .border(1.dp, sectionAccent.copy(alpha = 0.40f), actionShape)
+                        if (performanceTier.enableComplexShaders) {
+                            Modifier.expressiveLiquidGlass(
+                                shape = actionShape,
+                                accent = sectionAccent,
+                                intensity = 0.72f,
+                                elevation = 3.dp
+                            )
+                        } else {
+                            Modifier
+                                .background(Color.White.copy(alpha = 0.85f), actionShape)
+                                .border(1.dp, Color.White, actionShape)
+                        }
                     } else Modifier
                 ),
                 shape = actionShape,
@@ -1707,6 +1818,7 @@ fun CategorySection(
     val expressive = LocalExpressiveStyle.current.enabled
     val expressiveGlass = LocalExpressiveGlassStyle.current
     val isExpressiveGlass = expressiveGlass.enabled
+    val performanceTier = LocalDevicePerformanceTier.current
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
     val categoryColors = listOf(
@@ -1751,16 +1863,20 @@ fun CategorySection(
                     .then(if (isExpressiveGlass) Modifier else Modifier.clip(categoryShape))
                     .then(
                         if (isExpressiveGlass) {
-                            Modifier
-                                .background(
-                                    Brush.verticalGradient(listOf(liquidAccent.copy(alpha = 0.96f), liquidAccent.copy(alpha = 0.90f))),
-                                    categoryShape
+                            if (performanceTier.enableComplexShaders) {
+                                Modifier.expressiveLiquidGlass(
+                                    shape = categoryShape,
+                                    accent = liquidAccent,
+                                    intensity = 1f,
+                                    elevation = 6.dp,
+                                    waves = true,
+                                    bubbleSeed = index + 301
                                 )
-                                .border(
-                                    1.2.dp,
-                                    Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.92f), Color.White.copy(alpha = 0.36f))),
-                                    categoryShape
-                                )
+                            } else {
+                                Modifier
+                                    .background(Color.White.copy(alpha = 0.85f), categoryShape)
+                                    .border(1.dp, Color.White, categoryShape)
+                            }
                         } else {
                             Modifier
                                 .background(categoryGlassFill)
@@ -1893,6 +2009,7 @@ private fun FavoriteToggleButton(
     compact: Boolean = false
 ) {
     val expressiveGlass = LocalExpressiveGlassStyle.current
+    val performanceTier = LocalDevicePerformanceTier.current
     val isExpressiveGlass = expressiveGlass.enabled
     val heartScale by animateFloatAsState(
         targetValue = if (product.isFavorite) 1.10f else 1f,
@@ -1908,10 +2025,21 @@ private fun FavoriteToggleButton(
         modifier = Modifier
             .size(if (compact) 34.dp else 38.dp)
             .then(
-                if (expressiveGlass.enabled) {
+                if (expressiveGlass.enabled && performanceTier.enableComplexShaders) {
+                    Modifier.expressiveLiquidGlass(
+                        shape = CircleShape,
+                        accent = heartAccent,
+                        secondaryAccent = expressiveGlass.secondaryAccent,
+                        intensity = if (product.isFavorite) 0.94f else 0.72f,
+                        elevation = if (product.isFavorite) 5.dp else 3.dp,
+                        waves = false,
+                        bubbleSeed = product.code.hashCode(),
+                        lightweight = true
+                    )
+                } else if (expressiveGlass.enabled) {
                     Modifier
-                        .background(heartAccent.copy(alpha = 0.18f), CircleShape)
-                        .border(1.dp, Color.White.copy(alpha = 0.72f), CircleShape)
+                        .background(Color.White.copy(alpha = 0.85f), CircleShape)
+                        .border(1.dp, Color.White, CircleShape)
                 } else Modifier
             )
     ) {
@@ -1943,6 +2071,7 @@ fun ProductCard(
     val expressive = LocalExpressiveStyle.current.enabled
     val expressiveGlass = LocalExpressiveGlassStyle.current
     val isExpressiveGlass = expressiveGlass.enabled
+    val performanceTier = LocalDevicePerformanceTier.current
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
     val cardShape = when {
@@ -1991,12 +2120,24 @@ fun ProductCard(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (isExpressiveGlass) Modifier else Modifier.glassSoftShadow(cardShape))
-            .then(if (isExpressiveGlass && lightweightGlass) Modifier else Modifier.clip(cardShape))
+            .then(if (isExpressiveGlass) Modifier else Modifier.clip(cardShape))
             .then(
                 if (isExpressiveGlass) {
-                    Modifier
-                        .background(Color.White.copy(alpha = 0.65f), cardShape)
-                        .border(1.dp, Color.White.copy(alpha = 0.85f), cardShape)
+                    if (performanceTier.enableComplexShaders) {
+                        Modifier.expressiveLiquidGlass(
+                            shape = cardShape,
+                            accent = cardAccent.first,
+                            secondaryAccent = expressiveGlass.secondaryAccent,
+                            intensity = 1.08f,
+                            elevation = 10.dp,
+                            waves = true,
+                            bubbleSeed = index + 71
+                        )
+                    } else {
+                        Modifier
+                            .background(Color.White.copy(alpha = 0.85f), cardShape)
+                            .border(1.dp, Color.White, cardShape)
+                    }
                 } else {
                     Modifier
                         .background(
@@ -2061,16 +2202,19 @@ fun ProductCard(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .size(if (compactExpressive) 42.dp else 48.dp)
-                    .clip(CircleShape)
+                    .then(if (performanceTier.isEntryLevel) Modifier else Modifier.clip(CircleShape))
             )
         } else {
             val dynColors = cardAccent
             Box(
                 modifier = Modifier
                     .size(if (compactExpressive) 42.dp else 48.dp)
-                    .clip(
-                        if (expressive) RoundedCornerShape(if (compactExpressive) 14.dp else 16.dp)
-                        else CircleShape
+                    .then(
+                        if (performanceTier.isEntryLevel) Modifier
+                        else Modifier.clip(
+                            if (expressive) RoundedCornerShape(if (compactExpressive) 14.dp else 16.dp)
+                            else CircleShape
+                        )
                     )
                     .background(if (isExpressiveGlass) avatarColors.first else dynColors.first),
                 contentAlignment = Alignment.Center
@@ -2127,7 +2271,7 @@ fun ProductCard(
                                 .border(1.dp, Color.White.copy(alpha = 0.72f), codeShape)
                         } else {
                             Modifier
-                                .clip(codeShape)
+                                .then(if (performanceTier.isEntryLevel) Modifier else Modifier.clip(codeShape))
                                 .background(if (expressive) cardAccent.first else MaterialTheme.colorScheme.primaryContainer)
                         }
                     )
@@ -2353,6 +2497,7 @@ fun MiniProductCard(
     val expressive = LocalExpressiveStyle.current.enabled
     val expressiveGlass = LocalExpressiveGlassStyle.current
     val isExpressiveGlass = expressiveGlass.enabled
+    val performanceTier = LocalDevicePerformanceTier.current
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
     val cardShape = when {
@@ -2415,12 +2560,24 @@ fun MiniProductCard(
             )
             .then(if (isExpressiveGlass) Modifier else Modifier.glassSoftShadow(cardShape))
             .then(if (isExpressiveGlass) Modifier else Modifier.expressiveShadow(cardShape, 7.dp))
-            .then(if (isExpressiveGlass && lightweightGlass) Modifier else Modifier.clip(cardShape))
+            .then(if (isExpressiveGlass) Modifier else Modifier.clip(cardShape))
             .then(
                 if (isExpressiveGlass) {
-                    Modifier
-                        .background(Color.White.copy(alpha = 0.65f), cardShape)
-                        .border(1.dp, Color.White.copy(alpha = 0.85f), cardShape)
+                    if (performanceTier.enableComplexShaders) {
+                        Modifier.expressiveLiquidGlass(
+                            shape = cardShape,
+                            accent = cardAccent.first,
+                            secondaryAccent = expressiveGlass.secondaryAccent,
+                            intensity = 1.08f,
+                            elevation = 10.dp,
+                            waves = true,
+                            bubbleSeed = index + 121
+                        )
+                    } else {
+                        Modifier
+                            .background(Color.White.copy(alpha = 0.85f), cardShape)
+                            .border(1.dp, Color.White, cardShape)
+                    }
                 } else {
                     Modifier
                         .background(
@@ -2486,13 +2643,16 @@ fun MiniProductCard(
                                 else -> 32.dp
                             }
                         )
-                        .clip(
-                            if (expressive) RoundedCornerShape(if (compactExpressive) 14.dp else 17.dp)
-                            else CircleShape
+                        .then(
+                            if (performanceTier.isEntryLevel) Modifier
+                            else Modifier.clip(
+                                if (expressive) RoundedCornerShape(if (compactExpressive) 14.dp else 17.dp)
+                                else CircleShape
+                            )
                         )
                         .background(if (isExpressiveGlass) avatarColors.first else cardAccent.first)
                         .then(
-                            if (isExpressiveGlass) Modifier.border(
+                            if (isExpressiveGlass && !performanceTier.isEntryLevel) Modifier.border(
                                 1.dp,
                                 Color.White.copy(alpha = 0.82f),
                                 RoundedCornerShape(if (compactExpressive) 14.dp else 17.dp)
@@ -2509,13 +2669,16 @@ fun MiniProductCard(
                                 else -> 32.dp
                             }
                         )
-                        .clip(
-                            if (expressive) RoundedCornerShape(if (compactExpressive) 14.dp else 17.dp)
-                            else CircleShape
+                        .then(
+                            if (performanceTier.isEntryLevel) Modifier
+                            else Modifier.clip(
+                                if (expressive) RoundedCornerShape(if (compactExpressive) 14.dp else 17.dp)
+                                else CircleShape
+                            )
                         )
                         .background(if (isExpressiveGlass) avatarColors.first else cardAccent.first)
                         .then(
-                            if (isExpressiveGlass) Modifier.border(
+                            if (isExpressiveGlass && !performanceTier.isEntryLevel) Modifier.border(
                                 1.dp,
                                 Color.White.copy(alpha = 0.82f),
                                 RoundedCornerShape(if (compactExpressive) 14.dp else 17.dp)
@@ -2541,12 +2704,12 @@ fun MiniProductCard(
                         modifier = Modifier
                             .then(
                                 if (isExpressiveGlass) {
-                                    Modifier
-                                        .background(
-                                            Brush.verticalGradient(listOf(Color(0xFFFFE082), Color(0xFFFFB300))),
-                                            unitShape
-                                        )
-                                    .border(1.dp, Color.White.copy(alpha = 0.78f), unitShape)
+                                    if (performanceTier.enableComplexShaders) Modifier
+                                        .background(Brush.verticalGradient(listOf(Color(0xFFFFE082), Color(0xFFFFB300))), unitShape)
+                                        .border(1.dp, Color.White.copy(alpha = 0.78f), unitShape)
+                                    else Modifier
+                                        .background(Color.White.copy(alpha = 0.85f), unitShape)
+                                        .border(1.dp, Color.White, unitShape)
                                 } else {
                                     Modifier
                                         .clip(unitShape)
@@ -2634,12 +2797,12 @@ fun MiniProductCard(
                     modifier = Modifier
                         .then(
                             if (isExpressiveGlass) {
-                                Modifier
-                                    .background(
-                                        Brush.verticalGradient(listOf(Color(0xFFFFE082), Color(0xFFFFB300))),
-                                        CircleShape
-                                    )
+                                if (performanceTier.enableComplexShaders) Modifier
+                                    .background(Brush.verticalGradient(listOf(Color(0xFFFFE082), Color(0xFFFFB300))), CircleShape)
                                     .border(1.dp, Color.White.copy(alpha = 0.78f), CircleShape)
+                                else Modifier
+                                    .background(Color.White.copy(alpha = 0.85f), CircleShape)
+                                    .border(1.dp, Color.White, CircleShape)
                             } else {
                                 Modifier
                                     .clip(CircleShape)
@@ -2677,6 +2840,7 @@ fun HistoryItem(
     val expressive = LocalExpressiveStyle.current.enabled
     val expressiveGlass = LocalExpressiveGlassStyle.current
     val isExpressiveGlass = expressiveGlass.enabled
+    val performanceTier = LocalDevicePerformanceTier.current
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
     val itemShape = when {
@@ -2722,12 +2886,21 @@ fun HistoryItem(
                 .then(if (isExpressiveGlass) Modifier.height(72.dp) else Modifier.heightIn(min = if (compactExpressive) 72.dp else 84.dp))
                 .then(if (isExpressiveGlass) Modifier else Modifier.glassSoftShadow(itemShape))
                 .then(if (isExpressiveGlass) Modifier else Modifier.expressiveShadow(itemShape, 6.dp))
-                .then(if (isExpressiveGlass && lightweightGlass) Modifier else Modifier.clip(itemShape))
+                .then(if (isExpressiveGlass) Modifier else Modifier.clip(itemShape))
                 .then(
                     when {
+                        isExpressiveGlass && performanceTier.enableComplexShaders -> Modifier.expressiveLiquidGlass(
+                            shape = itemShape,
+                            accent = dynColors.first,
+                            secondaryAccent = expressiveGlass.secondaryAccent,
+                            intensity = 1.04f,
+                            elevation = 9.dp,
+                            waves = true,
+                            bubbleSeed = index + 171
+                        )
                         isExpressiveGlass -> Modifier
-                            .background(Color.White.copy(alpha = 0.65f), itemShape)
-                            .border(1.dp, Color.White.copy(alpha = 0.85f), itemShape)
+                            .background(Color.White.copy(alpha = 0.85f), itemShape)
+                            .border(1.dp, Color.White, itemShape)
                         glass.enabled -> Modifier
                             .background(glass.fill.copy(alpha = glass.alpha))
                             .border(1.dp, strongColors.first.copy(alpha = 0.42f), itemShape)
@@ -2753,9 +2926,21 @@ fun HistoryItem(
                     .size(if (isExpressiveGlass) 50.dp else if (compactExpressive) 38.dp else 46.dp)
                     .then(
                         if (isExpressiveGlass) {
-                            Modifier
-                                .background(dynColors.first, CircleShape)
-                                .border(1.2.dp, Color.White.copy(alpha = 0.85f), CircleShape)
+                            if (performanceTier.enableComplexShaders) {
+                                Modifier.expressiveLiquidGlass(
+                                    shape = CircleShape,
+                                    accent = dynColors.first,
+                                    secondaryAccent = expressiveGlass.secondaryAccent,
+                                    intensity = 0.94f,
+                                    elevation = 4.dp,
+                                    waves = false,
+                                    bubbleSeed = index + 191
+                                )
+                            } else {
+                                Modifier
+                                    .background(dynColors.first.copy(alpha = 0.90f), CircleShape)
+                                    .border(1.dp, Color.White, CircleShape)
+                            }
                         } else {
                             Modifier
                                 .clip(historyIconShape)
@@ -2780,9 +2965,12 @@ fun HistoryItem(
                         .build(),
                     contentDescription = product.name,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(if (compactExpressive) 46.dp else 54.dp)
-                        .clip(RoundedCornerShape(if (compactExpressive) 13.dp else 16.dp))
+                            modifier = Modifier
+                                .size(if (compactExpressive) 46.dp else 54.dp)
+                                .then(
+                                    if (performanceTier.isEntryLevel) Modifier
+                                    else Modifier.clip(RoundedCornerShape(if (compactExpressive) 13.dp else 16.dp))
+                                )
                         .background(MaterialTheme.colorScheme.surface)
                 )
                 Spacer(modifier = Modifier.width(if (compactExpressive) 7.dp else 10.dp))
