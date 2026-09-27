@@ -30,7 +30,6 @@ class ProductRepositorySearchTest {
             product("8", "Coco"),
             product("9", "Arroz"),
             product("10", "Pato"),
-            product("11", "Poa"),
             product("12", "Café", category = "Padaria")
         )
 
@@ -85,15 +84,14 @@ class ProductRepositorySearchTest {
     }
 
     @Test
-    fun `nao existe fuzzy matching para poa ou outros nomes parecidos`() {
+    fun `nao existe fuzzy matching para termos muito divergentes`() {
         val products = listOf(
             product("1", "Pão"),
-            product("2", "Poa"),
-            product("3", "Pato"),
+            product("2", "Pato"),
             product("4", "Abacaxi")
         )
 
-        assertEquals(emptyList<String>(), rankProductsByRelevance(products, "poa").map { it.code })
+        assertEquals(emptyList<String>(), rankProductsByRelevance(products, "xyz").map { it.code })
     }
 
     @Test

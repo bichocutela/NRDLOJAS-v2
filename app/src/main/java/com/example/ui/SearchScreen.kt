@@ -82,6 +82,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
@@ -93,6 +94,7 @@ import kotlinx.coroutines.withContext
 
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import com.example.ui.theme.getDynamicThemeColor
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveStyle
@@ -118,8 +120,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.rememberGraphicsLayer
-import androidx.compose.ui.graphics.layer.drawLayer
+
+
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
@@ -487,7 +489,8 @@ fun SearchScreen(
         hadSearchResults = hasSearchResults
     }
 
-    LaunchedEffect(mostUsed, homeSettings.carouselIntervalSeconds) {
+    LaunchedEffect(mostUsed, homeSettings.carouselIntervalSeconds, homeListState.isScrollInProgress) {
+        if (homeListState.isScrollInProgress) return@LaunchedEffect
         if (mostUsed.isEmpty() || !homeSettings.showMostUsed) return@LaunchedEffect
         while (true) {
             delay(homeSettings.carouselIntervalSeconds * 1000L)
@@ -1592,14 +1595,15 @@ fun SectionHeader(
                         .size(if (compactExpressive) 30.dp else 34.dp)
                         .then(
                             if (isExpressiveGlass) {
-                                Modifier.expressiveLiquidGlass(
+                                Modifier.expressiveShadow(headerIconShape, 5.dp).expressiveLiquidGlass(
                                     shape = headerIconShape,
                                     accent = sectionAccent,
                                     secondaryAccent = expressiveGlass.secondaryAccent,
                                     intensity = 0.92f,
                                     elevation = 5.dp,
                                     waves = true,
-                                    bubbleSeed = title.hashCode()
+                                    bubbleSeed = title.hashCode(),
+                                    lightweight = true
                                 )
                             } else {
                                 Modifier
@@ -1903,7 +1907,8 @@ private fun normalizeNotificationText(value: String): String =
 private fun FavoriteToggleButton(
     product: Product,
     viewModel: MainViewModel,
-    compact: Boolean = false
+    compact: Boolean = false,
+    lightweightGlass: Boolean = false
 ) {
     val expressiveGlass = LocalExpressiveGlassStyle.current
     val heartScale by animateFloatAsState(
@@ -1921,15 +1926,18 @@ private fun FavoriteToggleButton(
             .size(if (compact) 34.dp else 38.dp)
             .then(
                 if (expressiveGlass.enabled) {
-                    Modifier.expressiveLiquidGlass(
-                        shape = CircleShape,
-                        accent = heartAccent,
-                        secondaryAccent = expressiveGlass.secondaryAccent,
-                        intensity = if (product.isFavorite) 0.94f else 0.72f,
-                        elevation = if (product.isFavorite) 5.dp else 3.dp,
-                        waves = false,
-                        bubbleSeed = product.code.hashCode()
-                    )
+                    Modifier
+                        .expressiveShadow(CircleShape, 3.dp)
+                        .expressiveLiquidGlass(
+                            shape = CircleShape,
+                            accent = heartAccent,
+                            secondaryAccent = expressiveGlass.secondaryAccent,
+                            intensity = if (product.isFavorite) 0.94f else 0.72f,
+                            elevation = if (product.isFavorite) 5.dp else 3.dp,
+                            waves = false,
+                            bubbleSeed = product.code.hashCode(),
+                            lightweight = lightweightGlass
+                        )
                 } else Modifier
             )
     ) {
@@ -1981,7 +1989,8 @@ fun ProductCard(
     }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val shareLayer = rememberGraphicsLayer()
+    var cardWidth by remember { mutableIntStateOf(0) }
+    var cardHeight by remember { mutableIntStateOf(0) }
     val cardAccent = if (isExpressiveGlass) {
         expressiveGlassCardAccent(expressiveGlass, index)
     } else {
@@ -2046,11 +2055,9 @@ fun ProductCard(
                         )
                 }
             )
-            .drawWithContent {
-                shareLayer.record {
-                    this@drawWithContent.drawContent()
-                }
-                drawLayer(shareLayer)
+            .onSizeChanged {
+                cardWidth = it.width
+                cardHeight = it.height
             }
             .vibrateClickable(
                 viewModel = viewModel,
@@ -2058,7 +2065,8 @@ fun ProductCard(
                     scope.launch {
                         val copied = copyHomeProductCardToClipboard(
                             context = context,
-                            layer = shareLayer,
+                            widthRaw = cardWidth,
+                            heightRaw = cardHeight,
                             product = product,
                             accentColor = shareAccentColor,
                             codeBackgroundColor = shareCodeColor
@@ -2143,7 +2151,7 @@ fun ProductCard(
         Spacer(modifier = Modifier.width(if (compactExpressive) 8.dp else 12.dp))
 
         Column(horizontalAlignment = Alignment.End) {
-            FavoriteToggleButton(product, viewModel, compact = compactExpressive)
+            FavoriteToggleButton(product, viewModel, compact = compactExpressive, lightweightGlass = lightweightGlass)
             val codeShape = if (expressive) RoundedCornerShape(20.dp) else RoundedCornerShape(16.dp)
             Box(
                 modifier = Modifier
@@ -2200,14 +2208,15 @@ fun ProductCard(
 
 private suspend fun copyHomeProductCardToClipboard(
     context: Context,
-    layer: androidx.compose.ui.graphics.layer.GraphicsLayer,
+    widthRaw: Int,
+    heightRaw: Int,
     product: Product,
     accentColor: Int,
     codeBackgroundColor: Int
 ): Boolean = runCatching {
-    val captured = layer.toImageBitmap().asAndroidBitmap()
-    val width = captured.width.coerceAtLeast(1)
-    val height = captured.height.coerceAtLeast(1)
+
+    val width = widthRaw.coerceAtLeast(1)
+    val height = heightRaw.coerceAtLeast(1)
     val density = context.resources.displayMetrics.density
     fun dp(value: Float) = value * density
 
@@ -2579,7 +2588,7 @@ fun MiniProductCard(
             }
 
             Column(horizontalAlignment = Alignment.End) {
-                FavoriteToggleButton(product, viewModel, compact = compactExpressive)
+                FavoriteToggleButton(product, viewModel, compact = compactExpressive, lightweightGlass = lightweightGlass)
                 if (expressive) {
                     val unitShape = RoundedCornerShape(14.dp)
                     Box(
@@ -2912,7 +2921,7 @@ fun HistoryItem(
                 )
             }
             Spacer(modifier = Modifier.width(4.dp))
-            FavoriteToggleButton(product, viewModel, compact = compactExpressive)
+            FavoriteToggleButton(product, viewModel, compact = compactExpressive, lightweightGlass = lightweightGlass)
             Box(
                 modifier = Modifier.then(
                     if (isExpressiveGlass) {
@@ -3003,7 +3012,7 @@ fun HistoryItem(
                 )
             }
         }
-        FavoriteToggleButton(product, viewModel, compact = true)
+        FavoriteToggleButton(product, viewModel, compact = true, lightweightGlass = lightweightGlass)
     }
 }
 
