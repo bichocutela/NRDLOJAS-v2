@@ -2758,7 +2758,7 @@ fun MiniProductCard(
                 ),
                 boldOutline = textPreferences.boldOutline,
                 uppercaseBold = true,
-                color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -2789,7 +2789,7 @@ fun MiniProductCard(
                         .then(
                             if (isExpressiveGlass) {
                                 if (performanceTier.enableComplexShaders) Modifier
-                                    .background(Brush.verticalGradient(listOf(Color(0xFFFFE082), Color(0xFFFFB300))), CircleShape)
+                                    .background(expressiveGlass.accent, CircleShape)
                                     .border(1.dp, Color.White.copy(alpha = 0.78f), CircleShape)
                                 else Modifier
                                     .background(Color.White.copy(alpha = 0.85f), CircleShape)
