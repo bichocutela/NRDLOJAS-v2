@@ -72,7 +72,7 @@ Uma galeria dos banners do NRD Códigos, organizada por paleta e estilo. As oito
 
 | **Glass Expressivo** | **Glass Soft** |
 |:--:|:--:|
-| ![Banner Glass Expressivo](docs/images/banners/glass-expressivo.png) | ![Banner Glass Soft](docs/images/banners/glass-soft.png) |
+| ![Banner Glass Expressivo](docs/images/banners/glass-expressivo.webp) | ![Banner Glass Soft](docs/images/banners/glass-soft.webp) |
 
 O **Glass Expressivo** destaca superfícies líquidas, reflexos e formas de vidro. O **Glass Soft** apresenta uma composição translúcida mais suave. Os banners são imagens de apresentação; os efeitos dos temas são aplicados dinamicamente no aplicativo.
 
