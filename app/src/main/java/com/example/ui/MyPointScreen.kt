@@ -48,8 +48,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -78,6 +77,7 @@ import com.example.data.HoursSummary
 import com.example.data.NossaGenteApi
 import com.example.data.FirebaseService
 import com.example.data.WorkSchedule
+import com.example.data.WorkScheduleEmployee
 import com.example.data.NossaGenteBenefitResult
 import com.example.data.NossaGenteHoursResult
 import com.example.data.NossaGentePointResult
@@ -166,8 +166,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
             }
             workSchedules = FirebaseService.fetchWorkSchedules()
             val currentMonth = currentMonthKey()
-            selectedScheduleKey = workSchedules.firstOrNull { it.monthKey == currentMonth }?.monthKey
-                ?: workSchedules.firstOrNull()?.monthKey ?: currentMonth
+            selectedScheduleKey = currentMonth
             val profileRegistration = employeeProfile?.registration.orEmpty().filter(Char::isDigit)
             com.example.util.ScheduleReminderWorker.cacheSchedules(context, workSchedules, profileRegistration)
             if (credentialStore.isDayOffNotificationsEnabled() || credentialStore.isScheduleNotificationsEnabled())
@@ -258,16 +257,23 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                         onToggle = { daysOffExpanded = !daysOffExpanded },
                         onSelectMonth = { selectedScheduleKey = it },
                         onDaysOffSaved = { monthKey, days ->
-                            workSchedules = workSchedules.map { schedule ->
-                                if (schedule.monthKey != monthKey) schedule else schedule.copy(
-                                    employees = schedule.employees.map { row ->
-                                        if (row.registration.filter(Char::isDigit) == employeeProfile?.registration?.filter(Char::isDigit))
-                                            row.copy(daysOff = days) else row
-                                    },
-                                    updatedAt = System.currentTimeMillis(),
-                                    revision = schedule.revision + 1
-                                )
-                            }
+                            val (year, month) = monthKey.split("-").map(String::toInt)
+                            val profile = employeeProfile
+                            val registration = profile?.registration.orEmpty().filter(Char::isDigit)
+                            val existing = workSchedules.firstOrNull { it.monthKey == monthKey }
+                            val rows = existing?.employees.orEmpty().toMutableList()
+                            val rowIndex = rows.indexOfFirst { it.registration.filter(Char::isDigit) == registration }
+                            if (rowIndex >= 0) rows[rowIndex] = rows[rowIndex].copy(daysOff = days)
+                            else if (registration.isNotBlank()) rows += WorkScheduleEmployee(
+                                registration = registration,
+                                name = profile?.name.orEmpty(),
+                                daysOff = days,
+                                verified = true
+                            )
+                            val updated = WorkSchedule(monthKey, year, month, rows,
+                                System.currentTimeMillis(), (existing?.revision ?: 0) + 1)
+                            workSchedules = (workSchedules.filterNot { it.monthKey == monthKey } + updated)
+                                .sortedByDescending { it.monthKey }
                             employeeProfile?.registration?.let { com.example.util.ScheduleReminderWorker.cacheSchedules(context, workSchedules, it) }
                         }
                     )
@@ -461,12 +467,16 @@ private fun MyDaysOffCard(
 ) {
     var selectorExpanded by remember { mutableStateOf(false) }
     val selected = schedules.firstOrNull { it.monthKey == selectedKey }
+    val period = selectedKey.split("-").mapNotNull(String::toIntOrNull)
+    val selectedYear = period.getOrNull(0) ?: java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+    val selectedMonth = period.getOrNull(1)?.takeIf { it in 1..12 }
+        ?: (java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1)
     val digits = registration.orEmpty().filter(Char::isDigit)
     val employee = selected?.employees?.firstOrNull { it.registration.filter(Char::isDigit) == digits }
     var editing by remember(selectedKey, digits) { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var saveMessage by remember { mutableStateOf<String?>(null) }
-    var selectedDays by remember(selectedKey, digits) { mutableStateOf(employee?.daysOff.orEmpty().toSet()) }
+    var selectedDays by remember(selectedKey, digits, employee?.daysOff) { mutableStateOf(employee?.daysOff.orEmpty().toSet()) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     Card(Modifier.fillMaxWidth(), shape = if (LocalExpressiveStyle.current.enabled) RoundedCornerShape(28.dp) else MaterialTheme.shapes.medium) {
@@ -480,43 +490,42 @@ private fun MyDaysOffCard(
                     androidx.compose.foundation.layout.Box(Modifier.weight(1f, fill = false)) {
                         Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
                             TextButton(onClick = { selectorExpanded = true }, modifier = Modifier.padding(horizontal = 6.dp)) {
-                                val label = selected?.let { "${monthName(it.month)}/${it.year}" } ?: "Escala indisponível"
+                                val label = "${monthName(selectedMonth)}/$selectedYear"
                                 Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text("$label  ▾", style = MaterialTheme.typography.titleSmall)
                             }
                         }
-                        DropdownMenu(expanded = selectorExpanded, onDismissRequest = { selectorExpanded = false }) {
-                            schedules.forEach { schedule ->
-                                val label = "${monthName(schedule.month)}/${schedule.year}"
-                                DropdownMenuItem(text = { Text(label) }, onClick = { onSelectMonth(schedule.monthKey); selectorExpanded = false })
-                            }
-                        }
+                        if (selectorExpanded) MonthYearPickerDialog(
+                            initialYear = selectedYear,
+                            initialMonth = selectedMonth,
+                            onDismiss = { selectorExpanded = false },
+                            onSelect = { year, month -> onSelectMonth("%04d-%02d".format(year, month)); selectorExpanded = false }
+                        )
                     }
-                    if (employee != null) {
+                    if (digits.isNotBlank()) {
                         androidx.compose.material3.OutlinedButton(
-                            onClick = { selectedDays = employee.daysOff.toSet(); editing = !editing; saveMessage = null },
+                            onClick = { selectedDays = employee?.daysOff.orEmpty().toSet(); editing = !editing; saveMessage = null },
                             enabled = !saving
                         ) { Text(if (editing) "Fechar" else "Adicionar folgas", style = MaterialTheme.typography.labelMedium) }
                     }
                 }
                 when {
                     registration.isNullOrBlank() -> Text("A matrícula do perfil Nossa Gente não está disponível para localizar sua escala.")
-                    selected == null -> Text("Ainda não há escala publicada para este mês.")
-                    employee == null -> Text("Não encontramos a matrícula ${registration} nesta escala.")
+                    !editing && employee == null -> Text("Nenhuma folga cadastrada para ${monthName(selectedMonth)}/$selectedYear. Toque em Adicionar folgas para escolher as datas.")
                     else -> {
                         Spacer(Modifier.height(14.dp))
-                        Text("Matrícula ${employee.registration}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (employee.shift.isNotBlank()) Text(employee.shift, style = MaterialTheme.typography.bodyMedium)
+                        Text("Matrícula ${employee?.registration ?: registration}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (!employee?.shift.isNullOrBlank()) Text(employee!!.shift, style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(12.dp))
                         Text("Folgas", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                         Spacer(Modifier.height(8.dp))
-                        val visibleDays = if (editing) selectedDays.sorted() else employee.daysOff.distinct().sorted()
+                        val visibleDays = if (editing) selectedDays.sorted() else employee?.daysOff.orEmpty().distinct().sorted()
                         if (visibleDays.isEmpty()) Text(if (editing) "Toque nas datas para marcar suas folgas." else "Nenhuma folga registrada.")
                         else visibleDays.chunked(4).forEach { week ->
                             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 week.forEach { day ->
-                                    val sunday = java.util.GregorianCalendar(selected.year, selected.month - 1, day)
+                                    val sunday = java.util.GregorianCalendar(selectedYear, selectedMonth - 1, day)
                                         .get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SUNDAY
                                     Box(Modifier.weight(1f).height(66.dp).background(
                                         if (sunday) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
@@ -535,9 +544,9 @@ private fun MyDaysOffCard(
                         }
                         if (editing) {
                             Spacer(Modifier.height(14.dp))
-                            Text("Selecione as datas de folga • ${monthName(selected.month)}/${selected.year}", style = MaterialTheme.typography.bodySmall)
+                            Text("Selecione as datas de folga • ${monthName(selectedMonth)}/$selectedYear", style = MaterialTheme.typography.bodySmall)
                             Spacer(Modifier.height(6.dp))
-                            MyDaysOffCalendar(selected.year, selected.month, selectedDays) { day ->
+                            MyDaysOffCalendar(selectedYear, selectedMonth, selectedDays) { day ->
                                 selectedDays = if (day in selectedDays) selectedDays - day else selectedDays + day
                             }
                             Spacer(Modifier.height(8.dp))
@@ -547,9 +556,9 @@ private fun MyDaysOffCard(
                                     saveMessage = null
                                     scope.launch {
                                         com.example.data.NossaGenteApi(context.applicationContext)
-                                            .saveMyScheduleDaysOff(selected.year, selected.month, selectedDays.toList())
+                                            .saveMyScheduleDaysOff(selectedYear, selectedMonth, selectedDays.toList())
                                             .onSuccess {
-                                                onDaysOffSaved(selected.monthKey, selectedDays.sorted())
+                                                onDaysOffSaved(selectedKey, selectedDays.sorted())
                                                 editing = false
                                                 saveMessage = "Folgas salvas e sincronizadas no seu perfil."
                                             }
@@ -565,15 +574,56 @@ private fun MyDaysOffCard(
                             }
                         }
                         saveMessage?.let { Text(it, color = if (it.startsWith("Folgas salvas")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                        if (employee.vacationDays.isNotEmpty()) {
+                        if (employee?.vacationDays.orEmpty().isNotEmpty()) {
                             Spacer(Modifier.height(6.dp))
-                            Text("Férias (FE): ${employee.vacationDays.sorted().joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+                            Text("Férias (FE): ${employee?.vacationDays.orEmpty().sorted().joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun MonthYearPickerDialog(
+    initialYear: Int,
+    initialMonth: Int,
+    onDismiss: () -> Unit,
+    onSelect: (Int, Int) -> Unit
+) {
+    var year by remember(initialYear, initialMonth) { mutableStateOf(initialYear) }
+    var month by remember(initialYear, initialMonth) { mutableStateOf(initialMonth) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Escolher mês e ano") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { if (year > 2000) year-- }) { Text("‹") }
+                    Text(year.toString(), style = MaterialTheme.typography.titleLarge)
+                    TextButton(onClick = { if (year < 2100) year++ }) { Text("›") }
+                }
+                (1..12).chunked(3).forEach { rowMonths ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        rowMonths.forEach { monthNumber ->
+                            val label = monthName(monthNumber).take(3)
+                            val selected = month == monthNumber
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = { month = monthNumber },
+                                modifier = Modifier.weight(1f),
+                                colors = if (selected) androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                ) else androidx.compose.material3.ButtonDefaults.outlinedButtonColors()
+                            ) { Text(label) }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSelect(year, month) }) { Text("Selecionar") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
 }
 
 @Composable

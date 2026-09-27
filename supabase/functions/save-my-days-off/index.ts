@@ -77,6 +77,22 @@ function findRegistration(value: any, depth = 0): string {
   return "";
 }
 
+function findEmployeeName(value: any, depth = 0): string {
+  if (!value || typeof value !== "object" || depth > 5) return "";
+  const keys = ["nomeCompleto", "nome_completo", "nome", "NOME", "name", "fullName"];
+  for (const key of keys) {
+    const raw = value[key];
+    if (typeof raw === "string" && raw.trim().length > 2) return raw.trim();
+  }
+  for (const child of Object.values(value)) {
+    if (child && typeof child === "object") {
+      const found = findEmployeeName(child, depth + 1);
+      if (found) return found;
+    }
+  }
+  return "";
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (req.method !== "POST") return reply({ error: "Método não permitido." }, 405);
@@ -90,8 +106,11 @@ Deno.serve(async (req: Request) => {
       return reply({ error: "Sua sessão Nossa Gente expirou. Entre novamente para salvar." }, 401);
     }
     if (!identityResponse.ok) return reply({ error: "Não foi possível confirmar sua matrícula na Nossa Gente." }, 502);
-    const registration = findRegistration(await identityResponse.json());
+    const identity = await identityResponse.json();
+    const registration = findRegistration(identity);
+    const employeeName = findEmployeeName(identity);
     if (!registration) return reply({ error: "A Nossa Gente não informou sua matrícula. As folgas não foram alteradas." }, 422);
+    if (!employeeName) return reply({ error: "A Nossa Gente não informou seu nome. As folgas não foram alteradas." }, 422);
 
     const input = await req.json();
     const year = Number(input.year);
@@ -112,17 +131,38 @@ Deno.serve(async (req: Request) => {
     const documentUrl = "https://firestore.googleapis.com/v1/projects/" + projectId +
       "/databases/(default)/documents/work_schedules/" + monthKey;
     const currentResponse = await fetch(documentUrl, { headers: { Authorization: "Bearer " + accessToken } });
-    if (currentResponse.status === 404) return reply({ error: "Ainda não existe escala publicada para este mês. Peça ao Mestre para inseri-la primeiro." }, 404);
-    if (!currentResponse.ok) return reply({ error: "Não foi possível carregar a escala deste mês." }, 502);
-    const document = await currentResponse.json();
-    const schedule = readFields(document.fields ?? {});
+    if (!currentResponse.ok && currentResponse.status !== 404) return reply({ error: "Não foi possível carregar a escala deste mês." }, 502);
+    const exists = currentResponse.ok;
+    const document = exists ? await currentResponse.json() : null;
+    const schedule = exists ? readFields(document.fields ?? {}) : { year, month, employees: [], updatedAt: 0, revision: 0 };
     const employees = Array.isArray(schedule.employees) ? schedule.employees : [];
     const index = employees.findIndex((row: any) => String(row.registration ?? "").replace(/\D/g, "") === registration);
-    if (index < 0) return reply({ error: "Sua matrícula não está incluída na escala deste mês. Peça ao Mestre para conferir." }, 404);
-    employees[index] = { ...employees[index], daysOff: days };
+    const ownRow = index >= 0 ? employees[index] : { registration, name: employeeName, shift: "", vacationDays: [], verified: true };
+    if (index < 0 && employees.some((row: any) => String(row.name ?? "").trim().toLocaleLowerCase("pt-BR") === employeeName.toLocaleLowerCase("pt-BR"))) {
+      return reply({ error: "Há um funcionário com o mesmo nome e outra matrícula nesta escala. Peça ao Mestre para conferir antes de cadastrar." }, 409);
+    }
+    if (index < 0) employees.push(ownRow);
+    const ownIndex = index >= 0 ? index : employees.length - 1;
+    employees[ownIndex] = { ...employees[ownIndex], daysOff: days, verified: true };
     schedule.employees = employees;
     schedule.updatedAt = Date.now();
     schedule.revision = Number(schedule.revision ?? 0) + 1;
+
+    if (!exists) {
+      const commitResponse = await fetch("https://firestore.googleapis.com/v1/projects/" + projectId + "/databases/(default)/documents:commit", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+        body: JSON.stringify({ writes: [{
+          update: { name: "projects/" + projectId + "/databases/(default)/documents/work_schedules/" + monthKey, fields: writeFields(schedule) },
+          currentDocument: { exists: false },
+        }] }),
+      });
+      if (commitResponse.status === 409 || commitResponse.status === 412) {
+        return reply({ error: "Uma escala acabou de ser criada neste mês. Atualize o perfil e tente novamente." }, 409);
+      }
+      if (!commitResponse.ok) return reply({ error: "Não foi possível criar o registro das suas folgas. Tente novamente." }, 502);
+      return reply({ ok: true, registration, monthKey, daysOff: days });
+    }
 
     const updateUrl = documentUrl +
       "?updateMask.fieldPaths=employees&updateMask.fieldPaths=updatedAt&updateMask.fieldPaths=revision" +
