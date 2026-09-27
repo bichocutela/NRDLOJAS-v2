@@ -40,6 +40,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.TimeoutCancellationException
 import com.google.firebase.FirebaseNetworkException
@@ -47,6 +48,7 @@ import com.google.firebase.FirebaseTooManyRequestsException
 import com.google.firebase.auth.FirebaseAuth
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveStyle
+import com.example.ui.theme.LocalNrdDrawerIsOpen
 import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.expressiveShadow
 import com.example.data.RemoteHomeSettings
@@ -67,6 +69,7 @@ fun AppNavGraph(
 ) {
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val drawerOpenSignal = LocalNrdDrawerIsOpen.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val nossaGenteApi = remember { com.example.data.NossaGenteApi(context) }
@@ -88,6 +91,12 @@ fun AppNavGraph(
         bottomEnd = if (screenProfile.compact) 28.dp else 36.dp
     )
     val glassDrawerShape = RoundedCornerShape(topEnd = 32.dp, bottomEnd = 32.dp)
+
+    LaunchedEffect(drawerState, drawerOpenSignal) {
+        snapshotFlow { drawerState.isOpen }.collectLatest { isOpen ->
+            drawerOpenSignal?.value = isOpen
+        }
+    }
 
     DisposableEffect(firebaseAuth) {
         val listener = FirebaseAuth.AuthStateListener { auth ->
