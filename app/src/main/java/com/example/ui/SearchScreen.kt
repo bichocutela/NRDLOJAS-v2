@@ -507,24 +507,19 @@ fun SearchScreen(
         homeListState, mostUsedListState, isExpressiveGlassTheme
     ) {
         if (mostUsed.isEmpty() || !homeSettings.showMostUsed) return@LaunchedEffect
-        // Observe scrolling outside composition. collectLatest also cancels an
-        // in-flight carousel animation as soon as vertical scrolling starts.
-        snapshotFlow { homeListState.isScrollInProgress }
-            .collectLatest { isScrolling ->
-                if (!isScrolling) {
-                    // Read visibility once after scrolling settles. Keeping layoutInfo
-                    // out of snapshotFlow avoids tracking every layout/scroll update.
-                    val sectionVisible = !isExpressiveGlassTheme ||
-                        homeListState.layoutInfo.visibleItemsInfo.any { it.key == "home-most-used" }
-                    if (sectionVisible) {
-                        while (true) {
-                            delay(homeSettings.carouselIntervalSeconds * 1000L)
-                            if (!mostUsedListState.isScrollInProgress) {
-                                val nextIndex = (mostUsedListState.firstVisibleItemIndex + 1) % mostUsed.size
-                                mostUsedListState.animateScrollToItem(nextIndex)
-                            }
-                        }
-                    }
+        // Observe scroll state only. Check visibility once after scrolling settles,
+        // without subscribing to layoutInfo changes on every scroll frame.
+        snapshotFlow { homeListState.isScrollInProgress }.collectLatest { isScrolling ->
+            if (isScrolling) return@collectLatest
+            val sectionVisible = !isExpressiveGlassTheme ||
+                homeListState.layoutInfo.visibleItemsInfo.any { it.key == "home-most-used" }
+            if (!sectionVisible) return@collectLatest
+
+            while (true) {
+                delay(homeSettings.carouselIntervalSeconds * 1000L)
+                if (!mostUsedListState.isScrollInProgress) {
+                    val nextIndex = (mostUsedListState.firstVisibleItemIndex + 1) % mostUsed.size
+                    mostUsedListState.animateScrollToItem(nextIndex)
                 }
             }
         }
@@ -1471,6 +1466,9 @@ fun SearchScreen(
                 viewModel = viewModel,
                 appTheme = appTheme,
                 textPreferences = textPreferences,
+                isExpressiveGlassTheme = isExpressiveGlassTheme,
+                vibrateOnClick = vibrateOnClick,
+                vibrator = vibrator,
                 onDismiss = { selectedCategory = null }
             )
         }
@@ -1911,6 +1909,9 @@ fun CategoryProductsSheet(
     viewModel: MainViewModel,
     appTheme: String,
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
+    isExpressiveGlassTheme: Boolean = false,
+    vibrateOnClick: Boolean = true,
+    vibrator: Vibrator? = null,
     onDismiss: () -> Unit
 ) {
     val glass = rememberGlassVisualStyle()
@@ -1941,7 +1942,16 @@ fun CategoryProductsSheet(
             )
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed(products, key = { _, item -> item.code }) { index, product ->
-                    ProductCard(product, viewModel, index, appTheme, textPreferences, lightweightGlass = isExpressiveGlassTheme, vibrateOnClick = vibrateOnClick, vibrator = vibrator)
+                    ProductCard(
+                        product,
+                        viewModel,
+                        index,
+                        appTheme,
+                        textPreferences,
+                        lightweightGlass = isExpressiveGlassTheme,
+                        vibrateOnClick = vibrateOnClick,
+                        vibrator = vibrator
+                    )
                 }
             }
         }
