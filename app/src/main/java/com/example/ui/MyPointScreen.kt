@@ -3,6 +3,7 @@ package com.example.ui
 import android.graphics.BitmapFactory
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -255,7 +256,20 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                         expanded = daysOffExpanded,
                         registration = employeeProfile?.registration,
                         onToggle = { daysOffExpanded = !daysOffExpanded },
-                        onSelectMonth = { selectedScheduleKey = it }
+                        onSelectMonth = { selectedScheduleKey = it },
+                        onDaysOffSaved = { monthKey, days ->
+                            workSchedules = workSchedules.map { schedule ->
+                                if (schedule.monthKey != monthKey) schedule else schedule.copy(
+                                    employees = schedule.employees.map { row ->
+                                        if (row.registration.filter(Char::isDigit) == employeeProfile?.registration?.filter(Char::isDigit))
+                                            row.copy(daysOff = days) else row
+                                    },
+                                    updatedAt = System.currentTimeMillis(),
+                                    revision = schedule.revision + 1
+                                )
+                            }
+                            employeeProfile?.registration?.let { com.example.util.ScheduleReminderWorker.cacheSchedules(context, workSchedules, it) }
+                        }
                     )
                     hours?.let { summary ->
                         val hoursShape = if (isExpressive) RoundedCornerShape(30.dp) else MaterialTheme.shapes.medium
@@ -442,12 +456,19 @@ private fun ProfileNotificationSwitch(label: String, checked: Boolean, onChecked
 @Composable
 private fun MyDaysOffCard(
     schedules: List<WorkSchedule>, selectedKey: String, expanded: Boolean, registration: String?,
-    onToggle: () -> Unit, onSelectMonth: (String) -> Unit
+    onToggle: () -> Unit, onSelectMonth: (String) -> Unit,
+    onDaysOffSaved: (String, List<Int>) -> Unit
 ) {
     var selectorExpanded by remember { mutableStateOf(false) }
     val selected = schedules.firstOrNull { it.monthKey == selectedKey }
     val digits = registration.orEmpty().filter(Char::isDigit)
     val employee = selected?.employees?.firstOrNull { it.registration.filter(Char::isDigit) == digits }
+    var editing by remember(selectedKey, digits) { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var saveMessage by remember { mutableStateOf<String?>(null) }
+    var selectedDays by remember(selectedKey, digits) { mutableStateOf(employee?.daysOff.orEmpty().toSet()) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     Card(Modifier.fillMaxWidth(), shape = if (LocalExpressiveStyle.current.enabled) RoundedCornerShape(28.dp) else MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -455,20 +476,28 @@ private fun MyDaysOffCard(
                 IconButton(onClick = onToggle) { Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, "Expandir Minhas Folgas") }
             }
             if (expanded) {
-                androidx.compose.foundation.layout.Box {
-                    Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
-                        TextButton(onClick = { selectorExpanded = true }, modifier = Modifier.padding(horizontal = 6.dp)) {
-                            val label = selected?.let { "${monthName(it.month)}/${it.year}" } ?: "Escala do mês atual indisponível"
-                            Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("$label  ▾", style = MaterialTheme.typography.titleSmall)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.foundation.layout.Box(Modifier.weight(1f, fill = false)) {
+                        Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
+                            TextButton(onClick = { selectorExpanded = true }, modifier = Modifier.padding(horizontal = 6.dp)) {
+                                val label = selected?.let { "${monthName(it.month)}/${it.year}" } ?: "Escala indisponível"
+                                Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("$label  ▾", style = MaterialTheme.typography.titleSmall)
+                            }
+                        }
+                        DropdownMenu(expanded = selectorExpanded, onDismissRequest = { selectorExpanded = false }) {
+                            schedules.forEach { schedule ->
+                                val label = "${monthName(schedule.month)}/${schedule.year}"
+                                DropdownMenuItem(text = { Text(label) }, onClick = { onSelectMonth(schedule.monthKey); selectorExpanded = false })
+                            }
                         }
                     }
-                    DropdownMenu(expanded = selectorExpanded, onDismissRequest = { selectorExpanded = false }) {
-                        schedules.forEach { schedule ->
-                            val label = "${monthName(schedule.month)}/${schedule.year}"
-                            DropdownMenuItem(text = { Text(label) }, onClick = { onSelectMonth(schedule.monthKey); selectorExpanded = false })
-                        }
+                    if (employee != null) {
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = { selectedDays = employee.daysOff.toSet(); editing = !editing; saveMessage = null },
+                            enabled = !saving
+                        ) { Text(if (editing) "Fechar" else "Adicionar folgas", style = MaterialTheme.typography.labelMedium) }
                     }
                 }
                 when {
@@ -482,8 +511,9 @@ private fun MyDaysOffCard(
                         Spacer(Modifier.height(12.dp))
                         Text("Folgas", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                         Spacer(Modifier.height(8.dp))
-                        if (employee.daysOff.isEmpty()) Text("Nenhuma folga registrada.")
-                        else employee.daysOff.distinct().sorted().chunked(4).forEach { week ->
+                        val visibleDays = if (editing) selectedDays.sorted() else employee.daysOff.distinct().sorted()
+                        if (visibleDays.isEmpty()) Text(if (editing) "Toque nas datas para marcar suas folgas." else "Nenhuma folga registrada.")
+                        else visibleDays.chunked(4).forEach { week ->
                             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 week.forEach { day ->
                                     val sunday = java.util.GregorianCalendar(selected.year, selected.month - 1, day)
@@ -503,12 +533,74 @@ private fun MyDaysOffCard(
                                 repeat(4 - week.size) { Spacer(Modifier.weight(1f)) }
                             }
                         }
+                        if (editing) {
+                            Spacer(Modifier.height(14.dp))
+                            Text("Selecione as datas de folga • ${monthName(selected.month)}/${selected.year}", style = MaterialTheme.typography.bodySmall)
+                            Spacer(Modifier.height(6.dp))
+                            MyDaysOffCalendar(selected.year, selected.month, selectedDays) { day ->
+                                selectedDays = if (day in selectedDays) selectedDays - day else selectedDays + day
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            androidx.compose.material3.Button(
+                                onClick = {
+                                    saving = true
+                                    saveMessage = null
+                                    scope.launch {
+                                        com.example.data.NossaGenteApi(context.applicationContext)
+                                            .saveMyScheduleDaysOff(selected.year, selected.month, selectedDays.toList())
+                                            .onSuccess {
+                                                onDaysOffSaved(selected.monthKey, selectedDays.sorted())
+                                                editing = false
+                                                saveMessage = "Folgas salvas e sincronizadas no seu perfil."
+                                            }
+                                            .onFailure { saveMessage = it.message ?: "Não foi possível salvar as folgas." }
+                                        saving = false
+                                    }
+                                },
+                                enabled = !saving,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (saving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                                else Text("Salvar folgas")
+                            }
+                        }
+                        saveMessage?.let { Text(it, color = if (it.startsWith("Folgas salvas")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                         if (employee.vacationDays.isNotEmpty()) {
                             Spacer(Modifier.height(6.dp))
                             Text("Férias (FE): ${employee.vacationDays.sorted().joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MyDaysOffCalendar(year: Int, month: Int, selected: Set<Int>, onToggle: (Int) -> Unit) {
+    val calendar = java.util.GregorianCalendar(year, month - 1, 1)
+    val offset = calendar.get(java.util.Calendar.DAY_OF_WEEK) - 1
+    val count = calendar.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+    val cells = List(offset) { null } + (1..count).map { it }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf("Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb").forEach { day ->
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { Text(day, style = MaterialTheme.typography.labelSmall) }
+            }
+        }
+        cells.chunked(7).forEach { week ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                week.forEach { day ->
+                    if (day == null) Spacer(Modifier.weight(1f).height(42.dp))
+                    else Box(
+                        Modifier.weight(1f).height(42.dp)
+                            .background(if (day in selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                RoundedCornerShape(10.dp))
+                            .clickable { onToggle(day) },
+                        contentAlignment = Alignment.Center
+                    ) { Text(day.toString(), color = if (day in selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface) }
+                }
+                repeat(7 - week.size) { Spacer(Modifier.weight(1f).height(42.dp)) }
             }
         }
     }

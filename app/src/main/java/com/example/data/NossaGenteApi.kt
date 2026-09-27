@@ -116,6 +116,35 @@ class NossaGenteApi(context: Context) {
         findEmployeeByRegistrationOnce(expected, allowSavedCredentialRecovery = true)
     }
 
+    /** Persiste somente as folgas da matrícula retornada pelo /me autenticado. */
+    suspend fun saveMyScheduleDaysOff(year: Int, month: Int, days: List<Int>): Result<Unit> = withContext(Dispatchers.IO) {
+        val token = currentToken() ?: return@withContext Result.failure(IllegalStateException("Entre no Nossa Gente para salvar suas folgas."))
+        if (year !in 2000..2100 || month !in 1..12) return@withContext Result.failure(IllegalArgumentException("Mês e ano inválidos."))
+        val lastDay = java.util.GregorianCalendar(year, month - 1, 1).getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+        val validDays = days.distinct().sorted()
+        if (validDays.any { it !in 1..lastDay }) return@withContext Result.failure(IllegalArgumentException("Há uma data que não existe neste mês."))
+        runCatching {
+            val supabaseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
+            val supabaseKey = BuildConfig.SUPABASE_ANON_KEY.trim()
+            check(supabaseUrl.isNotBlank() && supabaseKey.isNotBlank()) { "Sincronização de folgas indisponível neste build." }
+            val payload = JSONObject().put("year", year).put("month", month).put("daysOff", JSONArray(validDays))
+            val request = Request.Builder()
+                .url("$supabaseUrl/functions/v1/save-my-days-off")
+                .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .header("Authorization", "Bearer $supabaseKey")
+                .header("apikey", supabaseKey)
+                .header("x-nossa-gente-token", token)
+                .header("Accept", "application/json")
+                .build()
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                val json = runCatching { JSONObject(body) }.getOrNull()
+                if (!response.isSuccessful) error(json?.optString("error")?.takeIf { it.isNotBlank() }
+                    ?: ("Não foi possível salvar suas folgas (HTTP " + response.code + ")."))
+            }
+        }
+    }
+
     private suspend fun findEmployeeByRegistrationOnce(
         expected: String,
         allowSavedCredentialRecovery: Boolean
