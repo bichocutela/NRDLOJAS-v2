@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Delete
@@ -907,19 +908,16 @@ fun MestreScreen(
                             "rise" to "Subida suave",
                             "drift" to "Deriva lateral"
                         )
-                        ExposedDropdownMenuBox(
-                            expanded = expandedBubbleMotion,
-                            onExpandedChange = { expandedBubbleMotion = !expandedBubbleMotion }
-                        ) {
+                        Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedTextField(
                                 value = motionOptions.find { it.first == draftAppearanceSettings.bubbleMotion }?.second ?: "Aleatória",
                                 onValueChange = {},
                                 readOnly = true,
                                 label = { Text("Modelo de movimento") },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedBubbleMotion) },
-                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                                trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                                modifier = Modifier.fillMaxWidth().clickable { expandedBubbleMotion = !expandedBubbleMotion }
                             )
-                            ExposedDropdownMenu(
+                            DropdownMenu(
                                 expanded = expandedBubbleMotion,
                                 onDismissRequest = { expandedBubbleMotion = false }
                             ) {
@@ -1060,22 +1058,17 @@ fun MestreScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    ExposedDropdownMenuBox(
-                        expanded = expandedRemoteTheme,
-                        onExpandedChange = {
-                            expandedRemoteTheme = !expandedRemoteTheme
-                        }
-                    ) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = themeOptions.find { it.first == draftAppearanceSettings.theme }?.second ?: "Multicolorido",
                             onValueChange = {},
                             readOnly = true,
                             label = { Text("Tema global") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRemoteTheme) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                            modifier = Modifier.fillMaxWidth().clickable { expandedRemoteTheme = !expandedRemoteTheme },
                             enabled = true
                         )
-                        ExposedDropdownMenu(
+                        DropdownMenu(
                             expanded = expandedRemoteTheme,
                             onDismissRequest = { expandedRemoteTheme = false }
                         ) {
@@ -1091,22 +1084,17 @@ fun MestreScreen(
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    ExposedDropdownMenuBox(
-                        expanded = expandedRemoteMode,
-                        onExpandedChange = {
-                            expandedRemoteMode = !expandedRemoteMode
-                        }
-                    ) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = appearanceModeOptions.find { it.first == draftAppearanceSettings.appearanceMode }?.second ?: "Seguir sistema",
                             onValueChange = {},
                             readOnly = true,
                             label = { Text("Modo de aparência") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRemoteMode) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                            modifier = Modifier.fillMaxWidth().clickable { expandedRemoteMode = !expandedRemoteMode },
                             enabled = true
                         )
-                        ExposedDropdownMenu(
+                        DropdownMenu(
                             expanded = expandedRemoteMode,
                             onDismissRequest = { expandedRemoteMode = false }
                         ) {
