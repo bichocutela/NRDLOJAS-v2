@@ -45,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import com.example.data.GeminiMasterService
 import com.example.data.NossaGenteApi
 import com.example.data.NossaGenteDirectoryResult
-import com.example.data.NossaGenteDirectoryEmployee
 import com.example.data.WorkScheduleEmployee
 import com.example.data.FirebaseService
 import kotlinx.coroutines.launch
@@ -65,8 +64,7 @@ internal fun MestreWorkScheduleSettings() {
     var year by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
-    val rowPreviews = remember { mutableStateMapOf<String, android.graphics.Bitmap>() }
-    var directoryCache by remember { mutableStateOf<List<NossaGenteDirectoryEmployee>?>(null) }
+    val rowPreviews = remember { mutableStateMapOf<String, RosterLinePreview>() }
     var selectedImage by remember { mutableStateOf<android.net.Uri?>(null) }
     var imageRotation by remember { mutableIntStateOf(0) }
 
@@ -104,7 +102,9 @@ internal fun MestreWorkScheduleSettings() {
                 if (extractedMonth in 1..12) month = extractedMonth.toString()
                 if (extractedYear in 2000..2100) year = extractedYear.toString()
                 val rows = json.optJSONArray("employees") ?: error("A resposta não contém a lista de funcionários.")
-                rowPreviews.values.forEach { it.recycle() }
+                rowPreviews.values.forEach { preview ->
+                    preview.full.recycle(); preview.identity.recycle(); preview.marks.recycle()
+                }
                 rowPreviews.clear()
                 employees.clear()
                 for (index in 0 until rows.length()) {
@@ -118,9 +118,15 @@ internal fun MestreWorkScheduleSettings() {
                         val margin = (bounds.height() * 0.8f).toInt().coerceAtLeast(10)
                         val top = (bounds.centerY() - margin).coerceAtLeast(0)
                         val bottom = (bounds.centerY() + margin).coerceAtMost(resized.height)
-                        if (bottom > top) rowPreviews[registration] = android.graphics.Bitmap.createBitmap(
-                            resized, 0, top, resized.width, bottom - top
-                        )
+                        if (bottom > top) {
+                            val full = android.graphics.Bitmap.createBitmap(resized, 0, top, resized.width, bottom - top)
+                            val split = bounds.right.coerceIn((full.width * 0.35f).toInt(), (full.width * 0.55f).toInt())
+                            rowPreviews[registration] = RosterLinePreview(
+                                full,
+                                android.graphics.Bitmap.createBitmap(full, 0, 0, split, full.height),
+                                android.graphics.Bitmap.createBitmap(full, split, 0, full.width - split, full.height)
+                            )
+                        }
                     }
                     employees += WorkScheduleEmployee(
                         registration = registration,
@@ -194,14 +200,20 @@ internal fun MestreWorkScheduleSettings() {
                                 OutlinedTextField(row.name, { employees[index] = row.copy(name = it, verified = false); matchedName = null }, Modifier.fillMaxWidth(), label = { Text("Nome") }, singleLine = true)
                                 OutlinedTextField(row.registration, { employees[index] = row.copy(registration = it.filter(Char::isDigit), verified = false); matchedName = null }, Modifier.fillMaxWidth(), label = { Text("Matrícula") }, singleLine = true)
                                 OutlinedTextField(row.shift, { employees[index] = row.copy(shift = it) }, Modifier.fillMaxWidth(), label = { Text("Setor / horário") }, singleLine = true)
-                                rowPreviews[row.registration]?.let { strip ->
-                                    Text("Linha original deste funcionário", style = MaterialTheme.typography.titleSmall)
-                                    Box(Modifier.fillMaxWidth().height(82.dp).horizontalScroll(rememberScrollState())) {
-                                        Image(strip.asImageBitmap(), contentDescription = "Linha da escala de ${row.name}",
-                                            modifier = Modifier.width(1400.dp).height(76.dp), contentScale = ContentScale.FillBounds)
+                                rowPreviews[row.registration]?.let { preview ->
+                                    Text("Linha completa da foto", style = MaterialTheme.typography.titleSmall)
+                                    Image(preview.full.asImageBitmap(), contentDescription = "Linha completa de ${row.name}",
+                                        modifier = Modifier.fillMaxWidth().height(50.dp), contentScale = ContentScale.FillBounds)
+                                    Text("Nome completo e matrícula na foto", style = MaterialTheme.typography.labelMedium)
+                                    Image(preview.identity.asImageBitmap(), contentDescription = "Nome e matrícula de ${row.name}",
+                                        modifier = Modifier.fillMaxWidth().height(62.dp), contentScale = ContentScale.FillBounds)
+                                    Text("Marcações X e FE na foto • deslize para os lados", style = MaterialTheme.typography.labelMedium)
+                                    Box(Modifier.fillMaxWidth().height(72.dp).horizontalScroll(rememberScrollState())) {
+                                        Image(preview.marks.asImageBitmap(), contentDescription = "Marcações da linha de ${row.name}",
+                                            modifier = Modifier.width(920.dp).height(66.dp), contentScale = ContentScale.FillBounds)
                                     }
-                                    Text("Deslize a linha para os lados para conferir os X.", style = MaterialTheme.typography.bodySmall)
-                                } ?: Text("A matrícula não foi localizada no OCR para recortar a linha. Confira a foto original.", style = MaterialTheme.typography.bodySmall)
+                                } ?: Text("Não foi possível localizar a matrícula na foto para mostrar a linha. Gire ou refaça a foto antes de confirmar.",
+                                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                                 Text("Toque para marcar ou desmarcar a folga", style = MaterialTheme.typography.titleSmall)
                                 ScheduleDayGrid(row.daysOff, month.toIntOrNull(), year.toIntOrNull()) { day ->
                                     employees[index] = row.copy(daysOff = row.daysOff.toggle(day))
@@ -212,21 +224,22 @@ internal fun MestreWorkScheduleSettings() {
                                 if (editVacation) ScheduleDayGrid(row.vacationDays, month.toIntOrNull(), year.toIntOrNull()) { day ->
                                     employees[index] = row.copy(vacationDays = row.vacationDays.toggle(day))
                                 }
+                                Text("A conferência consulta o cadastro de colaboradores com a sessão Nossa Gente autenticada em Meu Perfil.",
+                                    style = MaterialTheme.typography.bodySmall)
                                 Button(onClick = {
                                     scope.launch {
                                         busy = true
-                                        val result = directoryCache?.let { NossaGenteDirectoryResult.Success(it) }
-                                            ?: NossaGenteApi(context.applicationContext).fetchEmployeeDirectory()
+                                        val result = NossaGenteApi(context.applicationContext)
+                                            .findEmployeeByRegistration(row.registration)
                                         when (result) {
                                             NossaGenteDirectoryResult.Unauthorized -> message = "Entre no Nossa Gente para consultar a matrícula."
                                             is NossaGenteDirectoryResult.Error -> message = result.message
                                             is NossaGenteDirectoryResult.Success -> {
-                                                directoryCache = result.employees
                                                 val official = result.employees.firstOrNull {
                                                     it.registration.filter(Char::isDigit) == row.registration.filter(Char::isDigit)
                                                 }
                                                 matchedName = official?.name
-                                                message = if (official == null) "Matrícula não encontrada na Nossa Gente. Não foi salva."
+                                                message = if (official == null) "A API não confirmou esta matrícula. Não foi salva."
                                                     else "Funcionário encontrado: ${official.name}. Confira o nome e confirme para salvar."
                                             }
                                         }
@@ -267,6 +280,12 @@ internal fun MestreWorkScheduleSettings() {
 private fun JSONObject.intList(key: String): List<Int> = optJSONArray(key)?.let { a -> (0 until a.length()).mapNotNull { a.optInt(it).takeIf { day -> day in 1..31 } }.distinct().sorted() }.orEmpty()
 private fun List<Int>.toggle(day: Int): List<Int> =
     (if (day in this) filterNot { it == day } else this + day).distinct().sorted()
+
+private data class RosterLinePreview(
+    val full: android.graphics.Bitmap,
+    val identity: android.graphics.Bitmap,
+    val marks: android.graphics.Bitmap
+)
 
 @Composable
 private fun ScheduleDayGrid(selected: List<Int>, month: Int?, year: Int?, onToggle: (Int) -> Unit) {

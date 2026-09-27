@@ -15,6 +15,31 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 class NossaGenteApiTest {
     @Test
+    fun parsesPaginatedCollaboratorsAndFindsOtherEmployees() {
+        val first = parseCollaboratorsPage("""{"data":[{"nome":"Alessandro Paulo da Silva","matricula":"10293613"}],"current_page":1,"last_page":2}""")!!
+        assertEquals("10293613", first.employees.single().registration)
+        assertEquals(true, first.hasNext)
+        val second = parseCollaboratorsPage("""{"data":[{"nome":"Luciana Gloria Almeida Ribeiro","matricula":10294749}],"current_page":2,"last_page":2}""")!!
+        assertEquals("Luciana Gloria Almeida Ribeiro", second.employees.single().name)
+        assertEquals(false, second.hasNext)
+        assertEquals(null, parseCollaboratorsPage("""{"message":"unauthorized"}"""))
+    }
+
+    @Test
+    fun confirmsOnlyTheAuthenticatedProfilesRegistration() {
+        val profile = EmployeeProfile(name = "Alessandro Paulo da Silva", registration = "10293613")
+        val found = matchAuthenticatedProfile(profile, "10293613")
+        org.junit.Assert.assertTrue(found is NossaGenteDirectoryResult.Success)
+        assertEquals("Alessandro Paulo da Silva", (found as NossaGenteDirectoryResult.Success).employees.single().name)
+        val other = matchAuthenticatedProfile(profile, "1012716")
+        org.junit.Assert.assertTrue(other is NossaGenteDirectoryResult.Error)
+        org.junit.Assert.assertTrue((other as NossaGenteDirectoryResult.Error).message.contains("A sessão Nossa Gente está"))
+        val missing = matchAuthenticatedProfile(EmployeeProfile(name = "Alessandro"), "10293613")
+        org.junit.Assert.assertTrue(missing is NossaGenteDirectoryResult.Error)
+        org.junit.Assert.assertTrue((missing as NossaGenteDirectoryResult.Error).message.contains("não informou a matrícula"))
+    }
+
+    @Test
     fun parsesFlatPromotionsByProductAndStore() {
         val api = NossaGenteApi(ApplicationProvider.getApplicationContext())
         val json = """
