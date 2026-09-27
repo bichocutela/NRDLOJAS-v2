@@ -136,7 +136,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.drawscope.drawOutline
+import androidx.compose.ui.graphics.drawscope.drawPath
 import android.os.Vibrator
 import android.content.Context
 import android.os.VibrationEffect
@@ -217,9 +217,9 @@ private fun Modifier.jellyGlassSurface(
     )
     val stroke = Stroke(width = rimWidth.toPx())
     onDrawBehind {
-        drawOutline(outline, fill)
+        drawPath(path, fill)
         clipPath(path) { drawRect(shine, size = Size(size.width, highlightPx)) }
-        drawOutline(outline, rim, style = stroke)
+        drawPath(path, rim, style = stroke)
     }
 }
 
