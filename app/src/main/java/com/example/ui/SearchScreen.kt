@@ -192,35 +192,15 @@ data class HomeTextPreferences(
     val largeText: Boolean = false
 )
 
-/** Cached, static jelly-glass finish used by repeated Glass Expressivo surfaces. */
+/** A single static fill and rim for repeated Glass Expressivo surfaces. */
 private fun Modifier.jellyGlassSurface(
     shape: Shape,
     fill: Brush,
     rim: Brush,
-    rimWidth: androidx.compose.ui.unit.Dp,
-    highlightHeight: androidx.compose.ui.unit.Dp = 15.dp
-): Modifier = drawWithCache {
-    val outline = shape.createOutline(size, layoutDirection, this)
-    val path = Path().apply {
-        when (outline) {
-            is androidx.compose.ui.graphics.Outline.Rectangle -> addRect(outline.rect)
-            is androidx.compose.ui.graphics.Outline.Rounded -> addRoundRect(outline.roundRect)
-            is androidx.compose.ui.graphics.Outline.Generic -> addPath(outline.path)
-        }
-    }
-    val highlightPx = highlightHeight.toPx().coerceAtMost(size.height)
-    val shine = Brush.verticalGradient(
-        colors = listOf(Color.White.copy(alpha = 0.54f), Color.White.copy(alpha = 0.12f), Color.Transparent),
-        startY = 0f,
-        endY = highlightPx
-    )
-    val stroke = Stroke(width = rimWidth.toPx())
-    onDrawBehind {
-        drawPath(path, fill)
-        clipPath(path) { drawRect(shine, size = Size(size.width, highlightPx)) }
-        drawPath(path, rim, style = stroke)
-    }
-}
+    rimWidth: androidx.compose.ui.unit.Dp
+): Modifier = this
+    .background(fill, shape)
+    .border(rimWidth, rim, shape)
 
 @Composable
 fun rememberHomeTextPreferences(userPreferences: com.example.data.UserPreferences): HomeTextPreferences {
@@ -1864,8 +1844,7 @@ fun CategorySection(
                                     rim = Brush.horizontalGradient(
                                         listOf(Color.White.copy(alpha = 0.92f), Color.White.copy(alpha = 0.36f))
                                     ),
-                                    rimWidth = 1.2.dp,
-                                    highlightHeight = 10.dp
+                                    rimWidth = 1.2.dp
                                 )
                         } else {
                             Modifier
@@ -2113,9 +2092,8 @@ fun ProductCard(
                     Modifier.jellyGlassSurface(
                         shape = cardShape,
                         fill = Brush.horizontalGradient(listOf(cardAccent.first.copy(alpha = 0.22f), Color.White.copy(alpha = 0.68f))),
-                        rim = Brush.sweepGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFF80D8FF), Color(0xFFFF80AB), Color(0xFFFFE082), Color.White.copy(alpha = 0.96f))),
-                        rimWidth = 1.5.dp,
-                        highlightHeight = 18.dp
+                        rim = Brush.linearGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFF80D8FF), Color(0xFFFF80AB), Color(0xFFFFE082), Color.White.copy(alpha = 0.96f))),
+                        rimWidth = 1.5.dp
                     )
                 } else {
                     Modifier
@@ -2560,9 +2538,8 @@ fun MiniProductCard(
                     Modifier.jellyGlassSurface(
                         shape = cardShape,
                         fill = Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.70f), Color.White.copy(alpha = 0.60f))),
-                        rim = Brush.sweepGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFF80D8FF), Color(0xFFFF80AB), Color(0xFFFFE082), Color.White.copy(alpha = 0.96f))),
-                        rimWidth = 1.5.dp,
-                        highlightHeight = 18.dp
+                        rim = Brush.linearGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFF80D8FF), Color(0xFFFF80AB), Color(0xFFFFE082), Color.White.copy(alpha = 0.96f))),
+                        rimWidth = 1.5.dp
                     )
                 } else {
                     Modifier
@@ -2871,9 +2848,8 @@ fun HistoryItem(
                         isExpressiveGlass -> Modifier.jellyGlassSurface(
                             shape = itemShape,
                             fill = Brush.horizontalGradient(listOf(dynColors.first.copy(alpha = 0.30f), Color.White.copy(alpha = 0.68f))),
-                            rim = Brush.sweepGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFF80D8FF), Color(0xFFFF80AB), Color(0xFFFFE082), Color.White.copy(alpha = 0.96f))),
-                            rimWidth = 1.3.dp,
-                            highlightHeight = 20.dp
+                            rim = Brush.linearGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFF80D8FF), Color(0xFFFF80AB), Color(0xFFFFE082), Color.White.copy(alpha = 0.96f))),
+                            rimWidth = 1.3.dp
                         )
                         glass.enabled -> Modifier
                             .background(glass.fill.copy(alpha = glass.alpha))
@@ -2907,9 +2883,8 @@ fun HistoryItem(
                                         colors = listOf(Color.White.copy(alpha = 0.56f), dynColors.first, dynColors.first.copy(alpha = 0.76f)),
                                         center = Offset(16f, 12f)
                                     ),
-                                    rim = Brush.sweepGradient(listOf(Color.White, Color(0xFF80D8FF), Color(0xFFFF80AB), Color(0xFFFFE082), Color.White)),
-                                    rimWidth = 1.2.dp,
-                                    highlightHeight = 18.dp
+                                    rim = Brush.linearGradient(listOf(Color.White, Color(0xFF80D8FF), Color(0xFFFF80AB), Color(0xFFFFE082), Color.White)),
+                                    rimWidth = 1.2.dp
                                 )
                                 .graphicsLayer { shape = CircleShape; clip = true }
                         } else {
