@@ -1176,7 +1176,7 @@ private fun AmbientLiquidBubbleLayer(
         modifier = modifier
             .onSizeChanged { canvasSize = Size(it.width.toFloat(), it.height.toFloat()) }
             .drawWithCache {
-                val scale = density
+                val scale = density.density
                 val rimStroke = Stroke(width = 1.45f * scale)
                 val highlightStroke = Stroke(width = 3.1f * scale, cap = StrokeCap.Round)
                 val bounceStroke = Stroke(width = 2.2f * scale, cap = StrokeCap.Round)
