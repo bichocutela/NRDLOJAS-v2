@@ -1,9 +1,5 @@
 package com.example.ui.theme
 
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.toArgb
-
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.LaunchedEffect
@@ -48,6 +44,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
@@ -1030,27 +1027,213 @@ fun GlassSoftBackground(
 }
 
 
-/** Dispatches to the selected liquid renderer. */
+private class AmbientLiquidBubble(
+    var x: Float,
+    var y: Float,
+    var velocityX: Float,
+    var velocityY: Float,
+    val radiusDp: Float,
+    val color: Color,
+    val phase: Float
+)
+
 @Composable
 private fun AdaptiveWaterContainer(
     modifier: Modifier,
     primary: Color,
     secondary: Color,
-    isDark: Boolean
+    turbulence: Float,
+    speedMultiplier: Float,
+    motion: String,
+    sizeMultiplier: Float,
+    additionalBubbles: Int,
+    brightness: Float,
+    outlineEnabled: Boolean,
+    isDark: Boolean,
+    touchPoint: MutableState<Offset?>
 ) {
-    val tier = LocalDevicePerformanceTier.current
-    val engineConfig = LocalLiquidEngineConfig.current
+    val density = LocalDensity.current
+    val homeScrollSignal = LocalNrdHomeScrollInProgress.current ?: remember { MutableStateFlow(false) }
+    val drawerOpenSignal = LocalNrdDrawerIsOpen.current ?: remember { MutableStateFlow(false) }
+    val performanceTier = LocalDevicePerformanceTier.current
+    val bubbleCount = (4 + additionalBubbles.coerceAtLeast(0))
+        .coerceAtMost(performanceTier.maxBackgroundBubbles)
+    val enhancedLighting = performanceTier.enableComplexShaders
+    val pausePhysics = remember(performanceTier, homeScrollSignal, drawerOpenSignal) {
+        combine(homeScrollSignal, drawerOpenSignal) { scrolling, drawerOpen ->
+            (performanceTier.pausePhysicsOnScroll && scrolling) ||
+                (performanceTier.pausePhysicsOnDrawer && drawerOpen)
+        }
+    }
+    // This list changes only when the surface/profile changes; frame updates
+    // mutate its preallocated bubble objects and invalidate drawing via frameTick.
+    val bubbles = remember { ArrayList<AmbientLiquidBubble>(16) }
+    var canvasSize by remember { mutableStateOf(Size.Zero) }
+    var frameTick by remember { mutableLongStateOf(0L) }
 
-    LiquidEngine(
-        type = engineConfig.type,
-        modifier = modifier,
-        bubbleCount = tier.maxBackgroundBubbles,
-        primary = primary,
-        secondary = secondary,
-        lottieAssetName = engineConfig.lottieAssetName,
-        riveResourceId = engineConfig.riveResourceId,
-        riveStateMachineName = engineConfig.riveStateMachineName
-    )
+    LaunchedEffect(canvasSize, primary, secondary, isDark, bubbleCount) {
+        bubbles.clear()
+        if (canvasSize.width > 0f && canvasSize.height > 0f) {
+            val random = Random(primary.hashCode() xor secondary.hashCode() xor canvasSize.width.toInt())
+            repeat(bubbleCount) { index ->
+                val radius = 21f + random.nextFloat() * 24f
+                val tint = when (index % 4) {
+                    0 -> primary
+                    1 -> secondary
+                    else -> Color.White
+                }
+                bubbles += AmbientLiquidBubble(
+                    x = radius * density.density + random.nextFloat() * (canvasSize.width - radius * 2f * density.density).coerceAtLeast(1f),
+                    y = radius * density.density + random.nextFloat() * (canvasSize.height - radius * 2f * density.density).coerceAtLeast(1f),
+                    velocityX = (random.nextFloat() - 0.5f) * 16f * speedMultiplier,
+                    velocityY = (random.nextFloat() - 0.5f) * 16f * speedMultiplier,
+                    radiusDp = radius,
+                    phase = random.nextFloat() * 6.28318f,
+                    color = tint.copy(alpha = if (isDark) 0.34f else 0.48f)
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(canvasSize, turbulence, speedMultiplier, motion, sizeMultiplier, performanceTier, pausePhysics) {
+        var lastFrameNanos = 0L
+        while (true) {
+            if (pausePhysics.first()) {
+                pausePhysics.first { isPaused -> !isPaused }
+                lastFrameNanos = 0L
+                continue
+            }
+            withFrameNanos { frameNanos ->
+                if (lastFrameNanos != 0L && canvasSize.width > 0f && canvasSize.height > 0f) {
+                    val dt = ((frameNanos - lastFrameNanos) / 1_000_000_000f)
+                        .coerceIn(0.005f, 0.033f)
+                    var index = 0
+                    while (index < bubbles.size) {
+                        val bubble = bubbles[index]
+                        val radius = bubble.radiusDp * sizeMultiplier * density.density
+                        var vx: Float
+                        var vy: Float
+                        if (performanceTier.enableComplexShaders) {
+                            val damping = 0.955f.toDouble()
+                                .pow((dt / 0.016f).toDouble()).toFloat()
+                            val time = frameNanos / 1_000_000_000f
+                            val dx = bubble.x - canvasSize.width * 0.5f
+                            val dy = bubble.y - canvasSize.height * 0.5f
+                            val distance = hypot(dx, dy).coerceAtLeast(1f)
+                            vx = when (motion) {
+                                "circular" -> -dy / distance * 42f * speedMultiplier
+                                "rise" -> bubble.velocityX * 0.96f + sin(time * 0.7f + bubble.phase) * 9f * speedMultiplier
+                                "drift" -> 24f * speedMultiplier + sin(time * 0.24f + bubble.phase) * 10f
+                                else -> bubble.velocityX + sin(time * 0.46f + bubble.phase) * (34f + 54f * turbulence) * dt * speedMultiplier
+                            }
+                            vy = when (motion) {
+                                "circular" -> dx / distance * 42f * speedMultiplier
+                                "rise" -> -34f * speedMultiplier + sin(time * 0.39f + bubble.phase) * 8f
+                                "drift" -> sin(time * 0.39f + bubble.phase * 1.23f) * 7f
+                                else -> bubble.velocityY + sin(time * 0.39f + bubble.phase * 1.23f) * (30f + 48f * turbulence) * dt * speedMultiplier
+                            }
+                            val touchRadius = 250f * density.density
+                            touchPoint.value?.let { point ->
+                                val touchX = bubble.x - point.x
+                                val touchY = bubble.y - point.y
+                                val touchDistance = hypot(touchX, touchY)
+                                if (touchDistance in 1f..touchRadius) {
+                                    val force = (1f - touchDistance / touchRadius) * (1500f + 2100f * turbulence) * dt
+                                    vx += touchX / touchDistance * force
+                                    vy += touchY / touchDistance * force
+                                }
+                            }
+                            vx *= damping
+                            vy *= damping
+                            val speed = hypot(vx, vy)
+                            val maxSpeed = 118f * speedMultiplier
+                            if (speed > maxSpeed) {
+                                vx = vx / speed * maxSpeed
+                                vy = vy / speed * maxSpeed
+                            }
+                        } else {
+                            // Entry devices use constant linear motion without trigonometry or collision forces.
+                            vx = bubble.velocityX
+                            vy = bubble.velocityY
+                        }
+
+                        var x = bubble.x + vx * dt
+                        var y = bubble.y + vy * dt
+                        if (x < -radius) x = canvasSize.width + radius
+                        if (x > canvasSize.width + radius) x = -radius
+                        if (y < -radius) y = canvasSize.height + radius
+                        if (y > canvasSize.height + radius) y = -radius
+                        bubble.velocityX = vx
+                        bubble.velocityY = vy
+                        bubble.x = x
+                        bubble.y = y
+                        index++
+                    }
+                }
+                lastFrameNanos = frameNanos
+                frameTick = frameNanos
+            }
+        }
+    }
+
+    Canvas(
+        modifier = modifier
+            .onSizeChanged { canvasSize = Size(it.width.toFloat(), it.height.toFloat()) }
+            .graphicsLayer { clip = true }
+            .drawWithCache {
+                val scale = density.density
+                val rimStroke = Stroke(width = 1.45f * scale)
+                val highlightStroke = Stroke(width = 3.1f * scale, cap = StrokeCap.Round)
+                val bounceStroke = Stroke(width = 2.2f * scale, cap = StrokeCap.Round)
+                val lightStrength = brightness.coerceIn(0.25f, 2f)
+                val primaryGlow = primary.copy(alpha = (if (enhancedLighting) 0.13f else 0.07f) * lightStrength)
+                val secondaryGlow = secondary.copy(alpha = (if (enhancedLighting) 0.08f else 0.035f) * lightStrength)
+                val iridescentRim = if (enhancedLighting) {
+                    Brush.sweepGradient(
+                        listOf(Color.White.copy(alpha = 0.88f), Color(0xFF80D8FF).copy(alpha = 0.72f), Color(0xFFFF80AB).copy(alpha = 0.64f), Color(0xFFFFE082).copy(alpha = 0.76f), Color.White.copy(alpha = 0.88f))
+                    )
+                } else null
+                val whiteHighlight = Color.White.copy(alpha = (if (isDark) 0.76f else 0.85f) * lightStrength)
+                val whiteBounce = Color.White.copy(alpha = (if (isDark) 0.20f else 0.35f) * lightStrength)
+                val whiteFillAlpha = (if (isDark) 0.035f else 0.10f) * lightStrength
+                val whiteOutlineAlpha = (0.40f * lightStrength).coerceIn(0f, 0.9f)
+                onDrawBehind {
+                    if (frameTick == 0L) return@onDrawBehind
+                    var index = 0
+                    while (index < bubbles.size) {
+                        val bubble = bubbles[index]
+                        val cx = bubble.x
+                        val cy = bubble.y
+                        val radius = bubble.radiusDp * sizeMultiplier * scale
+                        if (!enhancedLighting) {
+                            drawCircle(Color.White.copy(alpha = 0.35f), radius * 0.96f, Offset(cx, cy))
+                            drawCircle(Color.White.copy(alpha = 0.55f), radius * 0.96f, Offset(cx, cy), style = rimStroke)
+                            index++
+                            continue
+                        }
+                        val highlightX = cx - radius * 0.30f
+                        val highlightY = cy - radius * 0.32f
+                        if (enhancedLighting) {
+                            drawCircle(primaryGlow, radius * 1.24f, Offset(cx, cy))
+                            drawCircle(secondaryGlow, radius * 1.10f, Offset(cx, cy))
+                        }
+                        drawCircle(bubble.color, radius * 0.98f, Offset(cx, cy), alpha = (0.20f * lightStrength).coerceIn(0f, 0.75f))
+                        drawCircle(Color.White, radius * 0.72f, Offset(highlightX, highlightY), alpha = whiteFillAlpha)
+                        if (outlineEnabled) {
+                            if (enhancedLighting) {
+                                drawCircle(iridescentRim!!, radius * 0.98f, Offset(cx, cy), style = rimStroke)
+                            } else {
+                                drawCircle(Color.White, radius * 0.98f, Offset(cx, cy), alpha = whiteOutlineAlpha, style = rimStroke)
+                            }
+                        }
+                        drawArc(whiteBounce, 28f, 118f, false, Offset(cx - radius * 0.84f, cy - radius * 0.84f), Size(radius * 1.68f, radius * 1.68f), style = bounceStroke)
+                        drawArc(whiteHighlight, 190f, 85f, false, Offset(cx - radius * 0.78f, cy - radius * 0.78f), Size(radius * 1.56f, radius * 1.56f), style = highlightStroke)
+                        drawCircle(whiteHighlight, radius * 0.09f, Offset(highlightX - radius * 0.04f, highlightY - radius * 0.04f))
+                        index++
+                    }
+                }
+            }
+    ) {}
 }
 
 @Composable
@@ -1242,7 +1425,15 @@ fun NrdAppBackground(
                         modifier = Modifier.fillMaxSize(),
                         primary = expressiveGlass.accent,
                         secondary = expressiveGlass.secondaryAccent,
-                        isDark = expressiveGlass.isDark
+                        turbulence = expressiveGlass.fluidity,
+                        speedMultiplier = expressiveGlass.bubbleSpeed,
+                        motion = expressiveGlass.bubbleMotion,
+                        sizeMultiplier = expressiveGlass.bubbleSize,
+                        additionalBubbles = expressiveGlass.bubbleExtraCount,
+                        brightness = expressiveGlass.bubbleBrightness,
+                        outlineEnabled = expressiveGlass.bubbleOutline,
+                        isDark = expressiveGlass.isDark,
+                        touchPoint = touchPoint
                     )
                     Box(modifier = Modifier.fillMaxSize(), content = { content() })
                 }
@@ -1544,7 +1735,6 @@ fun MyApplicationTheme(
     expressiveGlassBubbleExtraCount: Int = 0,
     expressiveGlassBubbleBrightness: Float = 1f,
     expressiveGlassBubbleOutline: Boolean = true,
-    liquidEngineConfig: LiquidEngineConfig = LiquidEngineConfig(),
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (appearanceMode) {
@@ -1552,7 +1742,9 @@ fun MyApplicationTheme(
         "dark" -> true
         else -> isSystemInDarkTheme()
     }
-    val normalizedExpressiveStyle = expressiveStyle.takeIf { it in setOf("solid", "glass") } ?: "solid"
+    val performanceTier = rememberDevicePerformanceTier()
+    val requestedExpressiveStyle = expressiveStyle.takeIf { it in setOf("solid", "glass") } ?: "solid"
+    val normalizedExpressiveStyle = if (performanceTier.enableComplexShaders) requestedExpressiveStyle else "solid"
     val isExpressive = appTheme == "expressive"
     val isGlassSoft = appTheme == "glass"
     val isExpressiveGlass = isExpressive && normalizedExpressiveStyle == "glass"
@@ -1589,7 +1781,6 @@ fun MyApplicationTheme(
         else -> MaterialTheme.shapes
     }
 
-    val performanceTier = rememberDevicePerformanceTier()
     val homeScrollInProgress = remember { MutableStateFlow(false) }
     val drawerIsOpen = remember { MutableStateFlow(false) }
     val expressiveGlassMotion = remember { mutableStateOf(0f) }
@@ -1620,8 +1811,7 @@ fun MyApplicationTheme(
         LocalDevicePerformanceTier provides performanceTier,
         LocalExpressiveGlassStyle provides expressiveGlassStyle,
         LocalExpressiveGlassMotion provides expressiveGlassMotion,
-        LocalNrdDarkMode provides darkTheme,
-        LocalLiquidEngineConfig provides liquidEngineConfig
+        LocalNrdDarkMode provides darkTheme
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

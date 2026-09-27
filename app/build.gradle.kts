@@ -94,8 +94,6 @@ dependencies {
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
-  implementation("com.airbnb.android:lottie-compose:6.7.1")
-  implementation("app.rive:rive-android:11.12.0")
   implementation(libs.converter.moshi)
   // Players reaproveitados do padrão MICRHEMA para páginas/cursos dinâmicos.
   implementation("androidx.media3:media3-exoplayer:1.2.1")

@@ -26,6 +26,7 @@ import com.example.ui.theme.glassSoftBackgroundColors
 import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.LocalExpressiveGlassStyle
+import com.example.ui.theme.LocalDevicePerformanceTier
 import com.example.ui.theme.expressiveGlassBackgroundColors
 import com.example.ui.theme.expressiveShadow
 import androidx.compose.ui.platform.LocalContext
@@ -59,8 +60,11 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val glassStyle = LocalGlassSoftStyle.current
     val expressiveGlassStyleValue = LocalExpressiveGlassStyle.current
     val currentExpressiveStyle = LocalExpressiveStyle.current
+    val performanceTier = LocalDevicePerformanceTier.current
+    val supportsExpressiveGlass = performanceTier.enableComplexShaders
+    val selectedExpressiveStyle = if (supportsExpressiveGlass) expressiveStyle else "solid"
     val isExpressive = currentExpressiveStyle.enabled
-    val isExpressiveGlass = currentExpressiveStyle.isGlass
+    val isExpressiveGlass = supportsExpressiveGlass && currentExpressiveStyle.isGlass
     val expressiveSliderColors = SliderDefaults.colors(
         thumbColor = MaterialTheme.colorScheme.primary,
         activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -294,11 +298,10 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    listOf(
-                        "solid" to "Sólido",
-                        "glass" to "Glass Expressivo"
-                    ).forEach { (styleKey, styleLabel) ->
-                        val selected = expressiveStyle == styleKey
+                    listOf("solid" to "Sólido", "glass" to "Glass Expressivo")
+                        .filter { it.first == "solid" || supportsExpressiveGlass }
+                        .forEach { (styleKey, styleLabel) ->
+                        val selected = selectedExpressiveStyle == styleKey
                         val previewShape = RoundedCornerShape(28.dp)
                         Card(
                             modifier = Modifier
@@ -369,7 +372,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    if (expressiveStyle == "glass") {
+                    if (selectedExpressiveStyle == "glass") {
                         "Glass Expressivo tem transparência, cores, bordas e profundidade próprias. Ele não usa nem altera as configurações do Glass Soft."
                     } else {
                         "Sólido é o padrão: multicolorido, vibrante, com hierarquia forte e superfícies definidas."
@@ -377,7 +380,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (expressiveStyle == "glass") {
+                if (selectedExpressiveStyle == "glass") {
                     Spacer(modifier = Modifier.height(8.dp))
                     val liquidRadius = 22f + (expressiveGlassFluidity * 18f)
                     val liquidShape = RoundedCornerShape(
@@ -424,7 +427,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                     readOnly = true,
                                     label = { Text("Cor do vidro líquido") },
                                     trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                                    modifier = Modifier.fillMaxWidth().clickable { expandedThemeMenu = !expandedThemeMenu }
+                                    modifier = Modifier.fillMaxWidth().clickable { expandedExpressiveGlassColorMenu = !expandedExpressiveGlassColorMenu }
                                 )
                                 DropdownMenu(
                                     expanded = expandedExpressiveGlassColorMenu,
@@ -582,7 +585,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 readOnly = true,
                                 label = { Text("Cor do vidro") },
                                 trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                                modifier = Modifier.fillMaxWidth().clickable { expandedThemeMenu = !expandedThemeMenu }
+                                modifier = Modifier.fillMaxWidth().clickable { expandedGlassColorMenu = !expandedGlassColorMenu }
                             )
                             DropdownMenu(
                                 expanded = expandedGlassColorMenu,

@@ -967,8 +967,8 @@ fun MestreScreen(
                         Slider(
                             value = draftAppearanceSettings.bubbleExtraCount.toFloat(),
                             onValueChange = { draftAppearanceSettings = draftAppearanceSettings.copy(bubbleExtraCount = it.toInt()) },
-                            valueRange = 0f..18f,
-                            steps = 17
+                            valueRange = 0f..12f,
+                            steps = 11
                         )
                         Text(
                             "A quantidade é ajustada automaticamente conforme o desempenho do aparelho.",
