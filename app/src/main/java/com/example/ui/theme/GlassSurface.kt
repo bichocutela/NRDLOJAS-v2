@@ -28,19 +28,22 @@ fun Modifier.glassSurface(
     val base = if (style.enabled) style.surfaceBase else Color.White
     val transparency = ((style.transparency - 0.20f) / 0.70f).coerceIn(0f, 1f)
     val backgroundBrush = remember(base, accent, style.isDark, transparency) {
+        val clearBase = if (style.isDark) 0.22f - 0.06f * transparency else 0.08f - 0.03f * transparency
+        val accentWash = if (style.isDark) 0.10f - 0.04f * transparency else 0.07f - 0.03f * transparency
+        val lowerBase = if (style.isDark) 0.25f - 0.07f * transparency else 0.05f - 0.02f * transparency
         Brush.linearGradient(
             colors = listOf(
-                base.copy(alpha = if (style.isDark) 0.50f - 0.16f * transparency else 0.30f - 0.15f * transparency),
-                accent.copy(alpha = if (style.isDark) 0.26f - 0.12f * transparency else 0.19f - 0.10f * transparency),
-                base.copy(alpha = if (style.isDark) 0.60f - 0.18f * transparency else 0.40f - 0.18f * transparency)
+                Color.White.copy(alpha = if (style.isDark) 0.10f else 0.08f),
+                accent.copy(alpha = accentWash),
+                base.copy(alpha = lowerBase.coerceAtLeast(clearBase))
             )
         )
     }
     val rimBrush = remember(accent, style.isDark) {
         Brush.linearGradient(
             colors = listOf(
-                Color.White.copy(alpha = if (style.isDark) 0.72f else 0.82f),
-                accent.copy(alpha = if (style.isDark) 0.42f else 0.32f)
+                Color.White.copy(alpha = if (style.isDark) 0.62f else 0.66f),
+                accent.copy(alpha = if (style.isDark) 0.28f else 0.22f)
             )
         )
     }
