@@ -19,6 +19,15 @@ class AppearanceSettings(
     val bubbleExtraCount: Int = 0,
     val bubbleBrightness: Float = 1f,
     val bubbleOutline: Boolean = true,
+    val bubbleShape: String = "classic",
+    val bubbleImageUrl: String = "",
+    val bubbleAlphaMin: Float = 0.12f,
+    val bubbleAlphaMax: Float = 0.52f,
+    val bubbleSway: Float = 0.55f,
+    val bubbleSpawnRate: Float = 1f,
+    val bubbleScalePulse: Float = 0.08f,
+    val bubbleRotation: Float = 0.12f,
+    val bubbleFade: Float = 0.45f,
     val revision: Long = 0L
 ) {
     /**
@@ -82,6 +91,15 @@ class AppearanceSettings(
         bubbleExtraCount: Int = this.bubbleExtraCount,
         bubbleBrightness: Float = this.bubbleBrightness,
         bubbleOutline: Boolean = this.bubbleOutline,
+        bubbleShape: String = this.bubbleShape,
+        bubbleImageUrl: String = this.bubbleImageUrl,
+        bubbleAlphaMin: Float = this.bubbleAlphaMin,
+        bubbleAlphaMax: Float = this.bubbleAlphaMax,
+        bubbleSway: Float = this.bubbleSway,
+        bubbleSpawnRate: Float = this.bubbleSpawnRate,
+        bubbleScalePulse: Float = this.bubbleScalePulse,
+        bubbleRotation: Float = this.bubbleRotation,
+        bubbleFade: Float = this.bubbleFade,
         revision: Long = this.revision
     ): AppearanceSettings = AppearanceSettings(
         overrideLocalTheme = overrideLocalTheme,
@@ -97,6 +115,15 @@ class AppearanceSettings(
         bubbleExtraCount = bubbleExtraCount,
         bubbleBrightness = bubbleBrightness,
         bubbleOutline = bubbleOutline,
+        bubbleShape = bubbleShape,
+        bubbleImageUrl = bubbleImageUrl,
+        bubbleAlphaMin = bubbleAlphaMin,
+        bubbleAlphaMax = bubbleAlphaMax,
+        bubbleSway = bubbleSway,
+        bubbleSpawnRate = bubbleSpawnRate,
+        bubbleScalePulse = bubbleScalePulse,
+        bubbleRotation = bubbleRotation,
+        bubbleFade = bubbleFade,
         revision = revision
     )
 
@@ -116,6 +143,15 @@ class AppearanceSettings(
             bubbleExtraCount == other.bubbleExtraCount &&
             bubbleBrightness == other.bubbleBrightness &&
             bubbleOutline == other.bubbleOutline &&
+            bubbleShape == other.bubbleShape &&
+            bubbleImageUrl == other.bubbleImageUrl &&
+            bubbleAlphaMin == other.bubbleAlphaMin &&
+            bubbleAlphaMax == other.bubbleAlphaMax &&
+            bubbleSway == other.bubbleSway &&
+            bubbleSpawnRate == other.bubbleSpawnRate &&
+            bubbleScalePulse == other.bubbleScalePulse &&
+            bubbleRotation == other.bubbleRotation &&
+            bubbleFade == other.bubbleFade &&
             revision == other.revision
     }
 
@@ -133,6 +169,15 @@ class AppearanceSettings(
         result = 31 * result + bubbleExtraCount.hashCode()
         result = 31 * result + bubbleBrightness.hashCode()
         result = 31 * result + bubbleOutline.hashCode()
+        result = 31 * result + bubbleShape.hashCode()
+        result = 31 * result + bubbleImageUrl.hashCode()
+        result = 31 * result + bubbleAlphaMin.hashCode()
+        result = 31 * result + bubbleAlphaMax.hashCode()
+        result = 31 * result + bubbleSway.hashCode()
+        result = 31 * result + bubbleSpawnRate.hashCode()
+        result = 31 * result + bubbleScalePulse.hashCode()
+        result = 31 * result + bubbleRotation.hashCode()
+        result = 31 * result + bubbleFade.hashCode()
         result = 31 * result + revision.hashCode()
         return result
     }

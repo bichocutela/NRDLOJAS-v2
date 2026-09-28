@@ -132,6 +132,12 @@ class UserPreferences(private val context: Context) {
     val expressiveGlassFluidity: Flow<Float> = context.dataStore.data.map { preferences ->
         (preferences[EXPRESSIVE_GLASS_FLUIDITY] ?: 0.68f).coerceIn(0f, 1f)
     }
+    val expressiveGlassTone: Flow<Float> = context.dataStore.data.map { (it[EXPRESSIVE_GLASS_TONE] ?: 0.45f).coerceIn(0f, 1f) }
+    val expressiveGlassFinish: Flow<String> = context.dataStore.data.map { it[EXPRESSIVE_GLASS_FINISH] ?: "glass" }
+    val expressiveGlassWater: Flow<String> = context.dataStore.data.map { it[EXPRESSIVE_GLASS_WATER] ?: "pure" }
+    val expressiveGlassLayerOpacity: Flow<Float> = context.dataStore.data.map { (it[EXPRESSIVE_GLASS_LAYER_OPACITY] ?: 0.60f).coerceIn(0f, 1f) }
+    val expressiveWaterOpacity: Flow<Float> = context.dataStore.data.map { (it[EXPRESSIVE_WATER_OPACITY] ?: 0.32f).coerceIn(0f, 1f) }
+    val expressiveReflectionOpacity: Flow<Float> = context.dataStore.data.map { (it[EXPRESSIVE_REFLECTION_OPACITY] ?: 0.32f).coerceIn(0f, 1f) }
 
     val onboardingShown: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[ONBOARDING_SHOWN] ?: false
@@ -289,6 +295,12 @@ class UserPreferences(private val context: Context) {
     suspend fun setExpressiveGlassFluidity(value: Float) {
         context.dataStore.edit { it[EXPRESSIVE_GLASS_FLUIDITY] = value.coerceIn(0f, 1f) }
     }
+    suspend fun setExpressiveGlassTone(value: Float) { context.dataStore.edit { it[EXPRESSIVE_GLASS_TONE] = value.coerceIn(0f, 1f) } }
+    suspend fun setExpressiveGlassFinish(value: String) { context.dataStore.edit { it[EXPRESSIVE_GLASS_FINISH] = value.takeIf { key -> key in setOf("frosted", "glass", "crystal") } ?: "glass" } }
+    suspend fun setExpressiveGlassWater(value: String) { context.dataStore.edit { it[EXPRESSIVE_GLASS_WATER] = value.takeIf { key -> key in setOf("crystal", "pure", "potable") } ?: "pure" } }
+    suspend fun setExpressiveGlassLayerOpacity(value: Float) { context.dataStore.edit { it[EXPRESSIVE_GLASS_LAYER_OPACITY] = value.coerceIn(0f, 1f) } }
+    suspend fun setExpressiveWaterOpacity(value: Float) { context.dataStore.edit { it[EXPRESSIVE_WATER_OPACITY] = value.coerceIn(0f, 1f) } }
+    suspend fun setExpressiveReflectionOpacity(value: Float) { context.dataStore.edit { it[EXPRESSIVE_REFLECTION_OPACITY] = value.coerceIn(0f, 1f) } }
 
     suspend fun setOnboardingShown(shown: Boolean) {
         context.dataStore.edit { it[ONBOARDING_SHOWN] = shown }
@@ -336,6 +348,12 @@ class UserPreferences(private val context: Context) {
         val EXPRESSIVE_GLASS_ACCENT_COLOR = stringPreferencesKey("expressive_glass_accent_color")
         val EXPRESSIVE_GLASS_TRANSPARENCY = floatPreferencesKey("expressive_glass_transparency")
         val EXPRESSIVE_GLASS_FLUIDITY = floatPreferencesKey("expressive_glass_fluidity")
+        val EXPRESSIVE_GLASS_TONE = floatPreferencesKey("expressive_glass_tone")
+        val EXPRESSIVE_GLASS_FINISH = stringPreferencesKey("expressive_glass_finish")
+        val EXPRESSIVE_GLASS_WATER = stringPreferencesKey("expressive_glass_water")
+        val EXPRESSIVE_GLASS_LAYER_OPACITY = floatPreferencesKey("expressive_glass_layer_opacity")
+        val EXPRESSIVE_WATER_OPACITY = floatPreferencesKey("expressive_water_opacity")
+        val EXPRESSIVE_REFLECTION_OPACITY = floatPreferencesKey("expressive_reflection_opacity")
         val ONBOARDING_SHOWN = booleanPreferencesKey("onboarding_shown")
         val INSTALLATION_ID = stringPreferencesKey("installation_id")
     }

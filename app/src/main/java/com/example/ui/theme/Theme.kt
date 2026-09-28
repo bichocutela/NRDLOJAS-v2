@@ -10,6 +10,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import kotlin.math.hypot
+import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.random.Random
@@ -35,6 +37,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -46,6 +49,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
@@ -59,6 +63,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -146,6 +151,21 @@ data class ExpressiveGlassStyle(
     val bubbleExtraCount: Int = 0,
     val bubbleBrightness: Float = 1f,
     val bubbleOutline: Boolean = true,
+    val bubbleShape: String = "classic",
+    val bubbleImageUrl: String = "",
+    val bubbleAlphaMin: Float = 0.12f,
+    val bubbleAlphaMax: Float = 0.52f,
+    val bubbleSway: Float = 0.55f,
+    val bubbleSpawnRate: Float = 1f,
+    val bubbleScalePulse: Float = 0.08f,
+    val bubbleRotation: Float = 0.12f,
+    val bubbleFade: Float = 0.45f,
+    val toneIntensity: Float = 0.45f,
+    val glassFinish: String = "glass",
+    val waterStyle: String = "pure",
+    val glassOpacity: Float = 0.60f,
+    val waterOpacity: Float = 0.32f,
+    val reflectionOpacity: Float = 0.32f,
     val isDark: Boolean = false
 ) {
     val surfaceBase: Color
@@ -171,11 +191,26 @@ val LocalDevicePerformanceTier = staticCompositionLocalOf {
 
 internal val ExpressiveGlassAccentNames = listOf("multicolor", "red", "green", "orange", "blue", "gold")
 
+data class ExpressiveGlassTextTokens(val primary: Color, val secondary: Color)
+
+/** Matized charcoal avoids pure black and keeps small labels comfortably above AA on pale glass. */
+fun expressiveGlassTextTokens(accentName: String, isDark: Boolean): ExpressiveGlassTextTokens {
+    if (isDark) return ExpressiveGlassTextTokens(Color(0xFFF3F5F7), Color(0xFFD0D6DC))
+    return when (normalizeExpressiveGlassAccentName(accentName)) {
+        "orange" -> ExpressiveGlassTextTokens(Color(0xFF2C1608), Color(0xFF593414))
+        "red" -> ExpressiveGlassTextTokens(Color(0xFF320A0E), Color(0xFF64212A))
+        "green" -> ExpressiveGlassTextTokens(Color(0xFF102D1C), Color(0xFF31533D))
+        "blue" -> ExpressiveGlassTextTokens(Color(0xFF10263B), Color(0xFF334E67))
+        "gold" -> ExpressiveGlassTextTokens(Color(0xFF302400), Color(0xFF5A4811))
+        else -> ExpressiveGlassTextTokens(Color(0xFF1E2124), Color(0xFF444B52))
+    }
+}
+
 private fun normalizeExpressiveGlassAccentName(name: String): String =
     name.trim().lowercase().takeIf { it in ExpressiveGlassAccentNames } ?: "multicolor"
 
 private fun expressiveGlassContentColor(background: Color): Color {
-    val dark = Color.Black
+    val dark = Color(0xFF1E2124)
     val backgroundLuminance = background.luminance()
     val whiteContrast = 1.05f / (backgroundLuminance + 0.05f)
     val darkContrast = (backgroundLuminance + 0.05f) / (dark.luminance() + 0.05f)
@@ -200,11 +235,14 @@ private fun expressiveGlassActionColors(name: String, isDark: Boolean): List<Col
     return listOf(active, blendGlassTone(active, Color.White, 0.24f), blendGlassTone(active, Color.Black, 0.16f))
 }
 
-internal fun expressiveGlassBackgroundColors(name: String, isDark: Boolean): List<Color> {
+internal fun expressiveGlassBackgroundColors(name: String, isDark: Boolean, toneIntensity: Float = 0.45f): List<Color> {
     val normalized = normalizeExpressiveGlassAccentName(name)
     if (normalized == "multicolor") {
-        return if (isDark) listOf(Color(0xFF121820), Color(0xFF171D25), Color(0xFF111922), Color(0xFF191C21))
+        val bases = if (isDark) listOf(Color(0xFF121820), Color(0xFF171D25), Color(0xFF111922), Color(0xFF191C21))
         else listOf(Color(0xFFF8FBFC), Color(0xFFF2F8F9), Color(0xFFFFFDF9), Color(0xFFF4F8F7))
+        val colors = listOf(Color(0xFFE7333F), Color(0xFF1976D2), Color(0xFF168447), Color(0xFFE56F00))
+        val tintAmount = (0.02f + toneIntensity.coerceIn(0f, 1f) * 0.24f) * if (isDark) 0.70f else 1f
+        return bases.mapIndexed { index, base -> blendGlassTone(base, colors[index], tintAmount) }
     }
     val hue = when (normalized) {
         "red" -> Color(0xFFD92F3A)
@@ -214,7 +252,8 @@ internal fun expressiveGlassBackgroundColors(name: String, isDark: Boolean): Lis
         else -> Color(0xFF9A6B00)
     }
     val neutral = if (isDark) Color(0xFF11151B) else Color.White
-    val tint = if (isDark) 0.20f else 0.075f
+    val intensity = toneIntensity.coerceIn(0f, 1f)
+    val tint = if (isDark) 0.12f + intensity * 0.24f else 0.025f + intensity * 0.28f
     return listOf(
         blendGlassTone(neutral, hue, tint),
         blendGlassTone(neutral, hue, tint * 0.55f),
@@ -244,7 +283,22 @@ internal fun resolveExpressiveGlassStyle(
     bubbleSize: Float = 1f,
     bubbleExtraCount: Int = 0,
     bubbleBrightness: Float = 1f,
-    bubbleOutline: Boolean = true
+    bubbleOutline: Boolean = true,
+    bubbleShape: String = "classic",
+    bubbleImageUrl: String = "",
+    bubbleAlphaMin: Float = 0.12f,
+    bubbleAlphaMax: Float = 0.52f,
+    bubbleSway: Float = 0.55f,
+    bubbleSpawnRate: Float = 1f,
+    bubbleScalePulse: Float = 0.08f,
+    bubbleRotation: Float = 0.12f,
+    bubbleFade: Float = 0.45f,
+    toneIntensity: Float = 0.45f,
+    glassFinish: String = "glass",
+    waterStyle: String = "pure",
+    glassOpacity: Float = 0.60f,
+    waterOpacity: Float = 0.32f,
+    reflectionOpacity: Float = 0.32f
 ): ExpressiveGlassStyle {
     if (!enabled) return ExpressiveGlassStyle()
     val safeTransparency = transparency.coerceIn(0.20f, 0.90f)
@@ -254,7 +308,8 @@ internal fun resolveExpressiveGlassStyle(
     // O vidro precisa deixar o fundo e as refrações atravessarem a superfície.
     // Antes o preenchimento branco/dourado ficava dominante e transformava o
     // efeito em cartões sólidos, principalmente no preset gold.
-    val surfaceAlpha = 0.64f - (0.30f * progress)
+    val userGlassOpacity = glassOpacity.coerceIn(0f, 1f)
+    val surfaceAlpha = ((0.64f - (0.30f * progress)) * userGlassOpacity).coerceIn(0f, 0.86f)
     val normalized = normalizeExpressiveGlassAccentName(accentName)
     return ExpressiveGlassStyle(
         enabled = true,
@@ -267,7 +322,7 @@ internal fun resolveExpressiveGlassStyle(
         onAccent = expressiveGlassContentColor(actions[0]),
         surfaceAlpha = surfaceAlpha,
         strongSurfaceAlpha = (surfaceAlpha + 0.10f).coerceAtMost(0.82f),
-        borderColor = Color.White.copy(alpha = (0.62f + 0.24f * safeFluidity).coerceAtMost(0.90f)),
+        borderColor = Color.White.copy(alpha = (0.12f + 0.68f * reflectionOpacity.coerceIn(0f, 1f) + 0.08f * safeFluidity).coerceIn(0.10f, 0.90f)),
         shadowElevation = 9f + (5f * safeFluidity),
         shadowAlpha = (if (isDark) 0.24f else 0.12f) + (0.08f * safeFluidity),
         bubbleSpeed = bubbleSpeed.coerceIn(0.25f, 2.5f),
@@ -276,6 +331,21 @@ internal fun resolveExpressiveGlassStyle(
         bubbleExtraCount = bubbleExtraCount.coerceIn(0, 18),
         bubbleBrightness = bubbleBrightness.coerceIn(0.25f, 2f),
         bubbleOutline = bubbleOutline,
+        bubbleShape = bubbleShape.takeIf { it in setOf("classic", "organic", "drop", "metaball", "ring", "crystal", "cluster", "sparkle", "neon", "capsule", "condensation", "soap", "lens") } ?: "classic",
+        bubbleImageUrl = bubbleImageUrl.take(2048),
+        bubbleAlphaMin = bubbleAlphaMin.coerceIn(0.05f, 0.9f),
+        bubbleAlphaMax = bubbleAlphaMax.coerceIn(bubbleAlphaMin.coerceIn(0.05f, 0.9f), 1f),
+        bubbleSway = bubbleSway.coerceIn(0f, 2f),
+        bubbleSpawnRate = bubbleSpawnRate.coerceIn(0.25f, 2f),
+        bubbleScalePulse = bubbleScalePulse.coerceIn(0f, 0.5f),
+        bubbleRotation = bubbleRotation.coerceIn(0f, 1f),
+        bubbleFade = bubbleFade.coerceIn(0f, 1f),
+        toneIntensity = toneIntensity.coerceIn(0f, 1f),
+        glassFinish = glassFinish.takeIf { it in setOf("frosted", "glass", "crystal") } ?: "glass",
+        waterStyle = waterStyle.takeIf { it in setOf("crystal", "pure", "potable") } ?: "pure",
+        glassOpacity = glassOpacity.coerceIn(0f, 1f),
+        waterOpacity = waterOpacity.coerceIn(0f, 1f),
+        reflectionOpacity = reflectionOpacity.coerceIn(0f, 1f),
         isDark = isDark
     )
 }
@@ -1068,6 +1138,15 @@ private fun AdaptiveWaterContainer(
     sizeMultiplier: Float,
     additionalBubbles: Int,
     brightness: Float,
+    waterOpacity: Float,
+    shapeModel: String,
+    alphaMin: Float,
+    alphaMax: Float,
+    swayAmount: Float,
+    spawnRate: Float,
+    scalePulse: Float,
+    rotationAmount: Float,
+    fadeAmount: Float,
     outlineEnabled: Boolean,
     isDark: Boolean,
     touchPoint: MutableState<Offset?>
@@ -1076,7 +1155,8 @@ private fun AdaptiveWaterContainer(
     val drawerOpenSignal = LocalNrdDrawerIsOpen.current ?: remember { MutableStateFlow(false) }
     val performanceTier = LocalDevicePerformanceTier.current
     val normalizedExtraBubbles = additionalBubbles.coerceIn(0, 18)
-    val bubbleCount = (4 + ((normalizedExtraBubbles * 12 + 9) / 18))
+    val bubbleCount = ((4 + ((normalizedExtraBubbles * 12 + 9) / 18)) * spawnRate.coerceIn(0.25f, 2f))
+        .toInt()
         .coerceAtMost(performanceTier.maxBackgroundBubbles)
     val enhancedLighting = performanceTier.enableComplexShaders
     // Keep bubbles moving through list gestures; only pause work hidden by the drawer.
@@ -1113,7 +1193,7 @@ private fun AdaptiveWaterContainer(
         }
     }
 
-    LaunchedEffect(canvasSize, turbulence, speedMultiplier, motion, sizeMultiplier, performanceTier, pausePhysics) {
+    LaunchedEffect(canvasSize, turbulence, speedMultiplier, motion, sizeMultiplier, swayAmount, performanceTier, pausePhysics) {
         var lastFrameNanos = 0L
         while (true) {
             if (pausePhysics.first()) {
@@ -1140,9 +1220,9 @@ private fun AdaptiveWaterContainer(
                             val distance = hypot(dx, dy).coerceAtLeast(1f)
                             vx = when (motion) {
                                 "circular" -> -dy / distance * 42f * speedMultiplier
-                                "rise" -> bubble.velocityX * 0.96f + sin(time * 0.7f + bubble.phase) * 9f * speedMultiplier
-                                "drift" -> 24f * speedMultiplier + sin(time * 0.24f + bubble.phase) * 10f
-                                else -> bubble.velocityX + sin(time * 0.46f + bubble.phase) * (34f + 54f * turbulence) * dt * speedMultiplier
+                                "rise" -> bubble.velocityX * 0.96f + sin(time * 0.7f + bubble.phase) * 9f * swayAmount
+                                "drift" -> 24f * speedMultiplier + sin(time * 0.24f + bubble.phase) * 10f * swayAmount
+                                else -> bubble.velocityX + sin(time * 0.46f + bubble.phase) * (34f + 54f * turbulence) * dt * speedMultiplier * swayAmount
                             }
                             vy = when (motion) {
                                 "circular" -> dx / distance * 42f * speedMultiplier
@@ -1211,12 +1291,13 @@ private fun AdaptiveWaterContainer(
                         listOf(Color.White.copy(alpha = 0.88f), Color(0xFF80D8FF).copy(alpha = 0.72f), Color(0xFFFF80AB).copy(alpha = 0.64f), Color(0xFFFFE082).copy(alpha = 0.76f), Color.White.copy(alpha = 0.88f))
                     )
                 } else null
-                val whiteHighlight = Color.White.copy(alpha = (if (isDark) 0.76f else 0.85f) * lightStrength)
-                val whiteBounce = Color.White.copy(alpha = (if (isDark) 0.20f else 0.35f) * lightStrength)
-                val whiteFillAlpha = (if (isDark) 0.035f else 0.10f) * lightStrength
-                val whiteOutlineAlpha = (0.40f * lightStrength).coerceIn(0f, 0.9f)
-                val entryBubbleFill = Color.White.copy(alpha = 0.35f)
-                val entryBubbleRim = Color.White.copy(alpha = 0.55f)
+                val safeLayerOpacity = waterOpacity.coerceIn(0f, 1f)
+                val safeAlphaMin = alphaMin.coerceIn(0f, 0.9f) * safeLayerOpacity
+                val waterAlpha = alphaMax.coerceIn(alphaMin.coerceIn(0f, 0.9f), 1f) * safeLayerOpacity
+                val whiteHighlight = Color.White.copy(alpha = (if (isDark) 0.76f else 0.85f) * lightStrength * safeLayerOpacity)
+                val whiteBounce = Color.White.copy(alpha = (if (isDark) 0.20f else 0.35f) * lightStrength * safeLayerOpacity)
+                val whiteFillAlpha = (if (isDark) 0.035f else 0.10f) * lightStrength * waterAlpha
+                val whiteOutlineAlpha = (0.40f * lightStrength * waterAlpha).coerceIn(0f, 0.9f)
                 onDrawBehind {
                     if (frameTick == 0L) return@onDrawBehind
                     var index = 0
@@ -1225,9 +1306,56 @@ private fun AdaptiveWaterContainer(
                         val cx = bubble.x
                         val cy = bubble.y
                         val radius = bubble.radiusDp * sizeMultiplier * scale
+                        val cycle = frameTick / 1_000_000_000f + bubble.phase
+                        val pulse = 1f + sin(cycle * 1.25f) * scalePulse.coerceIn(0f, 0.5f)
+                        val particleRadius = radius * pulse
+                        val fadeCycle = abs(sin(cycle * 0.42f))
+                        val lifecycleAlpha = (safeAlphaMin +
+                            (waterAlpha - safeAlphaMin) * (0.5f + 0.5f * sin(cycle)))
+                            .coerceIn(0f, 1f) * (1f - fadeAmount.coerceIn(0f, 1f) * fadeCycle * 0.45f)
+                        val center = Offset(cx, cy)
                         if (!enhancedLighting) {
-                            drawCircle(entryBubbleFill, radius * 0.96f, Offset(cx, cy))
-                            drawCircle(entryBubbleRim, radius * 0.96f, Offset(cx, cy), style = rimStroke)
+                            val lowContrast = bubble.color.copy(alpha = lifecycleAlpha)
+                            when (shapeModel) {
+                                "organic" -> drawOval(lowContrast, Offset(cx - particleRadius * 1.15f, cy - particleRadius * 0.78f), Size(particleRadius * 2.30f, particleRadius * 1.56f))
+                                "ring", "neon", "soap" -> drawCircle(lowContrast, particleRadius * 0.90f, center, style = rimStroke)
+                                "capsule" -> drawRoundRect(lowContrast, androidx.compose.ui.geometry.Offset(cx - particleRadius * 0.65f, cy - particleRadius * 0.40f), androidx.compose.ui.geometry.Size(particleRadius * 1.3f, particleRadius * 0.8f), androidx.compose.ui.geometry.CornerRadius(particleRadius))
+                                "cluster", "condensation", "metaball" -> {
+                                    drawCircle(lowContrast, particleRadius * 0.62f, Offset(cx - particleRadius * 0.24f, cy))
+                                    drawCircle(lowContrast, particleRadius * 0.62f, Offset(cx + particleRadius * 0.24f, cy))
+                                }
+                                "sparkle" -> {
+                                    drawLine(Color.White.copy(alpha = lifecycleAlpha), Offset(cx, cy - particleRadius), Offset(cx, cy + particleRadius), particleRadius * 0.08f, cap = StrokeCap.Round)
+                                    drawLine(Color.White.copy(alpha = lifecycleAlpha), Offset(cx - particleRadius, cy), Offset(cx + particleRadius, cy), particleRadius * 0.08f, cap = StrokeCap.Round)
+                                }
+                                else -> drawCircle(Color.White.copy(alpha = (0.35f * waterAlpha * lifecycleAlpha).coerceIn(0f, 1f)), particleRadius * 0.96f, center)
+                            }
+                            if (outlineEnabled) drawCircle(Color.White.copy(alpha = (0.55f * waterAlpha * lifecycleAlpha).coerceIn(0f, 1f)), particleRadius * 0.96f, center, style = rimStroke)
+                            index++
+                            continue
+                        }
+                        if (shapeModel != "classic" && enhancedLighting) {
+                            rotate((bubble.phase * 40f + cycle * 24f) * rotationAmount.coerceIn(0f, 1f), center) {
+                                when (shapeModel) {
+                                    "organic" -> drawOval(bubble.color.copy(alpha = lifecycleAlpha), Offset(cx - particleRadius * 1.18f, cy - particleRadius * 0.78f), Size(particleRadius * 2.36f, particleRadius * 1.56f))
+                                    "drop" -> {
+                                        val drop = Path().apply { moveTo(cx, cy - particleRadius); cubicTo(cx + particleRadius * 0.35f, cy - particleRadius * 0.25f, cx + particleRadius, cy + particleRadius * 0.25f, cx + particleRadius * 0.68f, cy + particleRadius * 0.72f); cubicTo(cx + particleRadius * 0.30f, cy + particleRadius * 1.16f, cx - particleRadius * 0.30f, cy + particleRadius * 1.16f, cx - particleRadius * 0.68f, cy + particleRadius * 0.72f); cubicTo(cx - particleRadius, cy + particleRadius * 0.25f, cx - particleRadius * 0.35f, cy - particleRadius * 0.25f, cx, cy - particleRadius); close() }
+                                        drawPath(drop, bubble.color.copy(alpha = lifecycleAlpha))
+                                    }
+                                    "metaball" -> { drawCircle(bubble.color.copy(alpha = lifecycleAlpha), particleRadius * 0.70f, Offset(cx - particleRadius * 0.34f, cy)); drawCircle(bubble.color.copy(alpha = lifecycleAlpha), particleRadius * 0.70f, Offset(cx + particleRadius * 0.34f, cy)) }
+                                    "ring" -> drawCircle(bubble.color.copy(alpha = lifecycleAlpha), particleRadius * 0.92f, center, style = Stroke(particleRadius * 0.16f))
+                                    "crystal" -> { val facet = Path().apply { moveTo(cx, cy - particleRadius); lineTo(cx + particleRadius * 0.82f, cy - particleRadius * 0.25f); lineTo(cx + particleRadius * 0.50f, cy + particleRadius * 0.82f); lineTo(cx - particleRadius * 0.50f, cy + particleRadius * 0.82f); lineTo(cx - particleRadius * 0.82f, cy - particleRadius * 0.25f); close() }; drawPath(facet, bubble.color.copy(alpha = lifecycleAlpha)); drawPath(facet, Color.White.copy(alpha = lifecycleAlpha * 0.65f), style = rimStroke) }
+                                    "cluster" -> for (i in 0..4) { val a = i * 1.256f; drawCircle(bubble.color.copy(alpha = lifecycleAlpha), particleRadius * 0.37f, Offset(cx + cos(a) * particleRadius * 0.45f, cy + sin(a) * particleRadius * 0.45f)) }
+                                    "sparkle" -> { drawLine(Color.White.copy(alpha = lifecycleAlpha), Offset(cx, cy - particleRadius), Offset(cx, cy + particleRadius), particleRadius * 0.10f, cap = StrokeCap.Round); drawLine(Color.White.copy(alpha = lifecycleAlpha), Offset(cx - particleRadius, cy), Offset(cx + particleRadius, cy), particleRadius * 0.10f, cap = StrokeCap.Round); drawCircle(bubble.color.copy(alpha = lifecycleAlpha * 0.70f), particleRadius * 0.45f, center) }
+                                    "neon" -> { drawCircle(bubble.color.copy(alpha = lifecycleAlpha * 0.14f), particleRadius * 1.15f, center); drawCircle(bubble.color.copy(alpha = lifecycleAlpha), particleRadius * 0.90f, center, style = Stroke(particleRadius * 0.07f)) }
+                                    "capsule" -> drawRoundRect(bubble.color.copy(alpha = lifecycleAlpha), androidx.compose.ui.geometry.Offset(cx - particleRadius * 0.65f, cy - particleRadius * 0.42f), androidx.compose.ui.geometry.Size(particleRadius * 1.30f, particleRadius * 0.84f), androidx.compose.ui.geometry.CornerRadius(particleRadius))
+                                    "condensation" -> { drawCircle(bubble.color.copy(alpha = lifecycleAlpha), particleRadius * 0.48f, center); drawCircle(bubble.color.copy(alpha = lifecycleAlpha * 0.82f), particleRadius * 0.24f, Offset(cx + particleRadius * 0.60f, cy + particleRadius * 0.30f)); drawCircle(bubble.color.copy(alpha = lifecycleAlpha * 0.66f), particleRadius * 0.17f, Offset(cx - particleRadius * 0.55f, cy + particleRadius * 0.42f)) }
+                                    "soap" -> { drawCircle(bubble.color.copy(alpha = lifecycleAlpha * 0.12f), particleRadius, center); drawCircle(iridescentRim!!, particleRadius * 0.93f, center, style = Stroke(particleRadius * 0.075f)) }
+                                    "lens" -> { drawOval(bubble.color.copy(alpha = lifecycleAlpha * 0.38f), Offset(cx - particleRadius * 1.18f, cy - particleRadius * 0.70f), Size(particleRadius * 2.36f, particleRadius * 1.40f)); drawLine(Color.White.copy(alpha = lifecycleAlpha * 0.76f), Offset(cx - particleRadius * 0.7f, cy), Offset(cx + particleRadius * 0.7f, cy), 1.5f * scale) }
+                                    else -> drawCircle(bubble.color.copy(alpha = lifecycleAlpha), particleRadius, center)
+                                }
+                                drawArc(Color.White.copy(alpha = lifecycleAlpha * 0.78f), 190f, 82f, false, Offset(cx - particleRadius * 0.72f, cy - particleRadius * 0.72f), Size(particleRadius * 1.44f, particleRadius * 1.44f), style = highlightStroke)
+                            }
                             index++
                             continue
                         }
@@ -1237,7 +1365,7 @@ private fun AdaptiveWaterContainer(
                             drawCircle(primaryGlow, radius * 1.24f, Offset(cx, cy))
                             drawCircle(secondaryGlow, radius * 1.10f, Offset(cx, cy))
                         }
-                        drawCircle(bubble.color, radius * 0.98f, Offset(cx, cy), alpha = (0.20f * lightStrength).coerceIn(0f, 0.75f))
+                        drawCircle(bubble.color, particleRadius * 0.98f, Offset(cx, cy), alpha = (0.20f * lightStrength * lifecycleAlpha).coerceIn(0f, 0.75f))
                         drawCircle(Color.White, radius * 0.72f, Offset(highlightX, highlightY), alpha = whiteFillAlpha)
                         if (outlineEnabled) {
                             if (enhancedLighting) {
@@ -1269,7 +1397,8 @@ fun NrdAppBackground(
         expressiveGlass.enabled -> {
             val colors = expressiveGlassBackgroundColors(
                 expressiveGlass.accentName,
-                expressiveGlass.isDark
+                expressiveGlass.isDark,
+                expressiveGlass.toneIntensity
             )
             val performanceTier = LocalDevicePerformanceTier.current
             val transition = rememberInfiniteTransition(label = "expressive-liquid-background")
@@ -1444,16 +1573,46 @@ fun NrdAppBackground(
                         modifier = Modifier.fillMaxSize(),
                         primary = expressiveGlass.accent,
                         secondary = expressiveGlass.secondaryAccent,
-                        turbulence = expressiveGlass.fluidity,
+                        turbulence = expressiveGlass.fluidity * when (expressiveGlass.waterStyle) {
+                            "crystal" -> 0.55f
+                            "potable" -> 1.25f
+                            else -> 1f
+                        },
                         speedMultiplier = expressiveGlass.bubbleSpeed,
                         motion = expressiveGlass.bubbleMotion,
                         sizeMultiplier = expressiveGlass.bubbleSize,
                         additionalBubbles = expressiveGlass.bubbleExtraCount,
-                        brightness = expressiveGlass.bubbleBrightness,
+                        brightness = expressiveGlass.bubbleBrightness * (0.60f + expressiveGlass.waterOpacity * 0.80f),
+                        waterOpacity = expressiveGlass.waterOpacity,
                         outlineEnabled = expressiveGlass.bubbleOutline,
+                        shapeModel = expressiveGlass.bubbleShape,
+                        alphaMin = expressiveGlass.bubbleAlphaMin,
+                        alphaMax = expressiveGlass.bubbleAlphaMax,
+                        swayAmount = expressiveGlass.bubbleSway,
+                        spawnRate = expressiveGlass.bubbleSpawnRate,
+                        scalePulse = expressiveGlass.bubbleScalePulse,
+                        rotationAmount = expressiveGlass.bubbleRotation,
+                        fadeAmount = expressiveGlass.bubbleFade,
                         isDark = expressiveGlass.isDark,
                         touchPoint = touchPoint
                     )
+                    if (expressiveGlass.bubbleImageUrl.startsWith("https://")) {
+                        coil.compose.AsyncImage(
+                            model = expressiveGlass.bubbleImageUrl,
+                            contentDescription = "Partícula personalizada do tema",
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .size(116.dp)
+                                .graphicsLayer {
+                                    translationX = (driftState.value - 0.5f) * size.width * 0.70f
+                                    translationY = (0.5f - driftState.value) * size.height * 0.26f
+                                    alpha = (0.48f + 0.42f * expressiveGlass.bubbleAlphaMax).coerceIn(0f, 1f) * expressiveGlass.waterOpacity
+                                    rotationZ = (driftState.value - 0.5f) * 18f * expressiveGlass.bubbleRotation
+                                    scaleX = 0.92f + driftState.value * expressiveGlass.bubbleScalePulse
+                                    scaleY = 0.92f + driftState.value * expressiveGlass.bubbleScalePulse
+                                }
+                        )
+                    }
                     Box(modifier = Modifier.fillMaxSize(), content = { content() })
                 }
             )
@@ -1599,8 +1758,9 @@ internal fun expressiveColorScheme(darkTheme: Boolean) = if (darkTheme) {
 
 internal fun expressiveGlassColorScheme(style: ExpressiveGlassStyle, darkTheme: Boolean): androidx.compose.material3.ColorScheme {
     val base = expressiveColorScheme(darkTheme)
-    val onSurface = if (darkTheme) Color(0xFFF4F7FC) else Color(0xFF16203B)
-    val onSurfaceVariant = if (darkTheme) Color(0xFFD2DCE9) else Color(0xFF536174)
+    val textTokens = expressiveGlassTextTokens(style.accentName, darkTheme)
+    val onSurface = textTokens.primary
+    val onSurfaceVariant = textTokens.secondary
     val surface = style.surfaceBase
     val containerAlpha = if (darkTheme) 0.24f else 0.18f
     return base.copy(
@@ -1754,6 +1914,21 @@ fun MyApplicationTheme(
     expressiveGlassBubbleExtraCount: Int = 0,
     expressiveGlassBubbleBrightness: Float = 1f,
     expressiveGlassBubbleOutline: Boolean = true,
+    expressiveGlassBubbleShape: String = "classic",
+    expressiveGlassBubbleImageUrl: String = "",
+    expressiveGlassBubbleAlphaMin: Float = 0.12f,
+    expressiveGlassBubbleAlphaMax: Float = 0.52f,
+    expressiveGlassBubbleSway: Float = 0.55f,
+    expressiveGlassBubbleSpawnRate: Float = 1f,
+    expressiveGlassBubbleScalePulse: Float = 0.08f,
+    expressiveGlassBubbleRotation: Float = 0.12f,
+    expressiveGlassBubbleFade: Float = 0.45f,
+    expressiveGlassToneIntensity: Float = 0.45f,
+    expressiveGlassFinish: String = "glass",
+    expressiveGlassWaterStyle: String = "pure",
+    expressiveGlassOpacity: Float = 0.60f,
+    expressiveWaterOpacity: Float = 0.32f,
+    expressiveReflectionOpacity: Float = 0.32f,
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (appearanceMode) {
@@ -1786,7 +1961,22 @@ fun MyApplicationTheme(
         bubbleSize = expressiveGlassBubbleSize,
         bubbleExtraCount = expressiveGlassBubbleExtraCount,
         bubbleBrightness = expressiveGlassBubbleBrightness,
-        bubbleOutline = expressiveGlassBubbleOutline
+        bubbleOutline = expressiveGlassBubbleOutline,
+        bubbleShape = expressiveGlassBubbleShape,
+        bubbleImageUrl = expressiveGlassBubbleImageUrl,
+        bubbleAlphaMin = expressiveGlassBubbleAlphaMin,
+        bubbleAlphaMax = expressiveGlassBubbleAlphaMax,
+        bubbleSway = expressiveGlassBubbleSway,
+        bubbleSpawnRate = expressiveGlassBubbleSpawnRate,
+        bubbleScalePulse = expressiveGlassBubbleScalePulse,
+        bubbleRotation = expressiveGlassBubbleRotation,
+        bubbleFade = expressiveGlassBubbleFade,
+        toneIntensity = expressiveGlassToneIntensity,
+        glassFinish = expressiveGlassFinish,
+        waterStyle = expressiveGlassWaterStyle,
+        glassOpacity = expressiveGlassOpacity,
+        waterOpacity = expressiveWaterOpacity,
+        reflectionOpacity = expressiveReflectionOpacity
     )
     val colorScheme = when {
         isGlassSoft -> glassSoftColorScheme(glassStyle)

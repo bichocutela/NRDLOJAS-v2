@@ -176,6 +176,12 @@ class MainActivity : ComponentActivity() {
             val expressiveGlassAccentColor by userPreferences.expressiveGlassAccentColor.collectAsState(initial = "multicolor")
             val expressiveGlassTransparency by userPreferences.expressiveGlassTransparency.collectAsState(initial = 0.58f)
             val expressiveGlassFluidity by userPreferences.expressiveGlassFluidity.collectAsState(initial = 0.68f)
+            val expressiveGlassTone by userPreferences.expressiveGlassTone.collectAsState(initial = 0.45f)
+            val expressiveGlassFinish by userPreferences.expressiveGlassFinish.collectAsState(initial = "glass")
+            val expressiveGlassWater by userPreferences.expressiveGlassWater.collectAsState(initial = "pure")
+            val expressiveGlassOpacity by userPreferences.expressiveGlassLayerOpacity.collectAsState(initial = 0.60f)
+            val expressiveWaterOpacity by userPreferences.expressiveWaterOpacity.collectAsState(initial = 0.32f)
+            val expressiveReflectionOpacity by userPreferences.expressiveReflectionOpacity.collectAsState(initial = 0.32f)
             val hasLocalThemeChoice by applicationContext.dataStore.data
                 .map { preferences -> preferences[UserPreferences.APP_THEME] != null }
                 .collectAsState(initial = false)
@@ -254,7 +260,22 @@ class MainActivity : ComponentActivity() {
                     expressiveGlassBubbleSize = remoteAppearance.bubbleSize,
                     expressiveGlassBubbleExtraCount = remoteAppearance.bubbleExtraCount,
                     expressiveGlassBubbleBrightness = remoteAppearance.bubbleBrightness,
-                    expressiveGlassBubbleOutline = remoteAppearance.bubbleOutline
+                    expressiveGlassBubbleOutline = remoteAppearance.bubbleOutline,
+                    expressiveGlassBubbleShape = remoteAppearance.bubbleShape,
+                    expressiveGlassBubbleImageUrl = remoteAppearance.bubbleImageUrl,
+                    expressiveGlassBubbleAlphaMin = remoteAppearance.bubbleAlphaMin,
+                    expressiveGlassBubbleAlphaMax = remoteAppearance.bubbleAlphaMax,
+                    expressiveGlassBubbleSway = remoteAppearance.bubbleSway,
+                    expressiveGlassBubbleSpawnRate = remoteAppearance.bubbleSpawnRate,
+                    expressiveGlassBubbleScalePulse = remoteAppearance.bubbleScalePulse,
+                    expressiveGlassBubbleRotation = remoteAppearance.bubbleRotation,
+                    expressiveGlassBubbleFade = remoteAppearance.bubbleFade,
+                    expressiveGlassToneIntensity = expressiveGlassTone,
+                    expressiveGlassFinish = expressiveGlassFinish,
+                    expressiveGlassWaterStyle = expressiveGlassWater,
+                    expressiveGlassOpacity = expressiveGlassOpacity,
+                    expressiveWaterOpacity = expressiveWaterOpacity,
+                    expressiveReflectionOpacity = expressiveReflectionOpacity
                 ) {
 
                 var showSplash by remember { mutableStateOf(true) }

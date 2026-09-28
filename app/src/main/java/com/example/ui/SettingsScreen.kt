@@ -57,6 +57,16 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val expressiveGlassAccentColor by viewModel.userPreferences.expressiveGlassAccentColor.collectAsState(initial = "multicolor")
     val expressiveGlassTransparency by viewModel.userPreferences.expressiveGlassTransparency.collectAsState(initial = 0.58f)
     val expressiveGlassFluidity by viewModel.userPreferences.expressiveGlassFluidity.collectAsState(initial = 0.68f)
+    val expressiveGlassTone by viewModel.userPreferences.expressiveGlassTone.collectAsState(initial = 0.45f)
+    val expressiveGlassFinish by viewModel.userPreferences.expressiveGlassFinish.collectAsState(initial = "glass")
+    val expressiveGlassWater by viewModel.userPreferences.expressiveGlassWater.collectAsState(initial = "pure")
+    val expressiveGlassOpacity by viewModel.userPreferences.expressiveGlassLayerOpacity.collectAsState(initial = 0.60f)
+    val expressiveWaterOpacity by viewModel.userPreferences.expressiveWaterOpacity.collectAsState(initial = 0.32f)
+    val expressiveReflectionOpacity by viewModel.userPreferences.expressiveReflectionOpacity.collectAsState(initial = 0.32f)
+    var expressiveGlassToneDraft by remember(expressiveGlassTone) { mutableFloatStateOf(expressiveGlassTone) }
+    var expressiveGlassOpacityDraft by remember(expressiveGlassOpacity) { mutableFloatStateOf(expressiveGlassOpacity) }
+    var expressiveWaterOpacityDraft by remember(expressiveWaterOpacity) { mutableFloatStateOf(expressiveWaterOpacity) }
+    var expressiveReflectionOpacityDraft by remember(expressiveReflectionOpacity) { mutableFloatStateOf(expressiveReflectionOpacity) }
     val glassStyle = LocalGlassSoftStyle.current
     val expressiveGlassStyleValue = LocalExpressiveGlassStyle.current
     val currentExpressiveStyle = LocalExpressiveStyle.current
@@ -414,6 +424,8 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             )
 
                             var expandedExpressiveGlassColorMenu by remember { mutableStateOf(false) }
+                            var expandedExpressiveFinish by remember { mutableStateOf(false) }
+                            var expandedExpressiveWater by remember { mutableStateOf(false) }
                             val expressiveGlassColorOptions = listOf(
                                 "multicolor" to "Multicolorido",
                                 "red" to "Vermelho",
@@ -448,6 +460,45 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                             }
                                         )
                                     }
+                                }
+                            }
+
+                            val glassFinishes = listOf("frosted" to "Fosco", "glass" to "Vidro", "crystal" to "Cristal")
+                            Box(Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = glassFinishes.firstOrNull { it.first == expressiveGlassFinish }?.second ?: "Vidro",
+                                    onValueChange = {}, readOnly = true,
+                                    label = { Text("Textura e acabamento") },
+                                    trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Box(Modifier.matchParentSize().clickable { expandedExpressiveFinish = true })
+                                DropdownMenu(expanded = expandedExpressiveFinish, onDismissRequest = { expandedExpressiveFinish = false }) {
+                                    glassFinishes.forEach { (key, label) -> DropdownMenuItem(text = { Text(label) }, onClick = {
+                                        coroutineScope.launch { viewModel.userPreferences.setExpressiveGlassFinish(key) }
+                                        expandedExpressiveFinish = false
+                                    }) }
+                                }
+                            }
+                            val waterTypes = listOf(
+                                "crystal" to "Água Cristalina",
+                                "pure" to "Água Pura",
+                                "potable" to "Água Potável"
+                            )
+                            Box(Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = waterTypes.firstOrNull { it.first == expressiveGlassWater }?.second ?: "Água Pura",
+                                    onValueChange = {}, readOnly = true,
+                                    label = { Text("Estilo da água") },
+                                    trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Box(Modifier.matchParentSize().clickable { expandedExpressiveWater = true })
+                                DropdownMenu(expanded = expandedExpressiveWater, onDismissRequest = { expandedExpressiveWater = false }) {
+                                    waterTypes.forEach { (key, label) -> DropdownMenuItem(text = { Text(label) }, onClick = {
+                                        coroutineScope.launch { viewModel.userPreferences.setExpressiveGlassWater(key) }
+                                        expandedExpressiveWater = false
+                                    }) }
                                 }
                             }
 
@@ -537,6 +588,18 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 Text("Fluido", style = MaterialTheme.typography.labelSmall)
                                 Text("Onda líquida", style = MaterialTheme.typography.labelSmall)
                             }
+                            GlassSettingSlider("Intensidade do tom", expressiveGlassToneDraft, "Pastel", "Intenso", expressiveSliderColors,
+                                onValueChange = { expressiveGlassToneDraft = it },
+                                onValueChangeFinished = { coroutineScope.launch { viewModel.userPreferences.setExpressiveGlassTone(expressiveGlassToneDraft) } })
+                            GlassSettingSlider("Opacidade das superfícies", expressiveGlassOpacityDraft, "Transparente", "Mais visível", expressiveSliderColors,
+                                onValueChange = { expressiveGlassOpacityDraft = it },
+                                onValueChangeFinished = { coroutineScope.launch { viewModel.userPreferences.setExpressiveGlassLayerOpacity(expressiveGlassOpacityDraft) } })
+                            GlassSettingSlider("Opacidade da água", expressiveWaterOpacityDraft, "Sutil", "Profunda", expressiveSliderColors,
+                                onValueChange = { expressiveWaterOpacityDraft = it },
+                                onValueChangeFinished = { coroutineScope.launch { viewModel.userPreferences.setExpressiveWaterOpacity(expressiveWaterOpacityDraft) } })
+                            GlassSettingSlider("Reflexo especular", expressiveReflectionOpacityDraft, "Discreto", "Brilhante", expressiveSliderColors,
+                                onValueChange = { expressiveReflectionOpacityDraft = it },
+                                onValueChangeFinished = { coroutineScope.launch { viewModel.userPreferences.setExpressiveReflectionOpacity(expressiveReflectionOpacityDraft) } })
                             Text(
                                 "Quanto maior a forma da água, mais orgânicas ficam curvas, sombras e profundidade. O gradiente Expressivo é diferente do Glass Soft.",
                                 style = MaterialTheme.typography.bodySmall,
@@ -986,6 +1049,24 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
 }
 
 
+
+@Composable
+private fun GlassSettingSlider(
+    title: String,
+    value: Float,
+    lowLabel: String,
+    highLabel: String,
+    colors: SliderColors,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit
+) {
+    Text("$title: ${(value * 100).toInt()}%", style = MaterialTheme.typography.titleSmall)
+    Slider(value = value, onValueChange = onValueChange, onValueChangeFinished = onValueChangeFinished, valueRange = 0f..1f, colors = colors)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(lowLabel, style = MaterialTheme.typography.labelSmall)
+        Text(highLabel, style = MaterialTheme.typography.labelSmall)
+    }
+}
 
 @Composable
 private fun SettingsSectionHeader(

@@ -103,6 +103,7 @@ import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.expressiveLiquidGlass
 import com.example.ui.theme.expressiveShadow
 import com.example.ui.theme.glassSurface
+import com.example.ui.theme.expressiveGlassTextTokens
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.ui.res.painterResource
@@ -120,6 +121,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 
 
@@ -401,17 +403,19 @@ fun SearchScreen(
         )
     }
     val expressiveGlassActionBrush = remember(
-        expressiveGlassStyle.accent,
-        expressiveGlassStyle.secondaryAccent,
-        expressiveGlassStyle.tertiaryAccent
+        expressiveGlassStyle.accentName,
+        expressiveGlassStyle.isDark
     ) {
+        val colors = when (expressiveGlassStyle.accentName) {
+            "orange" -> listOf(Color(0xFF7A3500), Color(0xFFBD4D00), Color(0xFFA94700))
+            "red" -> listOf(Color(0xFF710F1B), Color(0xFFB51E31), Color(0xFFD92F3A))
+            "green" -> listOf(Color(0xFF07572E), Color(0xFF0D713A), Color(0xFF168447))
+            "blue" -> listOf(Color(0xFF073B68), Color(0xFF0F5794), Color(0xFF1769AA))
+            "gold" -> listOf(Color(0xFF5D4100), Color(0xFF876000), Color(0xFF9A6B00))
+            else -> listOf(Color(0xFF70202A), Color(0xFF15518C), Color(0xFF17673C))
+        }
         Brush.linearGradient(
-            listOf(
-                expressiveGlassStyle.accent.copy(alpha = 0.64f),
-                expressiveGlassStyle.secondaryAccent.copy(alpha = 0.34f),
-                expressiveGlassStyle.tertiaryAccent.copy(alpha = 0.46f),
-                expressiveGlassStyle.accent.copy(alpha = 0.56f)
-            )
+            colors.map { it.copy(alpha = if (expressiveGlassStyle.isDark) 0.84f else 0.96f) }
         )
     }
     val normalizedTheme = remember(localAppTheme) {
@@ -1027,7 +1031,7 @@ fun SearchScreen(
                         .graphicsLayer { shape = searchButtonShape; clip = true },
                     shape = searchButtonShape,
                     color = Color.Transparent,
-                    contentColor = expressiveGlassStyle.onAccent,
+                    contentColor = Color.White,
                     border = BorderStroke(
                         1.5.dp,
                         Brush.linearGradient(
@@ -1067,7 +1071,7 @@ fun SearchScreen(
                                 color = expressiveGlassStyle.onAccent,
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Black,
-                                    shadow = null
+                                    shadow = Shadow(Color.Black.copy(alpha = 0.22f), Offset(0f, 1.5f), 2f)
                                 )
                             )
                         }
@@ -1628,6 +1632,7 @@ fun SectionHeader(
     val expressive = LocalExpressiveStyle.current.enabled
     val expressiveGlass = LocalExpressiveGlassStyle.current
     val isExpressiveGlass = expressiveGlass.enabled
+    val glassText = expressiveGlassTextTokens(expressiveGlass.accentName, expressiveGlass.isDark)
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
     val sectionIcon = when {
@@ -1693,7 +1698,7 @@ fun SectionHeader(
                 },
                 boldOutline = textPreferences.boldOutline,
                 uppercaseBold = textPreferences.uppercaseBold,
-                color = if (expressive) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (isExpressiveGlass) glassText.primary else if (expressive) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         if (actionLabel != null && onAction != null) {
@@ -1785,6 +1790,7 @@ fun CategorySection(
     val expressive = LocalExpressiveStyle.current.enabled
     val expressiveGlass = LocalExpressiveGlassStyle.current
     val isExpressiveGlass = expressiveGlass.enabled
+    val glassText = expressiveGlassTextTokens(expressiveGlass.accentName, expressiveGlass.isDark)
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
     val categoryColors = listOf(
@@ -1881,7 +1887,7 @@ fun CategorySection(
                         boldOutline = textPreferences.boldOutline,
                         uppercaseBold = true,
                         color = when {
-                            isExpressiveGlass -> MaterialTheme.colorScheme.onSurface
+                        isExpressiveGlass -> glassText.primary
                             glass.enabled -> MaterialTheme.colorScheme.onSurface
                             expressive -> strongColors.second
                             else -> dynamicColors.second
@@ -2012,6 +2018,7 @@ fun ProductCard(
     val expressive = LocalExpressiveStyle.current.enabled
     val expressiveGlass = LocalExpressiveGlassStyle.current
     val isExpressiveGlass = expressiveGlass.enabled
+    val glassText = expressiveGlassTextTokens(expressiveGlass.accentName, expressiveGlass.isDark)
     val performanceTier = LocalDevicePerformanceTier.current
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
@@ -2166,14 +2173,14 @@ fun ProductCard(
                 baseStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
                 boldOutline = textPreferences.boldOutline,
                 uppercaseBold = textPreferences.uppercaseBold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = if (isExpressiveGlass) glassText.primary else MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = if (isExpressiveGlass) "•" else getCategoryIcon(product.category),
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified
+                    color = if (isExpressiveGlass) glassText.secondary else Color.Unspecified
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 StylizedText(
@@ -2181,7 +2188,7 @@ fun ProductCard(
                     baseStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
                     boldOutline = textPreferences.boldOutline,
                     uppercaseBold = true,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isExpressiveGlass) glassText.secondary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -2425,6 +2432,7 @@ fun MiniProductCard(
     val expressive = LocalExpressiveStyle.current.enabled
     val expressiveGlass = LocalExpressiveGlassStyle.current
     val isExpressiveGlass = expressiveGlass.enabled
+    val glassText = expressiveGlassTextTokens(expressiveGlass.accentName, expressiveGlass.isDark)
     val performanceTier = LocalDevicePerformanceTier.current
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
@@ -2666,7 +2674,7 @@ fun MiniProductCard(
             ),
             boldOutline = textPreferences.boldOutline,
             uppercaseBold = textPreferences.uppercaseBold,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (isExpressiveGlass) glassText.primary else MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
@@ -2675,7 +2683,7 @@ fun MiniProductCard(
             Text(
                 text = if (isExpressiveGlass) "•" else getCategoryIcon(product.category),
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified
+                color = if (isExpressiveGlass) glassText.secondary else Color.Unspecified
             )
             Spacer(modifier = Modifier.width(4.dp))
             StylizedText(
@@ -2687,7 +2695,7 @@ fun MiniProductCard(
                 ),
                 boldOutline = textPreferences.boldOutline,
                 uppercaseBold = true,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isExpressiveGlass) glassText.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -2708,7 +2716,7 @@ fun MiniProductCard(
                         else -> 16.sp
                     }
                 ),
-                color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary,
+                color = if (isExpressiveGlass) glassText.primary else MaterialTheme.colorScheme.primary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -2755,6 +2763,7 @@ fun HistoryItem(
     val expressive = LocalExpressiveStyle.current.enabled
     val expressiveGlass = LocalExpressiveGlassStyle.current
     val isExpressiveGlass = expressiveGlass.enabled
+    val glassText = expressiveGlassTextTokens(expressiveGlass.accentName, expressiveGlass.isDark)
     val performanceTier = LocalDevicePerformanceTier.current
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
@@ -2902,7 +2911,7 @@ fun HistoryItem(
                     Text(
                         text = if (isExpressiveGlass) "•" else getCategoryIcon(product.category),
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                        color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified
+                        color = if (isExpressiveGlass) glassText.secondary else Color.Unspecified
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     StylizedText(
@@ -2914,7 +2923,7 @@ fun HistoryItem(
                         ),
                         boldOutline = textPreferences.boldOutline,
                         uppercaseBold = true,
-                        color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isExpressiveGlass) glassText.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -2922,7 +2931,7 @@ fun HistoryItem(
                 Text(
                     text = "Código: ${product.code}",
                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = if (isExpressiveGlass) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary
+                    color = if (isExpressiveGlass) glassText.primary else MaterialTheme.colorScheme.primary
                 )
             }
             Spacer(modifier = Modifier.width(4.dp))
@@ -3207,3 +3216,4 @@ fun Modifier.vibrateClickable(
         )
     }
 }
+

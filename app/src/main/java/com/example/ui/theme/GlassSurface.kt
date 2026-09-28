@@ -27,22 +27,26 @@ fun Modifier.glassSurface(
     val style = LocalExpressiveGlassStyle.current
     val base = if (style.enabled) style.surfaceBase else Color.White
     val transparency = ((style.transparency - 0.20f) / 0.70f).coerceIn(0f, 1f)
-    val backgroundBrush = remember(base, accent, style.isDark, transparency) {
+    val backgroundBrush = remember(base, accent, style.isDark, transparency, style.glassFinish, style.glassOpacity, style.toneIntensity) {
+        val finishDensity = when (style.glassFinish) { "frosted" -> 1.24f; "crystal" -> 0.60f; else -> 1f }
+        val toneWash = 0.72f + style.toneIntensity * 0.56f
+        val opacity = style.glassOpacity * finishDensity
         val clearBase = if (style.isDark) 0.22f - 0.06f * transparency else 0.08f - 0.03f * transparency
-        val accentWash = if (style.isDark) 0.10f - 0.04f * transparency else 0.07f - 0.03f * transparency
-        val lowerBase = if (style.isDark) 0.25f - 0.07f * transparency else 0.05f - 0.02f * transparency
+        val accentWash = (if (style.isDark) 0.10f - 0.04f * transparency else 0.07f - 0.03f * transparency) * opacity * toneWash
+        val lowerBase = (if (style.isDark) 0.25f - 0.07f * transparency else 0.05f - 0.02f * transparency) * opacity
         Brush.linearGradient(
             colors = listOf(
-                Color.White.copy(alpha = if (style.isDark) 0.10f else 0.08f),
+                Color.White.copy(alpha = (if (style.isDark) 0.10f else 0.08f) * opacity),
                 accent.copy(alpha = accentWash),
-                base.copy(alpha = lowerBase.coerceAtLeast(clearBase))
+                base.copy(alpha = lowerBase.coerceAtLeast(clearBase * opacity))
             )
         )
     }
-    val rimBrush = remember(accent, style.isDark) {
+    val rimBrush = remember(accent, style.isDark, style.glassFinish, style.reflectionOpacity) {
+        val rim = when (style.glassFinish) { "frosted" -> 0.52f; "crystal" -> 0.92f; else -> 0.66f }
         Brush.linearGradient(
             colors = listOf(
-                Color.White.copy(alpha = if (style.isDark) 0.62f else 0.66f),
+                Color.White.copy(alpha = rim * style.reflectionOpacity.coerceIn(0f, 1f)),
                 accent.copy(alpha = if (style.isDark) 0.28f else 0.22f)
             )
         )
