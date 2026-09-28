@@ -35,6 +35,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -309,7 +310,7 @@ internal fun resolveExpressiveGlassStyle(
     // Antes o preenchimento branco/dourado ficava dominante e transformava o
     // efeito em cartões sólidos, principalmente no preset gold.
     val userGlassOpacity = glassOpacity.coerceIn(0f, 1f)
-    val surfaceAlpha = ((0.64f - (0.30f * progress)) * userGlassOpacity).coerceIn(0f, 0.86f)
+    val surfaceAlpha = ((0.84f - (0.60f * progress)) * userGlassOpacity).coerceIn(0f, 0.92f)
     val normalized = normalizeExpressiveGlassAccentName(accentName)
     return ExpressiveGlassStyle(
         enabled = true,
@@ -1318,6 +1319,28 @@ private fun AdaptiveWaterContainer(
                             val lowContrast = bubble.color.copy(alpha = lifecycleAlpha)
                             when (shapeModel) {
                                 "organic" -> drawOval(lowContrast, Offset(cx - particleRadius * 1.15f, cy - particleRadius * 0.78f), Size(particleRadius * 2.30f, particleRadius * 1.56f))
+                                "drop" -> {
+                                    val drop = Path().apply {
+                                        moveTo(cx, cy - particleRadius)
+                                        cubicTo(cx + particleRadius * 0.35f, cy - particleRadius * 0.25f, cx + particleRadius, cy + particleRadius * 0.25f, cx + particleRadius * 0.68f, cy + particleRadius * 0.72f)
+                                        cubicTo(cx + particleRadius * 0.30f, cy + particleRadius * 1.16f, cx - particleRadius * 0.30f, cy + particleRadius * 1.16f, cx - particleRadius * 0.68f, cy + particleRadius * 0.72f)
+                                        cubicTo(cx - particleRadius, cy + particleRadius * 0.25f, cx - particleRadius * 0.35f, cy - particleRadius * 0.25f, cx, cy - particleRadius)
+                                        close()
+                                    }
+                                    drawPath(drop, lowContrast)
+                                }
+                                "crystal" -> {
+                                    val facet = Path().apply {
+                                        moveTo(cx, cy - particleRadius)
+                                        lineTo(cx + particleRadius * 0.82f, cy - particleRadius * 0.25f)
+                                        lineTo(cx + particleRadius * 0.50f, cy + particleRadius * 0.82f)
+                                        lineTo(cx - particleRadius * 0.50f, cy + particleRadius * 0.82f)
+                                        lineTo(cx - particleRadius * 0.82f, cy - particleRadius * 0.25f)
+                                        close()
+                                    }
+                                    drawPath(facet, lowContrast)
+                                }
+                                "lens" -> drawOval(lowContrast, Offset(cx - particleRadius * 1.18f, cy - particleRadius * 0.70f), Size(particleRadius * 2.36f, particleRadius * 1.40f))
                                 "ring", "neon", "soap" -> drawCircle(lowContrast, particleRadius * 0.90f, center, style = rimStroke)
                                 "capsule" -> drawRoundRect(lowContrast, androidx.compose.ui.geometry.Offset(cx - particleRadius * 0.65f, cy - particleRadius * 0.40f), androidx.compose.ui.geometry.Size(particleRadius * 1.3f, particleRadius * 0.8f), androidx.compose.ui.geometry.CornerRadius(particleRadius))
                                 "cluster", "condensation", "metaball" -> {
@@ -1382,6 +1405,54 @@ private fun AdaptiveWaterContainer(
                 }
             }
     ) {}
+}
+
+/** Small live sample of the particle renderer used by the Expressive Glass theme. */
+@Composable
+fun ExpressiveParticlePreview(
+    shapeModel: String,
+    imageUrl: String,
+    modifier: Modifier = Modifier
+) {
+    val touchPoint = remember { mutableStateOf<Offset?>(null) }
+    val previewShape = RoundedCornerShape(22.dp)
+    Box(
+        modifier = modifier
+            .clip(previewShape)
+            .background(Brush.linearGradient(listOf(Color(0xFFEAF7FF), Color(0xFFD9EAF7))))
+            .border(1.dp, Color.White.copy(alpha = 0.88f), previewShape)
+    ) {
+        AdaptiveWaterContainer(
+            modifier = Modifier.fillMaxSize(),
+            primary = Color(0xFF4AA9D8),
+            secondary = Color(0xFF7B85D5),
+            turbulence = 0.8f,
+            speedMultiplier = 0.6f,
+            motion = "rise",
+            sizeMultiplier = 0.85f,
+            additionalBubbles = 2,
+            brightness = 1f,
+            waterOpacity = 0.92f,
+            shapeModel = shapeModel,
+            alphaMin = 0.28f,
+            alphaMax = 0.78f,
+            swayAmount = 0.7f,
+            spawnRate = 1f,
+            scalePulse = 0.08f,
+            rotationAmount = 0.3f,
+            fadeAmount = 0.25f,
+            outlineEnabled = true,
+            isDark = false,
+            touchPoint = touchPoint
+        )
+        if (imageUrl.startsWith("https://")) {
+            coil.compose.AsyncImage(
+                model = imageUrl,
+                contentDescription = "Prévia animada do PNG personalizado",
+                modifier = Modifier.align(Alignment.Center).size(58.dp)
+            )
+        }
+    }
 }
 
 @Composable
