@@ -47,5 +47,11 @@ data class RemoteNovelty(
     val enabled: Boolean,
     val target: String,
     val version: String,
-    val createdAt: Long
+    val createdAt: Long,
+    val model: String = "ribbon",
+    val color: String = "red",
+    val size: String = "medium",
+    val location: String = "menu",
+    val startDate: String = "",
+    val endDate: String = ""
 )
