@@ -168,6 +168,7 @@ fun MestreScreen(
     val appearanceSettings by appearanceSettingsFlow
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
     var draftAppearanceSettings by remember(appearanceSettings) { mutableStateOf(appearanceSettings) }
+    val pendingBubbleImageDeletes = remember { mutableStateListOf<String>() }
     var draftDefaultThemeBackgrounds by remember(appearanceSettings.defaultThemeBackgrounds) {
         mutableStateOf(appearanceSettings.defaultThemeBackgrounds)
     }
@@ -256,15 +257,22 @@ fun MestreScreen(
         contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
     ) { uri: android.net.Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
+        val replacedImageUrl = draftAppearanceSettings.bubbleImageUrl
         coroutineScope.launch {
             isUploadingThemeBackground = true
-            val url = FirebaseService.uploadImageToStorage(uri, "glass_particles/${UUID.randomUUID()}.png")
-            isUploadingThemeBackground = false
-            if (url.isNullOrBlank()) {
-                snackbarHostState.showSnackbar(FirebaseService.lastError ?: "Não foi possível enviar o PNG.")
-            } else {
-                draftAppearanceSettings = draftAppearanceSettings.copy(bubbleImageUrl = url)
-                snackbarHostState.showSnackbar("PNG carregado. Salve os movimentos para publicar.")
+            try {
+                val url = FirebaseService.uploadImageToStorage(uri, "glass_particles/${UUID.randomUUID()}.png")
+                if (url.isNullOrBlank()) {
+                    snackbarHostState.showSnackbar(FirebaseService.lastError ?: "Não foi possível enviar o PNG.")
+                } else {
+                    if (replacedImageUrl.isNotBlank() && replacedImageUrl != url) {
+                        pendingBubbleImageDeletes.add(replacedImageUrl)
+                    }
+                    draftAppearanceSettings = draftAppearanceSettings.copy(bubbleImageUrl = url)
+                    snackbarHostState.showSnackbar("PNG carregado. Salve os movimentos para publicar.")
+                }
+            } finally {
+                isUploadingThemeBackground = false
             }
         }
     }
@@ -990,12 +998,56 @@ fun MestreScreen(
                                 }) }
                             }
                         }
-                        OutlinedButton(
-                            onClick = { bubblePngLauncher.launch("image/png") },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !isUploadingThemeBackground
-                        ) {
-                            Text(if (isUploadingThemeBackground) "Enviando PNG…" else if (draftAppearanceSettings.bubbleImageUrl.isBlank()) "Usar PNG personalizado" else "Trocar PNG personalizado")
+                        com.example.ui.theme.ExpressiveParticlePreview(
+                            shapeModel = draftAppearanceSettings.bubbleShape,
+                            imageUrl = draftAppearanceSettings.bubbleImageUrl,
+                            modifier = Modifier.fillMaxWidth().height(132.dp)
+                        )
+                        Text(
+                            "Prévia da partícula: ${particleShapes.firstOrNull { it.first == draftAppearanceSettings.bubbleShape }?.second ?: "Bolha clássica"}",
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                        if (draftAppearanceSettings.bubbleImageUrl.isNotBlank()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                coil.compose.AsyncImage(
+                                    model = draftAppearanceSettings.bubbleImageUrl,
+                                    contentDescription = "Prévia do PNG personalizado",
+                                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(14.dp))
+                                )
+                                Column(Modifier.weight(1f)) {
+                                    Text("PNG personalizado", style = MaterialTheme.typography.titleSmall)
+                                    Text("A imagem aparece na prévia acima.", style = MaterialTheme.typography.bodySmall)
+                                }
+                                TextButton(
+                                    onClick = { bubblePngLauncher.launch("image/png") },
+                                    enabled = !isUploadingThemeBackground
+                                ) { Text("Editar / substituir") }
+                                IconButton(
+                                    onClick = {
+                                        val imageUrl = draftAppearanceSettings.bubbleImageUrl
+                                        if (imageUrl.isNotBlank()) pendingBubbleImageDeletes.add(imageUrl)
+                                        draftAppearanceSettings = draftAppearanceSettings.copy(bubbleImageUrl = "")
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar("PNG removido da configuração. Salve os movimentos para publicar.")
+                                        }
+                                    },
+                                    enabled = !isUploadingThemeBackground
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Excluir PNG personalizado")
+                                }
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = { bubblePngLauncher.launch("image/png") },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !isUploadingThemeBackground
+                            ) {
+                                Text(if (isUploadingThemeBackground) "Enviando PNG…" else "Usar PNG personalizado")
+                            }
                         }
                         Text("Opacidade mínima: ${(draftAppearanceSettings.bubbleAlphaMin * 100).toInt()}%", style = MaterialTheme.typography.titleSmall)
                         Slider(value = draftAppearanceSettings.bubbleAlphaMin, onValueChange = {
@@ -1105,6 +1157,11 @@ fun MestreScreen(
                                     val saved = FirebaseService.saveAppearanceSettings(settingsToSave)
                                     isSavingGlobalAppearance = false
                                     if (saved) draftAppearanceSettings = settingsToSave
+                                    if (saved && pendingBubbleImageDeletes.isNotEmpty()) {
+                                        val cleanupUrls = pendingBubbleImageDeletes.distinct().filter { it != settingsToSave.bubbleImageUrl }
+                                        val removedUrls = cleanupUrls.filter { FirebaseService.deleteGlassParticleImage(it) }
+                                        pendingBubbleImageDeletes.removeAll(removedUrls.toSet())
+                                    }
                                     snackbarHostState.showSnackbar(
                                         if (saved) "Movimentos das bolhas publicados para todos."
                                         else FirebaseService.lastError ?: "Não foi possível salvar os movimentos."
