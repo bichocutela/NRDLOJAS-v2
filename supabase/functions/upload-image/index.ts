@@ -36,6 +36,27 @@ serve(async (req) => {
       throw new Error('Unauthorized administrative account')
     }
 
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    if (req.method === 'POST' && req.headers.get('content-type')?.includes('application/json')) {
+      const actionPayload = await req.json()
+      if (actionPayload.action !== 'delete') throw new Error('Unsupported storage action')
+      const deletePath = String(actionPayload.path ?? '').replace(/^\/+/, '')
+      if (!deletePath.startsWith('glass_particles/') || deletePath.includes('..')) {
+        throw new Error('Only custom glass particle images can be deleted')
+      }
+      const { error } = await supabaseAdmin.storage
+        .from('nrdlojas-images')
+        .remove([deletePath])
+      if (error) throw new Error(`Storage deletion failed: ${error.message}`)
+      return new Response(JSON.stringify({ deleted: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200
+      })
+    }
+
     const formData = await req.formData()
     const pathValue = formData.get('path')
     const fileValue = formData.get('file')
@@ -57,11 +78,6 @@ serve(async (req) => {
         throw new Error(`Unsupported dynamic media type: ${dynamicType || 'unknown'}`)
       }
     }
-
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
 
     const contentType = safePath.toLowerCase().endsWith('.json')
       ? 'application/json'

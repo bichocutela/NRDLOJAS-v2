@@ -864,6 +864,55 @@ object FirebaseService {
         }
     }
 
+    /** Deletes only a custom Glass particle owned by the administrative upload flow. */
+    suspend fun deleteGlassParticleImage(publicUrl: String): Boolean = withContext(Dispatchers.IO) {
+        val supabaseUrl = BuildConfig.SUPABASE_URL
+        val supabaseKey = BuildConfig.SUPABASE_ANON_KEY
+        if (supabaseUrl.isBlank() || supabaseKey.isBlank()) {
+            lastError = "Supabase não configurado"
+            return@withContext false
+        }
+        val pathSegments = android.net.Uri.parse(publicUrl).pathSegments
+        val bucketIndex = pathSegments.indexOf("nrdlojas-images")
+        val objectPath = pathSegments.drop(bucketIndex + 1).joinToString("/")
+        if (bucketIndex < 0 || !objectPath.startsWith("glass_particles/") || objectPath.contains("..")) {
+            lastError = "O endereço não corresponde a uma partícula personalizada válida."
+            return@withContext false
+        }
+        try {
+            val firebaseToken = com.google.firebase.auth.FirebaseAuth.getInstance()
+                .currentUser?.getIdToken(false)?.await()?.token.orEmpty()
+            if (firebaseToken.isBlank()) {
+                lastError = "Faça login como Mestre para excluir esta imagem."
+                return@withContext false
+            }
+            val body = org.json.JSONObject()
+                .put("action", "delete")
+                .put("path", objectPath)
+                .toString()
+                .toRequestBody("application/json; charset=utf-8".toMediaType())
+            val request = Request.Builder()
+                .url("$supabaseUrl/functions/v1/upload-image")
+                .post(body)
+                .addHeader("Authorization", "Bearer $supabaseKey")
+                .addHeader("x-firebase-token", firebaseToken)
+                .build()
+            okHttpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) return@withContext true
+                lastError = try {
+                    org.json.JSONObject(response.body?.string().orEmpty()).optString("error")
+                        .ifBlank { "Falha ao excluir a imagem do armazenamento." }
+                } catch (_: Exception) {
+                    "Falha ao excluir a imagem do armazenamento."
+                }
+                false
+            }
+        } catch (error: Exception) {
+            lastError = error.message ?: "Falha ao excluir a imagem do armazenamento."
+            false
+        }
+    }
+
     suspend fun uploadBanner(uri: android.net.Uri): String? {
         return try {
             val ctx = appContext ?: return null
