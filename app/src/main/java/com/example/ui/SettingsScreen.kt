@@ -1068,6 +1068,7 @@ private fun GlassSettingSlider(
     }
 }
 
+@Composable
 private fun SettingsSectionHeader(
     title: String,
     summary: String,
