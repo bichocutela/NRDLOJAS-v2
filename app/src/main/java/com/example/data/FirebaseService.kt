@@ -46,7 +46,8 @@ object FirebaseService {
                         shift = row["shift"] as? String ?: "",
                         daysOff = (row["daysOff"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() }.orEmpty(),
                         vacationDays = (row["vacationDays"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() }.orEmpty(),
-                        verified = row["verified"] as? Boolean ?: false
+                        verified = row["verified"] as? Boolean ?: false,
+                        rosterPhotoUrl = row["rosterPhotoUrl"] as? String ?: ""
                     )
                 }.orEmpty()
                 WorkSchedule(doc.id, year, month, employees, doc.getLong("updatedAt") ?: 0L, (doc.getLong("revision") ?: 1L).toInt())
@@ -66,6 +67,9 @@ object FirebaseService {
             val existing = ref.get().await()
             val revision = (existing.getLong("revision") ?: 0L).toInt() + 1
             val now = System.currentTimeMillis()
+            val existingPhotos = (existing.get("employees") as? List<*>)?.mapNotNull { it as? Map<*, *> }
+                ?.associate { (it["registration"] as? String).orEmpty().filter(Char::isDigit) to (it["rosterPhotoUrl"] as? String).orEmpty() }
+                .orEmpty()
             ref.set(mapOf(
                 "year" to schedule.year,
                 "month" to schedule.month,
@@ -75,7 +79,8 @@ object FirebaseService {
                     "shift" to row.shift,
                     "daysOff" to row.daysOff.distinct().sorted(),
                     "vacationDays" to row.vacationDays.distinct().sorted(),
-                    "verified" to row.verified
+                    "verified" to row.verified,
+                    "rosterPhotoUrl" to row.rosterPhotoUrl.ifBlank { existingPhotos[row.registration.filter(Char::isDigit)].orEmpty() }
                 ) },
                 "updatedAt" to now,
                 "revision" to revision
@@ -127,13 +132,18 @@ object FirebaseService {
                 val others = (existing.get("employees") as? List<*>)?.mapNotNull { it as? Map<*, *> }
                     ?.filterNot { (it["registration"] as? String)?.filter(Char::isDigit) == registration }
                     ?.map { it.entries.associate { entry -> entry.key.toString() to entry.value } }.orEmpty()
+                val previousPhoto = (existing.get("employees") as? List<*>)?.mapNotNull { it as? Map<*, *> }
+                    ?.firstOrNull { (it["registration"] as? String)?.filter(Char::isDigit) == registration }
+                    ?.get("rosterPhotoUrl") as? String
+                val preservedPhoto = previousPhoto?.takeIf { it.isNotBlank() } ?: row.rosterPhotoUrl
                 val employee = mapOf(
                     "registration" to registration,
                     "name" to row.name,
                     "shift" to row.shift,
                     "daysOff" to row.daysOff.distinct().sorted(),
                     "vacationDays" to row.vacationDays.distinct().sorted(),
-                    "verified" to true
+                    "verified" to true,
+                    "rosterPhotoUrl" to preservedPhoto
                 )
                 transaction.set(ref, mapOf(
                     "year" to year, "month" to month,
