@@ -1232,6 +1232,15 @@ object FirebaseService {
                         bubbleExtraCount = (snapshot?.getLong("appearanceBubbleExtraCount") ?: 0L).toInt().coerceIn(0, 18),
                         bubbleBrightness = (snapshot?.getDouble("appearanceBubbleBrightness") ?: 1.0).toFloat().coerceIn(0.25f, 2f),
                         bubbleOutline = snapshot?.getBoolean("appearanceBubbleOutline") ?: true,
+                        bubbleShape = snapshot?.getString("appearanceBubbleShape")?.takeIf { it in supportedBubbleShapes } ?: "classic",
+                        bubbleImageUrl = snapshot?.getString("appearanceBubbleImageUrl").orEmpty().take(2048),
+                        bubbleAlphaMin = (snapshot?.getDouble("appearanceBubbleAlphaMin") ?: 0.12).toFloat().coerceIn(0.05f, 0.9f),
+                        bubbleAlphaMax = (snapshot?.getDouble("appearanceBubbleAlphaMax") ?: 0.52).toFloat().coerceIn(0.1f, 1f),
+                        bubbleSway = (snapshot?.getDouble("appearanceBubbleSway") ?: 0.55).toFloat().coerceIn(0f, 2f),
+                        bubbleSpawnRate = (snapshot?.getDouble("appearanceBubbleSpawnRate") ?: 1.0).toFloat().coerceIn(0.25f, 2f),
+                        bubbleScalePulse = (snapshot?.getDouble("appearanceBubbleScalePulse") ?: 0.08).toFloat().coerceIn(0f, 0.5f),
+                        bubbleRotation = (snapshot?.getDouble("appearanceBubbleRotation") ?: 0.12).toFloat().coerceIn(0f, 1f),
+                        bubbleFade = (snapshot?.getDouble("appearanceBubbleFade") ?: 0.45).toFloat().coerceIn(0f, 1f),
                         revision = snapshot?.getLong("appearanceRevision") ?: 0L
                     )
                 }
@@ -1382,6 +1391,15 @@ object FirebaseService {
             bubbleExtraCount = settings.bubbleExtraCount.coerceIn(0, 18),
             bubbleBrightness = settings.bubbleBrightness.coerceIn(0.25f, 2f),
             bubbleOutline = settings.bubbleOutline,
+            bubbleShape = settings.bubbleShape.takeIf { it in supportedBubbleShapes } ?: "classic",
+            bubbleImageUrl = settings.bubbleImageUrl.take(2048),
+            bubbleAlphaMin = settings.bubbleAlphaMin.coerceIn(0.05f, 0.9f),
+            bubbleAlphaMax = settings.bubbleAlphaMax.coerceIn(settings.bubbleAlphaMin.coerceIn(0.05f, 0.9f), 1f),
+            bubbleSway = settings.bubbleSway.coerceIn(0f, 2f),
+            bubbleSpawnRate = settings.bubbleSpawnRate.coerceIn(0.25f, 2f),
+            bubbleScalePulse = settings.bubbleScalePulse.coerceIn(0f, 0.5f),
+            bubbleRotation = settings.bubbleRotation.coerceIn(0f, 1f),
+            bubbleFade = settings.bubbleFade.coerceIn(0f, 1f),
             revision = revision
         )
         val publicManifestSaved = runCatching {
@@ -1417,6 +1435,15 @@ object FirebaseService {
                         "appearanceBubbleExtraCount" to settings.bubbleExtraCount.coerceIn(0, 18).toLong(),
                         "appearanceBubbleBrightness" to settings.bubbleBrightness.coerceIn(0.25f, 2f).toDouble(),
                         "appearanceBubbleOutline" to settings.bubbleOutline,
+                        "appearanceBubbleShape" to (settings.bubbleShape.takeIf { it in supportedBubbleShapes } ?: "classic"),
+                        "appearanceBubbleImageUrl" to settings.bubbleImageUrl.take(2048),
+                        "appearanceBubbleAlphaMin" to settings.bubbleAlphaMin.coerceIn(0.05f, 0.9f).toDouble(),
+                        "appearanceBubbleAlphaMax" to settings.bubbleAlphaMax.coerceIn(settings.bubbleAlphaMin.coerceIn(0.05f, 0.9f), 1f).toDouble(),
+                        "appearanceBubbleSway" to settings.bubbleSway.coerceIn(0f, 2f).toDouble(),
+                        "appearanceBubbleSpawnRate" to settings.bubbleSpawnRate.coerceIn(0.25f, 2f).toDouble(),
+                        "appearanceBubbleScalePulse" to settings.bubbleScalePulse.coerceIn(0f, 0.5f).toDouble(),
+                        "appearanceBubbleRotation" to settings.bubbleRotation.coerceIn(0f, 1f).toDouble(),
+                        "appearanceBubbleFade" to settings.bubbleFade.coerceIn(0f, 1f).toDouble(),
                         "appearanceRevision" to revision
                     ),
                     com.google.firebase.firestore.SetOptions.merge()
@@ -1446,6 +1473,15 @@ object FirebaseService {
         bubbleExtraCount: Int,
         bubbleBrightness: Float,
         bubbleOutline: Boolean,
+        bubbleShape: String,
+        bubbleImageUrl: String,
+        bubbleAlphaMin: Float,
+        bubbleAlphaMax: Float,
+        bubbleSway: Float,
+        bubbleSpawnRate: Float,
+        bubbleScalePulse: Float,
+        bubbleRotation: Float,
+        bubbleFade: Float,
         revision: Long
     ): String {
         val defaultsJson = org.json.JSONObject()
@@ -1484,6 +1520,15 @@ object FirebaseService {
             .put("appearanceBubbleExtraCount", bubbleExtraCount)
             .put("appearanceBubbleBrightness", bubbleBrightness.toDouble())
             .put("appearanceBubbleOutline", bubbleOutline)
+            .put("appearanceBubbleShape", bubbleShape)
+            .put("appearanceBubbleImageUrl", bubbleImageUrl)
+            .put("appearanceBubbleAlphaMin", bubbleAlphaMin.toDouble())
+            .put("appearanceBubbleAlphaMax", bubbleAlphaMax.toDouble())
+            .put("appearanceBubbleSway", bubbleSway.toDouble())
+            .put("appearanceBubbleSpawnRate", bubbleSpawnRate.toDouble())
+            .put("appearanceBubbleScalePulse", bubbleScalePulse.toDouble())
+            .put("appearanceBubbleRotation", bubbleRotation.toDouble())
+            .put("appearanceBubbleFade", bubbleFade.toDouble())
             .put("appearanceRevision", revision)
             .toString()
     }
@@ -1570,9 +1615,23 @@ object FirebaseService {
             bubbleExtraCount = root.optInt("appearanceBubbleExtraCount", 0).coerceIn(0, 18),
             bubbleBrightness = root.optDouble("appearanceBubbleBrightness", 1.0).toFloat().coerceIn(0.25f, 2f),
             bubbleOutline = root.optBoolean("appearanceBubbleOutline", true),
+            bubbleShape = root.optString("appearanceBubbleShape").takeIf { it in supportedBubbleShapes } ?: "classic",
+            bubbleImageUrl = root.optString("appearanceBubbleImageUrl").take(2048),
+            bubbleAlphaMin = root.optDouble("appearanceBubbleAlphaMin", 0.12).toFloat().coerceIn(0.05f, 0.9f),
+            bubbleAlphaMax = root.optDouble("appearanceBubbleAlphaMax", 0.52).toFloat().coerceIn(0.1f, 1f),
+            bubbleSway = root.optDouble("appearanceBubbleSway", 0.55).toFloat().coerceIn(0f, 2f),
+            bubbleSpawnRate = root.optDouble("appearanceBubbleSpawnRate", 1.0).toFloat().coerceIn(0.25f, 2f),
+            bubbleScalePulse = root.optDouble("appearanceBubbleScalePulse", 0.08).toFloat().coerceIn(0f, 0.5f),
+            bubbleRotation = root.optDouble("appearanceBubbleRotation", 0.12).toFloat().coerceIn(0f, 1f),
+            bubbleFade = root.optDouble("appearanceBubbleFade", 0.45).toFloat().coerceIn(0f, 1f),
             revision = root.optLong("appearanceRevision", 0L)
         )
     }.getOrNull()
+
+    private val supportedBubbleShapes = setOf(
+        "classic", "organic", "drop", "metaball", "ring", "crystal", "cluster",
+        "sparkle", "neon", "capsule", "condensation", "soap", "lens"
+    )
 
     private fun parseDefaultThemeBackgroundsJson(raw: org.json.JSONObject?): Map<String, ThemeBackground> {
         if (raw == null) return emptyMap()
