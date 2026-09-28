@@ -23,11 +23,14 @@ class ScheduleReminderWorker(context: Context, params: WorkerParameters) : Corou
             val fresh = com.example.data.FirebaseService.fetchWorkSchedules()
             for (schedule in fresh) {
                 val employee = schedule.employees.firstOrNull { it.registration.filter(Char::isDigit) == registration } ?: continue
+                if (employee.shift.isBlank() && employee.daysOff.isEmpty() && employee.vacationDays.isEmpty()) continue
                 val fingerprint = "${employee.shift}|${employee.daysOff.sorted()}|${employee.vacationDays.sorted()}"
                 val key = "fingerprint_${schedule.monthKey}"
                 val previous = store.getString(key, null)
                 if (previous != null && previous != fingerprint) {
                     NotificationHelper.showNotification(applicationContext, "SCHEDULE_CHANGED", "Escala Alterada", "Confira as folgas de ${schedule.month}/${schedule.year} no Meu Perfil.")
+                    store.edit().putString(KEY_LAST_CHANGED_MONTH, schedule.monthKey)
+                        .putString(KEY_LAST_CHANGED_REGISTRATION, registration).apply()
                 } else if (previous == null && schedule.monthKey > "%04d-%02d".format(Calendar.getInstance().get(Calendar.YEAR), Calendar.getInstance().get(Calendar.MONTH) + 1)) {
                     NotificationHelper.showNotification(applicationContext, "SCHEDULE_NEW", "Escala de ${monthName(schedule.month)} Inserida", "Confira suas folgas no Meu Perfil.")
                 }
@@ -62,7 +65,44 @@ class ScheduleReminderWorker(context: Context, params: WorkerParameters) : Corou
         private const val PREFS = "profile_schedule_reminders"
         private const val KEY_REGISTRATION = "registration"
         private const val KEY_SCHEDULES = "schedules"
+        private const val KEY_LAST_CHANGED_MONTH = "last_changed_month"
+        private const val KEY_LAST_CHANGED_REGISTRATION = "last_changed_registration"
         private const val UNIQUE_WORK = "profile_schedule_reminders"
+
+        fun markScheduleChanged(context: Context, registration: String, monthKey: String) {
+            context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString(KEY_LAST_CHANGED_MONTH, monthKey)
+                .putString(KEY_LAST_CHANGED_REGISTRATION, registration.filter(Char::isDigit))
+                .apply()
+        }
+
+        fun changedPreviousMonthKey(
+            context: Context, schedules: List<WorkSchedule>, registration: String, year: Int, month: Int
+        ): String? {
+            val store = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val previous = Calendar.getInstance().apply {
+                clear(); set(year, month - 1, 1); add(Calendar.MONTH, -1)
+            }
+            val key = "%04d-%02d".format(previous.get(Calendar.YEAR), previous.get(Calendar.MONTH) + 1)
+            val digits = registration.filter(Char::isDigit)
+            val changedByWorker = store.getString(KEY_LAST_CHANGED_MONTH, null) == key &&
+                store.getString(KEY_LAST_CHANGED_REGISTRATION, null) == digits
+            if (changedByWorker) return key
+
+            val cachedSchedules = runCatching { JSONArray(store.getString(KEY_SCHEDULES, "[]")) }.getOrNull() ?: return null
+            val cachedMonth = (0 until cachedSchedules.length()).mapNotNull { cachedSchedules.optJSONObject(it) }
+                .firstOrNull { it.optString("monthKey") == key } ?: return null
+            val cachedEmployees = cachedMonth.optJSONArray("employees") ?: return null
+            val cachedEmployee = (0 until cachedEmployees.length()).mapNotNull { cachedEmployees.optJSONObject(it) }
+            val latest = schedules.firstOrNull { it.monthKey == key }?.employees
+                ?.firstOrNull { it.registration.filter(Char::isDigit) == digits }
+            if (cachedEmployee == null) return key.takeIf { latest != null }
+            if (latest == null) return key
+            val previousFingerprint = cachedEmployee.optString("fingerprint").takeIf { it.isNotBlank() }
+                ?: "${cachedEmployee.optString("shift")}|${cachedEmployee.optJSONArray("daysOff")?.toIntList().orEmpty()}|${cachedEmployee.optJSONArray("vacationDays")?.toIntList().orEmpty()}"
+            val latestFingerprint = "${latest.shift}|${latest.daysOff.sorted()}|${latest.vacationDays.sorted()}"
+            return key.takeIf { previousFingerprint != latestFingerprint }
+        }
 
         fun cacheSchedules(context: Context, schedules: List<WorkSchedule>, registration: String) {
             if (registration.isBlank()) return
@@ -73,7 +113,10 @@ class ScheduleReminderWorker(context: Context, params: WorkerParameters) : Corou
                         put("employees", JSONArray().apply {
                             schedule.employees.forEach { row ->
                                 if (row.registration.filter(Char::isDigit) == registration) {
-                                    put(JSONObject().put("registration", row.registration).put("daysOff", JSONArray(row.daysOff)))
+                                    put(JSONObject().put("registration", row.registration)
+                                        .put("daysOff", JSONArray(row.daysOff)).put("shift", row.shift)
+                                        .put("vacationDays", JSONArray(row.vacationDays))
+                                        .put("fingerprint", "${row.shift}|${row.daysOff.sorted()}|${row.vacationDays.sorted()}"))
                                 }
                             }
                         })
@@ -87,6 +130,8 @@ class ScheduleReminderWorker(context: Context, params: WorkerParameters) : Corou
         private fun monthName(month: Int): String = Calendar.getInstance().apply { set(Calendar.MONTH, month - 1) }
             .getDisplayName(Calendar.MONTH, Calendar.LONG, java.util.Locale("pt", "BR"))
             ?.replaceFirstChar { it.uppercase() } ?: "mês"
+
+        private fun JSONArray.toIntList(): List<Int> = (0 until length()).map { optInt(it) }
 
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<ScheduleReminderWorker>(15, TimeUnit.MINUTES).build()
