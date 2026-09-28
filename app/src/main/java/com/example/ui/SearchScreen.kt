@@ -12,7 +12,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -103,6 +102,7 @@ import com.example.ui.theme.ExpressiveGlassStyle
 import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.expressiveLiquidGlass
 import com.example.ui.theme.expressiveShadow
+import com.example.ui.theme.glassSurface
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.ui.res.painterResource
@@ -118,6 +118,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -298,7 +299,15 @@ private fun expressiveGlassCardAccent(style: ExpressiveGlassStyle, index: Int): 
     )
     // A Home do Glass Expressivo mantém a paleta viva da referência; a cor
     // selecionada continua controlando as ações e a iluminação do tema.
-    return signaturePalette[index % signaturePalette.size] to style.onAccent
+    val accent = signaturePalette[index % signaturePalette.size]
+    return accent to contrastingGlassContentColor(accent)
+}
+
+private fun contrastingGlassContentColor(background: Color): Color {
+    val luminance = background.luminance()
+    val whiteContrast = 1.05f / (luminance + 0.05f)
+    val blackContrast = (luminance + 0.05f) / 0.05f
+    return if (whiteContrast >= blackContrast) Color.White else Color(0xFF111827)
 }
 
 private fun expressiveGlassCardSecondary(style: ExpressiveGlassStyle, index: Int): Color {
@@ -525,7 +534,7 @@ fun SearchScreen(
         ) {
         val screenProfile = rememberNrdScreenProfile()
         val compactExpressive = isExpressiveTheme && screenProfile.compact
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
@@ -533,8 +542,8 @@ fun SearchScreen(
                     top = if (compactExpressive) 4.dp else if (isExpressiveTheme) 6.dp else 0.dp,
                     end = if (compactExpressive) 8.dp else if (isExpressiveTheme) 12.dp else 0.dp
                 )
+                .aspectRatio(3f)
         ) {
-            val headerHeight = maxWidth / 3f
             val headerShape = if (isExpressiveTheme) {
                 RoundedCornerShape(if (compactExpressive) 24.dp else 28.dp)
             } else {
@@ -543,8 +552,7 @@ fun SearchScreen(
 
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(headerHeight)
+                    .fillMaxSize()
                     .then(if (isExpressiveGlassTheme) Modifier else Modifier.glassSoftShadow(headerShape).expressiveShadow(headerShape, 8.dp))
                     .clip(headerShape)
                     .background(
@@ -1102,7 +1110,7 @@ fun SearchScreen(
                     item { SearchEmptyState(onClear = { viewModel.updateSearchQuery("") }) }
                 } else {
                     itemsIndexed(searchResults, key = { _, it -> it.code }) { index, product ->
-                        ProductCard(product, viewModel, index, appTheme, textPreferences, lightweightGlass = isExpressiveGlassTheme, vibrateOnClick = vibrateOnClick, vibrator = vibrator)
+                        ProductCard(product, viewModel, index, appTheme, textPreferences, vibrateOnClick = vibrateOnClick, vibrator = vibrator)
                     }
                 }
             }
@@ -1149,7 +1157,6 @@ fun SearchScreen(
                                         viewModel.onProductSearched(selected)
                                         selectedMostUsedProduct = selected
                                     },
-                                    lightweightGlass = isExpressiveGlassTheme,
                                     vibrateOnClick = vibrateOnClick,
                                     vibrator = vibrator
                                 )
@@ -1174,7 +1181,6 @@ fun SearchScreen(
                                     index = index,
                                     appTheme = appTheme,
                                     textPreferences = textPreferences,
-                                    lightweightGlass = true,
                                     vibrateOnClick = vibrateOnClick,
                                     vibrator = vibrator
                                 )
@@ -1212,7 +1218,6 @@ fun SearchScreen(
                                     index = index,
                                     appTheme = appTheme,
                                     textPreferences = textPreferences,
-                                    lightweightGlass = true,
                                     vibrateOnClick = vibrateOnClick,
                                     vibrator = vibrator
                                 )
@@ -1283,7 +1288,6 @@ fun SearchScreen(
                                         index = index,
                                         appTheme = appTheme,
                                         textPreferences = textPreferences,
-                                        lightweightGlass = true,
                                         vibrateOnClick = vibrateOnClick,
                                         vibrator = vibrator
                                     )
@@ -1330,7 +1334,7 @@ fun SearchScreen(
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     favorites.forEachIndexed { index, product ->
-                                        ProductCard(product, viewModel, index, appTheme, textPreferences, lightweightGlass = isExpressiveGlassTheme, vibrateOnClick = vibrateOnClick, vibrator = vibrator)
+                                        ProductCard(product, viewModel, index, appTheme, textPreferences, vibrateOnClick = vibrateOnClick, vibrator = vibrator)
                                     }
                                 }
                             }
@@ -1445,7 +1449,7 @@ fun SearchScreen(
                     )
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(products, key = { _, item -> item.code }) { index, product ->
-                            ProductCard(product, viewModel, index, appTheme, textPreferences, lightweightGlass = isExpressiveGlassTheme, vibrateOnClick = vibrateOnClick, vibrator = vibrator)
+                            ProductCard(product, viewModel, index, appTheme, textPreferences, vibrateOnClick = vibrateOnClick, vibrator = vibrator)
                         }
                     }
                 }
@@ -1472,7 +1476,6 @@ fun SearchScreen(
                                     viewModel.onProductSearched(selected)
                                     selectedMostUsedProduct = selected
                                 },
-                                lightweightGlass = isExpressiveGlassTheme,
                                 vibrateOnClick = vibrateOnClick,
                                 vibrator = vibrator
                             )
@@ -1665,21 +1668,7 @@ fun SectionHeader(
                         .size(if (compactExpressive) 30.dp else 34.dp)
                         .then(
                             if (isExpressiveGlass) {
-                                if (performanceTier.enableComplexShaders) {
-                                    Modifier.expressiveLiquidGlass(
-                                        shape = headerIconShape,
-                                        accent = sectionAccent,
-                                        intensity = 0.92f,
-                                        elevation = 5.dp,
-                                        waves = true,
-                                        bubbleSeed = title.hashCode(),
-                                        lightweight = true
-                                    )
-                                } else {
-                                    Modifier
-                                        .background(Color.White.copy(alpha = 0.85f), headerIconShape)
-                                        .border(1.dp, Color.White, headerIconShape)
-                                }
+                                Modifier.glassSurface(headerIconShape, sectionAccent, elevation = 4.dp)
                             } else {
                                 Modifier
                                     .clip(headerIconShape)
@@ -1809,7 +1798,6 @@ fun CategorySection(
     val expressive = LocalExpressiveStyle.current.enabled
     val expressiveGlass = LocalExpressiveGlassStyle.current
     val isExpressiveGlass = expressiveGlass.enabled
-    val performanceTier = LocalDevicePerformanceTier.current
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
     val categoryColors = listOf(
@@ -1849,27 +1837,14 @@ fun CategorySection(
             }
             Box(
                 modifier = Modifier
-                    .then(if (isExpressiveGlass) Modifier else Modifier.glassSoftShadow(categoryShape))
-                    .then(if (isExpressiveGlass) Modifier else Modifier.expressiveShadow(categoryShape, 6.dp))
-                    .then(if (isExpressiveGlass) Modifier else Modifier.clip(categoryShape))
                     .then(
                         if (isExpressiveGlass) {
-                            if (performanceTier.enableComplexShaders) {
-                                Modifier.expressiveLiquidGlass(
-                                    shape = categoryShape,
-                                    accent = liquidAccent,
-                                    intensity = 1f,
-                                    elevation = 6.dp,
-                                    waves = true,
-                                    bubbleSeed = index + 301
-                                )
-                            } else {
-                                Modifier
-                                    .background(Color.White.copy(alpha = 0.85f), categoryShape)
-                                    .border(1.dp, Color.White, categoryShape)
-                            }
+                            Modifier.glassSurface(categoryShape, liquidAccent, elevation = 4.dp)
                         } else {
                             Modifier
+                                .then(Modifier.glassSoftShadow(categoryShape))
+                                .then(Modifier.expressiveShadow(categoryShape, 6.dp))
+                                .clip(categoryShape)
                                 .background(categoryGlassFill)
                                 .border(1.dp, categoryGlassBorder, categoryShape)
                         }
@@ -1898,7 +1873,7 @@ fun CategorySection(
                             painter = painterResource(id = expressiveCategoryIconRes(category)),
                             contentDescription = category,
                             tint = when {
-                                isExpressiveGlass -> Color.White
+                                isExpressiveGlass -> MaterialTheme.colorScheme.onSurface
                                 glass.enabled -> strongColors.first
                                 else -> strongColors.second
                             },
@@ -1919,7 +1894,7 @@ fun CategorySection(
                         boldOutline = textPreferences.boldOutline,
                         uppercaseBold = true,
                         color = when {
-                            isExpressiveGlass -> Color.White
+                            isExpressiveGlass -> MaterialTheme.colorScheme.onSurface
                             glass.enabled -> MaterialTheme.colorScheme.onSurface
                             expressive -> strongColors.second
                             else -> dynamicColors.second
@@ -1977,7 +1952,6 @@ fun CategoryProductsSheet(
                         index,
                         appTheme,
                         textPreferences,
-                        lightweightGlass = isExpressiveGlassTheme,
                         vibrateOnClick = vibrateOnClick,
                         vibrator = vibrator
                     )
@@ -2000,7 +1974,6 @@ private fun FavoriteToggleButton(
     compact: Boolean = false
 ) {
     val expressiveGlass = LocalExpressiveGlassStyle.current
-    val performanceTier = LocalDevicePerformanceTier.current
     val isExpressiveGlass = expressiveGlass.enabled
     val heartScale by animateFloatAsState(
         targetValue = if (product.isFavorite) 1.10f else 1f,
@@ -2016,22 +1989,11 @@ private fun FavoriteToggleButton(
         modifier = Modifier
             .size(if (compact) 34.dp else 38.dp)
             .then(
-                if (expressiveGlass.enabled && performanceTier.enableComplexShaders) {
-                    Modifier.expressiveLiquidGlass(
-                        shape = CircleShape,
-                        accent = heartAccent,
-                        secondaryAccent = expressiveGlass.secondaryAccent,
-                        intensity = if (product.isFavorite) 0.94f else 0.72f,
-                        elevation = if (product.isFavorite) 5.dp else 3.dp,
-                        waves = false,
-                        bubbleSeed = product.code.hashCode(),
-                        lightweight = true
-                    )
-                } else if (expressiveGlass.enabled) {
-                    Modifier
-                        .background(Color.White.copy(alpha = 0.85f), CircleShape)
-                        .border(1.dp, Color.White, CircleShape)
-                } else Modifier
+                if (expressiveGlass.enabled) Modifier.glassSurface(
+                    shape = CircleShape,
+                    accent = heartAccent,
+                    elevation = if (product.isFavorite) 4.dp else 2.dp
+                ) else Modifier
             )
     ) {
         Icon(
@@ -2053,8 +2015,6 @@ fun ProductCard(
     appTheme: String = "multicolor",
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
     onProductClick: ((Product) -> Unit)? = null,
-    animateGlass: Boolean = true,
-    lightweightGlass: Boolean = false,
     vibrateOnClick: Boolean = true,
     vibrator: Vibrator? = null
 ) {
@@ -2090,7 +2050,8 @@ fun ProductCard(
         )
     }
     val shareAccentColor = cardAccent.first.toArgb()
-    val shareCodeColor = MaterialTheme.colorScheme.primary.toArgb()
+    val shareCodeColor = cardAccent.first.toArgb()
+    val shareCodeTextColor = cardAccent.second.toArgb()
     val avatarColors = expressiveGlassAvatarColors(index)
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
@@ -2110,27 +2071,13 @@ fun ProductCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (isExpressiveGlass) Modifier else Modifier.glassSoftShadow(cardShape))
-            .then(if (isExpressiveGlass) Modifier else Modifier.clip(cardShape))
             .then(
                 if (isExpressiveGlass) {
-                    if (performanceTier.enableComplexShaders) {
-                        Modifier.expressiveLiquidGlass(
-                            shape = cardShape,
-                            accent = cardAccent.first,
-                            secondaryAccent = expressiveGlass.secondaryAccent,
-                            intensity = 1.08f,
-                            elevation = 10.dp,
-                            waves = true,
-                            bubbleSeed = index + 71
-                        )
-                    } else {
-                        Modifier
-                            .background(Color.White.copy(alpha = 0.85f), cardShape)
-                            .border(1.dp, Color.White, cardShape)
-                    }
+                    Modifier.glassSurface(cardShape, cardAccent.first, elevation = 5.dp)
                 } else {
                     Modifier
+                        .glassSoftShadow(cardShape)
+                        .clip(cardShape)
                         .background(
                             when {
                                 glass.enabled -> glass.fill.copy(alpha = glass.alpha)
@@ -2164,7 +2111,8 @@ fun ProductCard(
                             heightRaw = cardHeight,
                             product = product,
                             accentColor = shareAccentColor,
-                            codeBackgroundColor = shareCodeColor
+                            codeBackgroundColor = shareCodeColor,
+                            codeTextColor = shareCodeTextColor
                         )
                         Toast.makeText(
                             context,
@@ -2228,7 +2176,7 @@ fun ProductCard(
                 baseStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
                 boldOutline = textPreferences.boldOutline,
                 uppercaseBold = textPreferences.uppercaseBold,
-                color = if (isExpressiveGlass) Color(0xFF0F172A) else MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2284,12 +2232,12 @@ fun ProductCard(
                     Text(
                         text = product.code,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
-                        color = if (isExpressiveGlass) expressiveGlass.onAccent else if (expressive) cardAccent.second else MaterialTheme.colorScheme.onPrimaryContainer
+                        color = if (isExpressiveGlass) cardAccent.second else if (expressive) cardAccent.second else MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
                         text = product.unit.uppercase(),
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Black),
-                        color = if (isExpressiveGlass) expressiveGlass.onAccent else if (expressive) cardAccent.second.copy(alpha = 0.78f) else MaterialTheme.colorScheme.primary
+                        color = if (isExpressiveGlass) cardAccent.second else if (expressive) cardAccent.second.copy(alpha = 0.78f) else MaterialTheme.colorScheme.primary
                     )
                 }
             }
@@ -2305,7 +2253,8 @@ private suspend fun copyHomeProductCardToClipboard(
     heightRaw: Int,
     product: Product,
     accentColor: Int,
-    codeBackgroundColor: Int
+    codeBackgroundColor: Int,
+    codeTextColor: Int
 ): Boolean = runCatching {
 
     val width = widthRaw.coerceAtLeast(1)
@@ -2355,7 +2304,7 @@ private suspend fun copyHomeProductCardToClipboard(
     canvas.drawText(product.name.take(1).uppercase(), circleCx, initialBaseline, initialPaint)
 
     val codePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.WHITE
+        color = codeTextColor
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         textAlign = Paint.Align.CENTER
         textSize = dp(16f)
@@ -2479,8 +2428,6 @@ fun MiniProductCard(
     appTheme: String = "multicolor",
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
     onProductClick: ((Product) -> Unit)? = null,
-    animateGlass: Boolean = true,
-    lightweightGlass: Boolean = false,
     vibrateOnClick: Boolean = true,
     vibrator: Vibrator? = null
 ) {
@@ -2529,46 +2476,41 @@ fun MiniProductCard(
     }
     Column(
         modifier = Modifier
-            .widthIn(
-                min = when {
-                    compactExpressive -> 138.dp
-                    expressive -> 154.dp
-                    else -> 144.dp
-                },
-                max = when {
-                    compactExpressive -> 164.dp
-                    expressive -> 184.dp
-                    else -> 176.dp
-                }
-            )
-            .heightIn(
-                min = when {
-                    compactExpressive -> 154.dp
-                    expressive -> 176.dp
-                    textPreferences.largeText -> 168.dp
-                    else -> 132.dp
-                }
-            )
-            .then(if (isExpressiveGlass) Modifier else Modifier.glassSoftShadow(cardShape))
-            .then(if (isExpressiveGlass) Modifier else Modifier.expressiveShadow(cardShape, 7.dp))
-            .then(if (isExpressiveGlass) Modifier else Modifier.clip(cardShape))
             .then(
                 if (isExpressiveGlass) {
-                    if (performanceTier.enableComplexShaders) {
-                        Modifier.expressiveLiquidGlass(
-                            shape = cardShape,
-                            accent = cardAccent.first,
-                            secondaryAccent = expressiveGlass.secondaryAccent,
-                            intensity = 1.08f,
-                            elevation = 10.dp,
-                            waves = true,
-                            bubbleSeed = index + 121
+                    Modifier
+                        .width(if (compactExpressive) 154.dp else 176.dp)
+                        .height(if (compactExpressive) 164.dp else 184.dp)
+                } else {
+                    Modifier
+                        .widthIn(
+                            min = when {
+                                compactExpressive -> 138.dp
+                                expressive -> 154.dp
+                                else -> 144.dp
+                            },
+                            max = when {
+                                compactExpressive -> 164.dp
+                                expressive -> 184.dp
+                                else -> 176.dp
+                            }
                         )
-                    } else {
-                        Modifier
-                            .background(Color.White.copy(alpha = 0.85f), cardShape)
-                            .border(1.dp, Color.White, cardShape)
-                    }
+                        .heightIn(
+                            min = when {
+                                compactExpressive -> 154.dp
+                                expressive -> 176.dp
+                                textPreferences.largeText -> 168.dp
+                                else -> 132.dp
+                            }
+                        )
+                        .glassSoftShadow(cardShape)
+                        .expressiveShadow(cardShape, 7.dp)
+                        .clip(cardShape)
+                }
+            )
+            .then(
+                if (isExpressiveGlass) {
+                    Modifier.glassSurface(cardShape, cardAccent.first, elevation = 5.dp)
                 } else {
                     Modifier
                         .background(
@@ -2695,12 +2637,9 @@ fun MiniProductCard(
                         modifier = Modifier
                             .then(
                                 if (isExpressiveGlass) {
-                                    if (performanceTier.enableComplexShaders) Modifier
-                                        .background(expressiveGlass.accent, unitShape)
+                                    Modifier
+                                        .background(cardAccent.first, unitShape)
                                         .border(1.dp, Color.White.copy(alpha = 0.78f), unitShape)
-                                    else Modifier
-                                        .background(Color.White.copy(alpha = 0.85f), unitShape)
-                                        .border(1.dp, Color.White, unitShape)
                                 } else {
                                     Modifier
                                         .clip(unitShape)
@@ -2712,7 +2651,7 @@ fun MiniProductCard(
                         Text(
                             text = product.unit.uppercase(),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
-                            color = if (isExpressiveGlass && performanceTier.enableComplexShaders) expressiveGlass.onAccent else MaterialTheme.colorScheme.onSurface
+                            color = if (isExpressiveGlass) cardAccent.second else MaterialTheme.colorScheme.onSurface
                         )
                     }
                 } else {
@@ -2737,7 +2676,7 @@ fun MiniProductCard(
             ),
             boldOutline = textPreferences.boldOutline,
             uppercaseBold = textPreferences.uppercaseBold,
-                            color = if (isExpressiveGlass) Color(0xFF0F172A) else MaterialTheme.colorScheme.onBackground,
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
@@ -2788,12 +2727,9 @@ fun MiniProductCard(
                     modifier = Modifier
                         .then(
                             if (isExpressiveGlass) {
-                                if (performanceTier.enableComplexShaders) Modifier
-                                    .background(expressiveGlass.accent, CircleShape)
+                                Modifier
+                                    .background(cardAccent.first, CircleShape)
                                     .border(1.dp, Color.White.copy(alpha = 0.78f), CircleShape)
-                                else Modifier
-                                    .background(Color.White.copy(alpha = 0.85f), CircleShape)
-                                    .border(1.dp, Color.White, CircleShape)
                             } else {
                                 Modifier
                                     .clip(CircleShape)
@@ -2806,7 +2742,7 @@ fun MiniProductCard(
                     Icon(
                         Icons.Default.ChevronRight,
                         contentDescription = "Abrir produto",
-                        tint = if (isExpressiveGlass) expressiveGlass.onAccent else MaterialTheme.colorScheme.primary,
+                        tint = if (isExpressiveGlass) cardAccent.second else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(if (compactExpressive) 16.dp else 18.dp)
                     )
                 }
@@ -2822,8 +2758,6 @@ fun HistoryItem(
     index: Int = 0,
     appTheme: String = "multicolor",
     textPreferences: HomeTextPreferences = HomeTextPreferences(),
-    animateGlass: Boolean = true,
-    lightweightGlass: Boolean = false,
     vibrateOnClick: Boolean = true,
     vibrator: Vibrator? = null
 ) {
@@ -2869,33 +2803,40 @@ fun HistoryItem(
         )
     }
     val strongColors = if (isExpressiveGlass) dynColors else homeStrongColors(index)
+    val historyOrbBrush = remember(dynColors.first, expressiveGlass.isDark) {
+        Brush.radialGradient(
+            colors = listOf(
+                Color.White.copy(alpha = if (expressiveGlass.isDark) 0.48f else 0.82f),
+                dynColors.first.copy(alpha = 0.92f),
+                dynColors.first.copy(alpha = 0.72f)
+            )
+        )
+    }
+    val historyOrbBorder = remember(dynColors.first) {
+        Brush.linearGradient(listOf(Color.White.copy(alpha = 0.92f), dynColors.first.copy(alpha = 0.64f)))
+    }
 
     if (expressive) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(if (isExpressiveGlass) Modifier.height(72.dp) else Modifier.heightIn(min = if (compactExpressive) 72.dp else 84.dp))
-                .then(if (isExpressiveGlass) Modifier else Modifier.glassSoftShadow(itemShape))
-                .then(if (isExpressiveGlass) Modifier else Modifier.expressiveShadow(itemShape, 6.dp))
-                .then(if (isExpressiveGlass) Modifier else Modifier.clip(itemShape))
+                .then(
+                    if (isExpressiveGlass) Modifier.height(72.dp)
+                    else Modifier.heightIn(min = if (compactExpressive) 72.dp else 84.dp)
+                )
                 .then(
                     when {
-                        isExpressiveGlass && performanceTier.enableComplexShaders -> Modifier.expressiveLiquidGlass(
-                            shape = itemShape,
-                            accent = dynColors.first,
-                            secondaryAccent = expressiveGlass.secondaryAccent,
-                            intensity = 1.04f,
-                            elevation = 9.dp,
-                            waves = true,
-                            bubbleSeed = index + 171
-                        )
-                        isExpressiveGlass -> Modifier
-                            .background(Color.White.copy(alpha = 0.85f), itemShape)
-                            .border(1.dp, Color.White, itemShape)
+                        isExpressiveGlass -> Modifier.glassSurface(itemShape, dynColors.first, elevation = 5.dp)
                         glass.enabled -> Modifier
+                            .glassSoftShadow(itemShape)
+                            .expressiveShadow(itemShape, 6.dp)
+                            .clip(itemShape)
                             .background(glass.fill.copy(alpha = glass.alpha))
                             .border(1.dp, strongColors.first.copy(alpha = 0.42f), itemShape)
                         else -> Modifier
+                            .glassSoftShadow(itemShape)
+                            .expressiveShadow(itemShape, 6.dp)
+                            .clip(itemShape)
                             .background(dynColors.first.copy(alpha = 0.62f))
                             .border(1.dp, strongColors.first.copy(alpha = 0.52f), itemShape)
                     }
@@ -2907,7 +2848,7 @@ fun HistoryItem(
                 
                 .padding(
                     horizontal = if (compactExpressive) 8.dp else 10.dp,
-                    vertical = if (compactExpressive) 7.dp else 9.dp
+                    vertical = if (isExpressiveGlass) 4.dp else if (compactExpressive) 7.dp else 9.dp
                 ),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -2917,21 +2858,9 @@ fun HistoryItem(
                     .size(if (isExpressiveGlass) 50.dp else if (compactExpressive) 38.dp else 46.dp)
                     .then(
                         if (isExpressiveGlass) {
-                            if (performanceTier.enableComplexShaders) {
-                                Modifier.expressiveLiquidGlass(
-                                    shape = CircleShape,
-                                    accent = dynColors.first,
-                                    secondaryAccent = expressiveGlass.secondaryAccent,
-                                    intensity = 0.94f,
-                                    elevation = 4.dp,
-                                    waves = false,
-                                    bubbleSeed = index + 191
-                                )
-                            } else {
-                                Modifier
-                                    .background(dynColors.first.copy(alpha = 0.90f), CircleShape)
-                                    .border(1.dp, Color.White, CircleShape)
-                            }
+                            Modifier
+                                .background(historyOrbBrush, CircleShape)
+                                .border(1.dp, historyOrbBorder, CircleShape)
                         } else {
                             Modifier
                                 .clip(historyIconShape)
@@ -2943,7 +2872,7 @@ fun HistoryItem(
                 Icon(
                     imageVector = Icons.Default.History,
                     contentDescription = "Histórico",
-                    tint = if (isExpressiveGlass) Color.White else strongColors.second,
+                    tint = if (isExpressiveGlass) dynColors.second else strongColors.second,
                     modifier = Modifier.size(if (compactExpressive) 19.dp else 23.dp)
                 )
             }
@@ -2975,7 +2904,7 @@ fun HistoryItem(
                     ),
                     boldOutline = textPreferences.boldOutline,
                     uppercaseBold = textPreferences.uppercaseBold,
-                    color = if (isExpressiveGlass) Color(0xFF0F172A) else MaterialTheme.colorScheme.onBackground,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -3015,7 +2944,7 @@ fun HistoryItem(
                 Icon(
                     Icons.Default.ChevronRight,
                     contentDescription = "Abrir produto",
-                tint = if (isExpressiveGlass) Color(0xFFB8860B) else strongColors.first,
+                    tint = if (isExpressiveGlass) Color(0xFFB8860B) else strongColors.first,
                     modifier = Modifier
                         .padding(if (isExpressiveGlass) 4.dp else 0.dp)
                         .size(if (compactExpressive) 20.dp else 24.dp)
@@ -3233,27 +3162,23 @@ fun ThemeBanner(
         "file:///android_asset/themes/theme_${normalizedTheme}.jpg"
     }
 
-    BoxWithConstraints(modifier = modifier) {
-        val safeScale = imageScale.coerceIn(0.5f, 3f)
-        val safeOffsetX = imageOffsetX.coerceIn(-1f, 1f)
-        val safeOffsetY = imageOffsetY.coerceIn(-1f, 1f)
-        val safeStretchX = imageStretchX.coerceIn(0.5f, 2.5f)
-        val safeStretchY = imageStretchY.coerceIn(0.5f, 2.5f)
-        AsyncImage(
-            model = imageModel,
-            contentDescription = "Banner do tema $normalizedTheme",
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    scaleX = safeScale * safeStretchX
-                    scaleY = safeScale * safeStretchY
-                    translationX = size.width * safeOffsetX
-                    translationY = size.height * safeOffsetY
-                },
-            contentScale = ContentScale.Fit,
-            alignment = Alignment.Center
-        )
-    }
+    val safeScale = imageScale.coerceIn(0.5f, 3f)
+    val safeOffsetX = imageOffsetX.coerceIn(-1f, 1f)
+    val safeOffsetY = imageOffsetY.coerceIn(-1f, 1f)
+    val safeStretchX = imageStretchX.coerceIn(0.5f, 2.5f)
+    val safeStretchY = imageStretchY.coerceIn(0.5f, 2.5f)
+    AsyncImage(
+        model = imageModel,
+        contentDescription = "Banner do tema $normalizedTheme",
+        modifier = modifier.graphicsLayer {
+            scaleX = safeScale * safeStretchX
+            scaleY = safeScale * safeStretchY
+            translationX = size.width * safeOffsetX
+            translationY = size.height * safeOffsetY
+        },
+        contentScale = ContentScale.Fit,
+        alignment = Alignment.Center
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)
