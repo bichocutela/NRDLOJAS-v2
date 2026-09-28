@@ -3091,46 +3091,75 @@ fun getCategoryIcon(category: String): String {
 fun generateBarcodeBitmap(data: String, profile: String = "Padrão"): ImageBitmap? {
     try {
         val writer = MultiFormatWriter()
-        val hints = java.util.EnumMap<EncodeHintType, Any>(EncodeHintType::class.java)
-        
-        val margin = when(profile) {
-            "Symbol" -> 20
-            "Datalogic" -> 10
-            else -> 10
-        }
-        hints[EncodeHintType.MARGIN] = margin
+        val hints = EnumMap<EncodeHintType, Any>(EncodeHintType::class.java)
+        hints[EncodeHintType.MARGIN] = 0
 
-        val baseWidth = when(profile) {
+        val baseWidth = when (profile) {
             "Symbol" -> 800
             "Datalogic" -> 1200
             else -> 1024
         }
-        val baseHeight = when(profile) {
+        val baseHeight = when (profile) {
             "Symbol" -> 200
             "Datalogic" -> 300
             else -> 256
         }
 
-        val format = if (data.length == 13 && data.all { it.isDigit() }) {
-            BarcodeFormat.EAN_13
-        } else {
-            BarcodeFormat.CODE_128
-        }
+        val format = if (
+            data.length == 13 &&
+            data.all { it in '0'..'9' } &&
+            hasValidEan13Checksum(data)
+        ) BarcodeFormat.EAN_13 else BarcodeFormat.CODE_128
 
-        val bitMatrix = writer.encode(data, format, baseWidth, baseHeight, hints)
-        val width = bitMatrix.width
-        val height = bitMatrix.height
-        val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
-        
-        for (x in 0 until width) {
-            for (y in 0 until height) {
-                bitmap.setPixel(x, y, if (bitMatrix.get(x, y)) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+        // Ask ZXing for the symbol's natural module width, then scale whole modules
+        // onto a white canvas so rasterization cannot shrink or crop quiet zones.
+        val raw = writer.encode(data, format, 1, baseHeight, hints)
+        val quietModules = when (format) {
+            // EAN-13 requires 11X on the left and 7X on the right. A symmetric 14X
+            // quiet zone gives the fixed reader additional horizontal alignment room.
+            BarcodeFormat.EAN_13 -> 14
+            else -> when (profile) {
+                "Symbol" -> 12
+                "Datalogic" -> 14
+                else -> 10
             }
         }
+        val moduleScale = ((baseWidth - 2 * quietModules) / raw.width).coerceAtLeast(1)
+        val symbolWidth = raw.width * moduleScale
+        val quietPixels = quietModules * moduleScale
+        val left = maxOf((baseWidth - symbolWidth) / 2, quietPixels)
+        val width = maxOf(baseWidth, left + symbolWidth + quietPixels)
+        val output = com.google.zxing.common.BitMatrix(width, baseHeight)
+        for (x in 0 until raw.width) {
+            if (raw.get(x, 0)) {
+                output.setRegion(left + x * moduleScale, 0, moduleScale, baseHeight)
+            }
+        }
+
+        val bitmap = android.graphics.Bitmap.createBitmap(
+            width,
+            baseHeight,
+            android.graphics.Bitmap.Config.ARGB_8888
+        )
+        val pixels = IntArray(width * baseHeight) { android.graphics.Color.WHITE }
+        for (y in 0 until baseHeight) {
+            for (x in 0 until width) {
+                if (output.get(x, y)) pixels[y * width + x] = android.graphics.Color.BLACK
+            }
+        }
+        bitmap.setPixels(pixels, 0, width, 0, 0, width, baseHeight)
         return bitmap.asImageBitmap()
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         return null
     }
+}
+
+private fun hasValidEan13Checksum(value: String): Boolean {
+    if (value.length != 13 || value.any { it !in '0'..'9' }) return false
+    val weightedSum = value.take(12).mapIndexed { index, digit ->
+        digit.digitToInt() * if (index % 2 == 0) 1 else 3
+    }.sum()
+    return (10 - weightedSum % 10) % 10 == value.last().digitToInt()
 }
 
 @Composable

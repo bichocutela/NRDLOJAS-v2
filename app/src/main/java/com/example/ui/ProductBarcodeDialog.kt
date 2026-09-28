@@ -237,7 +237,7 @@ fun ProductBarcodeDialog(
                             when {
                                 screenProfile.veryCompact -> 0.98f
                                 screenProfile.compact -> 0.95f
-                                else -> 0.88f
+                                else -> if (scannerProfile == "Datalogic") 0.98f else 0.88f
                             }
                         )
                         .then(
@@ -263,7 +263,7 @@ fun ProductBarcodeDialog(
                                 when {
                                     screenProfile.veryCompact -> 10.dp
                                     screenProfile.compact -> 14.dp
-                                    else -> 20.dp
+                                    else -> if (scannerProfile == "Datalogic") 12.dp else 20.dp
                                 }
                             )
                     ) {
@@ -344,7 +344,8 @@ fun ProductBarcodeDialog(
                                 "Datalogic" -> if (screenProfile.compact) 116.dp else 128.dp
                                 else -> if (screenProfile.compact) 94.dp else 106.dp
                             }
-                            val widthFraction = (0.9f * (zoomPercent / 100f)).coerceAtMost(1.0f)
+                            // Keep the quiet zones visible while making the size control real.
+                            val widthFraction = (zoomPercent / 100f).coerceIn(0.8f, 1f)
 
                             Box(
                                 modifier = Modifier.fillMaxWidth(),
@@ -491,9 +492,9 @@ fun ProductBarcodeDialog(
                             )
                             IconButton(
                                 onClick = {
-                                    if (zoomPercent < 120) zoomPercent += 10
+                                    if (zoomPercent < 100) zoomPercent += 10
                                 },
-                                enabled = zoomPercent < 120
+                                enabled = zoomPercent < 100
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = "Mais")
                             }
