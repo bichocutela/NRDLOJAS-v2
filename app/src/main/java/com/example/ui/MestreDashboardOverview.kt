@@ -417,11 +417,21 @@ internal fun MestreNoveltySettings() {
     var showPreview by remember { mutableStateOf(false) }
     var showStartPicker by remember { mutableStateOf(false) }
     var showEndPicker by remember { mutableStateOf(false) }
-    val startPicker = rememberDatePickerState()
-    val endPicker = rememberDatePickerState()
-
     fun formatPickerDate(value: Long?): String =
-        value?.let { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(it)) }.orEmpty()
+        value?.let {
+            SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                timeZone = java.util.TimeZone.getTimeZone("UTC")
+            }.format(Date(it))
+        }.orEmpty()
+
+    fun parsePickerDate(value: String): Long? =
+        value.takeIf(String::isNotBlank)?.let {
+            runCatching {
+                SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                    timeZone = java.util.TimeZone.getTimeZone("UTC")
+                }.parse(it)?.time
+            }.getOrNull()
+        }
 
     fun audienceSummary(audience: String, version: String): String = when (audience) {
         "new" -> "Somente versão " + version
@@ -459,7 +469,7 @@ internal fun MestreNoveltySettings() {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Avisos salvos (" + savedNovelties.size + ")", style = MaterialTheme.typography.titleSmall)
                     Text(
-                        savedNovelties.count { it.enabled }.toString() + " ativos • toque em um aviso para abrir os detalhes",
+                        savedNovelties.count { it.enabled }.toString() + " registros marcados como ativos • toque em um aviso para abrir os detalhes",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -741,6 +751,7 @@ internal fun MestreNoveltySettings() {
     }
 
     if (showStartPicker) {
+        val startPicker = rememberDatePickerState(initialSelectedDateMillis = parsePickerDate(startDate))
         DatePickerDialog(
             onDismissRequest = { showStartPicker = false },
             confirmButton = {
@@ -753,9 +764,15 @@ internal fun MestreNoveltySettings() {
         ) { DatePicker(state = startPicker) }
     }
     if (showEndPicker) {
+        val endPicker = rememberDatePickerState(initialSelectedDateMillis = parsePickerDate(endDate))
         DatePickerDialog(
             onDismissRequest = { showEndPicker = false },
-            confirmButton = { TextButton(onClick = { showEndPicker = false }) { Text("OK") } },
+            confirmButton = {
+                TextButton(onClick = {
+                    endDate = formatPickerDate(endPicker.selectedDateMillis)
+                    showEndPicker = false
+                }) { Text("OK") }
+            },
             dismissButton = { TextButton(onClick = { showEndPicker = false }) { Text("Cancelar") } }
         ) { DatePicker(state = endPicker) }
     }
