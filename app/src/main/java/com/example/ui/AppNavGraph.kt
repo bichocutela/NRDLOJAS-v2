@@ -628,11 +628,11 @@ fun LoginDrawerContent(
         !remoteHomeSettings.noveltyText.isNullOrBlank() &&
         withinNoveltyDates &&
         (remoteHomeSettings.noveltyLocation.isNullOrBlank() || remoteHomeSettings.noveltyLocation == "menu" || remoteHomeSettings.noveltyLocation == "all") &&
-        when (remoteHomeSettings.noveltyTarget) {
-            "new" -> com.example.BuildConfig.VERSION_NAME == remoteHomeSettings.noveltyVersion
-            "previous" -> com.example.BuildConfig.VERSION_NAME != remoteHomeSettings.noveltyVersion
-            else -> true
-        }
+        isNoveltyVersionEligible(
+            installedVersion = com.example.BuildConfig.VERSION_NAME,
+            target = remoteHomeSettings.noveltyTarget,
+            referenceVersion = remoteHomeSettings.noveltyVersion
+        )
     val expressive = LocalExpressiveStyle.current.enabled
     val glassStyle = LocalGlassSoftStyle.current
     val screenProfile = rememberNrdScreenProfile()

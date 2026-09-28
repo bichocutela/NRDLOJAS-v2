@@ -1043,7 +1043,20 @@ object FirebaseService {
             .addSnapshotListener { snapshot, error ->
                 if (error != null) { Log.e("FirebaseService", "Erro ao observar novidades", error); return@addSnapshotListener }
                 trySend(snapshot?.documents.orEmpty().map { doc ->
-                    RemoteNovelty(doc.id, doc.getString("text").orEmpty(), doc.getBoolean("enabled") ?: false, doc.getString("target").orEmpty(), doc.getString("version").orEmpty(), doc.getLong("createdAt") ?: 0L)
+                    RemoteNovelty(
+                        id = doc.id,
+                        text = doc.getString("text").orEmpty(),
+                        enabled = doc.getBoolean("enabled") ?: false,
+                        target = doc.getString("target").orEmpty(),
+                        version = doc.getString("version").orEmpty(),
+                        createdAt = doc.getLong("createdAt") ?: 0L,
+                        model = doc.getString("model") ?: "ribbon",
+                        color = doc.getString("color") ?: "red",
+                        size = doc.getString("size") ?: "medium",
+                        location = doc.getString("location") ?: "menu",
+                        startDate = doc.getString("startDate").orEmpty(),
+                        endDate = doc.getString("endDate").orEmpty()
+                    )
                 })
             }
         awaitClose { registration.remove() }
@@ -1059,37 +1072,64 @@ object FirebaseService {
         size: String = "medium",
         location: String = "menu",
         startDate: String = "",
-        endDate: String = ""
+        endDate: String = "",
+        documentId: String? = null
     ): Boolean {
-        if (!prepareManagementWrite("publicar a novidade")) return false
+        if (!prepareManagementWrite(if (documentId == null) "publicar a novidade" else "editar a novidade")) return false
         if (text.isBlank()) {
             lastError = "Digite o texto da novidade."
             return false
         }
+        if (target !in setOf("all", "new", "previous")) {
+            lastError = "Escolha um público válido para o aviso."
+            return false
+        }
+        if (target != "all" && version.isBlank()) {
+            lastError = "Informe a versão de referência do aviso."
+            return false
+        }
         return try {
             val firestore = FirebaseFirestore.getInstance()
-            firestore.collection("app_novelties").add(
-                mapOf("text" to text.trim(), "enabled" to enabled, "target" to target, "version" to version.trim(), "createdAt" to System.currentTimeMillis())
-            ).await()
-            firestore
-                .collection("config")
-                .document("appSettings")
-                .set(
-                    mapOf(
-                        "noveltyText" to text.trim(),
-                        "noveltyEnabled" to enabled,
-                        "noveltyTarget" to target,
-                        "noveltyVersion" to version.trim(),
-                        "noveltyModel" to model,
-                        "noveltyColor" to color,
-                        "noveltySize" to size,
-                        "noveltyLocation" to location,
-                        "noveltyStartDate" to startDate.trim(),
-                        "noveltyEndDate" to endDate.trim()
-                    ),
-                    com.google.firebase.firestore.SetOptions.merge()
-                )
-                .await()
+            val now = System.currentTimeMillis()
+            val record = mapOf(
+                "text" to text.trim(),
+                "enabled" to enabled,
+                "target" to target,
+                "version" to version.trim(),
+                "model" to model,
+                "color" to color,
+                "size" to size,
+                "location" to location,
+                "startDate" to startDate.trim(),
+                "endDate" to endDate.trim(),
+                "updatedAt" to now
+            )
+            val history = firestore.collection("app_novelties")
+            val historyDocument = if (documentId.isNullOrBlank()) history.document() else history.document(documentId)
+            val batch = firestore.batch()
+            val completeRecord = if (documentId.isNullOrBlank()) {
+                record + ("createdAt" to now)
+            } else {
+                record
+            }
+            batch.set(historyDocument, completeRecord, com.google.firebase.firestore.SetOptions.merge())
+            batch.set(
+                firestore.collection("config").document("appSettings"),
+                mapOf(
+                    "noveltyText" to text.trim(),
+                    "noveltyEnabled" to enabled,
+                    "noveltyTarget" to target,
+                    "noveltyVersion" to version.trim(),
+                    "noveltyModel" to model,
+                    "noveltyColor" to color,
+                    "noveltySize" to size,
+                    "noveltyLocation" to location,
+                    "noveltyStartDate" to startDate.trim(),
+                    "noveltyEndDate" to endDate.trim()
+                ),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+            batch.commit().await()
             true
         } catch (e: Exception) {
             lastError = e.message

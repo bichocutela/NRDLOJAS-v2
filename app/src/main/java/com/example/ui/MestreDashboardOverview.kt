@@ -1,5 +1,6 @@
 package com.example.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,9 +38,11 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
@@ -406,158 +409,399 @@ internal fun MestreNoveltySettings() {
     var startDate by rememberSaveable { mutableStateOf("") }
     var endDate by rememberSaveable { mutableStateOf("") }
     var enabled by rememberSaveable { mutableStateOf(true) }
+    var editingNoveltyId by rememberSaveable { mutableStateOf<String?>(null) }
+    var savedSectionExpanded by rememberSaveable { mutableStateOf(false) }
+    var formExpanded by rememberSaveable { mutableStateOf(false) }
+    var appearanceExpanded by rememberSaveable { mutableStateOf(false) }
+    var expandedNoveltyId by rememberSaveable { mutableStateOf<String?>(null) }
     var showPreview by remember { mutableStateOf(false) }
     var showStartPicker by remember { mutableStateOf(false) }
     var showEndPicker by remember { mutableStateOf(false) }
-    val startPicker = rememberDatePickerState()
-    val endPicker = rememberDatePickerState()
-    fun formatPickerDate(value: Long?): String = value?.let { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(it)) }.orEmpty()
+    fun formatPickerDate(value: Long?): String =
+        value?.let {
+            SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                timeZone = java.util.TimeZone.getTimeZone("UTC")
+            }.format(Date(it))
+        }.orEmpty()
 
-    Text("Inserir Novidade", style = MaterialTheme.typography.titleMedium)
+    fun parsePickerDate(value: String): Long? =
+        value.takeIf(String::isNotBlank)?.let {
+            runCatching {
+                SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                    timeZone = java.util.TimeZone.getTimeZone("UTC")
+                }.parse(it)?.time
+            }.getOrNull()
+        }
+
+    fun audienceSummary(audience: String, version: String): String = when (audience) {
+        "new" -> "Somente versão " + version
+        "previous" -> "Versões anteriores à " + version
+        else -> "Todas as versões"
+    }
+
+    fun resetForm() {
+        editingNoveltyId = null
+        noveltyText = "Tema Novo: Expressivo disponível"
+        target = "all"
+        targetVersion = com.example.BuildConfig.VERSION_NAME
+        model = "ribbon"
+        color = "red"
+        size = "medium"
+        location = "menu"
+        startDate = ""
+        endDate = ""
+        enabled = true
+        appearanceExpanded = false
+        saveMessage = null
+    }
+
+    Text("Avisos do aplicativo", style = MaterialTheme.typography.titleMedium)
     Text(
-        "Monte o aviso que será publicado no aplicativo. Nesta primeira etapa, a prévia e os campos já ficam disponíveis para validação visual.",
+        "Edite avisos salvos ou crie um novo. Eles aparecem no menu do app; esta tela não envia notificação push.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    if (savedNovelties.isNotEmpty()) {
-        Spacer(modifier = Modifier.height(10.dp))
-        Text("Novidades publicadas", style = MaterialTheme.typography.titleSmall)
-        Spacer(modifier = Modifier.height(6.dp))
-        savedNovelties.take(10).forEach { novelty ->
-            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(novelty.text, style = MaterialTheme.typography.bodyLarge)
+
+    Spacer(modifier = Modifier.height(12.dp))
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Avisos salvos (" + savedNovelties.size + ")", style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "${if (novelty.enabled) "Ativa" else "Desativada"} • ${when (novelty.target) { "new" -> "Versão nova"; "previous" -> "Versões anteriores"; else -> "Todos" }} • ${novelty.version}",
+                        savedNovelties.count { it.enabled }.toString() + " registros marcados como ativos • toque em um aviso para abrir os detalhes",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (novelty.enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                TextButton(onClick = { savedSectionExpanded = !savedSectionExpanded }) {
+                    Text(if (savedSectionExpanded) "Recolher ▴" else "Abrir ▾")
+                }
             }
-            Spacer(modifier = Modifier.height(6.dp))
+            if (savedSectionExpanded) {
+                Spacer(modifier = Modifier.height(8.dp))
+                if (savedNovelties.isEmpty()) {
+                    Text("Ainda não há avisos salvos.", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    savedNovelties.forEach { novelty ->
+                        val itemExpanded = expandedNoveltyId == novelty.id
+                        OutlinedCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { expandedNoveltyId = if (itemExpanded) null else novelty.id }
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(novelty.text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            (if (novelty.enabled) "Ativo" else "Desativado") + " • " + audienceSummary(novelty.target, novelty.version),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (novelty.enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Text(if (itemExpanded) "▴" else "▾", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                                }
+                                if (itemExpanded) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    val dateRange = when {
+                                        novelty.startDate.isBlank() && novelty.endDate.isBlank() -> "Sem período definido"
+                                        else -> novelty.startDate.ifBlank { "sem início" } + " a " + novelty.endDate.ifBlank { "sem fim" }
+                                    }
+                                    Text(
+                                        "Local: menu lateral • Período: " + dateRange,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    if (novelty.createdAt > 0L) {
+                                        Text(
+                                            "Salvo em " + SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(novelty.createdAt)),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    OutlinedButton(
+                                        onClick = {
+                                            editingNoveltyId = novelty.id
+                                            noveltyText = novelty.text
+                                            target = novelty.target.ifBlank { "all" }
+                                            targetVersion = novelty.version.ifBlank { com.example.BuildConfig.VERSION_NAME }
+                                            model = novelty.model
+                                            color = novelty.color
+                                            size = novelty.size
+                                            location = novelty.location
+                                            startDate = novelty.startDate
+                                            endDate = novelty.endDate
+                                            enabled = novelty.enabled
+                                            appearanceExpanded = true
+                                            formExpanded = true
+                                            saveMessage = null
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("Editar este aviso")
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
         }
     }
+
     Spacer(modifier = Modifier.height(10.dp))
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Modelo do aviso", style = MaterialTheme.typography.titleSmall)
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(onClick = { showPreview = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("Pré-visualizar aviso")
-            }
-            Spacer(modifier = Modifier.height(8.dp))
+        Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    color = Color(0xFFD91C1C),
-                    shape = RoundedCornerShape(topStart = 14.dp, bottomStart = 14.dp, topEnd = 2.dp, bottomEnd = 2.dp)
-                ) {
-                    Text("NOVIDADE", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp), style = MaterialTheme.typography.labelSmall)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        if (editingNoveltyId == null) "Criar novidade" else "Editar aviso salvo",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        if (editingNoveltyId == null) "Preencha o aviso e escolha quem poderá vê-lo."
+                        else "Ao salvar, este aviso se torna a configuração atual do aplicativo.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Configurações", style = MaterialTheme.typography.titleMedium)
+                TextButton(onClick = { formExpanded = !formExpanded }) {
+                    Text(if (formExpanded) "Recolher ▴" else "Abrir ▾")
+                }
             }
-            Spacer(modifier = Modifier.height(14.dp))
-            OutlinedTextField(
-                value = noveltyText,
-                onValueChange = { noveltyText = it },
-                label = { Text("Texto da fita") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = { target = when (target) { "all" -> "new"; "new" -> "previous"; else -> "all" } },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    when (target) {
-                        "new" -> "Somente versão nova"
-                        "previous" -> "Somente versões anteriores"
-                        else -> "Todos os usuários"
-                    }
+            if (formExpanded) {
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedButton(onClick = { showPreview = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Pré-visualizar aviso")
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Text("Texto do aviso", style = MaterialTheme.typography.titleSmall)
+                OutlinedTextField(
+                    value = noveltyText,
+                    onValueChange = { noveltyText = it },
+                    label = { Text("Texto exibido na fita") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(
-                value = targetVersion,
-                onValueChange = { targetVersion = it },
-                label = { Text("Versão considerada nova") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = { model = if (model == "ribbon") "tag" else "ribbon" }, modifier = Modifier.fillMaxWidth()) {
-                Text(if (model == "ribbon") "Modelo: Fita" else "Modelo: Etiqueta")
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = { location = when (location) { "menu" -> "home"; "home" -> "settings"; "settings" -> "all"; else -> "menu" } }, modifier = Modifier.fillMaxWidth()) {
-                Text("Local: ${when (location) { "home" -> "Home"; "settings" -> "Configurações"; "all" -> "Todas as áreas"; else -> "Menu" }}")
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                Button(onClick = { showStartPicker = true }, modifier = Modifier.weight(1f)) {
-                    Text(if (startDate.isBlank()) "Escolher início" else startDate)
-                }
-                Button(onClick = { showEndPicker = true }, modifier = Modifier.weight(1f)) {
-                    Text(if (endDate.isBlank()) "Escolher fim" else endDate)
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                Button(onClick = { color = when (color) { "red" -> "blue"; "blue" -> "green"; else -> "red" } }, modifier = Modifier.weight(1f)) {
-                    Text("Cor: ${when (color) { "red" -> "Vermelha"; "blue" -> "Azul"; else -> "Verde" }}")
-                }
-                Button(onClick = { size = when (size) { "small" -> "medium"; "medium" -> "large"; else -> "small" } }, modifier = Modifier.weight(1f)) {
-                    Text("Tamanho: ${when (size) { "small" -> "P"; "medium" -> "M"; else -> "G" }}")
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Novidade ativa", modifier = Modifier.weight(1f))
-                Switch(checked = enabled, onCheckedChange = { enabled = it })
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = {
-                    coroutineScope.launch {
-                        isSaving = true
-                        saveMessage = null
-                        val saved = FirebaseService.saveNoveltySettings(
-                            text = noveltyText,
-                            enabled = enabled,
-                            target = target,
-                            version = targetVersion,
-                            model = model,
-                            color = color,
-                            size = size,
-                            location = location,
-                            startDate = startDate,
-                            endDate = endDate
-                        )
-                        saveMessage = if (saved) "Novidade publicada para o público escolhido." else FirebaseService.lastError ?: "Não foi possível publicar a novidade."
-                        isSaving = false
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Quem verá este aviso?", style = MaterialTheme.typography.titleSmall)
+                val audiences = listOf(
+                    Triple("all", "Todos os usuários", "Qualquer versão do aplicativo."),
+                    Triple("new", "Somente a versão nova", "A versão instalada precisa ser igual à indicada."),
+                    Triple("previous", "Versões anteriores", "A versão instalada precisa ser menor que a indicada.")
+                )
+                audiences.forEach { (key, label, description) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { target = key }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = target == key, onClick = { target = key })
+                        Column(modifier = Modifier.padding(start = 4.dp)) {
+                            Text(label, style = MaterialTheme.typography.bodyMedium)
+                            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isSaving && noveltyText.isNotBlank()
-            ) {
-                Text(if (isSaving) "Salvando..." else "Salvar novidade")
+                }
+                if (target != "all") {
+                    OutlinedTextField(
+                        value = targetVersion,
+                        onValueChange = { targetVersion = it },
+                        label = { Text("Versão de referência") },
+                        supportingText = {
+                            Text(
+                                if (target == "new") "Exibe somente na versão " + targetVersion + "."
+                                else "Exibe em versões inferiores a " + targetVersion + "."
+                            )
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                Text(
+                    "Este filtro controla a fita no menu. Não envia push; versões que não têm o recurso de avisos não conseguem exibi-la.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                TextButton(onClick = { appearanceExpanded = !appearanceExpanded }) {
+                    Text(if (appearanceExpanded) "Aparência e período ▴" else "Aparência e período ▾")
+                }
+                if (appearanceExpanded) {
+                    Text("Modelo", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        FilterChip(selected = model == "ribbon", onClick = { model = "ribbon" }, label = { Text("Fita") })
+                        FilterChip(selected = model == "tag", onClick = { model = "tag" }, label = { Text("Etiqueta") })
+                    }
+                    Text("Cor", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        listOf("red" to "Vermelha", "blue" to "Azul", "green" to "Verde").forEach { (key, label) ->
+                            FilterChip(selected = color == key, onClick = { color = key }, label = { Text(label) })
+                        }
+                    }
+                    Text("Tamanho", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        listOf("small" to "P", "medium" to "M", "large" to "G").forEach { (key, label) ->
+                            FilterChip(selected = size == key, onClick = { size = key }, label = { Text(label) })
+                        }
+                    }
+                    Text("Local de exibição: menu lateral", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(onClick = { showStartPicker = true }, modifier = Modifier.weight(1f)) {
+                            Text(if (startDate.isBlank()) "Escolher início" else startDate)
+                        }
+                        Button(onClick = { showEndPicker = true }, modifier = Modifier.weight(1f)) {
+                            Text(if (endDate.isBlank()) "Escolher fim" else endDate)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Aviso ativo", modifier = Modifier.weight(1f))
+                    Switch(checked = enabled, onCheckedChange = { enabled = it })
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        val currentEditingId = editingNoveltyId
+                        coroutineScope.launch {
+                            isSaving = true
+                            saveMessage = null
+                            val saved = FirebaseService.saveNoveltySettings(
+                                text = noveltyText,
+                                enabled = enabled,
+                                target = target,
+                                version = targetVersion,
+                                model = model,
+                                color = color,
+                                size = size,
+                                location = location,
+                                startDate = startDate,
+                                endDate = endDate,
+                                documentId = currentEditingId
+                            )
+                            if (saved) {
+                                saveMessage = when {
+                                    currentEditingId != null -> "Aviso atualizado."
+                                    enabled -> "Aviso salvo e publicado."
+                                    else -> "Aviso salvo e desativado."
+                                }
+                                editingNoveltyId = null
+                                noveltyText = "Tema Novo: Expressivo disponível"
+                                target = "all"
+                                targetVersion = com.example.BuildConfig.VERSION_NAME
+                                model = "ribbon"
+                                color = "red"
+                                size = "medium"
+                                location = "menu"
+                                startDate = ""
+                                endDate = ""
+                                enabled = true
+                                appearanceExpanded = false
+                                expandedNoveltyId = currentEditingId
+                                savedSectionExpanded = true
+                                formExpanded = false
+                            } else {
+                                saveMessage = FirebaseService.lastError ?: "Não foi possível salvar o aviso."
+                            }
+                            isSaving = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSaving && noveltyText.isNotBlank() &&
+                        (target == "all" || targetVersion.isNotBlank())
+                ) {
+                    Text(
+                        when {
+                            isSaving -> "Salvando..."
+                            editingNoveltyId != null -> "Salvar alterações"
+                            enabled -> "Salvar e publicar aviso"
+                            else -> "Salvar aviso desativado"
+                        }
+                    )
+                }
+                if (editingNoveltyId != null) {
+                    TextButton(
+                        onClick = {
+                            resetForm()
+                            formExpanded = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Cancelar edição")
+                    }
+                }
             }
             saveMessage?.let {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(it, color = if (it.startsWith("Novidade")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+                Text(
+                    it,
+                    color = if (it.startsWith("Aviso ")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                )
             }
         }
     }
+
     if (showStartPicker) {
-        DatePickerDialog(onDismissRequest = { showStartPicker = false }, confirmButton = { TextButton(onClick = { startDate = formatPickerDate(startPicker.selectedDateMillis); showStartPicker = false }) { Text("OK") } }, dismissButton = { TextButton(onClick = { showStartPicker = false }) { Text("Cancelar") } }) { DatePicker(state = startPicker) }
+        val startPicker = rememberDatePickerState(initialSelectedDateMillis = parsePickerDate(startDate))
+        DatePickerDialog(
+            onDismissRequest = { showStartPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    startDate = formatPickerDate(startPicker.selectedDateMillis)
+                    showStartPicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showStartPicker = false }) { Text("Cancelar") } }
+        ) { DatePicker(state = startPicker) }
     }
     if (showEndPicker) {
-        DatePickerDialog(onDismissRequest = { showEndPicker = false }, confirmButton = { TextButton(onClick = { endDate = formatPickerDate(endPicker.selectedDateMillis); showEndPicker = false }) { Text("OK") } }, dismissButton = { TextButton(onClick = { showEndPicker = false }) { Text("Cancelar") } }) { DatePicker(state = endPicker) }
+        val endPicker = rememberDatePickerState(initialSelectedDateMillis = parsePickerDate(endDate))
+        DatePickerDialog(
+            onDismissRequest = { showEndPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    endDate = formatPickerDate(endPicker.selectedDateMillis)
+                    showEndPicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showEndPicker = false }) { Text("Cancelar") } }
+        ) { DatePicker(state = endPicker) }
     }
     if (showPreview) {
-        androidx.compose.material3.AlertDialog(onDismissRequest = { showPreview = false }, confirmButton = { TextButton(onClick = { showPreview = false }) { Text("Fechar") } }, title = { Text("Prévia") }, text = { Row(verticalAlignment = Alignment.CenterVertically) { Surface(color = Color(0xFFD91C1C), shape = RoundedCornerShape(12.dp)) { Text(noveltyText, color = Color.White, modifier = Modifier.padding(10.dp)) }; Spacer(modifier = Modifier.width(8.dp)); Text("Configurações") } })
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showPreview = false },
+            confirmButton = { TextButton(onClick = { showPreview = false }) { Text("Fechar") } },
+            title = { Text("Prévia do aviso") },
+            text = {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            color = when (color) {
+                                "blue" -> Color(0xFF1565C0)
+                                "green" -> Color(0xFF2E7D32)
+                                else -> Color(0xFFD91C1C)
+                            },
+                            shape = if (model == "tag") RoundedCornerShape(10.dp)
+                            else RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp, topEnd = 2.dp, bottomEnd = 2.dp)
+                        ) {
+                            Text(noveltyText, color = Color.White, modifier = Modifier.padding(10.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Público: " + audienceSummary(target, targetVersion))
+                    Text(if (enabled) "Estado: ativo" else "Estado: desativado")
+                }
+            }
+        )
     }
 }
 
