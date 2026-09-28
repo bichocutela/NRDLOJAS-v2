@@ -2,4 +2,5 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <external-files-path name="my_downloads" path="Download/" />
     <cache-path name="shared_cards" path="shared_cards/" />
+    <cache-path name="roster_photos" path="roster_photos/" />
 </paths>
