@@ -41,6 +41,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.data.Product
 import com.example.data.UserPreferences
 import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.LocalExpressiveGlassStyle
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.expressiveShadow
@@ -74,6 +75,7 @@ fun ProductBarcodeDialog(
     val boldOutline by userPreferences.boldOutline.collectAsState(initial = false)
     val uppercaseBold by userPreferences.uppercaseBold.collectAsState(initial = false)
     val glassSoftStyle = LocalGlassSoftStyle.current
+    val expressiveGlassStyle = LocalExpressiveGlassStyle.current
     val expressiveStyle = LocalExpressiveStyle.current
     val isExpressive = expressiveStyle.enabled
     var photoUrl by remember(product.code, product.imageUrl) {
@@ -218,13 +220,15 @@ fun ProductBarcodeDialog(
                     shape = dialogShape,
                     color = when {
                         glassSoftStyle.enabled -> MaterialTheme.colorScheme.surface
-                        isExpressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                        isExpressive -> MaterialTheme.colorScheme.surfaceContainerHigh
                         else -> MaterialTheme.colorScheme.surface
                     },
                     border = if (highlightedFromNotification) {
                         BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                     } else if (glassSoftStyle.enabled) {
                         BorderStroke(1.dp, glassSoftStyle.borderColor)
+                    } else if (isExpressive) {
+                        BorderStroke(1.dp, expressiveGlassStyle.borderColor)
                     } else {
                         null
                     },
@@ -247,8 +251,8 @@ fun ProductBarcodeDialog(
                                 else -> 14.dp
                             }
                         )
-                        .glassSoftShadow(dialogShape)
-                        .expressiveShadow(dialogShape, if (screenProfile.compact) 7.dp else 10.dp)
+                        .then(if (glassSoftStyle.enabled) Modifier.glassSoftShadow(dialogShape) else Modifier)
+                        .then(if (isExpressive) Modifier.expressiveShadow(dialogShape, expressiveGlassStyle.shadowElevation.dp) else Modifier)
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,

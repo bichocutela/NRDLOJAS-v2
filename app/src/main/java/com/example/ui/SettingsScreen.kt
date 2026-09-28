@@ -62,13 +62,10 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
     val expressiveGlassTone by viewModel.userPreferences.expressiveGlassTone.collectAsState(initial = 0.45f)
     val expressiveGlassFinish by viewModel.userPreferences.expressiveGlassFinish.collectAsState(initial = "glass")
     val expressiveGlassWater by viewModel.userPreferences.expressiveGlassWater.collectAsState(initial = "pure")
-    val expressiveGlassOpacity by viewModel.userPreferences.expressiveGlassLayerOpacity.collectAsState(initial = 0.60f)
     val expressiveWaterOpacity by viewModel.userPreferences.expressiveWaterOpacity.collectAsState(initial = 0.32f)
     val expressiveReflectionOpacity by viewModel.userPreferences.expressiveReflectionOpacity.collectAsState(initial = 0.32f)
     var expressiveGlassTransparencyDraft by remember(expressiveGlassTransparency) { mutableFloatStateOf(expressiveGlassTransparency) }
     var expressiveGlassFluidityDraft by remember(expressiveGlassFluidity) { mutableFloatStateOf(expressiveGlassFluidity) }
-    var expressiveGlassToneDraft by remember(expressiveGlassTone) { mutableFloatStateOf(expressiveGlassTone) }
-    var expressiveGlassOpacityDraft by remember(expressiveGlassOpacity) { mutableFloatStateOf(expressiveGlassOpacity) }
     var expressiveWaterOpacityDraft by remember(expressiveWaterOpacity) { mutableFloatStateOf(expressiveWaterOpacity) }
     var expressiveReflectionOpacityDraft by remember(expressiveReflectionOpacity) { mutableFloatStateOf(expressiveReflectionOpacity) }
     val glassStyle = LocalGlassSoftStyle.current
@@ -428,7 +425,6 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             )
 
                             var expandedExpressiveGlassColorMenu by remember { mutableStateOf(false) }
-                            var expandedExpressiveFinish by remember { mutableStateOf(false) }
                             var expandedExpressiveWater by remember { mutableStateOf(false) }
                             val expressiveGlassColorOptions = listOf(
                                 "multicolor" to "Multicolorido",
@@ -438,103 +434,59 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 "blue" to "Azul",
                                 "gold" to "Dourado"
                             )
+                            GlassSettingGroupTitle("Cor", "Escolha a cor do fundo e dos reflexos.")
                             Box(modifier = Modifier.fillMaxWidth()) {
                                 OutlinedTextField(
                                     value = expressiveGlassColorOptions.find { it.first == expressiveGlassAccentColor }?.second ?: "Multicolorido",
                                     onValueChange = {},
                                     readOnly = true,
-                                    label = { Text("Cor do vidro líquido") },
+                                    label = { Text("Cor do vidro") },
                                     trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
                                     modifier = Modifier.fillMaxWidth()
                                 )
-                                Box(Modifier.matchParentSize().clickable(onClick = { expandedExpressiveGlassColorMenu = !expandedExpressiveGlassColorMenu }))
-                                DropdownMenu(
-
-                                    expanded = expandedExpressiveGlassColorMenu,
-                                    onDismissRequest = { expandedExpressiveGlassColorMenu = false }
-                                ) {
+                                Box(Modifier.matchParentSize().clickable { expandedExpressiveGlassColorMenu = !expandedExpressiveGlassColorMenu })
+                                DropdownMenu(expanded = expandedExpressiveGlassColorMenu, onDismissRequest = { expandedExpressiveGlassColorMenu = false }) {
                                     expressiveGlassColorOptions.forEach { (key, label) ->
-                                        DropdownMenuItem(
-                                            text = { Text(label) },
-                                            onClick = {
-                                                coroutineScope.launch {
-                                                    viewModel.userPreferences.setExpressiveGlassAccentColor(key)
-                                                }
-                                                expandedExpressiveGlassColorMenu = false
-                                            }
-                                        )
+                                        DropdownMenuItem(text = { Text(label) }, onClick = {
+                                            coroutineScope.launch { viewModel.userPreferences.setExpressiveGlassAccentColor(key) }
+                                            expandedExpressiveGlassColorMenu = false
+                                        })
                                     }
                                 }
                             }
 
-                            GlassSettingSlider(
-                                "Intensidade da cor",
-                                expressiveGlassToneDraft,
-                                "Pastel",
-                                "Vibrante",
-                                expressiveSliderColors,
-                                onValueChange = { expressiveGlassToneDraft = it },
-                                onValueChangeFinished = {
-                                    coroutineScope.launch { viewModel.userPreferences.setExpressiveGlassTone(expressiveGlassToneDraft) }
-                                }
-                            )
-
-                            GlassSettingGroupTitle("Vidro", "Acabamento e visibilidade dos cartões e superfícies.")
+                            GlassSettingGroupTitle("Vidro", "Fosco, Vidro e Cristal mudam a densidade e o reflexo dos cartões.")
                             val glassFinishes = listOf("frosted" to "Fosco", "glass" to "Vidro", "crystal" to "Cristal")
-                            Box(Modifier.fillMaxWidth()) {
-                                OutlinedTextField(
-                                    value = glassFinishes.firstOrNull { it.first == expressiveGlassFinish }?.second ?: "Vidro",
-                                    onValueChange = {}, readOnly = true,
-                                    label = { Text("Textura e acabamento") },
-                                    trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Box(Modifier.matchParentSize().clickable { expandedExpressiveFinish = true })
-                                DropdownMenu(expanded = expandedExpressiveFinish, onDismissRequest = { expandedExpressiveFinish = false }) {
-                                    glassFinishes.forEach { (key, label) -> DropdownMenuItem(text = { Text(label) }, onClick = {
-                                        coroutineScope.launch { viewModel.userPreferences.setExpressiveGlassFinish(key) }
-                                        expandedExpressiveFinish = false
-                                    }) }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                glassFinishes.forEach { (key, label) ->
+                                    FilterChip(
+                                        selected = expressiveGlassFinish == key,
+                                        onClick = { coroutineScope.launch { viewModel.userPreferences.setExpressiveGlassFinish(key) } },
+                                        label = { Text(label) },
+                                        modifier = Modifier.weight(1f)
+                                    )
                                 }
                             }
-                            GlassSettingGroupTitle("Prévia ao vivo", "Ajustes abaixo atualizam esta amostra antes de salvar.")
                             GlassExpressiveLivePreview(
                                 accentName = expressiveGlassAccentColor,
                                 isDark = expressiveGlassStyleValue.isDark,
-                                tone = expressiveGlassToneDraft,
+                                tone = expressiveGlassTone,
                                 transparency = expressiveGlassTransparencyDraft,
-                                glassOpacity = expressiveGlassOpacityDraft,
-                                finish = expressiveGlassFinish,
-                                waterStyle = expressiveGlassWater,
-                                fluidity = expressiveGlassFluidityDraft,
-                                waterOpacity = expressiveWaterOpacityDraft,
-                                reflectionOpacity = expressiveReflectionOpacityDraft
+                                finish = expressiveGlassFinish
                             )
-
                             GlassSettingSlider(
                                 "Transparência do vidro",
                                 expressiveGlassTransparencyDraft,
-                                "Mais denso",
-                                "Mais translúcido",
+                                "Mais opaco",
+                                "Mais transparente",
                                 expressiveSliderColors,
                                 onValueChange = { expressiveGlassTransparencyDraft = it },
                                 onValueChangeFinished = {
                                     coroutineScope.launch { viewModel.userPreferences.setExpressiveGlassTransparency(expressiveGlassTransparencyDraft) }
                                 }
                             )
-                            GlassSettingSlider(
-                                "Opacidade das superfícies",
-                                expressiveGlassOpacityDraft,
-                                "Transparente",
-                                "Mais visível",
-                                expressiveSliderColors,
-                                onValueChange = { expressiveGlassOpacityDraft = it },
-                                onValueChangeFinished = {
-                                    coroutineScope.launch { viewModel.userPreferences.setExpressiveGlassLayerOpacity(expressiveGlassOpacityDraft) }
-                                }
-                            )
 
-                            GlassSettingGroupTitle("Água", "Estilo, movimento e presença das bolhas no fundo.")
+                            GlassSettingGroupTitle("Água", "Ajuste a presença do efeito aquático no fundo.")
                             val waterTypes = listOf(
                                 "crystal" to "Água Cristalina",
                                 "pure" to "Água Pura",
@@ -543,35 +495,27 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                             Box(Modifier.fillMaxWidth()) {
                                 OutlinedTextField(
                                     value = waterTypes.firstOrNull { it.first == expressiveGlassWater }?.second ?: "Água Pura",
-                                    onValueChange = {}, readOnly = true,
-                                    label = { Text("Estilo da água") },
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Tipo de água") },
                                     trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
                                     modifier = Modifier.fillMaxWidth()
                                 )
                                 Box(Modifier.matchParentSize().clickable { expandedExpressiveWater = true })
                                 DropdownMenu(expanded = expandedExpressiveWater, onDismissRequest = { expandedExpressiveWater = false }) {
-                                    waterTypes.forEach { (key, label) -> DropdownMenuItem(text = { Text(label) }, onClick = {
-                                        coroutineScope.launch { viewModel.userPreferences.setExpressiveGlassWater(key) }
-                                        expandedExpressiveWater = false
-                                    }) }
+                                    waterTypes.forEach { (key, label) ->
+                                        DropdownMenuItem(text = { Text(label) }, onClick = {
+                                            coroutineScope.launch { viewModel.userPreferences.setExpressiveGlassWater(key) }
+                                            expandedExpressiveWater = false
+                                        })
+                                    }
                                 }
                             }
                             GlassSettingSlider(
-                                "Forma da água",
-                                expressiveGlassFluidityDraft,
-                                "Gota estável",
-                                "Ondulação",
-                                expressiveSliderColors,
-                                onValueChange = { expressiveGlassFluidityDraft = it },
-                                onValueChangeFinished = {
-                                    coroutineScope.launch { viewModel.userPreferences.setExpressiveGlassFluidity(expressiveGlassFluidityDraft) }
-                                }
-                            )
-                            GlassSettingSlider(
-                                "Opacidade da água",
+                                "Intensidade da água",
                                 expressiveWaterOpacityDraft,
-                                "Sutil",
-                                "Profunda",
+                                "Discreta",
+                                "Visível",
                                 expressiveSliderColors,
                                 onValueChange = { expressiveWaterOpacityDraft = it },
                                 onValueChangeFinished = {
@@ -579,7 +523,7 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 }
                             )
 
-                            GlassSettingGroupTitle("Efeitos", "Controla os reflexos das bordas e o brilho especular.")
+                            GlassSettingGroupTitle("Efeitos", "Ajuste o brilho das bordas do vidro.")
                             GlassSettingSlider(
                                 "Reflexo especular",
                                 expressiveReflectionOpacityDraft,
@@ -590,11 +534,6 @@ fun SettingsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                                 onValueChangeFinished = {
                                     coroutineScope.launch { viewModel.userPreferences.setExpressiveReflectionOpacity(expressiveReflectionOpacityDraft) }
                                 }
-                            )
-                            Text(
-                                "Vidro ajusta as superfícies. Água ajusta as bolhas e ondulações. Efeitos ajusta os reflexos.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -1076,12 +1015,7 @@ private fun GlassExpressiveLivePreview(
     isDark: Boolean,
     tone: Float,
     transparency: Float,
-    glassOpacity: Float,
-    finish: String,
-    waterStyle: String,
-    fluidity: Float,
-    waterOpacity: Float,
-    reflectionOpacity: Float
+    finish: String
 ) {
     val shape = RoundedCornerShape(22.dp)
     val colors = expressiveGlassBackgroundColors(accentName, isDark, tone)
@@ -1093,17 +1027,22 @@ private fun GlassExpressiveLivePreview(
         "gold" -> Color(0xFFC69A24)
         else -> Color(0xFF7286C7)
     }
-    val surfaceAlpha = ((0.18f + transparency.coerceIn(0f, 1f) * 0.52f) *
-        (0.38f + glassOpacity.coerceIn(0f, 1f) * 0.62f)).coerceIn(0.10f, 0.88f)
-    val finishAdjustment = when (finish) {
-        "frosted" -> 0.11f
-        "crystal" -> -0.10f
-        else -> 0f
+    val progress = ((transparency.coerceIn(0.20f, 0.90f) - 0.20f) / 0.70f).coerceIn(0f, 1f)
+    val surfaceAlpha = when (finish) {
+        "frosted" -> 0.96f + (0.86f - 0.96f) * progress
+        "crystal" -> 0.76f + (0.56f - 0.76f) * progress
+        else -> 0.88f + (0.68f - 0.88f) * progress
     }
-    val fill = accent.copy(alpha = (surfaceAlpha + finishAdjustment).coerceIn(0.08f, 0.92f))
-    val reflection = (0.04f + reflectionOpacity.coerceIn(0f, 1f) * 0.32f).coerceIn(0.04f, 0.36f)
-    val waterPresence = (waterOpacity.coerceIn(0f, 1f) * (0.25f + fluidity.coerceIn(0f, 1f) * 0.75f)).coerceIn(0f, 1f)
-
+    val rimAlpha = when (finish) { "frosted" -> 0.52f; "crystal" -> 0.92f; else -> 0.70f }
+    val base = if (isDark) Color(0xFF101721) else Color.White
+    val accentWash = when (finish) { "frosted" -> 0.10f; "crystal" -> 0.055f; else -> 0.08f } * (0.75f + tone.coerceIn(0f, 1f) * 0.5f)
+    val fillBrush = Brush.linearGradient(
+        listOf(
+            Color.White.copy(alpha = (if (finish == "crystal") 0.42f else 0.30f) * surfaceAlpha),
+            accent.copy(alpha = accentWash),
+            base.copy(alpha = surfaceAlpha)
+        )
+    )
     Box(
         modifier = Modifier.fillMaxWidth().height(132.dp)
             .clip(shape)
@@ -1111,21 +1050,20 @@ private fun GlassExpressiveLivePreview(
             .padding(10.dp)
     ) {
         Surface(
-            modifier = Modifier.fillMaxSize().border(1.dp, Brush.linearGradient(
-                listOf(Color.White.copy(alpha = 0.38f + reflection * 0.35f), accent.copy(alpha = reflection))
-            ), shape),
+            modifier = Modifier.fillMaxSize().border(
+                1.dp,
+                Brush.linearGradient(listOf(Color.White.copy(alpha = rimAlpha), accent.copy(alpha = 0.22f))),
+                shape
+            ),
             shape = shape,
-            color = fill
+            color = Color.Transparent
         ) {
             Box(Modifier.fillMaxSize()) {
-                Box(
-                    Modifier.fillMaxWidth().height(42.dp)
-                        .background(Brush.linearGradient(listOf(Color.White.copy(alpha = reflection), Color.Transparent)))
-                )
+                Box(Modifier.matchParentSize().clip(shape).background(fillBrush))
                 Column(Modifier.align(Alignment.CenterStart).padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    Text("Cartão de exemplo", style = MaterialTheme.typography.titleSmall)
-                    Text("Superfície ${(surfaceAlpha * 100).toInt()}% · Reflexo ${(reflection * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
-                    Text("${finish.replaceFirstChar { it.uppercase() }} · ${waterStyle.replaceFirstChar { it.uppercase() }} · Água ${(waterPresence * 100).toInt()}%", style = MaterialTheme.typography.labelSmall)
+                    Text("Prévia do Glass Expressivo", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                    Text("${finish.replaceFirstChar { it.uppercase() }} · superfície ${(surfaceAlpha * 100).toInt()}%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                    Text("Ajuste a transparência para ver o cartão mudar.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

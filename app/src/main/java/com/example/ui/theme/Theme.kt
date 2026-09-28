@@ -306,11 +306,20 @@ internal fun resolveExpressiveGlassStyle(
     val safeFluidity = fluidity.coerceIn(0f, 1f)
     val progress = ((safeTransparency - 0.20f) / 0.70f).coerceIn(0f, 1f)
     val actions = expressiveGlassActionColors(accentName, isDark)
-    // O vidro precisa deixar o fundo e as refrações atravessarem a superfície.
-    // Antes o preenchimento branco/dourado ficava dominante e transformava o
-    // efeito em cartões sólidos, principalmente no preset gold.
-    val userGlassOpacity = glassOpacity.coerceIn(0f, 1f)
-    val surfaceAlpha = ((0.84f - (0.60f * progress)) * userGlassOpacity).coerceIn(0f, 0.92f)
+    // Glass Expressivo tem tokens próprios: o tipo muda a densidade-base e
+    // transparência só afina esse acabamento, como uma escolha de material real.
+    val finish = glassFinish.takeIf { it in setOf("frosted", "glass", "crystal") } ?: "glass"
+    val surfaceAlpha = when (finish) {
+        "frosted" -> 0.96f + (0.86f - 0.96f) * progress
+        "crystal" -> 0.76f + (0.56f - 0.76f) * progress
+        else -> 0.88f + (0.68f - 0.88f) * progress
+    }
+    val normalizedWater = waterStyle.takeIf { it in setOf("crystal", "pure", "potable") } ?: "pure"
+    val effectiveWaterOpacity = waterOpacity.coerceIn(0f, 1f) * when (normalizedWater) {
+        "crystal" -> 0.48f
+        "potable" -> 1f
+        else -> 0.72f
+    }
     val normalized = normalizeExpressiveGlassAccentName(accentName)
     return ExpressiveGlassStyle(
         enabled = true,
@@ -322,10 +331,10 @@ internal fun resolveExpressiveGlassStyle(
         tertiaryAccent = actions[2],
         onAccent = expressiveGlassContentColor(actions[0]),
         surfaceAlpha = surfaceAlpha,
-        strongSurfaceAlpha = (surfaceAlpha + 0.10f).coerceAtMost(0.82f),
-        borderColor = Color.White.copy(alpha = (0.12f + 0.68f * reflectionOpacity.coerceIn(0f, 1f) + 0.08f * safeFluidity).coerceIn(0.10f, 0.90f)),
-        shadowElevation = 9f + (5f * safeFluidity),
-        shadowAlpha = (if (isDark) 0.24f else 0.12f) + (0.08f * safeFluidity),
+        strongSurfaceAlpha = (surfaceAlpha + 0.08f).coerceAtMost(0.98f),
+        borderColor = Color.White.copy(alpha = (when (finish) { "frosted" -> 0.52f; "crystal" -> 0.92f; else -> 0.70f }) * (0.45f + 0.55f * reflectionOpacity.coerceIn(0f, 1f))),
+        shadowElevation = (when (finish) { "frosted" -> 5f; "crystal" -> 12f; else -> 8f }) + (2f * safeFluidity),
+        shadowAlpha = when (finish) { "frosted" -> 0.14f; "crystal" -> 0.22f; else -> 0.18f },
         bubbleSpeed = bubbleSpeed.coerceIn(0.25f, 2.5f),
         bubbleMotion = bubbleMotion.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
         bubbleSize = bubbleSize.coerceIn(0.65f, 1.8f),
@@ -343,9 +352,9 @@ internal fun resolveExpressiveGlassStyle(
         bubbleFade = bubbleFade.coerceIn(0f, 1f),
         toneIntensity = toneIntensity.coerceIn(0f, 1f),
         glassFinish = glassFinish.takeIf { it in setOf("frosted", "glass", "crystal") } ?: "glass",
-        waterStyle = waterStyle.takeIf { it in setOf("crystal", "pure", "potable") } ?: "pure",
+        waterStyle = normalizedWater,
         glassOpacity = glassOpacity.coerceIn(0f, 1f),
-        waterOpacity = waterOpacity.coerceIn(0f, 1f),
+        waterOpacity = effectiveWaterOpacity,
         reflectionOpacity = reflectionOpacity.coerceIn(0f, 1f),
         isDark = isDark
     )
@@ -633,13 +642,15 @@ fun Modifier.expressiveLiquidGlass(
                 }
                 val maxDimension = maxOf(size.width, size.height).coerceAtLeast(1f)
                 val minDimension = minOf(size.width, size.height).coerceAtLeast(1f)
+                val surfaceAlpha = style.surfaceAlpha.coerceIn(0.42f, 0.98f)
+                val accentTint = if (style.glassFinish == "crystal") 0.055f else 0.09f
                 val baseBrush = Brush.linearGradient(
                     colors = listOf(
-                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.40f).coerceIn(0f, 1f)),
-                        tint.copy(alpha = (0.34f + 0.20f * fluidity) * safeIntensity),
-                        style.surfaceBase.copy(alpha = (style.surfaceAlpha * 0.30f).coerceIn(0f, 1f)),
-                        refraction.copy(alpha = (0.20f + 0.14f * fluidity) * safeIntensity),
-                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.36f).coerceIn(0f, 1f))
+                        style.surfaceBase.copy(alpha = (surfaceAlpha * 0.94f).coerceIn(0f, 1f)),
+                        tint.copy(alpha = accentTint * safeIntensity),
+                        style.surfaceBase.copy(alpha = surfaceAlpha),
+                        refraction.copy(alpha = (if (style.glassFinish == "crystal") 0.045f else 0.075f) * safeIntensity),
+                        style.surfaceBase.copy(alpha = (style.strongSurfaceAlpha * 0.96f).coerceIn(0f, 1f))
                     ),
                     start = Offset.Zero,
                     end = Offset(size.width, size.height)
@@ -973,12 +984,14 @@ private fun Modifier.expressiveLightweightLiquidGlass(
             }
             val maxDimension = maxOf(size.width, size.height).coerceAtLeast(1f)
             val seedShift = (((bubbleSeed % 7) + 7) % 7) / 7f
+            val surfaceAlpha = style.surfaceAlpha.coerceIn(0.42f, 0.98f)
+            val accentTint = if (style.glassFinish == "crystal") 0.055f else 0.09f
             val baseBrush = Brush.linearGradient(
                 colors = listOf(
-                    Color.White.copy(alpha = if (style.isDark) 0.10f else 0.48f),
-                    tint.copy(alpha = (0.30f + 0.16f * fluidity) * intensity),
-                    style.surfaceBase.copy(alpha = (style.surfaceAlpha * 0.28f).coerceIn(0f, 1f)),
-                    secondaryTint.copy(alpha = (0.18f + 0.10f * fluidity) * intensity)
+                    Color.White.copy(alpha = if (style.isDark) 0.10f else if (style.glassFinish == "crystal") 0.36f else 0.22f),
+                    tint.copy(alpha = accentTint * intensity),
+                    style.surfaceBase.copy(alpha = surfaceAlpha),
+                    secondaryTint.copy(alpha = (if (style.glassFinish == "crystal") 0.045f else 0.07f) * intensity)
                 ),
                 start = Offset.Zero,
                 end = Offset(size.width, size.height)

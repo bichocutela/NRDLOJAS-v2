@@ -104,6 +104,36 @@ class ExpressiveThemeTest {
     }
 
     @Test
+    fun `expressive glass finish produces distinct useful surface densities`() {
+        val finishes = listOf("frosted", "glass", "crystal").map { finish ->
+            resolveExpressiveGlassStyle(
+                enabled = true,
+                isDark = false,
+                transparency = 0.55f,
+                glassFinish = finish
+            )
+        }
+
+        assertTrue(finishes[0].surfaceAlpha > finishes[1].surfaceAlpha)
+        assertTrue(finishes[1].surfaceAlpha > finishes[2].surfaceAlpha)
+        assertTrue(finishes[0].surfaceAlpha >= 0.86f)
+        assertTrue(finishes[2].surfaceAlpha <= 0.76f)
+    }
+
+    @Test
+    fun `water styles change water presence without changing glass finish`() {
+        val clear = resolveExpressiveGlassStyle(
+            enabled = true, isDark = false, waterStyle = "crystal", waterOpacity = 0.8f
+        )
+        val potable = resolveExpressiveGlassStyle(
+            enabled = true, isDark = false, waterStyle = "potable", waterOpacity = 0.8f
+        )
+
+        assertTrue(potable.waterOpacity > clear.waterOpacity)
+        assertEquals(clear.surfaceAlpha, potable.surfaceAlpha)
+    }
+
+    @Test
     fun `glass bubble controls are clamped and reach the rendering style`() {
         val style = resolveExpressiveGlassStyle(
             enabled = true,
