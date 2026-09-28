@@ -184,41 +184,53 @@ private fun expressiveGlassContentColor(background: Color): Color {
 
 private fun expressiveGlassActionColors(name: String, isDark: Boolean): List<Color> {
     val normalized = normalizeExpressiveGlassAccentName(name)
-    val light = mapOf(
-        "multicolor" to listOf(Color(0xFFE7333F), Color(0xFF1976D2), Color(0xFFF2B705)),
-        "red" to listOf(Color(0xFFE7333F), Color(0xFFFF7A59), Color(0xFFC2185B)),
-        "green" to listOf(Color(0xFF1E9C55), Color(0xFF44C79A), Color(0xFF0F7A68)),
-        "orange" to listOf(Color(0xFFF57C00), Color(0xFFFFB24A), Color(0xFFE94E1B)),
-        "blue" to listOf(Color(0xFF1976D2), Color(0xFF42A5F5), Color(0xFF4B5FD6)),
-        "gold" to listOf(Color(0xFFB8860B), Color(0xFFE6B93D), Color(0xFFFFD76A))
-    )
-    val dark = mapOf(
-        "multicolor" to listOf(Color(0xFFFF7882), Color(0xFF78B9FF), Color(0xFFFFD76A)),
-        "red" to listOf(Color(0xFFFF7882), Color(0xFFFFA083), Color(0xFFFF7FB5)),
-        "green" to listOf(Color(0xFF72E2A5), Color(0xFF7CE5C6), Color(0xFF6FD6CB)),
-        "orange" to listOf(Color(0xFFFFB567), Color(0xFFFFCA7A), Color(0xFFFF8A66)),
-        "blue" to listOf(Color(0xFF79B8FF), Color(0xFF8FD3FF), Color(0xFFA6AEFF)),
-        "gold" to listOf(Color(0xFFFFD76A), Color(0xFFFFE49B), Color(0xFFEAB84D))
-    )
-    return (if (isDark) dark else light).getValue(normalized)
+    if (normalized == "multicolor") {
+        return if (isDark) listOf(Color(0xFFFF7882), Color(0xFF78B9FF), Color(0xFFFFD76A))
+        else listOf(Color(0xFFE7333F), Color(0xFF1976D2), Color(0xFFB8860B))
+    }
+    val base = when (normalized) {
+        "red" -> Color(0xFFE7333F)
+        "green" -> Color(0xFF168447)
+        "orange" -> Color(0xFFE56F00)
+        "blue" -> Color(0xFF1769AA)
+        else -> Color(0xFF9A6B00)
+    }
+    val active = if (isDark) blendGlassTone(base, Color.White, 0.34f) else base
+    // The same hue is used for every action state; only lightness changes.
+    return listOf(active, blendGlassTone(active, Color.White, 0.24f), blendGlassTone(active, Color.Black, 0.16f))
 }
 
 internal fun expressiveGlassBackgroundColors(name: String, isDark: Boolean): List<Color> {
     val normalized = normalizeExpressiveGlassAccentName(name)
-    // The light Glass Expressivo theme uses one consistent clear-water base;
-    // accent selection remains visible in the controls and bubble refractions.
-    val light = listOf(
-        Color(0xFFE1F5FE), Color(0xFF81D4FA), Color(0xFFE0F7FA), Color(0xFFB2EBF2)
+    if (normalized == "multicolor") {
+        return if (isDark) listOf(Color(0xFF121820), Color(0xFF171D25), Color(0xFF111922), Color(0xFF191C21))
+        else listOf(Color(0xFFF8FBFC), Color(0xFFF2F8F9), Color(0xFFFFFDF9), Color(0xFFF4F8F7))
+    }
+    val hue = when (normalized) {
+        "red" -> Color(0xFFD92F3A)
+        "green" -> Color(0xFF168447)
+        "orange" -> Color(0xFFE56F00)
+        "blue" -> Color(0xFF1769AA)
+        else -> Color(0xFF9A6B00)
+    }
+    val neutral = if (isDark) Color(0xFF11151B) else Color.White
+    val tint = if (isDark) 0.20f else 0.075f
+    return listOf(
+        blendGlassTone(neutral, hue, tint),
+        blendGlassTone(neutral, hue, tint * 0.55f),
+        blendGlassTone(neutral, hue, tint * 0.82f),
+        blendGlassTone(neutral, hue, tint * 0.35f)
     )
-    val dark = mapOf(
-        "multicolor" to listOf(Color(0xFF190F18), Color(0xFF0E1C30), Color(0xFF2B2110), Color(0xFF0F291F), Color(0xFF21172F)),
-        "red" to listOf(Color(0xFF2A1116), Color(0xFF35161B), Color(0xFF2E1423), Color(0xFF2B1A12)),
-        "green" to listOf(Color(0xFF10241A), Color(0xFF0E2D25), Color(0xFF102638), Color(0xFF1A2913)),
-        "orange" to listOf(Color(0xFF2B1A0E), Color(0xFF3B2812), Color(0xFF321713), Color(0xFF2A2217)),
-        "blue" to listOf(Color(0xFF0D1B2C), Color(0xFF102C42), Color(0xFF171A38), Color(0xFF102B2A)),
-        "gold" to listOf(Color(0xFF2B220E), Color(0xFF3B2D11), Color(0xFF2A2619), Color(0xFF221D12))
+}
+
+private fun blendGlassTone(from: Color, to: Color, amount: Float): Color {
+    val t = amount.coerceIn(0f, 1f)
+    return Color(
+        red = from.red + (to.red - from.red) * t,
+        green = from.green + (to.green - from.green) * t,
+        blue = from.blue + (to.blue - from.blue) * t,
+        alpha = from.alpha + (to.alpha - from.alpha) * t
     )
-    return if (isDark) dark.getValue(normalized) else light
 }
 
 internal fun resolveExpressiveGlassStyle(
@@ -1320,8 +1332,8 @@ fun NrdAppBackground(
                         val ambientTertiary = expressiveGlass.tertiaryAccent
                         val haloPrimary = Brush.radialGradient(
                             colors = listOf(
-                                ambientPrimary.copy(alpha = 0.26f * lightScale),
-                                ambientPrimary.copy(alpha = 0.09f * lightScale),
+                                ambientPrimary.copy(alpha = 0.10f * lightScale),
+                                ambientPrimary.copy(alpha = 0.035f * lightScale),
                                 Color.Transparent
                             ),
                             center = Offset(
@@ -1332,8 +1344,8 @@ fun NrdAppBackground(
                         )
                         val haloSecondary = Brush.radialGradient(
                             colors = listOf(
-                                ambientSecondary.copy(alpha = 0.23f * lightScale),
-                                ambientSecondary.copy(alpha = 0.08f * lightScale),
+                                ambientSecondary.copy(alpha = 0.075f * lightScale),
+                                ambientSecondary.copy(alpha = 0.028f * lightScale),
                                 Color.Transparent
                             ),
                             center = Offset(
@@ -1344,7 +1356,7 @@ fun NrdAppBackground(
                         )
                         val haloTertiary = Brush.radialGradient(
                             colors = listOf(
-                                ambientTertiary.copy(alpha = 0.20f * lightScale),
+                                ambientTertiary.copy(alpha = 0.06f * lightScale),
                                 Color.Transparent
                             ),
                             center = Offset(
@@ -1355,8 +1367,8 @@ fun NrdAppBackground(
                         )
                         val pearlLight = Brush.radialGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = if (expressiveGlass.isDark) 0.08f else 0.42f),
-                                Color.White.copy(alpha = if (expressiveGlass.isDark) 0.03f else 0.12f),
+                                Color.White.copy(alpha = if (expressiveGlass.isDark) 0.06f else 0.12f),
+                                Color.White.copy(alpha = if (expressiveGlass.isDark) 0.02f else 0.04f),
                                 Color.Transparent
                             ),
                             center = Offset(
@@ -1367,7 +1379,7 @@ fun NrdAppBackground(
                         )
                         val lowerGlow = Brush.radialGradient(
                             colors = listOf(
-                                expressiveGlass.accent.copy(alpha = if (expressiveGlass.isDark) 0.13f else 0.20f),
+                                expressiveGlass.accent.copy(alpha = if (expressiveGlass.isDark) 0.06f else 0.08f),
                                 Color.Transparent
                             ),
                             center = Offset(size.width * 0.76f, size.height * 0.96f),
@@ -1376,9 +1388,9 @@ fun NrdAppBackground(
                         val causticBrush = Brush.horizontalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color.White.copy(alpha = if (expressiveGlass.isDark) 0.07f else 0.48f),
-                                ambientSecondary.copy(alpha = if (expressiveGlass.isDark) 0.08f else 0.34f),
-                                Color.White.copy(alpha = if (expressiveGlass.isDark) 0.05f else 0.36f),
+                                Color.White.copy(alpha = if (expressiveGlass.isDark) 0.05f else 0.10f),
+                                ambientSecondary.copy(alpha = if (expressiveGlass.isDark) 0.04f else 0.06f),
+                                Color.White.copy(alpha = if (expressiveGlass.isDark) 0.035f else 0.07f),
                                 Color.Transparent
                             )
                         )
@@ -1419,7 +1431,7 @@ fun NrdAppBackground(
                             drawRect(brush = lowerGlow)
                             withTransform({ translate(top = size.height * 0.04f * driftTravel) }) {
                                 drawPath(causticPath, brush = causticBrush, style = causticStroke)
-                                drawPath(causticPath, color = Color.White.copy(alpha = if (expressiveGlass.isDark) 0.10f else 0.45f), style = causticHighlightStroke)
+                                drawPath(causticPath, color = Color.White.copy(alpha = if (expressiveGlass.isDark) 0.08f else 0.10f), style = causticHighlightStroke)
                             }
                             withTransform({ translate(top = -size.height * 0.04f * driftTravel) }) {
                                 drawPath(lowerCausticPath, brush = causticBrush, style = lowerCausticStroke)

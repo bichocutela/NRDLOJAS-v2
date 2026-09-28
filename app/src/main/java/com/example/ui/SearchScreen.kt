@@ -287,19 +287,16 @@ private fun homeDynamicColors(
 
 private fun expressiveGlassCardAccent(style: ExpressiveGlassStyle, index: Int): Pair<Color, Color> {
     if (!style.enabled) return style.accent to style.onAccent
-
-    // Assinatura visual do mock: fundo pode ser dourado, mas os cards continuam
-    // alternando rosa, azul, laranja, dourado e verde.
     val signaturePalette = listOf(
-        Color(0xFFEF4E6D),
-        Color(0xFF2587DF),
-        Color(0xFFF57C2C),
-        Color(0xFFE7B21A),
-        Color(0xFF35A75A)
+        Color(0xFFE7333F),
+        Color(0xFF168447),
+        Color(0xFFE56F00),
+        Color(0xFF1769AA),
+        Color(0xFFB8860B)
     )
-    // A Home do Glass Expressivo mantém a paleta viva da referência; a cor
-    // selecionada continua controlando as ações e a iluminação do tema.
-    val accent = signaturePalette[index % signaturePalette.size]
+    val accent = if (style.accentName == "multicolor") {
+        signaturePalette[index % signaturePalette.size]
+    } else style.accent
     return accent to contrastingGlassContentColor(accent)
 }
 
@@ -311,32 +308,43 @@ private fun contrastingGlassContentColor(background: Color): Color {
 }
 
 private fun expressiveGlassCardSecondary(style: ExpressiveGlassStyle, index: Int): Color {
-    val signature = listOf(
-        Color(0xFFFFA7B5),
-        Color(0xFF8FD0FF),
-        Color(0xFFFFBE82),
-        Color(0xFFFFE17A),
-        Color(0xFF8BE6A4)
-    )
-    return signature[index % signature.size]
+    val signature = listOf(Color(0xFFFFA1A8), Color(0xFFA6D9B9), Color(0xFFFFC18A), Color(0xFFA9D4F5), Color(0xFFFFE18A))
+    return if (style.accentName == "multicolor") signature[index % signature.size]
+    else if (style.isDark) style.accent.copy(alpha = 0.72f)
+    else style.accent.copy(alpha = 0.32f)
 }
 
-private fun expressiveGlassCategoryAccent(index: Int): Color = listOf(
-    Color(0xFFE53935), // Açougue
-    Color(0xFF1E88E5), // Cafeteria
-    Color(0xFFEC407A), // Frios
-    Color(0xFFFB8C00), // Hortifruti
-    Color(0xFF2E9D57), // Mercearia
-    Color(0xFFB8860B)  // Padaria
-)[index % 6]
+private fun expressiveGlassCategoryAccent(style: ExpressiveGlassStyle, category: String, index: Int): Color {
+    if (style.accentName != "multicolor") return style.accent
+    val normalized = normalizeForGlassPalette(category)
+    return when {
+        "acougue" in normalized -> Color(0xFFE7333F)
+        "cafeteria" in normalized -> Color(0xFF168447)
+        "frios" in normalized -> Color(0xFFE56F00)
+        "hortifruti" in normalized -> Color(0xFF1769AA)
+        "mercearia" in normalized -> Color(0xFFB8860B)
+        else -> listOf(Color(0xFFE7333F), Color(0xFF168447), Color(0xFFE56F00), Color(0xFF1769AA), Color(0xFFB8860B))[index % 5]
+    }
+}
 
-private fun expressiveGlassAvatarColors(index: Int): Pair<Color, Color> = listOf(
-    Color(0xFFFFE0E7) to Color(0xFFB4234D),
-    Color(0xFFDDEEFF) to Color(0xFF1769AA),
-    Color(0xFFFFE8D5) to Color(0xFFB85A16),
-    Color(0xFFFFF0C2) to Color(0xFF8A6500),
-    Color(0xFFDDF5E5) to Color(0xFF207A42)
-)[index % 5]
+private fun normalizeForGlassPalette(value: String): String =
+    Normalizer.normalize(value, Normalizer.Form.NFD)
+        .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+        .lowercase()
+        .trim()
+
+private fun expressiveGlassAvatarColors(style: ExpressiveGlassStyle, index: Int): Pair<Color, Color> {
+    val accents = listOf(Color(0xFFE7333F), Color(0xFF168447), Color(0xFFE56F00), Color(0xFF1769AA), Color(0xFFB8860B))
+    val accent = if (style.accentName == "multicolor") accents[index % accents.size] else style.accent
+    val pastel = if (style.isDark) accent.copy(alpha = 0.82f) else {
+        Color(
+            red = accent.red + (1f - accent.red) * 0.82f,
+            green = accent.green + (1f - accent.green) * 0.82f,
+            blue = accent.blue + (1f - accent.blue) * 0.82f
+        )
+    }
+    return pastel to contrastingGlassContentColor(pastel)
+}
 
 @Composable
 private fun homeStrongColors(index: Int): Pair<Color, Color> {
@@ -1009,67 +1017,57 @@ fun SearchScreen(
                         .fillMaxWidth()
                         .height(expressiveGlassSearchButtonHeight)
                         .scale(primaryActionScale)
-                        .then(
-                            if (performanceTier.enableComplexShaders) Modifier.shadow(
-                                elevation = 12.dp,
-                                shape = searchButtonShape,
-                                clip = false,
-                                ambientColor = Color(0xFFFFB300).copy(alpha = 0.34f),
-                                spotColor = Color(0xFFFFB300).copy(alpha = 0.60f)
-                            ) else Modifier
+                        .shadow(
+                            elevation = 7.dp,
+                            shape = searchButtonShape,
+                            clip = false,
+                            ambientColor = expressiveGlassStyle.accent.copy(alpha = 0.12f),
+                            spotColor = expressiveGlassStyle.accent.copy(alpha = 0.20f)
                         )
                         .graphicsLayer { shape = searchButtonShape; clip = true },
                     shape = searchButtonShape,
                     color = Color.Transparent,
-                    contentColor = Color.White,
-                    border = if (performanceTier.enableComplexShaders) {
-                        BorderStroke(
-                            2.dp,
-                            Brush.verticalGradient(
-                                listOf(Color.White.copy(alpha = 0.95f), Color(0xFFFFE082).copy(alpha = 0.55f), Color.White.copy(alpha = 0.78f))
+                    contentColor = expressiveGlassStyle.onAccent,
+                    border = BorderStroke(
+                        1.5.dp,
+                        Brush.linearGradient(
+                            listOf(
+                                Color.White.copy(alpha = 0.82f),
+                                expressiveGlassStyle.accent.copy(alpha = 0.44f),
+                                Color.White.copy(alpha = 0.58f)
                             )
                         )
-                    } else BorderStroke(2.dp, Color.White),
+                    ),
                     interactionSource = primaryActionInteraction
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .then(
-                                if (performanceTier.enableComplexShaders) {
-                                    Modifier.background(
-                                        Brush.verticalGradient(
-                                            listOf(Color(0xFFFFE082), Color(0xFFFFB300), Color(0xFFF57F17))
-                                        )
-                                    )
-                                } else {
-                                    Modifier.background(Color(0xFFFFB300))
-                                }
-                            ),
+                            .background(expressiveGlassActionBrush),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (performanceTier.enableComplexShaders) {
-                            Box(
-                                Modifier
-                                    .align(Alignment.TopCenter)
-                                    .fillMaxWidth()
-                                    .height(17.dp)
-                                    .background(
-                                        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.68f), Color.White.copy(alpha = 0.16f), Color.Transparent))
+                        Box(
+                            Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .height(15.dp)
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.04f), Color.Transparent)
                                     )
-                            )
-                        }
+                                )
+                        )
                         Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Search, contentDescription = null, tint = Color.White)
+                            Icon(Icons.Default.Search, contentDescription = null, tint = expressiveGlassStyle.onAccent)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 "Pesquisar",
                                 fontWeight = FontWeight.Black,
                                 fontSize = 17.sp,
-                                color = Color.White,
+                                color = expressiveGlassStyle.onAccent,
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Black,
-                                    shadow = if (performanceTier.enableComplexShaders) Shadow(Color(0x55000000), blurRadius = 4f) else null
+                                    shadow = null
                                 )
                             )
                         }
@@ -1630,7 +1628,6 @@ fun SectionHeader(
     val expressive = LocalExpressiveStyle.current.enabled
     val expressiveGlass = LocalExpressiveGlassStyle.current
     val isExpressiveGlass = expressiveGlass.enabled
-    val performanceTier = LocalDevicePerformanceTier.current
     val profile = rememberNrdScreenProfile()
     val compactExpressive = expressive && profile.compact
     val sectionIcon = when {
@@ -1641,10 +1638,11 @@ fun SectionHeader(
         else -> Icons.Default.Search
     }
     val sectionAccent = when {
+        isExpressiveGlass && expressiveGlass.accentName != "multicolor" -> expressiveGlass.accent
         title.contains("Mais Utilizados", ignoreCase = true) -> expressiveGlass.accent
         title.contains("Últimos", ignoreCase = true) -> expressiveGlass.tertiaryAccent
         title.contains("Histórico", ignoreCase = true) -> expressiveGlass.secondaryAccent
-        title.contains("Favoritos", ignoreCase = true) -> Color(0xFFEF4E56)
+        title.contains("Favoritos", ignoreCase = true) -> if (isExpressiveGlass) expressiveGlass.accent else Color(0xFFEF4E56)
         else -> expressiveGlass.accent
     }
     Row(
@@ -1704,18 +1702,7 @@ fun SectionHeader(
                 onClick = onAction,
                 modifier = Modifier.then(
                     if (isExpressiveGlass) {
-                        if (performanceTier.enableComplexShaders) {
-                            Modifier.expressiveLiquidGlass(
-                                shape = actionShape,
-                                accent = sectionAccent,
-                                intensity = 0.72f,
-                                elevation = 3.dp
-                            )
-                        } else {
-                            Modifier
-                                .background(Color.White.copy(alpha = 0.85f), actionShape)
-                                .border(1.dp, Color.White, actionShape)
-                        }
+                        Modifier.glassSurface(actionShape, sectionAccent, elevation = 2.dp)
                     } else Modifier
                 ),
                 shape = actionShape,
@@ -1818,7 +1805,7 @@ fun CategorySection(
             val colors = categoryColors[index % categoryColors.size]
             val dynamicColors = homeDynamicColors(index, appTheme, colors.first, colors.second)
             val strongColors = homeStrongColors(index)
-            val liquidAccent = expressiveGlassCategoryAccent(index)
+            val liquidAccent = expressiveGlassCategoryAccent(expressiveGlass, category, index)
             val categoryGlassFill = when {
                 glass.enabled -> glass.fill.copy(alpha = glass.alpha)
                 isExpressiveGlass -> expressiveGlass.surfaceBase.copy(alpha = expressiveGlass.surfaceAlpha)
@@ -1873,7 +1860,7 @@ fun CategorySection(
                             painter = painterResource(id = expressiveCategoryIconRes(category)),
                             contentDescription = category,
                             tint = when {
-                                isExpressiveGlass -> MaterialTheme.colorScheme.onSurface
+                                isExpressiveGlass -> liquidAccent
                                 glass.enabled -> strongColors.first
                                 else -> strongColors.second
                             },
@@ -1983,7 +1970,10 @@ private fun FavoriteToggleButton(
         ),
         label = "favorite-liquid-scale"
     )
-    val heartAccent = if (product.isFavorite) Color(0xFFEF4E56) else if (isExpressiveGlass) Color(0xFFFFB300) else expressiveGlass.accent
+    val heartAccent = expressiveGlass.accent
+    val heartTint = if (product.isFavorite && !isExpressiveGlass) Color(0xFFEF4E56)
+        else if (isExpressiveGlass) expressiveGlass.accent
+        else MaterialTheme.colorScheme.primary
     IconButton(
         onClick = { viewModel.toggleFavorite(product) },
         modifier = Modifier
@@ -1999,7 +1989,7 @@ private fun FavoriteToggleButton(
         Icon(
             imageVector = if (product.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
             contentDescription = if (product.isFavorite) "Remover dos favoritos" else "Adicionar aos favoritos",
-            tint = if (product.isFavorite) Color(0xFFEF4E56) else if (isExpressiveGlass) Color(0xFFB8860B) else MaterialTheme.colorScheme.primary,
+            tint = heartTint,
             modifier = Modifier
                 .size(if (compact) 19.dp else 21.dp)
                 .scale(heartScale)
@@ -2052,7 +2042,7 @@ fun ProductCard(
     val shareAccentColor = cardAccent.first.toArgb()
     val shareCodeColor = cardAccent.first.toArgb()
     val shareCodeTextColor = cardAccent.second.toArgb()
-    val avatarColors = expressiveGlassAvatarColors(index)
+    val avatarColors = expressiveGlassAvatarColors(expressiveGlass, index)
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(
@@ -2459,7 +2449,7 @@ fun MiniProductCard(
         )
     }
     val strongAccent = if (isExpressiveGlass) cardAccent else homeStrongColors(index)
-    val avatarColors = expressiveGlassAvatarColors(index)
+    val avatarColors = expressiveGlassAvatarColors(expressiveGlass, index)
     var showDialog by remember(product.code) { mutableStateOf(false) }
     if (showDialog) {
         ProductBarcodeDialog(
@@ -2944,7 +2934,7 @@ fun HistoryItem(
                 Icon(
                     Icons.Default.ChevronRight,
                     contentDescription = "Abrir produto",
-                    tint = if (isExpressiveGlass) Color(0xFFB8860B) else strongColors.first,
+                    tint = if (isExpressiveGlass) expressiveGlass.accent else strongColors.first,
                     modifier = Modifier
                         .padding(if (isExpressiveGlass) 4.dp else 0.dp)
                         .size(if (compactExpressive) 20.dp else 24.dp)
