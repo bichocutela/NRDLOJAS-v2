@@ -94,6 +94,7 @@ class ScheduleReminderWorker(context: Context, params: WorkerParameters) : Corou
                 .firstOrNull { it.optString("monthKey") == key } ?: return null
             val cachedEmployees = cachedMonth.optJSONArray("employees") ?: return null
             val cachedEmployee = (0 until cachedEmployees.length()).mapNotNull { cachedEmployees.optJSONObject(it) }
+                .firstOrNull { it.optString("registration").filter(Char::isDigit) == digits }
             val latest = schedules.firstOrNull { it.monthKey == key }?.employees
                 ?.firstOrNull { it.registration.filter(Char::isDigit) == digits }
             if (cachedEmployee == null) return key.takeIf { latest != null }
