@@ -527,7 +527,8 @@ private class ScheduleDraftStore(context: android.content.Context) {
         rows.forEach { row ->
             json.put(JSONObject().put("registration", row.registration).put("name", row.name)
                 .put("shift", row.shift).put("daysOff", JSONArray(row.daysOff))
-                .put("vacationDays", JSONArray(row.vacationDays)).put("verified", row.verified))
+                .put("vacationDays", JSONArray(row.vacationDays)).put("verified", row.verified)
+                .put("rosterPhotoUrl", row.rosterPhotoUrl))
         }
         prefs.edit().putString(period, json.toString()).apply()
     }
@@ -539,7 +540,7 @@ private class ScheduleDraftStore(context: android.content.Context) {
             val registration = row.optString("registration").filter(Char::isDigit)
             if (registration.isBlank()) return@mapNotNull null
             WorkScheduleEmployee(registration, row.optString("name"), row.optString("shift"),
-                row.intList("daysOff"), row.intList("vacationDays"), row.optBoolean("verified"))
+                row.intList("daysOff"), row.intList("vacationDays"), row.optBoolean("verified"), row.optString("rosterPhotoUrl"))
         }
     }.getOrDefault(emptyList())
 }
