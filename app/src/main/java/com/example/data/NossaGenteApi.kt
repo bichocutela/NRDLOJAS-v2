@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.Context
+import android.net.Uri
 import android.util.Base64
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
@@ -8,6 +9,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
+import okhttp3.MultipartBody
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
@@ -26,10 +28,12 @@ import java.util.concurrent.TimeUnit
 class NossaGenteApi(context: Context) {
     private companion object {
         const val MAX_PROFILE_PHOTO_BYTES = 8 * 1024 * 1024L
+        const val MAX_ROSTER_PHOTO_BYTES = 10 * 1024 * 1024
     }
 
     @Volatile
     private var inMemoryToken: String? = null
+    private val appContext = context.applicationContext
     private val secureSession = NossaGenteSecureSession(context)
     private val credentialStore = NossaGenteCredentialStore(context.applicationContext)
     private val client = OkHttpClient.Builder()
@@ -143,6 +147,67 @@ class NossaGenteApi(context: Context) {
                     ?: ("Não foi possível salvar suas folgas (HTTP " + response.code + ")."))
             }
         }
+    }
+
+    /** Uploads the authenticated employee's monthly roster photo, then attaches it to that month. */
+    suspend fun saveMyRosterPhoto(uri: Uri, registration: String, year: Int, month: Int): Result<String> = withContext(Dispatchers.IO) {
+        val token = currentToken() ?: return@withContext Result.failure(IllegalStateException("Entre no Nossa Gente para registrar a foto."))
+        val digits = registration.filter(Char::isDigit)
+        if (digits.isBlank() || year !in 2000..2100 || month !in 1..12) {
+            return@withContext Result.failure(IllegalArgumentException("Matrícula, mês ou ano inválidos."))
+        }
+        runCatching {
+            val supabaseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
+            val supabaseKey = BuildConfig.SUPABASE_ANON_KEY.trim()
+            check(supabaseUrl.isNotBlank() && supabaseKey.isNotBlank()) { "Upload de foto indisponível neste build." }
+            val bytes = photoBytes(uri)
+            check(bytes.isNotEmpty() && bytes.size <= MAX_ROSTER_PHOTO_BYTES) { "A foto deve ter até 10 MB." }
+            val monthKey = "%04d-%02d".format(year, month)
+            val path = "work-schedule-photos/$digits/$monthKey.jpg"
+            val multipart = MultipartBody.Builder().setType(MultipartBody.FORM)
+                .addFormDataPart("path", path)
+                .addFormDataPart("file", "$monthKey.jpg", bytes.toRequestBody("image/jpeg".toMediaType()))
+                .build()
+            val uploadRequest = Request.Builder().url("$supabaseUrl/functions/v1/upload-image")
+                .post(multipart).header("Authorization", "Bearer $supabaseKey")
+                .header("apikey", supabaseKey).header("x-nossa-gente-token", token).build()
+            val photoUrl = client.newCall(uploadRequest).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                val json = runCatching { JSONObject(body) }.getOrNull()
+                if (!response.isSuccessful) error(json?.optString("error")?.takeIf { it.isNotBlank() }
+                    ?: "Não foi possível enviar a foto (HTTP ${response.code}).")
+                json?.optString("url")?.takeIf { it.isNotBlank() } ?: error("O servidor não retornou o endereço da foto.")
+            }
+            val payload = JSONObject().put("action", "saveRosterPhoto").put("year", year)
+                .put("month", month).put("photoUrl", photoUrl)
+            val saveRequest = Request.Builder().url("$supabaseUrl/functions/v1/save-my-days-off")
+                .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .header("Authorization", "Bearer $supabaseKey").header("apikey", supabaseKey)
+                .header("x-nossa-gente-token", token).build()
+            client.newCall(saveRequest).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                val json = runCatching { JSONObject(body) }.getOrNull()
+                if (!response.isSuccessful) error(json?.optString("error")?.takeIf { it.isNotBlank() }
+                    ?: "Não foi possível salvar a foto no perfil (HTTP ${response.code}).")
+            }
+            photoUrl
+        }
+    }
+
+    private fun photoBytes(uri: Uri): ByteArray {
+        return appContext.contentResolver.openInputStream(uri)?.use { input ->
+            val output = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(16 * 1024)
+            var total = 0
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                total += read
+                check(total <= MAX_ROSTER_PHOTO_BYTES) { "A foto deve ter até 10 MB." }
+                output.write(buffer, 0, read)
+            }
+            output.toByteArray()
+        } ?: error("Não foi possível ler a foto capturada.")
     }
 
     private suspend fun findEmployeeByRegistrationOnce(

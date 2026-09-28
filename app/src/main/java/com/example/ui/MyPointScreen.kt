@@ -1,9 +1,15 @@
 package com.example.ui
 
 import android.graphics.BitmapFactory
+import android.net.Uri
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +37,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Notifications
@@ -62,6 +69,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -92,6 +100,7 @@ import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.expressiveShadow
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -165,9 +174,15 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                 is NossaGenteBenefitResult.Error -> if (error == null) error = result.message
             }
             workSchedules = FirebaseService.fetchWorkSchedules()
-            val currentMonth = currentMonthKey()
-            selectedScheduleKey = currentMonth
             val profileRegistration = employeeProfile?.registration.orEmpty().filter(Char::isDigit)
+            val today = java.util.Calendar.getInstance()
+            val changedPreviousMonth = com.example.util.ScheduleReminderWorker.changedPreviousMonthKey(
+                context, workSchedules, profileRegistration, today.get(java.util.Calendar.YEAR), today.get(java.util.Calendar.MONTH) + 1
+            )
+            selectedScheduleKey = com.example.data.resolveProfileScheduleMonth(
+                workSchedules, profileRegistration, today.get(java.util.Calendar.YEAR),
+                today.get(java.util.Calendar.MONTH) + 1, today.get(java.util.Calendar.DAY_OF_MONTH), changedPreviousMonth
+            )
             com.example.util.ScheduleReminderWorker.cacheSchedules(context, workSchedules, profileRegistration)
             if (credentialStore.isDayOffNotificationsEnabled() || credentialStore.isScheduleNotificationsEnabled())
                 com.example.util.ScheduleReminderWorker.schedule(context)
@@ -272,6 +287,24 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                             )
                             val updated = WorkSchedule(monthKey, year, month, rows,
                                 System.currentTimeMillis(), (existing?.revision ?: 0) + 1)
+                            workSchedules = (workSchedules.filterNot { it.monthKey == monthKey } + updated)
+                                .sortedByDescending { it.monthKey }
+                            employeeProfile?.registration?.let { com.example.util.ScheduleReminderWorker.cacheSchedules(context, workSchedules, it) }
+                            com.example.util.ScheduleReminderWorker.markScheduleChanged(context, registration, monthKey)
+                        },
+                        onRosterPhotoSaved = { monthKey, url ->
+                            val (year, month) = monthKey.split("-").map(String::toInt)
+                            val profile = employeeProfile
+                            val registration = profile?.registration.orEmpty().filter(Char::isDigit)
+                            val existing = workSchedules.firstOrNull { it.monthKey == monthKey }
+                            val rows = existing?.employees.orEmpty().toMutableList()
+                            val rowIndex = rows.indexOfFirst { it.registration.filter(Char::isDigit) == registration }
+                            if (rowIndex >= 0) rows[rowIndex] = rows[rowIndex].copy(rosterPhotoUrl = url)
+                            else if (registration.isNotBlank()) rows += WorkScheduleEmployee(
+                                registration = registration, name = profile?.name.orEmpty(), verified = true, rosterPhotoUrl = url
+                            )
+                            val updated = WorkSchedule(monthKey, year, month, rows,
+                                existing?.updatedAt ?: 0L, existing?.revision ?: 1)
                             workSchedules = (workSchedules.filterNot { it.monthKey == monthKey } + updated)
                                 .sortedByDescending { it.monthKey }
                             employeeProfile?.registration?.let { com.example.util.ScheduleReminderWorker.cacheSchedules(context, workSchedules, it) }
@@ -463,7 +496,8 @@ private fun ProfileNotificationSwitch(label: String, checked: Boolean, onChecked
 private fun MyDaysOffCard(
     schedules: List<WorkSchedule>, selectedKey: String, expanded: Boolean, registration: String?,
     onToggle: () -> Unit, onSelectMonth: (String) -> Unit,
-    onDaysOffSaved: (String, List<Int>) -> Unit
+    onDaysOffSaved: (String, List<Int>) -> Unit,
+    onRosterPhotoSaved: (String, String) -> Unit
 ) {
     var selectorExpanded by remember { mutableStateOf(false) }
     val selected = schedules.firstOrNull { it.monthKey == selectedKey }
@@ -479,6 +513,53 @@ private fun MyDaysOffCard(
     var selectedDays by remember(selectedKey, digits, employee?.daysOff) { mutableStateOf(employee?.daysOff.orEmpty().toSet()) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var photoDialogUrl by remember(selectedKey, digits) { mutableStateOf<String?>(null) }
+    var calendarDay by remember(selectedKey, digits) { mutableStateOf<Int?>(null) }
+    var photoUploadBusy by remember { mutableStateOf(false) }
+    var photoMessage by remember { mutableStateOf<String?>(null) }
+    var captureUri by remember { mutableStateOf<Uri?>(null) }
+    var captureFile by remember { mutableStateOf<File?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        val uri = captureUri
+        if (captured && uri != null) {
+            photoUploadBusy = true
+            photoMessage = null
+            scope.launch {
+                NossaGenteApi(context.applicationContext).saveMyRosterPhoto(uri, digits, selectedYear, selectedMonth)
+                    .onSuccess { url ->
+                        onRosterPhotoSaved(selectedKey, url)
+                        photoMessage = "Foto salva no perfil para ${monthName(selectedMonth)}/$selectedYear."
+                    }
+                    .onFailure { photoMessage = it.message ?: "Não foi possível salvar a foto." }
+                photoUploadBusy = false
+                captureFile?.delete()
+                captureFile = null
+            }
+        } else if (!captured) {
+            photoMessage = "A captura foi cancelada."
+            captureFile?.delete()
+            captureFile = null
+        }
+    }
+
+    fun captureRosterPhoto() {
+        runCatching {
+            val directory = File(context.cacheDir, "roster_photos").apply { mkdirs() }
+            val file = File.createTempFile("roster_${selectedKey}_", ".jpg", directory)
+            captureFile = file
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        }.onSuccess { uri ->
+            captureUri = uri
+            runCatching { cameraLauncher.launch(uri) }.onFailure {
+                captureFile?.delete()
+                captureFile = null
+                photoMessage = "Não foi possível abrir a câmera. Verifique se há um aplicativo de câmera disponível."
+            }
+        }.onFailure {
+            photoMessage = "Não foi possível abrir a câmera. Verifique se há um aplicativo de câmera disponível."
+        }
+    }
+
     Card(Modifier.fillMaxWidth(), shape = if (LocalExpressiveStyle.current.enabled) RoundedCornerShape(28.dp) else MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -486,7 +567,7 @@ private fun MyDaysOffCard(
                 IconButton(onClick = onToggle) { Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, "Expandir Minhas Folgas") }
             }
             if (expanded) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     androidx.compose.foundation.layout.Box(Modifier.weight(1f, fill = false)) {
                         Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
                             TextButton(onClick = { selectorExpanded = true }, modifier = Modifier.padding(horizontal = 6.dp)) {
@@ -503,12 +584,31 @@ private fun MyDaysOffCard(
                             onSelect = { year, month -> onSelectMonth("%04d-%02d".format(year, month)); selectorExpanded = false }
                         )
                     }
-                    if (digits.isNotBlank()) {
+                }
+                if (digits.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         androidx.compose.material3.OutlinedButton(
                             onClick = { selectedDays = employee?.daysOff.orEmpty().toSet(); editing = !editing; saveMessage = null },
-                            enabled = !saving
-                        ) { Text(if (editing) "Fechar" else "Adicionar folgas", style = MaterialTheme.typography.labelMedium) }
+                            enabled = !saving && !photoUploadBusy,
+                            modifier = Modifier.weight(1f)
+                        ) { Text(if (editing) "Fechar" else "Adicionar folgas", style = MaterialTheme.typography.labelMedium, maxLines = 1) }
+                        val savedPhotoUrl = employee?.rosterPhotoUrl?.takeIf { it.isNotBlank() }
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = { if (savedPhotoUrl != null) photoDialogUrl = savedPhotoUrl else captureRosterPhoto() },
+                            enabled = !photoUploadBusy,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            if (photoUploadBusy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                            else if (savedPhotoUrl != null) Text("Foto Registrada", style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                            else {
+                                Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(17.dp))
+                                Spacer(Modifier.width(5.dp))
+                                Text("Registrar Foto", style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                            }
+                        }
                     }
+                    photoMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = if (it.startsWith("Foto salva")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) }
                 }
                 when {
                     registration.isNullOrBlank() -> Text("A matrícula do perfil Nossa Gente não está disponível para localizar sua escala.")
@@ -530,7 +630,7 @@ private fun MyDaysOffCard(
                                     Box(Modifier.weight(1f).height(66.dp).background(
                                         if (sunday) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                                         RoundedCornerShape(14.dp)
-                                    ), contentAlignment = Alignment.Center) {
+                                    ).clickable { calendarDay = day }, contentAlignment = Alignment.Center) {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                             Text(day.toString().padStart(2, '0'), style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
@@ -583,6 +683,58 @@ private fun MyDaysOffCard(
             }
         }
     }
+    photoDialogUrl?.let { url -> RosterPhotoViewerDialog(url, onDismiss = { photoDialogUrl = null }) }
+    calendarDay?.let { day ->
+        DaysOffCalendarDialog(selectedYear, selectedMonth, day, onDismiss = { calendarDay = null })
+    }
+}
+
+@Composable
+private fun DaysOffCalendarDialog(year: Int, month: Int, selectedDay: Int, onDismiss: () -> Unit) {
+    val weekday = java.text.SimpleDateFormat("EEEE", java.util.Locale("pt", "BR")).format(
+        java.util.GregorianCalendar(year, month - 1, selectedDay).time
+    ).replaceFirstChar { it.uppercase() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("$selectedDay de ${monthName(month)} • $weekday") },
+        text = {
+            Column {
+                Text("Confira o dia no calendário completo de ${monthName(month)}/$year.", style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(12.dp))
+                MyDaysOffCalendar(year, month, setOf(selectedDay), onToggle = null)
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Fechar") } }
+    )
+}
+
+@Composable
+private fun RosterPhotoViewerDialog(url: String, onDismiss: () -> Unit) {
+    var scale by remember(url) { mutableStateOf(1f) }
+    var offsetX by remember(url) { mutableStateOf(0f) }
+    var offsetY by remember(url) { mutableStateOf(0f) }
+    val transformState = rememberTransformableState { zoom, pan, _ ->
+        val nextScale = (scale * zoom).coerceIn(1f, 5f)
+        scale = nextScale
+        offsetX += pan.x
+        offsetY += pan.y
+        if (scale == 1f) { offsetX = 0f; offsetY = 0f }
+    }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.94f))) {
+            coil.compose.AsyncImage(
+                model = url,
+                contentDescription = "Foto completa da escala. Use pinça para ampliar e arraste para conferir os detalhes.",
+                modifier = Modifier.fillMaxSize().transformable(transformState).graphicsLayer {
+                    scaleX = scale; scaleY = scale; translationX = offsetX; translationY = offsetY
+                },
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+            )
+            androidx.compose.material3.TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)) {
+                Text("FECHAR", color = Color.White)
+            }
+        }
+    }
 }
 
 @Composable
@@ -627,7 +779,7 @@ private fun MonthYearPickerDialog(
 }
 
 @Composable
-private fun MyDaysOffCalendar(year: Int, month: Int, selected: Set<Int>, onToggle: (Int) -> Unit) {
+private fun MyDaysOffCalendar(year: Int, month: Int, selected: Set<Int>, onToggle: ((Int) -> Unit)?) {
     val calendar = java.util.GregorianCalendar(year, month - 1, 1)
     val offset = calendar.get(java.util.Calendar.DAY_OF_WEEK) - 1
     val count = calendar.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
@@ -646,7 +798,7 @@ private fun MyDaysOffCalendar(year: Int, month: Int, selected: Set<Int>, onToggl
                         Modifier.weight(1f).height(42.dp)
                             .background(if (day in selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                                 RoundedCornerShape(10.dp))
-                            .clickable { onToggle(day) },
+                            .then(if (onToggle != null) Modifier.clickable { onToggle(day) } else Modifier),
                         contentAlignment = Alignment.Center
                     ) { Text(day.toString(), color = if (day in selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface) }
                 }

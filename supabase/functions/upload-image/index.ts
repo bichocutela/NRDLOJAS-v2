@@ -4,7 +4,7 @@ import * as jose from "https://deno.land/x/jose@v4.14.4/index.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-firebase-token',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-firebase-token, x-nossa-gente-token',
 }
 
 const JWKS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'
@@ -17,23 +17,55 @@ const DYNAMIC_MEDIA_TYPES = new Set([
   'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/ogg', 'audio/wav', 'audio/x-wav',
   'application/pdf',
 ])
+const NG_API_BASE = 'https://app.nordestao.com.br/nossa-gente/v1'
+
+function findRegistration(value: any, depth = 0): string {
+  if (!value || typeof value !== 'object' || depth > 5) return ''
+  for (const key of ['matricula', 'MATRICULA', 'registro', 'registration', 'numeroMatricula', 'numero_matricula']) {
+    const raw = value[key]
+    if (typeof raw === 'string' || typeof raw === 'number') {
+      const digits = String(raw).replace(/\D/g, '')
+      if (digits) return digits
+    }
+  }
+  for (const child of Object.values(value)) {
+    if (child && typeof child === 'object') {
+      const found = findRegistration(child, depth + 1)
+      if (found) return found
+    }
+  }
+  return ''
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
     const firebaseToken = req.headers.get('x-firebase-token')
-    if (!firebaseToken) throw new Error('Missing x-firebase-token')
-
-    const { payload } = await jose.jwtVerify(firebaseToken, JWKS, {
-      issuer: `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`,
-      audience: FIREBASE_PROJECT_ID,
-    })
-    if (!payload.sub) throw new Error('Missing subject in token')
-
-    const email = String(payload.email ?? '').toLowerCase()
-    if (email !== 'mestre@nrdlojas.com' && email !== 'admin@nrdlojas.com') {
-      throw new Error('Unauthorized administrative account')
+    const nossaGenteToken = req.headers.get('x-nossa-gente-token')?.trim()
+    let rosterRegistration = ''
+    if (nossaGenteToken) {
+      if (req.method !== 'POST' || req.headers.get('content-type')?.includes('application/json')) {
+        throw new Error('Nossa Gente sessions may only upload roster photos')
+      }
+      const identityResponse = await fetch(NG_API_BASE + '/me', {
+        headers: { Accept: 'application/json', Authorization: 'Bearer ' + nossaGenteToken, 'X-Requested-With': 'XMLHttpRequest' },
+      })
+      if (identityResponse.status === 401 || identityResponse.status === 403) throw new Error('Sua sessão Nossa Gente expirou. Entre novamente.')
+      if (!identityResponse.ok) throw new Error('Não foi possível confirmar sua matrícula na Nossa Gente.')
+      rosterRegistration = findRegistration(await identityResponse.json())
+      if (!rosterRegistration) throw new Error('A Nossa Gente não informou sua matrícula.')
+    } else {
+      if (!firebaseToken) throw new Error('Missing x-firebase-token')
+      const { payload } = await jose.jwtVerify(firebaseToken, JWKS, {
+        issuer: `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`,
+        audience: FIREBASE_PROJECT_ID,
+      })
+      if (!payload.sub) throw new Error('Missing subject in token')
+      const email = String(payload.email ?? '').toLowerCase()
+      if (email !== 'mestre@nrdlojas.com' && email !== 'admin@nrdlojas.com') {
+        throw new Error('Unauthorized administrative account')
+      }
     }
 
     const supabaseAdmin = createClient(
@@ -67,6 +99,14 @@ serve(async (req) => {
     if (safePath === 'banners/themes' || safePath.startsWith('banners/themes/')) {
       throw new Error('Protected theme path')
     }
+
+    if (nossaGenteToken) {
+      const expectedPath = new RegExp(`^work-schedule-photos/${rosterRegistration}/\\d{4}-\\d{2}\\.jpg$`)
+      if (!expectedPath.test(safePath) || fileValue.size <= 0 || fileValue.size > 10 * 1024 * 1024 || (fileValue.type || '').toLowerCase() !== 'image/jpeg') {
+        throw new Error('Foto de escala inválida. Envie um JPEG de até 10 MB para o mês selecionado.')
+      }
+    }
+
 
     if (safePath.startsWith('dynamic-pages/')) {
       if (fileValue.size <= 0) throw new Error('Empty media file')

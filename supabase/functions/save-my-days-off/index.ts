@@ -115,10 +115,14 @@ Deno.serve(async (req: Request) => {
     const input = await req.json();
     const year = Number(input.year);
     const month = Number(input.month);
-    const days = Array.isArray(input.daysOff) ? [...new Set(input.daysOff.map(Number))].sort((a, b) => a - b) : null;
-    if (!Number.isInteger(year) || year < 2000 || year > 2100 || !Number.isInteger(month) || month < 1 || month > 12 || !days) {
-      return reply({ error: "Mês, ano ou datas inválidos." }, 400);
+    const action = String(input.action ?? "saveDaysOff");
+    if (!Number.isInteger(year) || year < 2000 || year > 2100 || !Number.isInteger(month) || month < 1 || month > 12 || !["saveDaysOff", "saveRosterPhoto"].includes(action)) {
+      return reply({ error: "Mês, ano ou ação inválidos." }, 400);
     }
+    const days = action === "saveDaysOff"
+      ? (Array.isArray(input.daysOff) ? [...new Set(input.daysOff.map(Number))].sort((a, b) => a - b) : null)
+      : [];
+    if (action === "saveDaysOff" && !days) return reply({ error: "As datas informadas são inválidas." }, 400);
     const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
     if (days.some((day: number) => !Number.isInteger(day) || day < 1 || day > lastDay)) {
       return reply({ error: "Uma das datas não pertence ao mês escolhido." }, 400);
@@ -143,6 +147,42 @@ Deno.serve(async (req: Request) => {
     }
     if (index < 0) employees.push(ownRow);
     const ownIndex = index >= 0 ? index : employees.length - 1;
+
+    if (action === "saveRosterPhoto") {
+      const monthKey = String(year) + "-" + String(month).padStart(2, "0");
+      const expectedUrl = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "") +
+        "/storage/v1/object/public/nrdlojas-images/work-schedule-photos/" + registration + "/" + monthKey + ".jpg";
+      const photoUrl = typeof input.photoUrl === "string" ? input.photoUrl : "";
+      if (!expectedUrl.startsWith("https://") || photoUrl !== expectedUrl) {
+        return reply({ error: "A foto não corresponde ao mês ou à matrícula autenticada." }, 400);
+      }
+      employees[ownIndex] = { ...employees[ownIndex], registration, name: employees[ownIndex].name || employeeName,
+        rosterPhotoUrl: photoUrl, verified: true };
+      schedule.employees = employees;
+      if (!exists) {
+        const commitResponse = await fetch("https://firestore.googleapis.com/v1/projects/" + projectId + "/databases/(default)/documents:commit", {
+          method: "POST",
+          headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+          body: JSON.stringify({ writes: [{
+            update: { name: "projects/" + projectId + "/databases/(default)/documents/work_schedules/" + monthKey, fields: writeFields(schedule) },
+            currentDocument: { exists: false },
+          }] }),
+        });
+        if (commitResponse.status === 409 || commitResponse.status === 412) return reply({ error: "A escala acabou de ser criada. Atualize o perfil e tente novamente." }, 409);
+        if (!commitResponse.ok) return reply({ error: "Não foi possível salvar a foto no perfil." }, 502);
+      } else {
+        const updateUrl = documentUrl + "?updateMask.fieldPaths=employees&currentDocument.updateTime=" + encodeURIComponent(document.updateTime);
+        const updateResponse = await fetch(updateUrl, {
+          method: "PATCH",
+          headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+          body: JSON.stringify({ fields: writeFields({ employees }) }),
+        });
+        if (updateResponse.status === 409 || updateResponse.status === 412) return reply({ error: "A escala mudou enquanto a foto era salva. Atualize e tente novamente." }, 409);
+        if (!updateResponse.ok) return reply({ error: "Não foi possível salvar a foto no perfil." }, 502);
+      }
+      return reply({ ok: true, action, registration, monthKey, photoUrl });
+    }
+
     employees[ownIndex] = { ...employees[ownIndex], daysOff: days, verified: true };
     schedule.employees = employees;
     schedule.updatedAt = Date.now();
