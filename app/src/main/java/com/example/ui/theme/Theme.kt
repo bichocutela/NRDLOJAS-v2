@@ -333,7 +333,7 @@ internal fun resolveExpressiveGlassStyle(
         surfaceAlpha = surfaceAlpha,
         strongSurfaceAlpha = (surfaceAlpha + 0.08f).coerceAtMost(0.98f),
         borderColor = Color.White.copy(alpha = (when (finish) { "frosted" -> 0.52f; "crystal" -> 0.92f; else -> 0.70f }) * (0.45f + 0.55f * reflectionOpacity.coerceIn(0f, 1f))),
-        shadowElevation = when (finish) { "frosted" -> 5f; "crystal" -> 12f; else -> 8f },
+        shadowElevation = (when (finish) { "frosted" -> 5f; "crystal" -> 12f; else -> 8f }) + (2f * safeFluidity),
         shadowAlpha = when (finish) { "frosted" -> 0.14f; "crystal" -> 0.22f; else -> 0.18f },
         bubbleSpeed = bubbleSpeed.coerceIn(0.25f, 2.5f),
         bubbleMotion = bubbleMotion.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
