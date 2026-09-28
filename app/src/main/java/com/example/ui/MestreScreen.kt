@@ -252,6 +252,22 @@ fun MestreScreen(
             }
         }
     }
+    val bubblePngLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        coroutineScope.launch {
+            isUploadingThemeBackground = true
+            val url = FirebaseService.uploadImageToStorage(uri, "glass_particles/${UUID.randomUUID()}.png")
+            isUploadingThemeBackground = false
+            if (url.isNullOrBlank()) {
+                snackbarHostState.showSnackbar(FirebaseService.lastError ?: "Não foi possível enviar o PNG.")
+            } else {
+                draftAppearanceSettings = draftAppearanceSettings.copy(bubbleImageUrl = url)
+                snackbarHostState.showSnackbar("PNG carregado. Salve os movimentos para publicar.")
+            }
+        }
+    }
     var importResult by remember { mutableStateOf<ProductImportResult?>(null) }
     var showImportDialog by remember { mutableStateOf(false) }
     var isParsingImport by remember { mutableStateOf(false) }
@@ -285,6 +301,7 @@ fun MestreScreen(
     var expandedRemoteTheme by remember { mutableStateOf(false) }
     var expandedRemoteMode by remember { mutableStateOf(false) }
     var expandedBubbleMotion by remember { mutableStateOf(false) }
+    var expandedBubbleShape by remember { mutableStateOf(false) }
 
     fun defaultBackgroundFor(themeKey: String): ThemeBackground =
         draftDefaultThemeBackgrounds[themeKey] ?: ThemeBackground(
@@ -363,7 +380,16 @@ fun MestreScreen(
             draftAppearanceSettings.bubbleSize != appearanceSettings.bubbleSize ||
             draftAppearanceSettings.bubbleExtraCount != appearanceSettings.bubbleExtraCount ||
             draftAppearanceSettings.bubbleBrightness != appearanceSettings.bubbleBrightness ||
-            draftAppearanceSettings.bubbleOutline != appearanceSettings.bubbleOutline
+            draftAppearanceSettings.bubbleOutline != appearanceSettings.bubbleOutline ||
+            draftAppearanceSettings.bubbleShape != appearanceSettings.bubbleShape ||
+            draftAppearanceSettings.bubbleImageUrl != appearanceSettings.bubbleImageUrl ||
+            draftAppearanceSettings.bubbleAlphaMin != appearanceSettings.bubbleAlphaMin ||
+            draftAppearanceSettings.bubbleAlphaMax != appearanceSettings.bubbleAlphaMax ||
+            draftAppearanceSettings.bubbleSway != appearanceSettings.bubbleSway ||
+            draftAppearanceSettings.bubbleSpawnRate != appearanceSettings.bubbleSpawnRate ||
+            draftAppearanceSettings.bubbleScalePulse != appearanceSettings.bubbleScalePulse ||
+            draftAppearanceSettings.bubbleRotation != appearanceSettings.bubbleRotation ||
+            draftAppearanceSettings.bubbleFade != appearanceSettings.bubbleFade
     val themeBackgroundsHaveChanges =
         draftDefaultThemeBackgrounds != appearanceSettings.defaultThemeBackgrounds ||
             draftThemeBackgrounds != appearanceSettings.themeBackgrounds
@@ -941,6 +967,54 @@ fun MestreScreen(
                                 }
                             }
                         }
+                        val particleShapes = listOf(
+                            "classic" to "Bolha clássica", "organic" to "Oval orgânica", "drop" to "Gota d’água",
+                            "metaball" to "Bolha dupla fundida", "ring" to "Anel translúcido", "crystal" to "Cristal facetado",
+                            "cluster" to "Microbolhas agrupadas", "sparkle" to "Estrela suave", "neon" to "Borda neon",
+                            "capsule" to "Cápsula suave", "condensation" to "Pingos condensados",
+                            "soap" to "Esfera iridescente", "lens" to "Disco / lente"
+                        )
+                        Box(Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = particleShapes.firstOrNull { it.first == draftAppearanceSettings.bubbleShape }?.second ?: "Bolha clássica",
+                                onValueChange = {}, readOnly = true,
+                                label = { Text("Forma da partícula") },
+                                trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Box(Modifier.matchParentSize().clickable { expandedBubbleShape = true })
+                            DropdownMenu(expanded = expandedBubbleShape, onDismissRequest = { expandedBubbleShape = false }) {
+                                particleShapes.forEach { (key, label) -> DropdownMenuItem(text = { Text(label) }, onClick = {
+                                    draftAppearanceSettings = draftAppearanceSettings.copy(bubbleShape = key)
+                                    expandedBubbleShape = false
+                                }) }
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = { bubblePngLauncher.launch("image/png") },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isUploadingThemeBackground
+                        ) {
+                            Text(if (isUploadingThemeBackground) "Enviando PNG…" else if (draftAppearanceSettings.bubbleImageUrl.isBlank()) "Usar PNG personalizado" else "Trocar PNG personalizado")
+                        }
+                        Text("Opacidade mínima: ${(draftAppearanceSettings.bubbleAlphaMin * 100).toInt()}%", style = MaterialTheme.typography.titleSmall)
+                        Slider(value = draftAppearanceSettings.bubbleAlphaMin, onValueChange = {
+                            draftAppearanceSettings = draftAppearanceSettings.copy(bubbleAlphaMin = it.coerceAtMost(draftAppearanceSettings.bubbleAlphaMax))
+                        }, valueRange = 0.05f..0.9f)
+                        Text("Opacidade máxima: ${(draftAppearanceSettings.bubbleAlphaMax * 100).toInt()}%", style = MaterialTheme.typography.titleSmall)
+                        Slider(value = draftAppearanceSettings.bubbleAlphaMax, onValueChange = {
+                            draftAppearanceSettings = draftAppearanceSettings.copy(bubbleAlphaMax = it.coerceAtLeast(draftAppearanceSettings.bubbleAlphaMin))
+                        }, valueRange = 0.1f..1f)
+                        Text("Oscilação lateral: ${(draftAppearanceSettings.bubbleSway * 50).toInt()}%", style = MaterialTheme.typography.titleSmall)
+                        Slider(value = draftAppearanceSettings.bubbleSway, onValueChange = { draftAppearanceSettings = draftAppearanceSettings.copy(bubbleSway = it) }, valueRange = 0f..2f)
+                        Text("Taxa de surgimento: ${String.format(Locale("pt", "BR"), "%.2f", draftAppearanceSettings.bubbleSpawnRate)}×", style = MaterialTheme.typography.titleSmall)
+                        Slider(value = draftAppearanceSettings.bubbleSpawnRate, onValueChange = { draftAppearanceSettings = draftAppearanceSettings.copy(bubbleSpawnRate = it) }, valueRange = 0.25f..2f)
+                        Text("Pulso de escala: ${(draftAppearanceSettings.bubbleScalePulse * 100).toInt()}%", style = MaterialTheme.typography.titleSmall)
+                        Slider(value = draftAppearanceSettings.bubbleScalePulse, onValueChange = { draftAppearanceSettings = draftAppearanceSettings.copy(bubbleScalePulse = it) }, valueRange = 0f..0.5f)
+                        Text("Rotação: ${(draftAppearanceSettings.bubbleRotation * 100).toInt()}%", style = MaterialTheme.typography.titleSmall)
+                        Slider(value = draftAppearanceSettings.bubbleRotation, onValueChange = { draftAppearanceSettings = draftAppearanceSettings.copy(bubbleRotation = it) }, valueRange = 0f..1f)
+                        Text("Fade do ciclo: ${(draftAppearanceSettings.bubbleFade * 100).toInt()}%", style = MaterialTheme.typography.titleSmall)
+                        Slider(value = draftAppearanceSettings.bubbleFade, onValueChange = { draftAppearanceSettings = draftAppearanceSettings.copy(bubbleFade = it) }, valueRange = 0f..1f)
                         Text(
                             "Velocidade: ${String.format(Locale("pt", "BR"), "%.1f", draftAppearanceSettings.bubbleSpeed)}×",
                             style = MaterialTheme.typography.titleSmall
@@ -1017,7 +1091,16 @@ fun MestreScreen(
                                         bubbleSize = draftAppearanceSettings.bubbleSize,
                                         bubbleExtraCount = draftAppearanceSettings.bubbleExtraCount,
                                         bubbleBrightness = draftAppearanceSettings.bubbleBrightness,
-                                        bubbleOutline = draftAppearanceSettings.bubbleOutline
+                                        bubbleOutline = draftAppearanceSettings.bubbleOutline,
+                                        bubbleShape = draftAppearanceSettings.bubbleShape,
+                                        bubbleImageUrl = draftAppearanceSettings.bubbleImageUrl,
+                                        bubbleAlphaMin = draftAppearanceSettings.bubbleAlphaMin,
+                                        bubbleAlphaMax = draftAppearanceSettings.bubbleAlphaMax,
+                                        bubbleSway = draftAppearanceSettings.bubbleSway,
+                                        bubbleSpawnRate = draftAppearanceSettings.bubbleSpawnRate,
+                                        bubbleScalePulse = draftAppearanceSettings.bubbleScalePulse,
+                                        bubbleRotation = draftAppearanceSettings.bubbleRotation,
+                                        bubbleFade = draftAppearanceSettings.bubbleFade
                                     )
                                     val saved = FirebaseService.saveAppearanceSettings(settingsToSave)
                                     isSavingGlobalAppearance = false
