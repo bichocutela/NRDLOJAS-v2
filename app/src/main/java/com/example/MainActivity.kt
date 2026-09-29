@@ -93,6 +93,8 @@ class MainActivity : ComponentActivity() {
 
     private var openAboutFromNotification by mutableStateOf(false)
     private var openPromotionsFromNotification by mutableStateOf(false)
+    private var profileSectionFromNotification by mutableStateOf<String?>(null)
+    private var profileNotificationNavigationKey by mutableStateOf(0L)
     private var productCodeFromNotification: String? = null
     private var productNotificationNavigationKey by mutableStateOf(0L)
     private var sharedOrderPdfUri by mutableStateOf<String?>(null)
@@ -104,6 +106,8 @@ class MainActivity : ComponentActivity() {
         captureSharedOrderPdf(intent)
         openAboutFromNotification = shouldOpenAbout(intent)
         openPromotionsFromNotification = shouldOpenPromotions(intent)
+        profileSectionFromNotification = extractProfileSection(intent)
+        if (profileSectionFromNotification != null) profileNotificationNavigationKey = 1L
         productCodeFromNotification = extractProductCode(intent)
         if (productCodeFromNotification != null) {
             productNotificationNavigationKey = 1L
@@ -301,6 +305,8 @@ class MainActivity : ComponentActivity() {
                                 viewModel = viewModel,
                                 openAboutFromNotification = openAboutFromNotification,
                                 openPromotionsFromNotification = openPromotionsFromNotification,
+                                profileSectionFromNotification = profileSectionFromNotification,
+                                profileNotificationNavigationKey = profileNotificationNavigationKey,
                                 productCodeFromNotification = productCodeFromNotification,
                                 sharedOrderPdfUri = sharedOrderPdfUri,
                                 sharedOrderPdfRequestKey = sharedOrderPdfRequestKey,
@@ -350,6 +356,10 @@ class MainActivity : ComponentActivity() {
         if (shouldOpenPromotions(intent)) {
             openPromotionsFromNotification = true
         }
+        extractProfileSection(intent)?.let { section ->
+            profileSectionFromNotification = section
+            profileNotificationNavigationKey += 1L
+        }
         extractProductCode(intent)?.let { code ->
             productCodeFromNotification = code
             viewModel.updateSearchQuery(code)
@@ -397,6 +407,19 @@ class MainActivity : ComponentActivity() {
             intent?.getStringExtra("type") == "PROMOTION_UPDATED"
     }
 
+    private fun extractProfileSection(intent: Intent?): String? {
+        val section = intent?.getStringExtra(EXTRA_OPEN_PROFILE_SECTION) ?: return null
+        return section.takeIf {
+            it in setOf(
+                com.example.util.ProfileNotificationRouting.SECTION_PROFILE,
+                com.example.util.ProfileNotificationRouting.SECTION_HOURS,
+                com.example.util.ProfileNotificationRouting.SECTION_POINT,
+                com.example.util.ProfileNotificationRouting.SECTION_BENEFIT,
+                com.example.util.ProfileNotificationRouting.SECTION_DAYS_OFF
+            )
+        }
+    }
+
     private fun extractProductCode(intent: Intent?): String? {
         val type = intent?.getStringExtra("type")
         if (type != "NEW_PRODUCT" && type != "CODE_CHANGED") return null
@@ -406,6 +429,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_OPEN_ABOUT = "open_about"
         const val EXTRA_OPEN_PROMOTIONS = "open_promotions"
+        const val EXTRA_OPEN_PROFILE_SECTION = "open_profile_section"
         const val EXTRA_OPEN_PRODUCT_CODE = "open_product_code"
         const val EXTRA_UPDATE_TAG = "update_tag"
     }
