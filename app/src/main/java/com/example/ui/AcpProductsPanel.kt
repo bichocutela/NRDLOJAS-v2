@@ -756,6 +756,7 @@ internal fun AcpProductsPanel(
                     }
                     Text(identifiers, style = MaterialTheme.typography.bodySmall)
                     Surface(
+                        modifier = Modifier.fillMaxWidth(),
                         shape = if (isExpressive) {
                             RoundedCornerShape(if (screenProfile.compact) 14.dp else 18.dp)
                         } else {
@@ -768,7 +769,7 @@ internal fun AcpProductsPanel(
                             "Preço: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = if (isExpressive) FontWeight.ExtraBold else FontWeight.Normal,
-                            modifier = Modifier.padding(
+                            modifier = Modifier.fillMaxWidth().padding(
                                 horizontal = if (isExpressive) {
                                     if (screenProfile.compact) 11.dp else 12.dp
                                 } else {
