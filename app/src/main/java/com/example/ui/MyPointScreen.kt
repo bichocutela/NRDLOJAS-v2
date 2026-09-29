@@ -409,7 +409,7 @@ fun MyPointScreen(
                             modifier = Modifier
                                 .bringIntoViewRequester(benefitRequester)
                                 .glassSoftShadow(RoundedCornerShape(20.dp), 3.dp),
-                            backgroundUrl = cardAppearance.cardBackgrounds[cardThemeKey].orEmpty(),
+                            backgroundUrl = cardAppearance.activeCardBackground(cardThemeKey),
                             themeKey = cardThemeKey,
                             name = employeeProfile?.name.orEmpty(),
                             limit = summary.limit.orEmpty(),
