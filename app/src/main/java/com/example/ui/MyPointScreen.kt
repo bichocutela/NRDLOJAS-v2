@@ -32,6 +32,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
@@ -104,7 +107,13 @@ import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () -> Unit) {
+fun MyPointScreen(
+    api: NossaGenteApi,
+    onNavigateBack: () -> Unit,
+    onSignOut: () -> Unit,
+    focusSection: String? = null,
+    focusRequestKey: Long = 0L
+) {
     val configuration = LocalConfiguration.current
     val expressiveStyle = LocalExpressiveStyle.current
     val expressiveGlassStyle = LocalExpressiveGlassStyle.current
@@ -133,6 +142,11 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
     var daysOffExpanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val profileListState = rememberLazyListState()
+    val daysOffRequester = remember { BringIntoViewRequester() }
+    val hoursRequester = remember { BringIntoViewRequester() }
+    val pointRequester = remember { BringIntoViewRequester() }
+    val benefitRequester = remember { BringIntoViewRequester() }
     val credentialStore = remember(context) { com.example.data.NossaGenteCredentialStore(context.applicationContext) }
 
     fun load() {
@@ -200,6 +214,22 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
         load()
     }
 
+    LaunchedEffect(focusRequestKey, loading, focusSection) {
+        if (focusRequestKey <= 0L || loading || focusSection == null) return@LaunchedEffect
+        if (focusSection == com.example.util.ProfileNotificationRouting.SECTION_DAYS_OFF) {
+            daysOffExpanded = true
+        }
+        androidx.compose.runtime.withFrameNanos { }
+        androidx.compose.runtime.withFrameNanos { }
+        when (focusSection) {
+            com.example.util.ProfileNotificationRouting.SECTION_PROFILE -> profileListState.animateScrollToItem(0)
+            com.example.util.ProfileNotificationRouting.SECTION_DAYS_OFF -> daysOffRequester.bringIntoView()
+            com.example.util.ProfileNotificationRouting.SECTION_HOURS -> hoursRequester.bringIntoView()
+            com.example.util.ProfileNotificationRouting.SECTION_POINT -> pointRequester.bringIntoView()
+            com.example.util.ProfileNotificationRouting.SECTION_BENEFIT -> benefitRequester.bringIntoView()
+        }
+    }
+
     Scaffold(
         containerColor = if (glassStyle.enabled || isExpressive) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
@@ -252,7 +282,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
         if (loading && hours == null && point == null) {
             Column(Modifier.fillMaxSize().padding(padding), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator() }
         } else {
-            LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(contentPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyColumn(state = profileListState, modifier = Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(contentPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item {
                     employeeProfile?.let { profile ->
                         EmployeeProfileCard(
@@ -265,6 +295,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                         Spacer(Modifier.height(10.dp))
                     }
                     MyDaysOffCard(
+                        modifier = Modifier.bringIntoViewRequester(daysOffRequester),
                         schedules = workSchedules,
                         selectedKey = selectedScheduleKey,
                         expanded = daysOffExpanded,
@@ -314,6 +345,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                         val hoursShape = if (isExpressive) RoundedCornerShape(30.dp) else MaterialTheme.shapes.medium
                         Card(
                             modifier = Modifier
+                                .bringIntoViewRequester(hoursRequester)
                                 .fillMaxWidth()
                                 .glassSoftShadow(hoursShape, if (isExpressive) 4.dp else 0.dp)
                                 .expressiveShadow(hoursShape, 7.dp),
@@ -347,6 +379,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                         val pointShape = if (isExpressive) RoundedCornerShape(28.dp) else MaterialTheme.shapes.medium
                         Card(
                             modifier = Modifier
+                                .bringIntoViewRequester(pointRequester)
                                 .fillMaxWidth()
                                 .glassSoftShadow(pointShape, if (isExpressive) 3.dp else 0.dp)
                                 .expressiveShadow(pointShape, 6.dp),
@@ -371,6 +404,7 @@ fun MyPointScreen(api: NossaGenteApi, onNavigateBack: () -> Unit, onSignOut: () 
                         Card(
                             onClick = { showBenefitDetails = true },
                             modifier = Modifier
+                                .bringIntoViewRequester(benefitRequester)
                                 .fillMaxWidth()
                                 .glassSoftShadow(benefitShape, if (isExpressive) 4.dp else 0.dp)
                                 .expressiveShadow(benefitShape, 7.dp),
@@ -494,6 +528,7 @@ private fun ProfileNotificationSwitch(label: String, checked: Boolean, onChecked
 
 @Composable
 private fun MyDaysOffCard(
+    modifier: Modifier = Modifier,
     schedules: List<WorkSchedule>, selectedKey: String, expanded: Boolean, registration: String?,
     onToggle: () -> Unit, onSelectMonth: (String) -> Unit,
     onDaysOffSaved: (String, List<Int>) -> Unit,
@@ -560,7 +595,7 @@ private fun MyDaysOffCard(
         }
     }
 
-    Card(Modifier.fillMaxWidth(), shape = if (LocalExpressiveStyle.current.enabled) RoundedCornerShape(28.dp) else MaterialTheme.shapes.medium) {
+    Card(modifier.fillMaxWidth(), shape = if (LocalExpressiveStyle.current.enabled) RoundedCornerShape(28.dp) else MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Minhas Folgas", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
