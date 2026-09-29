@@ -88,13 +88,7 @@ object NotificationHelper {
     }
 
 
-    private fun smallIconForType(type: String): Int = when (type) {
-        "NEW_PRODUCT" -> R.drawable.ic_notification_product_added
-        "CODE_CHANGED" -> R.drawable.ic_notification_code_changed
-        "SUGGESTION_FIXED" -> R.drawable.ic_notification_suggestion_fixed
-        "PROMOTION_UPDATED" -> R.drawable.ic_notification_product_added
-        else -> R.drawable.ic_notification_default
-    }
+    private fun smallIconForType(type: String): Int = ProfileNotificationRouting.iconRes(type)
 
     private fun largeIconForNotification(context: Context) =
         BitmapFactory.decodeResource(context.resources, R.drawable.icon_multicolor_original)
@@ -211,6 +205,21 @@ object NotificationHelper {
         )
     }
 
+    private fun profileNotificationPendingIntent(context: Context, type: String, section: String): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_OPEN_PROFILE_SECTION, section)
+            putExtra("type", type)
+        }
+        return PendingIntent.getActivity(
+            context,
+            (type + section).hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+
     fun showNotification(context: Context, type: String, title: String, body: String, productCode: String? = null) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -243,6 +252,9 @@ object NotificationHelper {
             }
             "APP_UPDATE" -> builder.setContentIntent(appUpdatePendingIntent(context))
             "PROMOTION_UPDATED" -> builder.setContentIntent(promotionsPendingIntent(context))
+            else -> ProfileNotificationRouting.profileSection(type)?.let { section ->
+                builder.setContentIntent(profileNotificationPendingIntent(context, type, section))
+            }
         }
 
         with(NotificationManagerCompat.from(context)) {

@@ -159,6 +159,7 @@ import com.example.data.FirebaseService
 import com.example.data.Product
 import com.example.data.ProductStandards
 import com.example.data.AppNotification
+import com.example.util.ProfileNotificationRouting
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -379,6 +380,7 @@ fun SearchScreen(
     onOpenDrawer: () -> Unit = {},
     canQuickEditBanner: Boolean = false,
     canQuickAddProduct: Boolean = false,
+    onOpenProfileNotification: (String) -> Unit = {},
     onQuickEditBanner: (String) -> Unit = {}
 ) {
     val bannerImageUri by viewModel.userPreferences.bannerImageUri.collectAsState(initial = null)
@@ -1522,44 +1524,56 @@ fun SearchScreen(
                                     .fillMaxWidth()
                                     .glassSoftShadow(MaterialTheme.shapes.medium)
                                     .clickable {
-                                    viewModel.markNotificationRead(notification.id)
-                                    val directCode = notification.productCode?.trim().orEmpty()
-                                    val notificationTarget = "${notification.title} ${notification.body}".trim()
-                                    val normalizedTarget = normalizeNotificationText(notificationTarget)
-                                    val codesInText = Regex("\\b\\d{4,14}\\b")
-                                        .findAll(notificationTarget)
-                                        .map { it.value }
-                                        .toSet()
-                                    val resolvedProduct = viewModel.allProducts.value.firstOrNull {
-                                        directCode.isNotBlank() && it.code.trim() == directCode
-                                    } ?: viewModel.allProducts.value.firstOrNull {
-                                        it.code.trim() in codesInText
-                                    } ?: viewModel.allProducts.value.firstOrNull {
-                                        val normalizedName = normalizeNotificationText(it.name)
-                                        normalizedName.isNotBlank() && normalizedTarget.contains(normalizedName)
-                                    }
-                                    selectedNotificationProduct = resolvedProduct
-                                    resolvedProduct?.let(viewModel::onProductSearched)
-                                    showNotificationsSheet = false
-                                },
+                                        viewModel.markNotificationRead(notification.id)
+                                        val profileSection = ProfileNotificationRouting.profileSection(notification.type)
+                                        if (profileSection != null) {
+                                            showNotificationsSheet = false
+                                            onOpenProfileNotification(profileSection)
+                                        } else {
+                                            val directCode = notification.productCode?.trim().orEmpty()
+                                            val notificationTarget = "${notification.title} ${notification.body}".trim()
+                                            val normalizedTarget = normalizeNotificationText(notificationTarget)
+                                            val codesInText = Regex("\\b\\d{4,14}\\b")
+                                                .findAll(notificationTarget)
+                                                .map { it.value }
+                                                .toSet()
+                                            val resolvedProduct = viewModel.allProducts.value.firstOrNull {
+                                                directCode.isNotBlank() && it.code.trim() == directCode
+                                            } ?: viewModel.allProducts.value.firstOrNull {
+                                                it.code.trim() in codesInText
+                                            } ?: viewModel.allProducts.value.firstOrNull {
+                                                val normalizedName = normalizeNotificationText(it.name)
+                                                normalizedName.isNotBlank() && normalizedTarget.contains(normalizedName)
+                                            }
+                                            selectedNotificationProduct = resolvedProduct
+                                            resolvedProduct?.let(viewModel::onProductSearched)
+                                            showNotificationsSheet = false
+                                        }
+                                    },
                                 colors = CardDefaults.cardColors(
                                     containerColor = if (notification.read) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primaryContainer
                                 )
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Text(notification.title, fontWeight = FontWeight.Bold)
-                                    Text(notification.body, style = MaterialTheme.typography.bodyMedium)
-                                    Text(
-                                        when (notification.type) {
-                                            "CODE_CHANGED" -> "CÓDIGO ALTERADO"
-                                            "BENEFIT_RELEASED" -> "CONVÊNIO LIBERADO"
-                                            "BENEFIT_PURCHASE" -> "COMPRA NO CONVÊNIO"
-                                            "HOURS_UPDATED" -> "BANCO DE HORAS"
-                                            else -> "NOVO PRODUTO"
-                                        },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(ProfileNotificationRouting.iconRes(notification.type)),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
                                     )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(notification.title, fontWeight = FontWeight.Bold)
+                                        Text(notification.body, style = MaterialTheme.typography.bodyMedium)
+                                        Text(
+                                            notificationLabel(notification.type),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1621,6 +1635,25 @@ fun SearchScreen(
         }
 
     }
+
+private fun notificationLabel(type: String): String = when (type) {
+    "NEW_PRODUCT" -> "NOVO PRODUTO"
+    "CODE_CHANGED" -> "CÓDIGO ALTERADO"
+    "SUGGESTION_FIXED" -> "SUGESTÃO CORRIGIDA"
+    "PROMOTION_UPDATED" -> "OFERTA ATUALIZADA"
+    "APP_UPDATE" -> "ATUALIZAÇÃO DO APP"
+    "PROFILE_UPDATED" -> "MEU PERFIL"
+    "HOURS_UPDATED" -> "BANCO DE HORAS"
+    "POINT_UPDATED" -> "PONTO ATUALIZADO"
+    "BENEFIT_RELEASED" -> "CONVÊNIO LIBERADO"
+    "BENEFIT_PURCHASE" -> "COMPRA NO CONVÊNIO"
+    "TODAY_OFF" -> "FOLGA HOJE"
+    "TOMORROW_OFF" -> "FOLGA AMANHÃ"
+    "SCHEDULE_INSERTED" -> "ESCALA INSERIDA"
+    "SCHEDULE_CHANGED" -> "ESCALA ALTERADA"
+    "NEW_INSTALLATION" -> "NOVA INSTALAÇÃO"
+    else -> "NOTIFICAÇÃO"
+}
 
 @Composable
 fun SectionHeader(
