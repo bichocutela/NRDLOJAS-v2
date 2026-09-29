@@ -62,6 +62,8 @@ fun AppNavGraph(
     viewModel: MainViewModel,
     openAboutFromNotification: Boolean = false,
     openPromotionsFromNotification: Boolean = false,
+    profileSectionFromNotification: String? = null,
+    profileNotificationNavigationKey: Long = 0L,
     productCodeFromNotification: String? = null,
     sharedOrderPdfUri: String? = null,
     sharedOrderPdfRequestKey: Long = 0L,
@@ -79,6 +81,8 @@ fun AppNavGraph(
     var drawerEmployeeProfile by remember { mutableStateOf<com.example.data.EmployeeProfile?>(null) }
     var drawerProfilePhotoModel by remember { mutableStateOf<Any?>(null) }
     var profileRefreshKey by remember { mutableIntStateOf(0) }
+    var requestedProfileSection by remember { mutableStateOf<String?>(null) }
+    var profileFocusRequestKey by remember { mutableLongStateOf(0L) }
     val firebaseAuth = remember { FirebaseAuth.getInstance() }
     val initialRole = remember(firebaseAuth) { managementRoleForEmail(firebaseAuth.currentUser?.email) }
     var isLoggedIn by remember { mutableStateOf(initialRole != null) }
@@ -148,6 +152,23 @@ fun AppNavGraph(
             ) {
                 launchSingleTop = true
             }
+        }
+    }
+
+    fun openProfileSection(section: String) {
+        requestedProfileSection = section
+        profileFocusRequestKey += 1L
+        val destination = if (profileEnabled && nossaGenteApi.hasSession()) "my_profile" else "my_point_login"
+        navController.navigate(destination) {
+            popUpTo(navController.graph.findStartDestination().id) { inclusive = false }
+            launchSingleTop = true
+        }
+    }
+
+    LaunchedEffect(profileSectionFromNotification, profileNotificationNavigationKey) {
+        val section = profileSectionFromNotification
+        if (profileNotificationNavigationKey > 0L && !section.isNullOrBlank()) {
+            openProfileSection(section)
         }
     }
 
@@ -256,6 +277,7 @@ fun AppNavGraph(
                         onOpenDrawer = { scope.launch { drawerState.open() } },
                         canQuickEditBanner = isLoggedIn && userRole == "mestre",
                         canQuickAddProduct = isLoggedIn && userRole == "mestre",
+                        onOpenProfileNotification = ::openProfileSection,
                         onQuickEditBanner = { themeKey ->
                             navController.navigate("mestre/banner/$themeKey") { launchSingleTop = true }
                         }
@@ -342,6 +364,8 @@ fun AppNavGraph(
                 composable("my_profile") {
                     MyPointScreen(
                         api = nossaGenteApi,
+                        focusSection = requestedProfileSection,
+                        focusRequestKey = profileFocusRequestKey,
                         onNavigateBack = { navController.popBackStack() },
                         onSignOut = {
                             profileEnabled = false
