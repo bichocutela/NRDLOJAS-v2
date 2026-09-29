@@ -179,7 +179,9 @@ internal fun AcpOfferLandscapePoster(
 ) {
     val validity by rememberOfferValidity(productName, offer)
     val isMaster = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email?.trim()?.lowercase() == "mestre@nrdlojas.com"
-    val narrowPhone = LocalConfiguration.current.screenWidthDp < 430
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val narrowPhone = screenWidthDp < 430
+    val stackPosterContent = screenWidthDp < 340
     var editValidity by remember { mutableStateOf(false) }
 
     if (banner != null) {
@@ -202,7 +204,7 @@ internal fun AcpOfferLandscapePoster(
             else -> offer.title.uppercase()
         }
         Surface(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, color = yellow, contentColor = Color.Black) {
-            if (narrowPhone) {
+            if (stackPosterContent) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
