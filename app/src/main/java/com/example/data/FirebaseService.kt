@@ -1324,6 +1324,7 @@ object FirebaseService {
                         themeBackgrounds = parseThemeBackgrounds(snapshot?.get("appearanceThemeBackgrounds")),
                         consultationBackgrounds = parseConsultationBackgrounds(snapshot?.get("appearanceConsultationBackgrounds")),
                         offerBanners = parseOfferBanners(snapshot?.get("appearanceOfferBanners")),
+                        cardBackgrounds = parseCardBackgrounds(snapshot?.get("appearanceCardBackgrounds")),
                         bubbleSpeed = (snapshot?.getDouble("appearanceBubbleSpeed") ?: 1.0).toFloat().coerceIn(0.25f, 2.5f),
                         bubbleMotion = snapshot?.getString("appearanceBubbleMotion")
                             ?.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
@@ -1450,6 +1451,10 @@ object FirebaseService {
                 }
             }
 
+        val safeCardBackgrounds = SupportedThemeKeys.mapNotNull { themeKey ->
+            val url = settings.cardBackgrounds[themeKey]?.trim()?.take(2048)
+            if (url?.startsWith("https://") == true) themeKey to url else null
+        }.toMap()
         val safeOfferBanners = SupportedOfferBannerKeys.associateWith { offerKey ->
             settings.offerBanners[offerKey].orEmpty()
                 .filter { background ->
@@ -1484,6 +1489,7 @@ object FirebaseService {
             themeBackgrounds = safeBackgrounds,
             consultationBackgrounds = safeConsultationBackgrounds,
             offerBanners = safeOfferBanners,
+            cardBackgrounds = safeCardBackgrounds,
             bubbleSpeed = settings.bubbleSpeed.coerceIn(0.25f, 2.5f),
             bubbleMotion = settings.bubbleMotion.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
             bubbleSize = settings.bubbleSize.coerceIn(0.65f, 1.8f),
@@ -1528,6 +1534,7 @@ object FirebaseService {
                         "appearanceThemeBackgrounds" to safeBackgrounds,
                         "appearanceConsultationBackgrounds" to safeConsultationBackgrounds,
                         "appearanceOfferBanners" to safeOfferBanners,
+                        "appearanceCardBackgrounds" to safeCardBackgrounds,
                         "appearanceBubbleSpeed" to settings.bubbleSpeed.coerceIn(0.25f, 2.5f).toDouble(),
                         "appearanceBubbleMotion" to (settings.bubbleMotion.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random"),
                         "appearanceBubbleSize" to settings.bubbleSize.coerceIn(0.65f, 1.8f).toDouble(),
@@ -1566,6 +1573,7 @@ object FirebaseService {
         themeBackgrounds: Map<String, List<Map<String, Any>>>,
         consultationBackgrounds: List<Map<String, Any>>,
         offerBanners: Map<String, List<Map<String, Any>>>,
+        cardBackgrounds: Map<String, String>,
         bubbleSpeed: Float,
         bubbleMotion: String,
         bubbleSize: Float,
@@ -1613,6 +1621,9 @@ object FirebaseService {
             .put("appearanceThemeBackgrounds", backgroundsJson)
             .put("appearanceConsultationBackgrounds", consultationJson)
             .put("appearanceOfferBanners", offerBannersJson)
+            .put("appearanceCardBackgrounds", org.json.JSONObject().apply {
+                cardBackgrounds.forEach { (themeKey, url) -> put(themeKey, url) }
+            })
             .put("appearanceBubbleSpeed", bubbleSpeed.toDouble())
             .put("appearanceBubbleMotion", bubbleMotion)
             .put("appearanceBubbleSize", bubbleSize.toDouble())
@@ -1708,6 +1719,7 @@ object FirebaseService {
             themeBackgrounds = parseThemeBackgroundsJson(root.optJSONObject("appearanceThemeBackgrounds")),
             consultationBackgrounds = parseConsultationBackgroundsJson(root.optJSONArray("appearanceConsultationBackgrounds")),
             offerBanners = parseOfferBannersJson(root.optJSONObject("appearanceOfferBanners")),
+            cardBackgrounds = parseCardBackgroundsJson(root.optJSONObject("appearanceCardBackgrounds")),
             bubbleSpeed = root.optDouble("appearanceBubbleSpeed", 1.0).toFloat().coerceIn(0.25f, 2.5f),
             bubbleMotion = root.optString("appearanceBubbleMotion").takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
             bubbleSize = root.optDouble("appearanceBubbleSize", 1.0).toFloat().coerceIn(0.65f, 1.8f),
@@ -1804,6 +1816,22 @@ object FirebaseService {
                 )
             }
             if (items.isEmpty()) null else themeKey to items
+        }.toMap()
+    }
+
+    private fun parseCardBackgrounds(value: Any?): Map<String, String> {
+        val raw = value as? Map<*, *> ?: return emptyMap()
+        return SupportedThemeKeys.mapNotNull { themeKey ->
+            val url = (raw[themeKey] as? String)?.trim()?.take(2048)
+            if (url?.startsWith("https://") == true) themeKey to url else null
+        }.toMap()
+    }
+
+    private fun parseCardBackgroundsJson(raw: org.json.JSONObject?): Map<String, String> {
+        if (raw == null) return emptyMap()
+        return SupportedThemeKeys.mapNotNull { themeKey ->
+            val url = raw.optString(themeKey).trim().take(2048)
+            if (url.startsWith("https://")) themeKey to url else null
         }.toMap()
     }
 

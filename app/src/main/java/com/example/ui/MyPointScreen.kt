@@ -96,6 +96,8 @@ import com.example.data.NossaGentePointResult
 import com.example.data.NossaGenteProfileResult
 import com.example.data.PointEntry
 import com.example.data.PointSummary
+import com.example.ui.theme.LocalCardAppearanceSettings
+import com.example.ui.theme.LocalCardThemeKey
 import com.example.ui.theme.LocalExpressiveStyle
 import com.example.ui.theme.LocalExpressiveGlassStyle
 import com.example.ui.theme.LocalGlassSoftStyle
@@ -120,6 +122,8 @@ fun MyPointScreen(
     val expressiveGlassStyle = LocalExpressiveGlassStyle.current
     val glassStyle = LocalGlassSoftStyle.current
     val isExpressive = expressiveStyle.enabled
+    val cardAppearance = LocalCardAppearanceSettings.current
+    val cardThemeKey = LocalCardThemeKey.current
     val contentPadding = if (configuration.screenWidthDp < 360) 10.dp else 16.dp
     val purchasesMaxHeight = (configuration.screenHeightDp * 0.42f).coerceIn(160f, 420f).dp
     var employeeProfile by remember { mutableStateOf<EmployeeProfile?>(null) }
@@ -401,36 +405,19 @@ fun MyPointScreen(
                         }
                     }
                     benefit?.let { summary ->
-                        val benefitShape = if (isExpressive) RoundedCornerShape(30.dp) else MaterialTheme.shapes.medium
-                        Card(
-                            onClick = { showBenefitDetails = true },
+                        BenefitCardSurface(
                             modifier = Modifier
                                 .bringIntoViewRequester(benefitRequester)
-                                .fillMaxWidth()
-                                .glassSoftShadow(benefitShape, if (isExpressive) 4.dp else 0.dp)
-                                .expressiveShadow(benefitShape, 7.dp),
-                            shape = benefitShape,
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface
-                                else MaterialTheme.colorScheme.tertiaryContainer
-                            )
-                        ) {
-                            Column(Modifier.fillMaxWidth().padding(if (isExpressive) 18.dp else 16.dp)) {
-                                Text(
-                                    "Convênio",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = if (isExpressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal
-                                )
-                                summary.period?.let { Text("Período: $it") }
-                                summary.updatedAt?.let { Text("Atualizado em: $it", style = MaterialTheme.typography.bodySmall) }
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text("Limite: ${summary.limit ?: "—"}")
-                                    Text("Gasto: ${summary.spent ?: "—"}")
-                                    Text("Saldo: ${summary.balance ?: "—"}")
-                                }
-                                Text("Toque para ver as compras", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
+                                .glassSoftShadow(RoundedCornerShape(20.dp), 3.dp),
+                            backgroundUrl = cardAppearance.cardBackgrounds[cardThemeKey].orEmpty(),
+                            themeKey = cardThemeKey,
+                            name = employeeProfile?.name.orEmpty(),
+                            limit = summary.limit.orEmpty(),
+                            spent = summary.spent.orEmpty(),
+                            balance = summary.balance.orEmpty(),
+                            period = summary.period.orEmpty(),
+                            onClick = { showBenefitDetails = true }
+                        )
                     }
                     if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
                 }

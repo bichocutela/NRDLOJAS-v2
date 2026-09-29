@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Notifications
@@ -329,6 +330,7 @@ internal fun MestreContentHub(
 internal fun MestreSettingsHub(
     onOpenHome: () -> Unit,
     onOpenAppearance: () -> Unit,
+    onOpenCardAppearance: () -> Unit,
     onOpenBubbles: () -> Unit,
     onOpenConsultationAppearance: () -> Unit,
     onOpenNotifications: () -> Unit,
@@ -354,6 +356,13 @@ internal fun MestreSettingsHub(
         description = "Tema, modo visual e fundos programados",
         icon = Icons.Default.Palette,
         onClick = onOpenAppearance
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+    PanelAreaCard(
+        title = "Aparência Cartão",
+        description = "Fundo do cartão-convênio por tema",
+        icon = Icons.Default.CreditCard,
+        onClick = onOpenCardAppearance
     )
     Spacer(modifier = Modifier.height(6.dp))
     PanelAreaCard(
