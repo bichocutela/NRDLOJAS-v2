@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.CategoryDefinition
 import com.example.data.AppearanceSettings
 import com.example.data.FirebaseService
@@ -879,6 +880,8 @@ internal fun AcpProductsPanel(
     selected?.let { requested ->
         AlertDialog(
             onDismissRequest = { closeDetail() },
+            modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp),
+            properties = DialogProperties(usePlatformDefaultWidth = false),
             title = { SelectionContainer { Text(detail?.description ?: requested.description) } },
             text = {
                 SelectionContainer {
