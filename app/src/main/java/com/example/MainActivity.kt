@@ -61,6 +61,8 @@ import com.example.ui.normalizedInterfaceScale
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.NrdAppBackground
 import com.example.ui.theme.LocalGlassSoftStyle
+import com.example.ui.theme.LocalCardAppearanceSettings
+import com.example.ui.theme.LocalCardThemeKey
 import com.example.ui.theme.LocalExpressiveStyle
 
 import com.example.util.FcmTopicSubscription
@@ -241,7 +243,11 @@ class MainActivity : ComponentActivity() {
             )
 
 
-            CompositionLocalProvider(LocalDensity provides customDensity) {
+            CompositionLocalProvider(
+                LocalDensity provides customDensity,
+                LocalCardAppearanceSettings provides remoteAppearance,
+                LocalCardThemeKey provides effectiveAppTheme
+            ) {
                 val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
                 LaunchedEffect(Unit) {
                     viewModel.syncMessage.collect { msg ->

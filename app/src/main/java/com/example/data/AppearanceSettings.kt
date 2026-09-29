@@ -13,6 +13,7 @@ class AppearanceSettings(
     val themeBackgrounds: Map<String, List<ThemeBackground>> = emptyMap(),
     val consultationBackgrounds: List<ThemeBackground> = emptyList(),
     val offerBanners: Map<String, List<ThemeBackground>> = emptyMap(),
+    val cardBackgrounds: Map<String, String> = emptyMap(),
     val bubbleSpeed: Float = 1f,
     val bubbleMotion: String = "random",
     val bubbleSize: Float = 1f,
@@ -85,6 +86,7 @@ class AppearanceSettings(
         themeBackgrounds: Map<String, List<ThemeBackground>> = this.themeBackgrounds,
         consultationBackgrounds: List<ThemeBackground> = this.consultationBackgrounds,
         offerBanners: Map<String, List<ThemeBackground>> = this.offerBanners,
+        cardBackgrounds: Map<String, String> = this.cardBackgrounds,
         bubbleSpeed: Float = this.bubbleSpeed,
         bubbleMotion: String = this.bubbleMotion,
         bubbleSize: Float = this.bubbleSize,
@@ -109,6 +111,7 @@ class AppearanceSettings(
         themeBackgrounds = themeBackgrounds,
         consultationBackgrounds = consultationBackgrounds,
         offerBanners = offerBanners,
+        cardBackgrounds = cardBackgrounds,
         bubbleSpeed = bubbleSpeed,
         bubbleMotion = bubbleMotion,
         bubbleSize = bubbleSize,
@@ -137,6 +140,7 @@ class AppearanceSettings(
             themeBackgrounds == other.themeBackgrounds &&
             consultationBackgrounds == other.consultationBackgrounds &&
             offerBanners == other.offerBanners &&
+            cardBackgrounds == other.cardBackgrounds &&
             bubbleSpeed == other.bubbleSpeed &&
             bubbleMotion == other.bubbleMotion &&
             bubbleSize == other.bubbleSize &&
@@ -163,6 +167,7 @@ class AppearanceSettings(
         result = 31 * result + themeBackgrounds.hashCode()
         result = 31 * result + consultationBackgrounds.hashCode()
         result = 31 * result + offerBanners.hashCode()
+        result = 31 * result + cardBackgrounds.hashCode()
         result = 31 * result + bubbleSpeed.hashCode()
         result = 31 * result + bubbleMotion.hashCode()
         result = 31 * result + bubbleSize.hashCode()
@@ -183,7 +188,7 @@ class AppearanceSettings(
     }
 
     override fun toString(): String =
-        "AppearanceSettings(overrideLocalTheme=$overrideLocalTheme, theme=$theme, appearanceMode=$appearanceMode, defaultThemeBackgrounds=$defaultThemeBackgrounds, themeBackgrounds=$themeBackgrounds, consultationBackgrounds=$consultationBackgrounds, offerBanners=$offerBanners, revision=$revision)"
+        "AppearanceSettings(overrideLocalTheme=$overrideLocalTheme, theme=$theme, appearanceMode=$appearanceMode, defaultThemeBackgrounds=$defaultThemeBackgrounds, themeBackgrounds=$themeBackgrounds, consultationBackgrounds=$consultationBackgrounds, offerBanners=$offerBanners, cardBackgrounds=$cardBackgrounds, revision=$revision)"
 
     private fun normalizeThemeKey(value: String): String = when (value.trim().lowercase()) {
         "multicolor" -> "multicolor"

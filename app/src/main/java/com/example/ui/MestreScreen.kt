@@ -52,6 +52,7 @@ import com.example.data.DeviceInstallationTracker
 import com.example.data.UserPreferences
 import com.example.data.ThemeBackground
 import com.example.data.SupportedOfferBannerKeys
+import com.example.data.SupportedThemeKeys
 import com.example.data.FirebaseService
 import com.example.data.MaintenanceSummary
 import com.example.data.ProductImportParser
@@ -67,6 +68,7 @@ private const val NEW_CATEGORY_ACTION_KEY = "__new_category__"
 private const val CATEGORY_PAGE_SIZE = 15
 private const val BACKGROUND_PAGE_SIZE = 6
 private const val CONSULTATION_BACKGROUND_KEY = "__consultar_produtos__"
+private const val CARD_APPEARANCE_KEY = "__aparencia_cartao__"
 private const val OFFER_BANNER_KEY_PREFIX = "__oferta__"
 private val offerBannerLabels = linkedMapOf(
     "standard" to "Banner padrão",
@@ -101,6 +103,7 @@ private enum class MestrePanelPage(val title: String) {
     HOME_SETTINGS("Configurações da Home"),
     NOTIFICATION_SETTINGS("Notificações globais"),
     APPEARANCE_SETTINGS("Fundos por tema"),
+    CARD_APPEARANCE_SETTINGS("Aparência Cartão"),
     BUBBLE_SETTINGS("Movimentos das Bolhas"),
     CONSULTATION_APPEARANCE_SETTINGS("Aparência Consultar Produtos"),
     ADVANCED("Ferramentas avançadas")
@@ -157,6 +160,7 @@ fun MestreScreen(
     var isSavingNotificationSettings by remember { mutableStateOf(false) }
     val appearanceSettingsFlow = remember(currentPage) {
         if (currentPage == MestrePanelPage.APPEARANCE_SETTINGS ||
+            currentPage == MestrePanelPage.CARD_APPEARANCE_SETTINGS ||
             currentPage == MestrePanelPage.BUBBLE_SETTINGS ||
             currentPage == MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS
         ) {
@@ -175,6 +179,11 @@ fun MestreScreen(
     var draftThemeBackgrounds by remember(appearanceSettings.themeBackgrounds) {
         mutableStateOf(appearanceSettings.themeBackgrounds)
     }
+    var draftCardBackgrounds by remember(appearanceSettings.cardBackgrounds) {
+        mutableStateOf(appearanceSettings.cardBackgrounds)
+    }
+    var cardAppearanceThemeKey by rememberSaveable { mutableStateOf("red") }
+    var isSavingCardAppearance by remember { mutableStateOf(false) }
     var draftConsultationBackgrounds by remember(appearanceSettings.consultationBackgrounds) {
         mutableStateOf(appearanceSettings.consultationBackgrounds)
     }
@@ -237,6 +246,7 @@ fun MestreScreen(
                 val uploadFolder = when {
                     themeKey == CONSULTATION_BACKGROUND_KEY -> "consultation_backgrounds"
                     offerKeyFromEditorKey(themeKey) != null -> "offer_banners/${offerKeyFromEditorKey(themeKey)}"
+                    themeKey == CARD_APPEARANCE_KEY -> "benefit_card_backgrounds/$cardAppearanceThemeKey"
                     else -> "theme_backgrounds/$themeKey"
                 }
                 val uploadedUrl = FirebaseService.uploadImageToStorage(
@@ -246,7 +256,11 @@ fun MestreScreen(
                 if (uploadedUrl.isNullOrBlank()) {
                     backgroundInputError = FirebaseService.lastError ?: "Não foi possível enviar a imagem."
                 } else {
-                    backgroundUrlInput = uploadedUrl
+                    if (themeKey == CARD_APPEARANCE_KEY) {
+                        draftCardBackgrounds = draftCardBackgrounds + (cardAppearanceThemeKey to uploadedUrl)
+                    } else {
+                        backgroundUrlInput = uploadedUrl
+                    }
                 }
             } finally {
                 isUploadingThemeBackground = false
@@ -401,6 +415,7 @@ fun MestreScreen(
     val themeBackgroundsHaveChanges =
         draftDefaultThemeBackgrounds != appearanceSettings.defaultThemeBackgrounds ||
             draftThemeBackgrounds != appearanceSettings.themeBackgrounds
+    val cardAppearanceHasChanges = draftCardBackgrounds != appearanceSettings.cardBackgrounds
     val consultationAppearanceHasChanges =
         draftConsultationBackgrounds != appearanceSettings.consultationBackgrounds ||
             draftOfferBanners != appearanceSettings.offerBanners
@@ -413,6 +428,7 @@ fun MestreScreen(
         MestrePanelPage.HOME_SETTINGS -> homeHasChanges
         MestrePanelPage.NOTIFICATION_SETTINGS -> notificationsHaveChanges
         MestrePanelPage.APPEARANCE_SETTINGS, MestrePanelPage.BUBBLE_SETTINGS -> appearancePageHasChanges
+        MestrePanelPage.CARD_APPEARANCE_SETTINGS -> cardAppearanceHasChanges
         MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS -> consultationAppearanceHasChanges
         else -> false
     }
@@ -545,6 +561,7 @@ fun MestreScreen(
                 MestreSettingsHub(
                     onOpenHome = { openPage(MestrePanelPage.HOME_SETTINGS) },
                     onOpenAppearance = { openPage(MestrePanelPage.APPEARANCE_SETTINGS) },
+                    onOpenCardAppearance = { openPage(MestrePanelPage.CARD_APPEARANCE_SETTINGS) },
                     onOpenBubbles = { openPage(MestrePanelPage.BUBBLE_SETTINGS) },
                     onOpenConsultationAppearance = { openPage(MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS) },
                     onOpenNotifications = { openPage(MestrePanelPage.NOTIFICATION_SETTINGS) },
@@ -1519,6 +1536,81 @@ fun MestreScreen(
             Spacer(modifier = Modifier.height(16.dp))
             }
 
+
+            if (currentPage == MestrePanelPage.CARD_APPEARANCE_SETTINGS) {
+                val cardThemeLabels = mapOf(
+                    "multicolor" to "Multicolorido", "red" to "Vermelho", "gold" to "Dourado",
+                    "green" to "Verde", "blue" to "Azul", "orange" to "Laranja",
+                    "glass" to "Glass Soft", "expressive" to "Glass Expressivo"
+                )
+                MestrePageIntro(
+                    description = "Escolha o fundo do cartão de convênio para cada tema. A máscara, o chip e os dados do usuário permanecem fixos.",
+                    hasUnsavedChanges = cardAppearanceHasChanges
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                MestreSectionHeader(
+                    title = "Aparência Cartão",
+                    description = "Imagem recomendada: 1.586:1 — ideal 1.586 × 1.000 px (mínimo 1.080 × 681 px). Inclua marcas e mascotes no fundo; deixe livre o centro e a parte inferior esquerda para os dados."
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.example.data.SupportedThemeKeys.forEach { key ->
+                        FilterChip(
+                            selected = cardAppearanceThemeKey == key,
+                            onClick = { cardAppearanceThemeKey = key },
+                            label = { Text(cardThemeLabels[key] ?: key) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                BenefitCardSurface(
+                    backgroundUrl = draftCardBackgrounds[cardAppearanceThemeKey].orEmpty(),
+                    themeKey = cardAppearanceThemeKey,
+                    name = "Alessandro Paulo da Silva",
+                    limit = "R$ 491,40",
+                    spent = "R$ 490,74",
+                    balance = "R$ 0,66",
+                    period = "10/09/2026 a 07/10/2026",
+                    onClick = {}
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Tema selecionado: ${cardThemeLabels[cardAppearanceThemeKey] ?: cardAppearanceThemeKey}", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    if (draftCardBackgrounds[cardAppearanceThemeKey].isNullOrBlank()) "Usando o fundo padrão deste tema." else "Fundo personalizado carregado.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        enabled = !isUploadingThemeBackground,
+                        onClick = {
+                            editingBackgroundTheme = CARD_APPEARANCE_KEY
+                            themeBackgroundLauncher.launch("image/*")
+                        }
+                    ) { Text(if (isUploadingThemeBackground) "Enviando…" else "Escolher imagem") }
+                    Button(
+                        enabled = cardAppearanceHasChanges && !isSavingCardAppearance,
+                        onClick = {
+                            coroutineScope.launch {
+                                isSavingCardAppearance = true
+                                val saved = FirebaseService.saveAppearanceSettings(
+                                    appearanceSettings.copy(cardBackgrounds = draftCardBackgrounds)
+                                )
+                                isSavingCardAppearance = false
+                                if (saved) draftCardBackgrounds = draftCardBackgrounds.toMap()
+                                snackbarHostState.showSnackbar(
+                                    if (saved) "Fundo do cartão publicado para o tema selecionado."
+                                    else FirebaseService.lastError ?: "Não foi possível salvar a aparência do cartão."
+                                )
+                            }
+                        }
+                    ) {
+                        if (isSavingCardAppearance) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        else Text("Salvar tema")
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
             if (currentPage == MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS) {
                 MestrePageIntro(
