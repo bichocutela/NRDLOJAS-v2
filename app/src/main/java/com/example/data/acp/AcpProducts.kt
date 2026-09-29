@@ -264,9 +264,12 @@ internal fun acpSearchRequest(rawQuery: String): AcpSearchRequest {
     }
     if (field != AcpSearchField.DESCRIPTION) return AcpSearchRequest(field, clean, emptyList())
 
-    val measure = acpMeasurePattern.find(clean)
+    // "#" is an explicit token separator: "downy#1l#" and "downy#lilas"
+    // are interpreted like their space-separated forms.
+    val tokenizedQuery = clean.replace('#', ' ')
+    val measure = acpMeasurePattern.find(tokenizedQuery)
     val canonicalMeasure = measure?.let { canonicalAcpMeasure(it.groupValues[1], it.groupValues[2]) }
-    val queryWithoutMeasure = if (measure != null) clean.removeRange(measure.range) else clean
+    val queryWithoutMeasure = if (measure != null) tokenizedQuery.removeRange(measure.range) else tokenizedQuery
     val terms = normalizeAcpSearchText(queryWithoutMeasure).split(' ').filter { it.length >= 2 }
     // ACP description filtering is substring based. A stable brand/name token finds candidates;
     // matching every remaining word and the requested package size happens locally below.
