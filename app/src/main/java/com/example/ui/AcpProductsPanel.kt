@@ -1247,21 +1247,23 @@ private suspend fun AcpApi.searchProductsUnifiedFresh(
         else -> AcpSearchField.CODE
     }
 
-    fun clear(field: AcpSearchField, page: Int) {
+    val request = acpSearchRequest(clean)
+
+    fun clear(field: AcpSearchField, searchValue: String, page: Int) {
         val parameters = listOf(
             "pageSize" to "20",
             "pageIndex" to page.toString(),
-            field.parameter to clean
+            field.parameter to searchValue
         )
         store.clear(acpResponseCacheName("Product/all", parameters))
     }
 
     // Product/all normalmente usa cache diário. O gesto explícito de atualizar é a exceção:
     // limpamos somente as chaves da pesquisa visível, sem varrer nem apagar o restante do cache.
-    clear(preferred, pageIndex)
+    clear(request.field, request.query, pageIndex)
     if (numeric && pageIndex == 0) {
         val alternate = if (preferred == AcpSearchField.BARCODE) AcpSearchField.CODE else AcpSearchField.BARCODE
-        clear(alternate, 0)
+        clear(alternate, clean, 0)
     }
     return searchProductsUnified(clean, pageIndex)
 }

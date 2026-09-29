@@ -10,7 +10,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class AcpProductsTest {
-    private fun product(fields: String) = AcpProductParser.page(JSONObject("""{"items":[{"description":"Teste",$fields}],"pageIndex":0,"totalPages":1}"""), 0).items.single()
+    private fun product(fields: String, description: String = "Teste") = AcpProductParser.page(JSONObject("""{"items":[{"description":${JSONObject.quote(description)},$fields}],"pageIndex":0,"totalPages":1}"""), 0).items.single()
 
     @Test fun separatesPrincipalClubAndPreviousPricesAndPreservesShortCodes() {
         val item = product(""""code":"00025","barCode":"500","value":14.29,"clubValue":9.99,"previousValue":16.5,"productCategories":[{"id":3,"description":"De-Por"},{"id":5,"description":"Clube de Vantagens"}]""")
@@ -160,6 +160,45 @@ class AcpProductsTest {
         val byCode = page.prioritizeExact(AcpSearchField.CODE, "111")
         assertEquals("1", byCode.items.first().id)
         assertEquals(listOf("1", "2"), page.prioritizeExact(AcpSearchField.DESCRIPTION, "Alvo").items.map { it.id })
+    }
+
+    @Test fun smartSearchExtractsBrandAndEquivalentVolumeUnits() {
+        val request = acpSearchRequest("DOWNY 1 L")
+        assertEquals(AcpSearchField.DESCRIPTION, request.field)
+        assertEquals("downy", request.query)
+        assertEquals(listOf("downy"), request.textTerms)
+        val hashDelimited = acpSearchRequest("downy#1l#")
+        assertEquals("downy", hashDelimited.query)
+        assertEquals(listOf("downy"), hashDelimited.textTerms)
+        assertEquals(0, hashDelimited.sizeValue?.compareTo(java.math.BigDecimal("1000")))
+        assertEquals("ml", request.sizeUnit)
+        assertEquals(0, request.sizeValue?.compareTo(java.math.BigDecimal("1000")))
+    }
+
+    @Test fun smartSearchMatchesAllWordsWithoutAccentsOrOrderDependence() {
+        val item = product(
+            """"contentQuantity":1,"contentUnit":"L","characteristic":"Brisa de Verão"""",
+            "Amaciante Downy 1L"
+        )
+        assertTrue(item.matchesAcpSearch("downy 1l"))
+        assertTrue(item.matchesAcpSearch("downy#1l#"))
+        assertTrue(item.matchesAcpSearch("1 litro verao DOWNY"))
+        assertFalse(item.matchesAcpSearch("downy 500ml"))
+        assertFalse(item.matchesAcpSearch("downy lavanda 1l"))
+        val lilas = product(""""contentQuantity":1,"contentUnit":"L"""", "Amaciante Downy Lilás 1L")
+        assertTrue(lilas.matchesAcpSearch("downy#lilas"))
+        assertFalse(item.matchesAcpSearch("downy#lilas"))
+    }
+
+    @Test fun smartSearchReadsVolumeFromDescriptionWhenCatalogContentIsMissing() {
+        val item = product(""""code":"001"""", "Amaciante Downy Concentrado 1000 ml")
+        assertTrue(item.matchesAcpSearch("downy 1 litro"))
+        assertFalse(item.matchesAcpSearch("downy 2l"))
+    }
+
+    @Test fun numericProductCodesAndBarcodesKeepTheirOriginalSearchField() {
+        assertEquals(AcpSearchField.BARCODE, acpSearchRequest("7891234567890").field)
+        assertEquals(AcpSearchField.CODE, acpSearchRequest("12345").field)
     }
 
     @Test(expected = AcpFailure::class) fun malformedContractIsNotAnEmptySearch() {
