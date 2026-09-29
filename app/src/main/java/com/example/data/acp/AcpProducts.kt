@@ -4,6 +4,7 @@ import org.json.JSONObject
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.Calendar
+import java.text.Normalizer
 import com.example.data.OFFER_BANNER_CASHBACK
 import com.example.data.OFFER_BANNER_CLUB
 import com.example.data.OFFER_BANNER_DE_POR
@@ -225,6 +226,88 @@ internal object AcpProductParser {
     private fun JSONObject.decimal(key: String): BigDecimal? { val raw = text(key) ?: return null; if (!Regex("[0-9]+([.,][0-9]+)?").matches(raw)) return null; return raw.replace(',', '.').toBigDecimalOrNull() }
 }
 
+internal data class AcpSearchRequest(
+    val field: AcpSearchField,
+    val query: String,
+    val textTerms: List<String>,
+    val sizeValue: BigDecimal? = null,
+    val sizeUnit: String? = null
+)
+
+private val acpMeasurePattern = Regex("(?<![\\p{L}])(\\d+(?:[.,]\\d+)?)\\s*(mililitros?|ml|litros?|l|quilogramas?|kg|gramas?|g)\\b", RegexOption.IGNORE_CASE)
+
+internal fun normalizeAcpSearchText(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFD)
+    .replace(Regex("\\p{M}+"), "")
+    .lowercase(java.util.Locale.ROOT)
+    .replace(Regex("[^a-z0-9]+"), " ")
+    .trim()
+
+private fun canonicalAcpMeasure(value: String, unit: String): Pair<BigDecimal, String>? {
+    val amount = value.replace(',', '.').toBigDecimalOrNull() ?: return null
+    val normalizedUnit = normalizeAcpSearchText(unit)
+    return when {
+        normalizedUnit in setOf("ml", "mililitro", "mililitros") -> amount to "ml"
+        normalizedUnit in setOf("l", "litro", "litros") -> amount.multiply(BigDecimal(1000)) to "ml"
+        normalizedUnit in setOf("g", "grama", "gramas") -> amount to "g"
+        normalizedUnit in setOf("kg", "quilograma", "quilogramas") -> amount.multiply(BigDecimal(1000)) to "g"
+        else -> null
+    }
+}
+
+internal fun acpSearchRequest(rawQuery: String): AcpSearchRequest {
+    val clean = rawQuery.trim()
+    val numeric = clean.all(Char::isDigit)
+    val field = when {
+        !numeric -> AcpSearchField.DESCRIPTION
+        clean.length in setOf(8, 12, 13, 14) -> AcpSearchField.BARCODE
+        else -> AcpSearchField.CODE
+    }
+    if (field != AcpSearchField.DESCRIPTION) return AcpSearchRequest(field, clean, emptyList())
+
+    val measure = acpMeasurePattern.find(clean)
+    val canonicalMeasure = measure?.let { canonicalAcpMeasure(it.groupValues[1], it.groupValues[2]) }
+    val queryWithoutMeasure = if (measure != null) clean.removeRange(measure.range) else clean
+    val terms = normalizeAcpSearchText(queryWithoutMeasure).split(' ').filter { it.length >= 2 }
+    // ACP description filtering is substring based. A stable brand/name token finds candidates;
+    // matching every remaining word and the requested package size happens locally below.
+    val seed = terms.firstOrNull() ?: clean
+    return AcpSearchRequest(
+        field = field,
+        query = seed,
+        textTerms = terms,
+        sizeValue = canonicalMeasure?.first,
+        sizeUnit = canonicalMeasure?.second
+    )
+}
+
+internal fun AcpProduct.matchesAcpSearch(rawQuery: String): Boolean {
+    val request = acpSearchRequest(rawQuery)
+    if (request.field != AcpSearchField.DESCRIPTION) return false
+    val searchable = normalizeAcpSearchText(
+        listOfNotNull(description, characteristic, productFamily, contentUnit, unit)
+            .plus(auxDescriptions)
+            .joinToString(" ")
+    )
+    if (request.textTerms.any { term -> !searchable.split(' ').any { it.contains(term) } }) return false
+
+    val wantedValue = request.sizeValue ?: return true
+    val wantedUnit = request.sizeUnit ?: return true
+    val productMeasures = buildList {
+        acpMeasurePattern.findAll(description).forEach { match ->
+            canonicalAcpMeasure(match.groupValues[1], match.groupValues[2])?.let(::add)
+        }
+        if (contentQuantity != null && contentUnit != null) {
+            canonicalAcpMeasure(contentQuantity.toPlainString(), contentUnit)?.let(::add)
+        }
+        if (packageQuantity != null && packageType != null) {
+            acpMeasurePattern.findAll(packageQuantity.toPlainString() + " " + packageType).forEach { match ->
+                canonicalAcpMeasure(match.groupValues[1], match.groupValues[2])?.let(::add)
+            }
+        }
+    }
+    return productMeasures.any { (value, unit) -> unit == wantedUnit && value.compareTo(wantedValue) == 0 }
+}
+
 private suspend fun AcpApi.searchProductsOnce(field: AcpSearchField, query: String, category: AcpCategory?, page: Int): AcpProductPage {
     val parameters = mutableListOf("pageSize" to "20", "pageIndex" to page.toString(), field.parameter to query)
     category?.let { parameters.add("productCategoryIds" to it.id) }
@@ -260,8 +343,14 @@ internal suspend fun AcpApi.searchProducts(field: AcpSearchField, query: String,
     // the single search box contract.
     if (field != preferredField) return AcpProductPage(emptyList(), page, 0, 0)
 
+    if (preferredField == AcpSearchField.DESCRIPTION) {
+        val smart = acpSearchRequest(clean)
+        val candidates = searchProductsOnce(AcpSearchField.DESCRIPTION, smart.query, category, page)
+        return candidates.copy(items = candidates.items.filter { it.matchesAcpSearch(clean) })
+    }
+
     val first = searchProductsOnce(preferredField, clean, category, page)
-    if (page != 0 || preferredField == AcpSearchField.DESCRIPTION || first.hasExact(preferredField, clean)) {
+    if (page != 0 || first.hasExact(preferredField, clean)) {
         return first
     }
 
