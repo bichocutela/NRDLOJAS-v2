@@ -167,6 +167,10 @@ class AcpProductsTest {
         assertEquals(AcpSearchField.DESCRIPTION, request.field)
         assertEquals("downy", request.query)
         assertEquals(listOf("downy"), request.textTerms)
+        val hashDelimited = acpSearchRequest("downy#1l#")
+        assertEquals("downy", hashDelimited.query)
+        assertEquals(listOf("downy"), hashDelimited.textTerms)
+        assertEquals(0, hashDelimited.sizeValue?.compareTo(java.math.BigDecimal("1000")))
         assertEquals("ml", request.sizeUnit)
         assertEquals(0, request.sizeValue?.compareTo(java.math.BigDecimal("1000")))
     }
@@ -177,9 +181,13 @@ class AcpProductsTest {
             "Amaciante Downy 1L"
         )
         assertTrue(item.matchesAcpSearch("downy 1l"))
+        assertTrue(item.matchesAcpSearch("downy#1l#"))
         assertTrue(item.matchesAcpSearch("1 litro verao DOWNY"))
         assertFalse(item.matchesAcpSearch("downy 500ml"))
         assertFalse(item.matchesAcpSearch("downy lavanda 1l"))
+        val lilas = product(""""contentQuantity":1,"contentUnit":"L"""", "Amaciante Downy Lilás 1L")
+        assertTrue(lilas.matchesAcpSearch("downy#lilas"))
+        assertFalse(item.matchesAcpSearch("downy#lilas"))
     }
 
     @Test fun smartSearchReadsVolumeFromDescriptionWhenCatalogContentIsMissing() {
