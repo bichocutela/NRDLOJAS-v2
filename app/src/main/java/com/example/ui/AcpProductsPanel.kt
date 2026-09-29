@@ -756,7 +756,6 @@ internal fun AcpProductsPanel(
                     }
                     Text(identifiers, style = MaterialTheme.typography.bodySmall)
                     Surface(
-                        modifier = Modifier.fillMaxWidth(),
                         shape = if (isExpressive) {
                             RoundedCornerShape(if (screenProfile.compact) 14.dp else 18.dp)
                         } else {
@@ -769,7 +768,7 @@ internal fun AcpProductsPanel(
                             "Preço: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = if (isExpressive) FontWeight.ExtraBold else FontWeight.Normal,
-                            modifier = Modifier.fillMaxWidth().padding(
+                            modifier = Modifier.padding(
                                 horizontal = if (isExpressive) {
                                     if (screenProfile.compact) 11.dp else 12.dp
                                 } else {
@@ -883,7 +882,10 @@ internal fun AcpProductsPanel(
             title = { SelectionContainer { Text(detail?.description ?: requested.description) } },
             text = {
                 SelectionContainer {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(
+                    Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     if (detail == null && detailBusy) {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         Text("Consultando preços…")
