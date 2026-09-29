@@ -1325,6 +1325,7 @@ object FirebaseService {
                         consultationBackgrounds = parseConsultationBackgrounds(snapshot?.get("appearanceConsultationBackgrounds")),
                         offerBanners = parseOfferBanners(snapshot?.get("appearanceOfferBanners")),
                         cardBackgrounds = parseCardBackgrounds(snapshot?.get("appearanceCardBackgrounds")),
+                        cardBackgroundSchedules = parseCardBackgroundSchedules(snapshot?.get("appearanceCardBackgroundSchedules")),
                         bubbleSpeed = (snapshot?.getDouble("appearanceBubbleSpeed") ?: 1.0).toFloat().coerceIn(0.25f, 2.5f),
                         bubbleMotion = snapshot?.getString("appearanceBubbleMotion")
                             ?.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
@@ -1451,7 +1452,27 @@ object FirebaseService {
                 }
             }
 
+        val safeCardBackgroundSchedules = SupportedThemeKeys.mapNotNull { themeKey ->
+            val background = settings.cardBackgroundSchedules[themeKey] ?: return@mapNotNull null
+            val url = background.url.trim().take(2048)
+            val startDate = ThemeBackground.normalizeDate(background.startDate)
+            val endDate = ThemeBackground.normalizeDate(background.endDate)
+            if (!url.startsWith("https://") || startDate == null || (endDate != null && endDate < startDate)) {
+                null
+            } else {
+                themeKey to linkedMapOf<String, Any>(
+                    "id" to "card-$themeKey",
+                    "label" to background.label.trim().take(80).ifBlank { "Fundo do cartão" },
+                    "url" to url,
+                    "isActive" to true,
+                    "startDate" to startDate
+                ).apply { if (endDate != null) put("endDate", endDate) }
+            }
+        }.toMap()
+
+        // Agendadas ficam fora do campo legado para versões antigas não as exibirem antes da data.
         val safeCardBackgrounds = SupportedThemeKeys.mapNotNull { themeKey ->
+            if (themeKey in safeCardBackgroundSchedules) return@mapNotNull null
             val url = settings.cardBackgrounds[themeKey]?.trim()?.take(2048)
             if (url?.startsWith("https://") == true) themeKey to url else null
         }.toMap()
@@ -1490,6 +1511,7 @@ object FirebaseService {
             consultationBackgrounds = safeConsultationBackgrounds,
             offerBanners = safeOfferBanners,
             cardBackgrounds = safeCardBackgrounds,
+            cardBackgroundSchedules = safeCardBackgroundSchedules,
             bubbleSpeed = settings.bubbleSpeed.coerceIn(0.25f, 2.5f),
             bubbleMotion = settings.bubbleMotion.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
             bubbleSize = settings.bubbleSize.coerceIn(0.65f, 1.8f),
@@ -1535,6 +1557,7 @@ object FirebaseService {
                         "appearanceConsultationBackgrounds" to safeConsultationBackgrounds,
                         "appearanceOfferBanners" to safeOfferBanners,
                         "appearanceCardBackgrounds" to safeCardBackgrounds,
+                        "appearanceCardBackgroundSchedules" to safeCardBackgroundSchedules,
                         "appearanceBubbleSpeed" to settings.bubbleSpeed.coerceIn(0.25f, 2.5f).toDouble(),
                         "appearanceBubbleMotion" to (settings.bubbleMotion.takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random"),
                         "appearanceBubbleSize" to settings.bubbleSize.coerceIn(0.65f, 1.8f).toDouble(),
@@ -1574,6 +1597,7 @@ object FirebaseService {
         consultationBackgrounds: List<Map<String, Any>>,
         offerBanners: Map<String, List<Map<String, Any>>>,
         cardBackgrounds: Map<String, String>,
+        cardBackgroundSchedules: Map<String, Map<String, Any>>,
         bubbleSpeed: Float,
         bubbleMotion: String,
         bubbleSize: Float,
@@ -1623,6 +1647,9 @@ object FirebaseService {
             .put("appearanceOfferBanners", offerBannersJson)
             .put("appearanceCardBackgrounds", org.json.JSONObject().apply {
                 cardBackgrounds.forEach { (themeKey, url) -> put(themeKey, url) }
+            })
+            .put("appearanceCardBackgroundSchedules", org.json.JSONObject().apply {
+                cardBackgroundSchedules.forEach { (themeKey, schedule) -> put(themeKey, org.json.JSONObject(schedule)) }
             })
             .put("appearanceBubbleSpeed", bubbleSpeed.toDouble())
             .put("appearanceBubbleMotion", bubbleMotion)
@@ -1720,6 +1747,7 @@ object FirebaseService {
             consultationBackgrounds = parseConsultationBackgroundsJson(root.optJSONArray("appearanceConsultationBackgrounds")),
             offerBanners = parseOfferBannersJson(root.optJSONObject("appearanceOfferBanners")),
             cardBackgrounds = parseCardBackgroundsJson(root.optJSONObject("appearanceCardBackgrounds")),
+            cardBackgroundSchedules = parseCardBackgroundSchedulesJson(root.optJSONObject("appearanceCardBackgroundSchedules")),
             bubbleSpeed = root.optDouble("appearanceBubbleSpeed", 1.0).toFloat().coerceIn(0.25f, 2.5f),
             bubbleMotion = root.optString("appearanceBubbleMotion").takeIf { it in setOf("random", "circular", "rise", "drift") } ?: "random",
             bubbleSize = root.optDouble("appearanceBubbleSize", 1.0).toFloat().coerceIn(0.65f, 1.8f),
@@ -1832,6 +1860,48 @@ object FirebaseService {
         return SupportedThemeKeys.mapNotNull { themeKey ->
             val url = raw.optString(themeKey).trim().take(2048)
             if (url.startsWith("https://")) themeKey to url else null
+        }.toMap()
+    }
+
+    private fun parseCardBackgroundSchedules(value: Any?): Map<String, ThemeBackground> {
+        val raw = value as? Map<*, *> ?: return emptyMap()
+        return SupportedThemeKeys.mapNotNull { themeKey ->
+            val item = raw[themeKey] as? Map<*, *> ?: return@mapNotNull null
+            val url = (item["url"] as? String)?.trim()?.take(2048)
+                ?.takeIf { it.startsWith("https://") } ?: return@mapNotNull null
+            val startDate = ThemeBackground.normalizeDate(item["startDate"] as? String)
+                ?: return@mapNotNull null
+            val endDate = ThemeBackground.normalizeDate(item["endDate"] as? String)
+            if (endDate != null && endDate < startDate) return@mapNotNull null
+            themeKey to ThemeBackground(
+                id = "card-$themeKey",
+                label = (item["label"] as? String)?.trim()?.take(80).orEmpty().ifBlank { "Fundo do cartão" },
+                url = url,
+                isActive = item["isActive"] as? Boolean ?: true,
+                startDate = startDate,
+                endDate = endDate
+            )
+        }.toMap()
+    }
+
+    private fun parseCardBackgroundSchedulesJson(raw: org.json.JSONObject?): Map<String, ThemeBackground> {
+        if (raw == null) return emptyMap()
+        return SupportedThemeKeys.mapNotNull { themeKey ->
+            val item = raw.optJSONObject(themeKey) ?: return@mapNotNull null
+            val url = item.optString("url").trim().take(2048)
+                .takeIf { it.startsWith("https://") } ?: return@mapNotNull null
+            val startDate = normalizePersistedThemeBackgroundDate(item.optString("startDate"))
+                ?: return@mapNotNull null
+            val endDate = normalizePersistedThemeBackgroundDate(item.optString("endDate"))
+            if (endDate != null && endDate < startDate) return@mapNotNull null
+            themeKey to ThemeBackground(
+                id = "card-$themeKey",
+                label = item.optString("label").trim().take(80).ifBlank { "Fundo do cartão" },
+                url = url,
+                isActive = item.optBoolean("isActive", true),
+                startDate = startDate,
+                endDate = endDate
+            )
         }.toMap()
     }
 
