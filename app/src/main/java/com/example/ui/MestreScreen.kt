@@ -174,16 +174,30 @@ fun MestreScreen(
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
     var draftAppearanceSettings by remember(appearanceSettings) { mutableStateOf(appearanceSettings) }
     val pendingBubbleImageDeletes = remember { mutableStateListOf<String>() }
+    var pendingCardImageDeletes by remember { mutableStateOf<List<String>>(emptyList()) }
     var draftDefaultThemeBackgrounds by remember(appearanceSettings.defaultThemeBackgrounds) {
         mutableStateOf(appearanceSettings.defaultThemeBackgrounds)
     }
     var draftThemeBackgrounds by remember(appearanceSettings.themeBackgrounds) {
         mutableStateOf(appearanceSettings.themeBackgrounds)
     }
+    var cardAppearanceThemeKey by rememberSaveable { mutableStateOf("red") }
     var draftCardBackgrounds by remember(appearanceSettings.cardBackgrounds) {
         mutableStateOf(appearanceSettings.cardBackgrounds)
     }
-    var cardAppearanceThemeKey by rememberSaveable { mutableStateOf("red") }
+    var draftCardBackgroundSchedules by remember(appearanceSettings.cardBackgroundSchedules) {
+        mutableStateOf(appearanceSettings.cardBackgroundSchedules)
+    }
+    var draftCardScheduleStarts by remember(appearanceSettings.cardBackgroundSchedules) {
+        mutableStateOf(appearanceSettings.cardBackgroundSchedules.mapValues { it.value.startDate.orEmpty() })
+    }
+    var draftCardScheduleEnds by remember(appearanceSettings.cardBackgroundSchedules) {
+        mutableStateOf(appearanceSettings.cardBackgroundSchedules.mapValues { it.value.endDate.orEmpty() })
+    }
+    var showCardStartDatePicker by remember { mutableStateOf(false) }
+    var showCardEndDatePicker by remember { mutableStateOf(false) }
+    var cardScheduleError by remember { mutableStateOf<String?>(null) }
+    var showDeleteCardBackgroundDialog by remember { mutableStateOf(false) }
     var isSavingCardAppearance by remember { mutableStateOf(false) }
     var draftConsultationBackgrounds by remember(appearanceSettings.consultationBackgrounds) {
         mutableStateOf(appearanceSettings.consultationBackgrounds)
@@ -258,7 +272,17 @@ fun MestreScreen(
                     backgroundInputError = FirebaseService.lastError ?: "Não foi possível enviar a imagem."
                 } else {
                     if (themeKey == CARD_APPEARANCE_KEY) {
-                        draftCardBackgrounds = draftCardBackgrounds + (cardAppearanceThemeKey to uploadedUrl)
+                        val themeKeyForCard = cardAppearanceThemeKey
+                        val previousUrl = draftCardBackgrounds[themeKeyForCard].orEmpty()
+                            .ifBlank { draftCardBackgroundSchedules[themeKeyForCard]?.url.orEmpty() }
+                        if (previousUrl.isNotBlank() && previousUrl != uploadedUrl) {
+                            pendingCardImageDeletes = pendingCardImageDeletes + previousUrl
+                        }
+                        draftCardBackgrounds = draftCardBackgrounds + (themeKeyForCard to uploadedUrl)
+                        draftCardBackgroundSchedules[themeKeyForCard]?.let { oldSchedule ->
+                            draftCardBackgroundSchedules = draftCardBackgroundSchedules +
+                                (themeKeyForCard to oldSchedule.copy(url = uploadedUrl))
+                        }
                     } else {
                         backgroundUrlInput = uploadedUrl
                     }
@@ -416,7 +440,12 @@ fun MestreScreen(
     val themeBackgroundsHaveChanges =
         draftDefaultThemeBackgrounds != appearanceSettings.defaultThemeBackgrounds ||
             draftThemeBackgrounds != appearanceSettings.themeBackgrounds
-    val cardAppearanceHasChanges = draftCardBackgrounds != appearanceSettings.cardBackgrounds
+    val cardScheduleDatesHaveChanges = SupportedThemeKeys.any { themeKey ->
+        draftCardScheduleStarts[themeKey].orEmpty() != appearanceSettings.cardBackgroundSchedules[themeKey]?.startDate.orEmpty() ||
+            draftCardScheduleEnds[themeKey].orEmpty() != appearanceSettings.cardBackgroundSchedules[themeKey]?.endDate.orEmpty()
+    }
+    val cardAppearanceHasChanges = draftCardBackgrounds != appearanceSettings.cardBackgrounds ||
+        draftCardBackgroundSchedules != appearanceSettings.cardBackgroundSchedules || cardScheduleDatesHaveChanges
     val consultationAppearanceHasChanges =
         draftConsultationBackgrounds != appearanceSettings.consultationBackgrounds ||
             draftOfferBanners != appearanceSettings.offerBanners
