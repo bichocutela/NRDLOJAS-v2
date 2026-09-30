@@ -52,11 +52,22 @@ class ScheduleReminderWorker(context: Context, params: WorkerParameters) : Corou
             val day = date.get(Calendar.DAY_OF_MONTH)
             val daysOff = employee.optJSONArray("daysOff") ?: continue
             if ((0 until daysOff.length()).none { daysOff.optInt(it) == day }) continue
-            val dedupeKey = "${type}_${date.get(Calendar.YEAR)}_${key}_$day"
-            if (store.getBoolean(dedupeKey, false)) continue
+            val dedupeKey = "${type}_${registration.hashCode()}_${date.get(Calendar.YEAR)}_${key}_$day"
             val title = if (type == "TODAY_OFF") "Hoje é Sua Folga!" else "Amanhã você estará de folga"
-            NotificationHelper.showNotification(applicationContext, type, title, "A escala publicada marca o dia $day como sua folga.")
-            store.edit().putBoolean(dedupeKey, true).apply()
+            // Stable tag replaces an already visible copy if WorkManager ever overlaps
+            // a retry, while the process lock makes the SharedPreferences check atomic.
+            synchronized(reminderNotificationLock) {
+                if (!store.getBoolean(dedupeKey, false)) {
+                    NotificationHelper.showNotification(
+                        applicationContext,
+                        type,
+                        title,
+                        "A escala publicada marca o dia $day como sua folga.",
+                        notificationTag = "profile_dayoff_${registration.hashCode()}_${type}_${date.get(Calendar.YEAR)}_${key}_$day"
+                    )
+                    store.edit().putBoolean(dedupeKey, true).apply()
+                }
+            }
         }
         return Result.success()
     }
@@ -68,6 +79,7 @@ class ScheduleReminderWorker(context: Context, params: WorkerParameters) : Corou
         private const val KEY_LAST_CHANGED_MONTH = "last_changed_month"
         private const val KEY_LAST_CHANGED_REGISTRATION = "last_changed_registration"
         private const val UNIQUE_WORK = "profile_schedule_reminders"
+        private val reminderNotificationLock = Any()
 
         fun markScheduleChanged(context: Context, registration: String, monthKey: String) {
             context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
