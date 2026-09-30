@@ -75,6 +75,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
@@ -124,6 +125,11 @@ fun MyPointScreen(
     val isExpressive = expressiveStyle.enabled
     val cardAppearance = LocalCardAppearanceSettings.current
     val cardThemeKey = LocalCardThemeKey.current
+    val profileThemeKey = if (glassStyle.enabled) glassStyle.accentName else cardThemeKey
+    val isDarkProfile = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val profilePalette = if (expressiveGlassStyle.enabled) null else remember(profileThemeKey, isDarkProfile) {
+        profileThemePalette(profileThemeKey, isDarkProfile)
+    }
     val contentPadding = if (configuration.screenWidthDp < 360) 10.dp else 16.dp
     val purchasesMaxHeight = (configuration.screenHeightDp * 0.42f).coerceIn(160f, 420f).dp
     var employeeProfile by remember { mutableStateOf<EmployeeProfile?>(null) }
@@ -295,7 +301,8 @@ fun MyPointScreen(
                             photoModel = employeePhotoModel ?: profile.photoUrl,
                             isExpressive = isExpressive,
                             glassEnabled = glassStyle.enabled,
-                            expressiveGlassEnabled = expressiveGlassStyle.enabled
+                            expressiveGlassEnabled = expressiveGlassStyle.enabled,
+                            palette = profilePalette
                         )
                         Spacer(Modifier.height(10.dp))
                     }
@@ -305,6 +312,7 @@ fun MyPointScreen(
                         selectedKey = selectedScheduleKey,
                         expanded = daysOffExpanded,
                         registration = employeeProfile?.registration,
+                        palette = profilePalette,
                         onToggle = { daysOffExpanded = !daysOffExpanded },
                         onSelectMonth = { selectedScheduleKey = it },
                         onDaysOffSaved = { monthKey, days ->
@@ -356,7 +364,7 @@ fun MyPointScreen(
                                 .expressiveShadow(hoursShape, 7.dp),
                             shape = hoursShape,
                             colors = CardDefaults.cardColors(
-                                containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface
+                                containerColor = profilePalette?.section ?: if (glassStyle.enabled) MaterialTheme.colorScheme.surface
                                 else MaterialTheme.colorScheme.secondaryContainer
                             )
                         ) {
@@ -364,14 +372,15 @@ fun MyPointScreen(
                                 Text(
                                     "Banco de horas",
                                     style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = if (isExpressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal
+                                    fontWeight = if (isExpressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal,
+                                    color = profilePalette?.text ?: MaterialTheme.colorScheme.onSurface
                                 )
-                                Spacer(Modifier.height(8.dp)); Text("Saldo atual: ${summary.total}", style = MaterialTheme.typography.titleMedium)
-                                Spacer(Modifier.height(10.dp)); Text("Saldos a vencer", style = MaterialTheme.typography.titleMedium)
+                                Spacer(Modifier.height(8.dp)); Text("Saldo atual: ${summary.total}", style = MaterialTheme.typography.titleMedium, color = profilePalette?.text ?: MaterialTheme.colorScheme.onSurface)
+                                Spacer(Modifier.height(10.dp)); Text("Saldos a vencer", style = MaterialTheme.typography.titleMedium, color = profilePalette?.text ?: MaterialTheme.colorScheme.onSurface)
                                 summary.months.forEach { month ->
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Text("${month.month}/${month.year}", modifier = Modifier.weight(1f))
-                                        Text(month.balance)
+                                        Text("${month.month}/${month.year}", modifier = Modifier.weight(1f), color = profilePalette?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(month.balance, color = profilePalette?.text ?: MaterialTheme.colorScheme.onSurface)
                                     }
                                 }
                             }
@@ -390,7 +399,7 @@ fun MyPointScreen(
                                 .expressiveShadow(pointShape, 6.dp),
                             shape = pointShape,
                             colors = CardDefaults.cardColors(
-                                containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface
+                                containerColor = profilePalette?.section ?: if (glassStyle.enabled) MaterialTheme.colorScheme.surface
                                 else MaterialTheme.colorScheme.primaryContainer
                             )
                         ) {
@@ -398,9 +407,10 @@ fun MyPointScreen(
                                 Text(
                                     summary.period ?: "Período atual",
                                     style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = if (isExpressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal
+                                    fontWeight = if (isExpressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal,
+                                    color = profilePalette?.text ?: MaterialTheme.colorScheme.onSurface
                                 )
-                                summary.status?.let { Text("Status: $it") }; summary.worked?.let { Text("Horas trabalhadas: $it") }; summary.balance?.let { Text("Saldo: $it") }
+                                summary.status?.let { Text("Status: $it", color = profilePalette?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant) }; summary.worked?.let { Text("Horas trabalhadas: $it", color = profilePalette?.text ?: MaterialTheme.colorScheme.onSurface) }; summary.balance?.let { Text("Saldo: $it", color = profilePalette?.text ?: MaterialTheme.colorScheme.onSurface) }
                             }
                         }
                     }
@@ -422,7 +432,7 @@ fun MyPointScreen(
                     if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
                 }
                 if (point?.records.isNullOrEmpty()) item { Text("Nenhum registro de ponto disponível para o período informado.") }
-                else items(point!!.records) { PointEntryCard(it) }
+                else items(point!!.records) { PointEntryCard(it, profilePalette) }
             }
         }
     }
@@ -518,6 +528,7 @@ private fun ProfileNotificationSwitch(label: String, checked: Boolean, onChecked
 private fun MyDaysOffCard(
     modifier: Modifier = Modifier,
     schedules: List<WorkSchedule>, selectedKey: String, expanded: Boolean, registration: String?,
+    palette: ProfileThemePalette? = null,
     onToggle: () -> Unit, onSelectMonth: (String) -> Unit,
     onDaysOffSaved: (String, List<Int>) -> Unit,
     onRosterPhotoSaved: (String, String) -> Unit
@@ -583,21 +594,22 @@ private fun MyDaysOffCard(
         }
     }
 
-    Card(modifier.fillMaxWidth(), shape = if (LocalExpressiveStyle.current.enabled) RoundedCornerShape(28.dp) else MaterialTheme.shapes.medium) {
+    Card(modifier.fillMaxWidth(), shape = if (LocalExpressiveStyle.current.enabled) RoundedCornerShape(28.dp) else MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = palette?.section ?: MaterialTheme.colorScheme.surface)) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Minhas Folgas", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                IconButton(onClick = onToggle) { Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, "Expandir Minhas Folgas") }
+                Text("Minhas Folgas", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = palette?.text ?: MaterialTheme.colorScheme.onSurface)
+                IconButton(onClick = onToggle) { Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, "Expandir Minhas Folgas", tint = palette?.accent ?: MaterialTheme.colorScheme.onSurface) }
             }
             if (expanded) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     androidx.compose.foundation.layout.Box(Modifier.weight(1f, fill = false)) {
-                        Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
+                        Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = palette?.tile ?: MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
                             TextButton(onClick = { selectorExpanded = true }, modifier = Modifier.padding(horizontal = 6.dp)) {
                                 val label = "${monthName(selectedMonth)}/$selectedYear"
-                                Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.CalendarToday, contentDescription = null, tint = palette?.accent ?: MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text("$label  ▾", style = MaterialTheme.typography.titleSmall)
+                                Text("$label  ▾", style = MaterialTheme.typography.titleSmall, color = palette?.text ?: MaterialTheme.colorScheme.onSurface)
                             }
                         }
                         if (selectorExpanded) MonthYearPickerDialog(
@@ -614,13 +626,17 @@ private fun MyDaysOffCard(
                         androidx.compose.material3.OutlinedButton(
                             onClick = { selectedDays = employee?.daysOff.orEmpty().toSet(); editing = !editing; saveMessage = null },
                             enabled = !saving && !photoUploadBusy,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            colors = palette?.let { androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = it.accent) }
+                                ?: androidx.compose.material3.ButtonDefaults.outlinedButtonColors()
                         ) { Text(if (editing) "Fechar" else "Adicionar folgas", style = MaterialTheme.typography.labelMedium, maxLines = 1) }
                         val savedPhotoUrl = employee?.rosterPhotoUrl?.takeIf { it.isNotBlank() }
                         androidx.compose.material3.OutlinedButton(
                             onClick = { if (savedPhotoUrl != null) photoDialogUrl = savedPhotoUrl else captureRosterPhoto() },
                             enabled = !photoUploadBusy,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            colors = palette?.let { androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = it.accent) }
+                                ?: androidx.compose.material3.ButtonDefaults.outlinedButtonColors()
                         ) {
                             if (photoUploadBusy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                             else if (savedPhotoUrl != null) Text("Foto Registrada", style = MaterialTheme.typography.labelMedium, maxLines = 1)
@@ -631,34 +647,34 @@ private fun MyDaysOffCard(
                             }
                         }
                     }
-                    photoMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = if (it.startsWith("Foto salva")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) }
+                    photoMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = if (it.startsWith("Foto salva")) (palette?.accent ?: MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.error) }
                 }
                 when {
-                    registration.isNullOrBlank() -> Text("A matrícula do perfil Nossa Gente não está disponível para localizar sua escala.")
-                    !editing && employee == null -> Text("Nenhuma folga cadastrada para ${monthName(selectedMonth)}/$selectedYear. Toque em Adicionar folgas para escolher as datas.")
+                    registration.isNullOrBlank() -> Text("A matrícula do perfil Nossa Gente não está disponível para localizar sua escala.", color = palette?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant)
+                    !editing && employee == null -> Text("Nenhuma folga cadastrada para ${monthName(selectedMonth)}/$selectedYear. Toque em Adicionar folgas para escolher as datas.", color = palette?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant)
                     else -> {
                         Spacer(Modifier.height(14.dp))
-                        Text("Matrícula ${employee?.registration ?: registration}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (!employee?.shift.isNullOrBlank()) Text(employee!!.shift, style = MaterialTheme.typography.bodyMedium)
+                        Text("Matrícula ${employee?.registration ?: registration}", style = MaterialTheme.typography.labelMedium, color = palette?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (!employee?.shift.isNullOrBlank()) Text(employee!!.shift, style = MaterialTheme.typography.bodyMedium, color = palette?.text ?: MaterialTheme.colorScheme.onSurface)
                         Spacer(Modifier.height(12.dp))
-                        Text("Folgas", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        Text("Folgas", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = palette?.text ?: MaterialTheme.colorScheme.onSurface)
                         Spacer(Modifier.height(8.dp))
                         val visibleDays = if (editing) selectedDays.sorted() else employee?.daysOff.orEmpty().distinct().sorted()
-                        if (visibleDays.isEmpty()) Text(if (editing) "Toque nas datas para marcar suas folgas." else "Nenhuma folga registrada.")
+                        if (visibleDays.isEmpty()) Text(if (editing) "Toque nas datas para marcar suas folgas." else "Nenhuma folga registrada.", color = palette?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant)
                         else visibleDays.chunked(4).forEach { week ->
                             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 week.forEach { day ->
                                     val sunday = java.util.GregorianCalendar(selectedYear, selectedMonth - 1, day)
                                         .get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SUNDAY
                                     Box(Modifier.weight(1f).height(66.dp).background(
-                                        if (sunday) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                        if (sunday) (palette?.highlight ?: MaterialTheme.colorScheme.primaryContainer) else (palette?.tile ?: MaterialTheme.colorScheme.surface),
                                         RoundedCornerShape(14.dp)
                                     ).clickable { calendarDay = day }, contentAlignment = Alignment.Center) {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                             Text(day.toString().padStart(2, '0'), style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = palette?.text ?: MaterialTheme.colorScheme.onSurface)
                                             if (sunday) Text("Domingo", style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.primary)
+                                                color = palette?.accent ?: MaterialTheme.colorScheme.primary)
                                         }
                                     }
                                 }
@@ -667,9 +683,9 @@ private fun MyDaysOffCard(
                         }
                         if (editing) {
                             Spacer(Modifier.height(14.dp))
-                            Text("Selecione as datas de folga • ${monthName(selectedMonth)}/$selectedYear", style = MaterialTheme.typography.bodySmall)
+                            Text("Selecione as datas de folga • ${monthName(selectedMonth)}/$selectedYear", style = MaterialTheme.typography.bodySmall, color = palette?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(6.dp))
-                            MyDaysOffCalendar(selectedYear, selectedMonth, selectedDays) { day ->
+                            MyDaysOffCalendar(selectedYear, selectedMonth, selectedDays, palette = palette) { day ->
                                 selectedDays = if (day in selectedDays) selectedDays - day else selectedDays + day
                             }
                             Spacer(Modifier.height(8.dp))
@@ -690,13 +706,15 @@ private fun MyDaysOffCard(
                                     }
                                 },
                                 enabled = !saving,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = palette?.let { androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = it.accent, contentColor = it.onAccent) }
+                                    ?: androidx.compose.material3.ButtonDefaults.buttonColors()
                             ) {
                                 if (saving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                                 else Text("Salvar folgas")
                             }
                         }
-                        saveMessage?.let { Text(it, color = if (it.startsWith("Folgas salvas")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                        saveMessage?.let { Text(it, color = if (it.startsWith("Folgas salvas")) (palette?.accent ?: MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                         if (employee?.vacationDays.orEmpty().isNotEmpty()) {
                             Spacer(Modifier.height(6.dp))
                             Text("Férias (FE): ${employee?.vacationDays.orEmpty().sorted().joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
@@ -802,7 +820,7 @@ private fun MonthYearPickerDialog(
 }
 
 @Composable
-private fun MyDaysOffCalendar(year: Int, month: Int, selected: Set<Int>, onToggle: ((Int) -> Unit)?) {
+private fun MyDaysOffCalendar(year: Int, month: Int, selected: Set<Int>, palette: ProfileThemePalette? = null, onToggle: ((Int) -> Unit)?) {
     val calendar = java.util.GregorianCalendar(year, month - 1, 1)
     val offset = calendar.get(java.util.Calendar.DAY_OF_WEEK) - 1
     val count = calendar.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
@@ -819,16 +837,64 @@ private fun MyDaysOffCalendar(year: Int, month: Int, selected: Set<Int>, onToggl
                     if (day == null) Spacer(Modifier.weight(1f).height(42.dp))
                     else Box(
                         Modifier.weight(1f).height(42.dp)
-                            .background(if (day in selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                            .background(if (day in selected) (palette?.highlight ?: MaterialTheme.colorScheme.primaryContainer) else (palette?.tile ?: MaterialTheme.colorScheme.surface),
                                 RoundedCornerShape(10.dp))
                             .then(if (onToggle != null) Modifier.clickable { onToggle(day) } else Modifier),
                         contentAlignment = Alignment.Center
-                    ) { Text(day.toString(), color = if (day in selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface) }
+                    ) { Text(day.toString(), color = palette?.text ?: if (day in selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface) }
                 }
                 repeat(7 - week.size) { Spacer(Modifier.weight(1f).height(42.dp)) }
             }
         }
     }
+}
+
+private data class ProfileThemePalette(
+    val hero: Color,
+    val heroText: Color,
+    val heroSecondaryText: Color,
+    val section: Color,
+    val tile: Color,
+    val highlight: Color,
+    val accent: Color,
+    val onAccent: Color,
+    val text: Color,
+    val secondaryText: Color
+)
+
+private fun profileThemePalette(themeKey: String, dark: Boolean): ProfileThemePalette {
+    val key = themeKey.trim().lowercase()
+        .removePrefix("glass-")
+        .removePrefix("expressive-")
+    val colors = when (key) {
+        "red", "pink" -> listOf(Color(0xFF9A2638), Color(0xFFFFA0AE), Color(0xFFFFEFF2), Color(0xFFFFF8F9), Color(0xFFF9DCE2), Color(0xFF741729), Color(0xFF42111B), Color(0xFF293038))
+        "gold", "yellow" -> listOf(Color(0xFF795500), Color(0xFFFFD66B), Color(0xFFFFF7E3), Color(0xFFFFFBF1), Color(0xFFF3E4B9), Color(0xFF624500), Color(0xFF3C321D), Color(0xFF30343A))
+        "green" -> listOf(Color(0xFF246447), Color(0xFF8EE0B0), Color(0xFFEDF7F0), Color(0xFFF8FCF9), Color(0xFFD9EDDF), Color(0xFF1D573D), Color(0xFF20372B), Color(0xFF29343A))
+        "blue" -> listOf(Color(0xFF245C88), Color(0xFF8CC7FF), Color(0xFFEEF6FC), Color(0xFFF8FBFE), Color(0xFFDCEBF8), Color(0xFF1C507A), Color(0xFF1F2F3F), Color(0xFF29343F))
+        "orange" -> listOf(Color(0xFF984612), Color(0xFFFFB479), Color(0xFFFFF2E7), Color(0xFFFFFAF5), Color(0xFFF8E1CE), Color(0xFF79380D), Color(0xFF3D2A1E), Color(0xFF34312E))
+        "purple" -> listOf(Color(0xFF59427F), Color(0xFFC5A8FF), Color(0xFFF3EFFA), Color(0xFFFAF8FE), Color(0xFFE5DDF5), Color(0xFF4C386F), Color(0xFF30283C), Color(0xFF32313A))
+        "cyan" -> listOf(Color(0xFF00585D), Color(0xFF78D7DD), Color(0xFFEAF7F7), Color(0xFFF7FCFC), Color(0xFFD2EEEE), Color(0xFF004D52), Color(0xFF1D3438), Color(0xFF2B363A))
+        else -> listOf(Color(0xFF3D4D5D), Color(0xFFB9DEFA), Color(0xFFF0F4F7), Color(0xFFFAFBFC), Color(0xFFE1E8EE), Color(0xFF344555), Color(0xFF272E35), Color(0xFF303840))
+    }
+    val hero = colors[0]
+    val accent = if (dark) colors[1] else colors[5]
+    val surface = if (dark) colors[6] else colors[2]
+    val tile = if (dark) colors[7] else colors[3]
+    val highlight = if (dark) hero.copy(alpha = 0.56f) else colors[4]
+    val text = if (dark) Color(0xFFF4F6F8) else colors[6]
+    val secondary = if (dark) Color(0xFFD0D7DE) else colors[5]
+    return ProfileThemePalette(
+        hero = hero,
+        heroText = Color.White,
+        heroSecondaryText = Color.White.copy(alpha = 0.88f),
+        section = surface,
+        tile = tile,
+        highlight = highlight,
+        accent = accent,
+        onAccent = if (dark) Color(0xFF1B2025) else Color.White,
+        text = text,
+        secondaryText = secondary
+    )
 }
 
 private fun currentMonthKey(): String {
@@ -848,7 +914,8 @@ private fun EmployeeProfileCard(
     photoModel: Any?,
     isExpressive: Boolean,
     glassEnabled: Boolean,
-    expressiveGlassEnabled: Boolean
+    expressiveGlassEnabled: Boolean,
+    palette: ProfileThemePalette? = null
 ) {
     val expressiveGlass = LocalExpressiveGlassStyle.current
     var showProfilePhoto by remember(photoModel) { mutableStateOf(false) }
@@ -881,8 +948,8 @@ private fun EmployeeProfileCard(
         colors = CardDefaults.cardColors(
             containerColor = when {
                 expressiveGlassEnabled -> Color.Transparent
-                glassEnabled -> MaterialTheme.colorScheme.surface
-                else -> MaterialTheme.colorScheme.primaryContainer
+                glassEnabled -> palette?.section ?: MaterialTheme.colorScheme.surface
+                else -> palette?.hero ?: MaterialTheme.colorScheme.primaryContainer
             }
         )
     ) {
@@ -899,9 +966,9 @@ private fun EmployeeProfileCard(
                     backgroundColor = if (expressiveGlassEnabled) {
                         MaterialTheme.colorScheme.surface.copy(alpha = 0.46f)
                     } else {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        palette?.tile ?: MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                     },
-                    iconTint = MaterialTheme.colorScheme.primary,
+                    iconTint = palette?.accent ?: MaterialTheme.colorScheme.primary,
                     onPhotoClick = if (photoModel != null) {
                         { showProfilePhoto = true }
                     } else null
@@ -911,18 +978,18 @@ private fun EmployeeProfileCard(
                     Text(
                         "Nome do usuário",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = palette?.let { if (glassEnabled) it.secondaryText else it.heroSecondaryText } ?: MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         profile.name ?: "—",
                         style = if (isExpressive) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = palette?.let { if (glassEnabled) it.text else it.heroText } ?: MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         "Dados sincronizados com o Nossa Gente",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = palette?.let { if (glassEnabled) it.secondaryText else it.heroSecondaryText } ?: MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -933,14 +1000,16 @@ private fun EmployeeProfileCard(
                     icon = Icons.Default.AccessTime,
                     label = "Tempo de Casa",
                     value = profile.tenure ?: "—",
-                    isExpressive = isExpressive
+                    isExpressive = isExpressive,
+                    palette = palette
                 )
                 ProfileMetric(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.CalendarToday,
                     label = "Admissão",
                     value = profile.admissionDate ?: "—",
-                    isExpressive = isExpressive
+                    isExpressive = isExpressive,
+                    palette = palette
                 )
             }
         }
@@ -961,26 +1030,27 @@ private fun ProfileMetric(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     value: String,
-    isExpressive: Boolean
+    isExpressive: Boolean,
+    palette: ProfileThemePalette? = null
 ) {
     val shape = RoundedCornerShape(if (isExpressive) 20.dp else 16.dp)
     Column(
         modifier = modifier
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isExpressive) 0.62f else 0.78f))
+            .background(palette?.tile ?: MaterialTheme.colorScheme.surface.copy(alpha = if (isExpressive) 0.62f else 0.78f))
             .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            Icon(icon, contentDescription = null, tint = palette?.accent ?: MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(label, style = MaterialTheme.typography.labelMedium, color = palette?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text(
             value,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = palette?.text ?: MaterialTheme.colorScheme.onSurface
         )
     }
 }
@@ -1080,7 +1150,7 @@ private fun formatBenefitDate(date: String?, separateTime: String? = null): Stri
 }
 
 @Composable
-private fun PointEntryCard(entry: PointEntry) {
+private fun PointEntryCard(entry: PointEntry, palette: ProfileThemePalette? = null) {
     val expressive = LocalExpressiveStyle.current.enabled
     val glassStyle = LocalGlassSoftStyle.current
     val cardShape = if (expressive) RoundedCornerShape(24.dp) else MaterialTheme.shapes.medium
@@ -1091,7 +1161,7 @@ private fun PointEntryCard(entry: PointEntry) {
             .expressiveShadow(cardShape, 6.dp),
         shape = cardShape,
         colors = CardDefaults.cardColors(
-            containerColor = if (glassStyle.enabled) MaterialTheme.colorScheme.surface
+            containerColor = palette?.section ?: if (glassStyle.enabled) MaterialTheme.colorScheme.surface
             else if (expressive) MaterialTheme.colorScheme.surfaceContainerLow
             else MaterialTheme.colorScheme.surface
         )
@@ -1100,16 +1170,17 @@ private fun PointEntryCard(entry: PointEntry) {
             Icon(
                 Icons.Default.AccessTime,
                 contentDescription = null,
-                tint = if (expressive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                tint = palette?.accent ?: if (expressive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
             )
             Text(
                 entry.date ?: "Dia não informado",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = if (expressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal,
-                modifier = Modifier.padding(start = 8.dp)
+                modifier = Modifier.padding(start = 8.dp),
+                color = palette?.text ?: MaterialTheme.colorScheme.onSurface
             )
         }
-        Spacer(Modifier.height(5.dp)); Text("Entrada: ${entry.entry ?: "—"}   Saída: ${entry.exit ?: "—"}")
-        entry.interval?.let { Text("Intervalo: $it") }; entry.status?.let { Text("Status: $it", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        Spacer(Modifier.height(5.dp)); Text("Entrada: ${entry.entry ?: "—"}   Saída: ${entry.exit ?: "—"}", color = palette?.text ?: MaterialTheme.colorScheme.onSurface)
+        entry.interval?.let { Text("Intervalo: $it", color = palette?.text ?: MaterialTheme.colorScheme.onSurface) }; entry.status?.let { Text("Status: $it", color = palette?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant) }
     } }
 }
