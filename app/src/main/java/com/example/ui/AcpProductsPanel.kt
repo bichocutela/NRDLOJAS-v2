@@ -1228,7 +1228,7 @@ internal suspend fun copyProductCardToClipboard(
 }.getOrDefault(false)
 
 private suspend fun AcpApi.searchProductsUnified(query: String, pageIndex: Int): AcpProductPage {
-    val clean = query.trim()
+    val clean = com.example.data.storeProductLookupCode(query)
     require(clean.isNotBlank() && clean.length <= 200 && pageIndex >= 0)
     val numeric = clean.all(Char::isDigit)
     val field = when {
@@ -1244,7 +1244,7 @@ private suspend fun AcpApi.searchProductsUnifiedFresh(
     pageIndex: Int,
     store: AcpSecureStore
 ): AcpProductPage {
-    val clean = query.trim()
+    val clean = com.example.data.storeProductLookupCode(query)
     require(clean.isNotBlank() && clean.length <= 200 && pageIndex >= 0)
     val numeric = clean.all(Char::isDigit)
     val preferred = when {
