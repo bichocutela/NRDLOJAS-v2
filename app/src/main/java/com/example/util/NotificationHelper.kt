@@ -122,8 +122,7 @@ object NotificationHelper {
             .setAutoCancel(true)
 
         with(NotificationManagerCompat.from(context)) {
-            if (notificationTag != null) notify(notificationTag, 0, builder.build())
-            else notify(System.currentTimeMillis().toInt(), builder.build())
+            notify(System.currentTimeMillis().toInt(), builder.build())
         }
     }
 
@@ -266,7 +265,8 @@ object NotificationHelper {
         }
 
         with(NotificationManagerCompat.from(context)) {
-            notify(System.currentTimeMillis().toInt(), builder.build())
+            if (notificationTag != null) notify(notificationTag, 0, builder.build())
+            else notify(System.currentTimeMillis().toInt(), builder.build())
         }
     }
 
