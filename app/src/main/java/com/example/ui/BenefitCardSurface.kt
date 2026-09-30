@@ -113,7 +113,7 @@ internal fun BenefitCardSurface(
 
             Column(
                 modifier = Modifier.align(Alignment.TopStart)
-                    .offset(x = maxWidth * 0.075f, y = maxHeight * 0.555f)
+                    .offset(x = maxWidth * 0.075f, y = maxHeight * 0.60f)
                     .fillMaxWidth(0.62f),
                 verticalArrangement = Arrangement.spacedBy(5.dp * scale)
             ) {
