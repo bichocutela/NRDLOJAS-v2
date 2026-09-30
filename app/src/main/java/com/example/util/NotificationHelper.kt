@@ -122,7 +122,8 @@ object NotificationHelper {
             .setAutoCancel(true)
 
         with(NotificationManagerCompat.from(context)) {
-            notify(System.currentTimeMillis().toInt(), builder.build())
+            if (notificationTag != null) notify(notificationTag, 0, builder.build())
+            else notify(System.currentTimeMillis().toInt(), builder.build())
         }
     }
 
@@ -220,7 +221,14 @@ object NotificationHelper {
     }
 
 
-    fun showNotification(context: Context, type: String, title: String, body: String, productCode: String? = null) {
+    fun showNotification(
+        context: Context,
+        type: String,
+        title: String,
+        body: String,
+        productCode: String? = null,
+        notificationTag: String? = null
+    ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 Log.w("NotificationHelper", "Notificação local ignorada: permissão POST_NOTIFICATIONS ausente; type=$type")
