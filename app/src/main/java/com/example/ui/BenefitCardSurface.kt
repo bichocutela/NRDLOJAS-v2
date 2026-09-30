@@ -170,9 +170,11 @@ private fun formatBenefitCardName(name: String): String {
 
 private fun formatBenefitCardPeriod(period: String): String {
     val value = period.trim().ifBlank { "—" }
-    return value
-        .replace(Regex("\\s+(?:a|até)\\s+", RegexOption.IGNORE_CASE), "\\n")
-        .replace(Regex("\\s+[–—-]\\s*"), "\\n")
+    val dates = value.split(
+        Regex("\\s+(?:a|até)\\s+|\\s*[–—-]\\s*"),
+        limit = 2
+    )
+    return if (dates.size == 2) dates.joinToString("\\n") else value
 }
 
 @Composable
