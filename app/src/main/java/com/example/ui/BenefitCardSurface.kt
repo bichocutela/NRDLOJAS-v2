@@ -114,45 +114,102 @@ internal fun BenefitCardSurface(
             Column(
                 modifier = Modifier.align(Alignment.TopStart)
                     .offset(x = maxWidth * 0.075f, y = maxHeight * 0.555f)
-                    .fillMaxWidth(0.62f),
-                verticalArrangement = Arrangement.spacedBy(5.dp * scale)
+                    .fillMaxWidth(0.90f),
+                verticalArrangement = Arrangement.spacedBy(8.dp * scale)
             ) {
                 Text(
-                    text = name.ifBlank { "USUÁRIO" }.uppercase(),
+                    text = formatBenefitCardName(name),
                     color = Color.White,
-                    fontSize = (15f * scale).sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = (1.1f * scale).sp,
+                    fontSize = (20f * scale).sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = (0.7f * scale).sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(7.dp * scale)
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp * scale)
                 ) {
-                    BenefitCardValue("LIMITE", limit, Modifier.weight(1.08f), scale)
-                    BenefitCardValue("GASTO", spent, Modifier.weight(1.08f), scale)
-                    BenefitCardValue("SALDO", balance, Modifier.weight(0.92f), scale)
+                    BenefitCardValue("LIMITE", limit, Modifier.weight(1.15f), scale)
+                    BenefitCardDivider(scale)
+                    BenefitCardValue("GASTO", spent, Modifier.weight(1.15f), scale)
+                    BenefitCardDivider(scale)
+                    BenefitCardValue("SALDO", balance, Modifier.weight(1.0f), scale)
+                    BenefitCardDivider(scale)
+                    BenefitCardValue(
+                        "PERÍODO",
+                        formatBenefitCardPeriod(period),
+                        Modifier.weight(1.45f),
+                        scale,
+                        valueFontSize = 12f,
+                        valueMaxLines = 2
+                    )
                 }
-                Text(
-                    text = "PERÍODO  " + period.ifBlank { "—" },
-                    color = Color.White.copy(alpha = 0.92f),
-                    fontSize = (9.5f * scale).sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
             }
         }
     }
 }
 
+private fun formatBenefitCardName(name: String): String {
+    val parts = name.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+    if (parts.isEmpty()) return "USUÁRIO"
+
+    val normalized = parts.map { it.uppercase(java.util.Locale("pt", "BR")) }
+    val fullName = normalized.joinToString(" ")
+    if (fullName.length <= 24 || normalized.size == 1) return fullName
+
+    val particles = setOf("DA", "DAS", "DE", "DO", "DOS", "E")
+    val middleInitials = normalized.drop(1).dropLast(1)
+        .filter { it !in particles }
+        .map { "${it.first()}." }
+    val abbreviated = (listOf(normalized.first()) + middleInitials + normalized.last()).joinToString(" ")
+    return if (abbreviated.length <= 24) abbreviated
+    else "${normalized.first().first()}. ${normalized.last()}"
+}
+
+private fun formatBenefitCardPeriod(period: String): String {
+    val value = period.trim().ifBlank { "—" }
+    return value
+        .replace(Regex("\\s+(?:a|até)\\s+", RegexOption.IGNORE_CASE), "\\n")
+        .replace(Regex("\\s+[–—-]\\s*"), "\\n")
+}
+
 @Composable
-private fun BenefitCardValue(label: String, value: String, modifier: Modifier, scale: Float) {
+private fun BenefitCardDivider(scale: Float) {
+    Box(
+        modifier = Modifier
+            .width((1f * scale).dp)
+            .height((34f * scale).dp)
+            .background(Color.White.copy(alpha = 0.68f))
+    )
+}
+
+@Composable
+private fun BenefitCardValue(
+    label: String,
+    value: String,
+    modifier: Modifier,
+    scale: Float,
+    valueFontSize: Float = 15.5f,
+    valueMaxLines: Int = 1
+) {
     Column(modifier = modifier) {
-        Text(label, color = Color.White.copy(alpha = 0.88f), fontSize = (8f * scale).sp,
-            fontWeight = FontWeight.Medium, maxLines = 1)
-        Text(value.ifBlank { "—" }, color = Color.White, fontSize = (11f * scale).sp,
-            fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            label,
+            color = Color.White.copy(alpha = 0.88f),
+            fontSize = (10.5f * scale).sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Clip
+        )
+        Text(
+            value.ifBlank { "—" },
+            color = Color.White,
+            fontSize = (valueFontSize * scale).sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = valueMaxLines,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
