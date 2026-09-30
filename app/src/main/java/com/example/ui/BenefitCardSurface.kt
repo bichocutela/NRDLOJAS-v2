@@ -174,7 +174,7 @@ private fun formatBenefitCardPeriod(period: String): String {
         Regex("\\s+(?:a|até)\\s+|\\s*[–—-]\\s*"),
         limit = 2
     )
-    return if (dates.size == 2) dates.joinToString("\\n") else value
+    return if (dates.size == 2) dates[0] + '\n' + dates[1] else value
 }
 
 @Composable
