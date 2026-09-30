@@ -14,6 +14,7 @@ class AppearanceSettings(
     val consultationBackgrounds: List<ThemeBackground> = emptyList(),
     val offerBanners: Map<String, List<ThemeBackground>> = emptyMap(),
     val cardBackgrounds: Map<String, String> = emptyMap(),
+    val cardBackgroundSchedules: Map<String, ThemeBackground> = emptyMap(),
     val bubbleSpeed: Float = 1f,
     val bubbleMotion: String = "random",
     val bubbleSize: Float = 1f,
@@ -78,6 +79,17 @@ class AppearanceSettings(
         .filter { it.isAvailableOn(date) }
         .maxByOrNull { ThemeBackground.normalizeDate(it.startDate).orEmpty() }
 
+    /** Returns a scheduled card image only inside its configured inclusive date range. */
+    fun activeCardBackground(
+        themeKey: String,
+        date: String = ThemeBackground.todayIsoDate()
+    ): String {
+        val key = normalizeThemeKey(themeKey)
+        val scheduled = cardBackgroundSchedules[key]
+        if (scheduled != null) return scheduled.url.takeIf { scheduled.isAvailableOn(date) }.orEmpty()
+        return cardBackgrounds[key].orEmpty()
+    }
+
     fun copy(
         overrideLocalTheme: Boolean = this.overrideLocalTheme,
         theme: String = this.theme,
@@ -87,6 +99,7 @@ class AppearanceSettings(
         consultationBackgrounds: List<ThemeBackground> = this.consultationBackgrounds,
         offerBanners: Map<String, List<ThemeBackground>> = this.offerBanners,
         cardBackgrounds: Map<String, String> = this.cardBackgrounds,
+        cardBackgroundSchedules: Map<String, ThemeBackground> = this.cardBackgroundSchedules,
         bubbleSpeed: Float = this.bubbleSpeed,
         bubbleMotion: String = this.bubbleMotion,
         bubbleSize: Float = this.bubbleSize,
@@ -112,6 +125,7 @@ class AppearanceSettings(
         consultationBackgrounds = consultationBackgrounds,
         offerBanners = offerBanners,
         cardBackgrounds = cardBackgrounds,
+        cardBackgroundSchedules = cardBackgroundSchedules,
         bubbleSpeed = bubbleSpeed,
         bubbleMotion = bubbleMotion,
         bubbleSize = bubbleSize,
@@ -141,6 +155,7 @@ class AppearanceSettings(
             consultationBackgrounds == other.consultationBackgrounds &&
             offerBanners == other.offerBanners &&
             cardBackgrounds == other.cardBackgrounds &&
+            cardBackgroundSchedules == other.cardBackgroundSchedules &&
             bubbleSpeed == other.bubbleSpeed &&
             bubbleMotion == other.bubbleMotion &&
             bubbleSize == other.bubbleSize &&
@@ -168,6 +183,7 @@ class AppearanceSettings(
         result = 31 * result + consultationBackgrounds.hashCode()
         result = 31 * result + offerBanners.hashCode()
         result = 31 * result + cardBackgrounds.hashCode()
+        result = 31 * result + cardBackgroundSchedules.hashCode()
         result = 31 * result + bubbleSpeed.hashCode()
         result = 31 * result + bubbleMotion.hashCode()
         result = 31 * result + bubbleSize.hashCode()
@@ -188,7 +204,7 @@ class AppearanceSettings(
     }
 
     override fun toString(): String =
-        "AppearanceSettings(overrideLocalTheme=$overrideLocalTheme, theme=$theme, appearanceMode=$appearanceMode, defaultThemeBackgrounds=$defaultThemeBackgrounds, themeBackgrounds=$themeBackgrounds, consultationBackgrounds=$consultationBackgrounds, offerBanners=$offerBanners, cardBackgrounds=$cardBackgrounds, revision=$revision)"
+        "AppearanceSettings(overrideLocalTheme=$overrideLocalTheme, theme=$theme, appearanceMode=$appearanceMode, defaultThemeBackgrounds=$defaultThemeBackgrounds, themeBackgrounds=$themeBackgrounds, consultationBackgrounds=$consultationBackgrounds, offerBanners=$offerBanners, cardBackgrounds=$cardBackgrounds, cardBackgroundSchedules=$cardBackgroundSchedules, revision=$revision)"
 
     private fun normalizeThemeKey(value: String): String = when (value.trim().lowercase()) {
         "multicolor" -> "multicolor"

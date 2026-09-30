@@ -28,6 +28,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -180,10 +181,23 @@ fun MestreScreen(
     var draftThemeBackgrounds by remember(appearanceSettings.themeBackgrounds) {
         mutableStateOf(appearanceSettings.themeBackgrounds)
     }
+    var cardAppearanceThemeKey by rememberSaveable { mutableStateOf("red") }
     var draftCardBackgrounds by remember(appearanceSettings.cardBackgrounds) {
         mutableStateOf(appearanceSettings.cardBackgrounds)
     }
-    var cardAppearanceThemeKey by rememberSaveable { mutableStateOf("red") }
+    var draftCardBackgroundSchedules by remember(appearanceSettings.cardBackgroundSchedules) {
+        mutableStateOf(appearanceSettings.cardBackgroundSchedules)
+    }
+    var draftCardScheduleStarts by remember(appearanceSettings.cardBackgroundSchedules) {
+        mutableStateOf(appearanceSettings.cardBackgroundSchedules.mapValues { it.value.startDate.orEmpty() })
+    }
+    var draftCardScheduleEnds by remember(appearanceSettings.cardBackgroundSchedules) {
+        mutableStateOf(appearanceSettings.cardBackgroundSchedules.mapValues { it.value.endDate.orEmpty() })
+    }
+    var showCardStartDatePicker by remember { mutableStateOf(false) }
+    var showCardEndDatePicker by remember { mutableStateOf(false) }
+    var cardScheduleError by remember { mutableStateOf<String?>(null) }
+    var showDeleteCardBackgroundDialog by remember { mutableStateOf(false) }
     var isSavingCardAppearance by remember { mutableStateOf(false) }
     var draftConsultationBackgrounds by remember(appearanceSettings.consultationBackgrounds) {
         mutableStateOf(appearanceSettings.consultationBackgrounds)
@@ -258,7 +272,12 @@ fun MestreScreen(
                     backgroundInputError = FirebaseService.lastError ?: "Não foi possível enviar a imagem."
                 } else {
                     if (themeKey == CARD_APPEARANCE_KEY) {
-                        draftCardBackgrounds = draftCardBackgrounds + (cardAppearanceThemeKey to uploadedUrl)
+                        val themeKeyForCard = cardAppearanceThemeKey
+                        draftCardBackgrounds = draftCardBackgrounds + (themeKeyForCard to uploadedUrl)
+                        draftCardBackgroundSchedules[themeKeyForCard]?.let { oldSchedule ->
+                            draftCardBackgroundSchedules = draftCardBackgroundSchedules +
+                                (themeKeyForCard to oldSchedule.copy(url = uploadedUrl))
+                        }
                     } else {
                         backgroundUrlInput = uploadedUrl
                     }
@@ -416,7 +435,12 @@ fun MestreScreen(
     val themeBackgroundsHaveChanges =
         draftDefaultThemeBackgrounds != appearanceSettings.defaultThemeBackgrounds ||
             draftThemeBackgrounds != appearanceSettings.themeBackgrounds
-    val cardAppearanceHasChanges = draftCardBackgrounds != appearanceSettings.cardBackgrounds
+    val cardScheduleDatesHaveChanges = SupportedThemeKeys.any { themeKey ->
+        draftCardScheduleStarts[themeKey].orEmpty() != appearanceSettings.cardBackgroundSchedules[themeKey]?.startDate.orEmpty() ||
+            draftCardScheduleEnds[themeKey].orEmpty() != appearanceSettings.cardBackgroundSchedules[themeKey]?.endDate.orEmpty()
+    }
+    val cardAppearanceHasChanges = draftCardBackgrounds != appearanceSettings.cardBackgrounds ||
+        draftCardBackgroundSchedules != appearanceSettings.cardBackgroundSchedules || cardScheduleDatesHaveChanges
     val consultationAppearanceHasChanges =
         draftConsultationBackgrounds != appearanceSettings.consultationBackgrounds ||
             draftOfferBanners != appearanceSettings.offerBanners
@@ -1544,8 +1568,12 @@ fun MestreScreen(
                     "green" to "Verde", "blue" to "Azul", "orange" to "Laranja",
                     "glass" to "Glass Soft", "expressive" to "Glass Expressivo"
                 )
+                val selectedCardUrl = draftCardBackgrounds[cardAppearanceThemeKey].orEmpty()
+                    .ifBlank { draftCardBackgroundSchedules[cardAppearanceThemeKey]?.url.orEmpty() }
+                val selectedStartDate = draftCardScheduleStarts[cardAppearanceThemeKey].orEmpty()
+                val selectedEndDate = draftCardScheduleEnds[cardAppearanceThemeKey].orEmpty()
                 MestrePageIntro(
-                    description = "Escolha o fundo do cartão de convênio para cada tema. A máscara, o chip e os dados do usuário permanecem fixos.",
+                    description = "Escolha o fundo do cartão de convênio para cada tema. Você pode remover a imagem ou programar quando ela será exibida.",
                     hasUnsavedChanges = cardAppearanceHasChanges
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1558,14 +1586,17 @@ fun MestreScreen(
                     com.example.data.SupportedThemeKeys.forEach { key ->
                         FilterChip(
                             selected = cardAppearanceThemeKey == key,
-                            onClick = { cardAppearanceThemeKey = key },
+                            onClick = {
+                                cardAppearanceThemeKey = key
+                                cardScheduleError = null
+                            },
                             label = { Text(cardThemeLabels[key] ?: key) }
                         )
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 BenefitCardSurface(
-                    backgroundUrl = draftCardBackgrounds[cardAppearanceThemeKey].orEmpty(),
+                    backgroundUrl = selectedCardUrl,
                     themeKey = cardAppearanceThemeKey,
                     name = "Alessandro Paulo da Silva",
                     limit = "R$ 491,40",
@@ -1577,38 +1608,150 @@ fun MestreScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Tema selecionado: ${cardThemeLabels[cardAppearanceThemeKey] ?: cardAppearanceThemeKey}", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    if (draftCardBackgrounds[cardAppearanceThemeKey].isNullOrBlank()) "Usando o fundo padrão deste tema." else "Fundo personalizado carregado.",
+                    when {
+                        selectedCardUrl.isBlank() -> "Usando o fundo padrão deste tema."
+                        selectedStartDate.isBlank() -> "Imagem personalizada ativa imediatamente."
+                        selectedEndDate.isBlank() -> "Agendada a partir de ${formatThemeBackgroundDate(selectedStartDate)}."
+                        else -> "Agendada de ${formatThemeBackgroundDate(selectedStartDate)} a ${formatThemeBackgroundDate(selectedEndDate)}."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Período da imagem (opcional)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Sem data de início, a imagem fica ativa imediatamente. Com início definido, ela aparece apenas no período escolhido; depois o cartão volta ao fundo padrão.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
-                        enabled = !isUploadingThemeBackground,
+                        onClick = { showCardStartDatePicker = true },
+                        enabled = selectedCardUrl.isNotBlank() && !isSavingCardAppearance,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (selectedStartDate.isBlank()) "Agendar início" else "Início: ${formatThemeBackgroundDate(selectedStartDate)}")
+                    }
+                    OutlinedButton(
+                        onClick = { showCardEndDatePicker = true },
+                        enabled = selectedCardUrl.isNotBlank() && selectedStartDate.isNotBlank() && !isSavingCardAppearance,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (selectedEndDate.isBlank()) "Sem data final" else "Fim: ${formatThemeBackgroundDate(selectedEndDate)}")
+                    }
+                }
+                if (selectedStartDate.isNotBlank() || selectedEndDate.isNotBlank()) {
+                    TextButton(
+                        onClick = {
+                            draftCardScheduleStarts = draftCardScheduleStarts - cardAppearanceThemeKey
+                            draftCardScheduleEnds = draftCardScheduleEnds - cardAppearanceThemeKey
+                            cardScheduleError = null
+                        },
+                        enabled = !isSavingCardAppearance
+                    ) { Text("Remover agendamento") }
+                }
+                cardScheduleError?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        enabled = !isUploadingThemeBackground && !isSavingCardAppearance,
                         onClick = {
                             editingBackgroundTheme = CARD_APPEARANCE_KEY
                             themeBackgroundLauncher.launch("image/*")
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            when {
+                                isUploadingThemeBackground -> "Enviando imagem…"
+                                selectedCardUrl.isBlank() -> "Escolher imagem"
+                                else -> "Trocar imagem"
+                            }
+                        )
+                    }
+                    if (selectedCardUrl.isNotBlank()) {
+                        IconButton(
+                            onClick = { showDeleteCardBackgroundDialog = true },
+                            enabled = !isUploadingThemeBackground && !isSavingCardAppearance
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Excluir imagem do cartão")
                         }
-                    ) { Text(if (isUploadingThemeBackground) "Enviando…" else "Escolher imagem") }
-                    Button(
-                        enabled = cardAppearanceHasChanges && !isSavingCardAppearance,
-                        onClick = {
-                            coroutineScope.launch {
-                                isSavingCardAppearance = true
-                                val saved = FirebaseService.saveAppearanceSettings(
-                                    appearanceSettings.copy(cardBackgrounds = draftCardBackgrounds)
+                    }
+                }
+                Button(
+                    enabled = cardAppearanceHasChanges && !isSavingCardAppearance && !isUploadingThemeBackground,
+                    onClick = {
+                        val selectedUrl = draftCardBackgrounds[cardAppearanceThemeKey].orEmpty()
+                            .ifBlank { draftCardBackgroundSchedules[cardAppearanceThemeKey]?.url.orEmpty() }
+                        val rawStart = draftCardScheduleStarts[cardAppearanceThemeKey].orEmpty()
+                        val rawEnd = draftCardScheduleEnds[cardAppearanceThemeKey].orEmpty()
+                        val startDate = ThemeBackground.normalizeDate(rawStart)
+                        val endDate = ThemeBackground.normalizeDate(rawEnd)
+                        when {
+                            selectedUrl.isNotBlank() && rawStart.isNotBlank() && startDate == null ->
+                                cardScheduleError = "Selecione uma data inicial válida."
+                            selectedUrl.isNotBlank() && rawEnd.isNotBlank() && endDate == null ->
+                                cardScheduleError = "Selecione uma data final válida."
+                            selectedUrl.isNotBlank() && startDate == null && endDate != null ->
+                                cardScheduleError = "Defina uma data inicial antes da data final."
+                            selectedUrl.isNotBlank() && startDate != null && endDate != null && endDate < startDate ->
+                                cardScheduleError = "A data final não pode ser anterior à data inicial."
+                            else -> {
+                                cardScheduleError = null
+                                val immediateImages = draftCardBackgrounds.toMutableMap()
+                                val schedules = draftCardBackgroundSchedules.toMutableMap()
+                                if (selectedUrl.isBlank()) {
+                                    immediateImages.remove(cardAppearanceThemeKey)
+                                    schedules.remove(cardAppearanceThemeKey)
+                                } else if (startDate != null) {
+                                    immediateImages.remove(cardAppearanceThemeKey)
+                                    schedules[cardAppearanceThemeKey] = ThemeBackground(
+                                        id = "card-$cardAppearanceThemeKey",
+                                        label = "Fundo do cartão",
+                                        url = selectedUrl,
+                                        isActive = true,
+                                        startDate = startDate,
+                                        endDate = endDate
+                                    )
+                                } else {
+                                    schedules.remove(cardAppearanceThemeKey)
+                                    immediateImages[cardAppearanceThemeKey] = selectedUrl
+                                }
+                                val imagesToSave = immediateImages.toMap()
+                                val schedulesToSave = schedules.toMap()
+                                val settingsToSave = appearanceSettings.copy(
+                                    cardBackgrounds = imagesToSave,
+                                    cardBackgroundSchedules = schedulesToSave
                                 )
-                                isSavingCardAppearance = false
-                                if (saved) draftCardBackgrounds = draftCardBackgrounds.toMap()
-                                snackbarHostState.showSnackbar(
-                                    if (saved) "Fundo do cartão publicado para o tema selecionado."
-                                    else FirebaseService.lastError ?: "Não foi possível salvar a aparência do cartão."
-                                )
+                                coroutineScope.launch {
+                                    isSavingCardAppearance = true
+                                    val saved = FirebaseService.saveAppearanceSettings(settingsToSave)
+                                    isSavingCardAppearance = false
+                                    if (saved) {
+                                        draftCardBackgrounds = imagesToSave
+                                        draftCardBackgroundSchedules = schedulesToSave
+                                        draftCardScheduleStarts = schedulesToSave.mapValues { it.value.startDate.orEmpty() }
+                                        draftCardScheduleEnds = schedulesToSave.mapValues { it.value.endDate.orEmpty() }
+                                    }
+                                    snackbarHostState.showSnackbar(
+                                        if (saved) "Fundo e agendamento do cartão salvos."
+                                        else FirebaseService.lastError ?: "Não foi possível salvar a aparência do cartão."
+                                    )
+                                }
                             }
                         }
-                    ) {
-                        if (isSavingCardAppearance) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        else Text("Salvar tema")
-                    }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isSavingCardAppearance) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    else Text("Salvar imagem e período")
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -2011,6 +2154,48 @@ fun MestreScreen(
                 }
             }
 
+            if (showCardStartDatePicker) {
+                val datePickerState = rememberDatePickerState(
+                    initialSelectedDateMillis = dateToPickerMillis(draftCardScheduleStarts[cardAppearanceThemeKey].orEmpty())
+                )
+                DatePickerDialog(
+                    onDismissRequest = { showCardStartDatePicker = false },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                pickerDateToIsoDate(datePickerState.selectedDateMillis)?.let { selectedDate ->
+                                    draftCardScheduleStarts = draftCardScheduleStarts + (cardAppearanceThemeKey to selectedDate)
+                                }
+                                cardScheduleError = null
+                                showCardStartDatePicker = false
+                            }
+                        ) { Text("Usar data") }
+                    },
+                    dismissButton = { TextButton(onClick = { showCardStartDatePicker = false }) { Text("Cancelar") } }
+                ) { DatePicker(state = datePickerState) }
+            }
+
+            if (showCardEndDatePicker) {
+                val datePickerState = rememberDatePickerState(
+                    initialSelectedDateMillis = dateToPickerMillis(draftCardScheduleEnds[cardAppearanceThemeKey].orEmpty())
+                )
+                DatePickerDialog(
+                    onDismissRequest = { showCardEndDatePicker = false },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                pickerDateToIsoDate(datePickerState.selectedDateMillis)?.let { selectedDate ->
+                                    draftCardScheduleEnds = draftCardScheduleEnds + (cardAppearanceThemeKey to selectedDate)
+                                }
+                                cardScheduleError = null
+                                showCardEndDatePicker = false
+                            }
+                        ) { Text("Usar data") }
+                    },
+                    dismissButton = { TextButton(onClick = { showCardEndDatePicker = false }) { Text("Cancelar") } }
+                ) { DatePicker(state = datePickerState) }
+            }
+
             if (showThemeBackgroundDialog) {
                 AlertDialog(
                     onDismissRequest = { showThemeBackgroundDialog = false },
@@ -2389,6 +2574,31 @@ fun MestreScreen(
           }
       )
   }
+
+            if (showDeleteCardBackgroundDialog) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteCardBackgroundDialog = false },
+                    title = { Text("Excluir imagem do cartão?") },
+                    text = {
+                        Text("A imagem será removida do tema selecionado quando você salvar. Os cartões voltarão a usar o fundo padrão.")
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                draftCardBackgrounds = draftCardBackgrounds - cardAppearanceThemeKey
+                                draftCardBackgroundSchedules = draftCardBackgroundSchedules - cardAppearanceThemeKey
+                                draftCardScheduleStarts = draftCardScheduleStarts - cardAppearanceThemeKey
+                                draftCardScheduleEnds = draftCardScheduleEnds - cardAppearanceThemeKey
+                                cardScheduleError = null
+                                showDeleteCardBackgroundDialog = false
+                            }
+                        ) { Text("Excluir") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteCardBackgroundDialog = false }) { Text("Cancelar") }
+                    }
+                )
+            }
 
   backgroundToDelete?.let { (themeKey, background) ->
                 AlertDialog(
