@@ -222,7 +222,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun updateSearchQuery(query: String) {
-        _searchQuery.value = query
+        _searchQuery.value = com.example.data.storeProductLookupCode(query)
     }
 
     fun onProductSearched(product: Product) {
@@ -264,8 +264,8 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     }
 
     fun getProductsByCategory(category: String) = repository.getProductsByCategory(category)
-    fun searchProducts(query: String) = repository.searchProducts(query)
-    fun searchProductsByCategory(category: String, query: String) = repository.searchProductsByCategory(category, query)
+    fun searchProducts(query: String) = repository.searchProducts(com.example.data.storeProductLookupCode(query))
+    fun searchProductsByCategory(category: String, query: String) = repository.searchProductsByCategory(category, com.example.data.storeProductLookupCode(query))
 
     suspend fun addCategory(name: String): Boolean {
         val cleanName = name.trim().replace(Regex("\\s+"), " ")
