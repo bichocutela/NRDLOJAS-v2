@@ -635,8 +635,8 @@ private fun MyDaysOffCard(
                             onClick = { if (savedPhotoUrl != null) photoDialogUrl = savedPhotoUrl else captureRosterPhoto() },
                             enabled = !photoUploadBusy,
                             modifier = Modifier.weight(1f),
-                            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = palette?.accent ?: MaterialTheme.colorScheme.primary),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, palette?.outline ?: MaterialTheme.colorScheme.outline)
+                            colors = palette?.let { androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = it.accent) }
+                                ?: androidx.compose.material3.ButtonDefaults.outlinedButtonColors()
                         ) {
                             if (photoUploadBusy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                             else if (savedPhotoUrl != null) Text("Foto Registrada", style = MaterialTheme.typography.labelMedium, maxLines = 1)
