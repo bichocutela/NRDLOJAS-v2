@@ -174,7 +174,6 @@ fun MestreScreen(
         .collectAsStateWithLifecycle(initialValue = AppearanceSettings())
     var draftAppearanceSettings by remember(appearanceSettings) { mutableStateOf(appearanceSettings) }
     val pendingBubbleImageDeletes = remember { mutableStateListOf<String>() }
-    var pendingCardImageDeletes by remember { mutableStateOf<List<String>>(emptyList()) }
     var draftDefaultThemeBackgrounds by remember(appearanceSettings.defaultThemeBackgrounds) {
         mutableStateOf(appearanceSettings.defaultThemeBackgrounds)
     }
@@ -273,11 +272,6 @@ fun MestreScreen(
                 } else {
                     if (themeKey == CARD_APPEARANCE_KEY) {
                         val themeKeyForCard = cardAppearanceThemeKey
-                        val previousUrl = draftCardBackgrounds[themeKeyForCard].orEmpty()
-                            .ifBlank { draftCardBackgroundSchedules[themeKeyForCard]?.url.orEmpty() }
-                        if (previousUrl.isNotBlank() && previousUrl != uploadedUrl) {
-                            pendingCardImageDeletes = pendingCardImageDeletes + previousUrl
-                        }
                         draftCardBackgrounds = draftCardBackgrounds + (themeKeyForCard to uploadedUrl)
                         draftCardBackgroundSchedules[themeKeyForCard]?.let { oldSchedule ->
                             draftCardBackgroundSchedules = draftCardBackgroundSchedules +
@@ -2159,6 +2153,48 @@ fun MestreScreen(
                 }
             }
 
+            if (showCardStartDatePicker) {
+                val datePickerState = rememberDatePickerState(
+                    initialSelectedDateMillis = dateToPickerMillis(draftCardScheduleStarts[cardAppearanceThemeKey].orEmpty())
+                )
+                DatePickerDialog(
+                    onDismissRequest = { showCardStartDatePicker = false },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                pickerDateToIsoDate(datePickerState.selectedDateMillis)?.let { selectedDate ->
+                                    draftCardScheduleStarts = draftCardScheduleStarts + (cardAppearanceThemeKey to selectedDate)
+                                }
+                                cardScheduleError = null
+                                showCardStartDatePicker = false
+                            }
+                        ) { Text("Usar data") }
+                    },
+                    dismissButton = { TextButton(onClick = { showCardStartDatePicker = false }) { Text("Cancelar") } }
+                ) { DatePicker(state = datePickerState) }
+            }
+
+            if (showCardEndDatePicker) {
+                val datePickerState = rememberDatePickerState(
+                    initialSelectedDateMillis = dateToPickerMillis(draftCardScheduleEnds[cardAppearanceThemeKey].orEmpty())
+                )
+                DatePickerDialog(
+                    onDismissRequest = { showCardEndDatePicker = false },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                pickerDateToIsoDate(datePickerState.selectedDateMillis)?.let { selectedDate ->
+                                    draftCardScheduleEnds = draftCardScheduleEnds + (cardAppearanceThemeKey to selectedDate)
+                                }
+                                cardScheduleError = null
+                                showCardEndDatePicker = false
+                            }
+                        ) { Text("Usar data") }
+                    },
+                    dismissButton = { TextButton(onClick = { showCardEndDatePicker = false }) { Text("Cancelar") } }
+                ) { DatePicker(state = datePickerState) }
+            }
+
             if (showThemeBackgroundDialog) {
                 AlertDialog(
                     onDismissRequest = { showThemeBackgroundDialog = false },
@@ -2537,6 +2573,31 @@ fun MestreScreen(
           }
       )
   }
+
+            if (showDeleteCardBackgroundDialog) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteCardBackgroundDialog = false },
+                    title = { Text("Excluir imagem do cartão?") },
+                    text = {
+                        Text("A imagem será removida do tema selecionado quando você salvar. Os cartões voltarão a usar o fundo padrão.")
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                draftCardBackgrounds = draftCardBackgrounds - cardAppearanceThemeKey
+                                draftCardBackgroundSchedules = draftCardBackgroundSchedules - cardAppearanceThemeKey
+                                draftCardScheduleStarts = draftCardScheduleStarts - cardAppearanceThemeKey
+                                draftCardScheduleEnds = draftCardScheduleEnds - cardAppearanceThemeKey
+                                cardScheduleError = null
+                                showDeleteCardBackgroundDialog = false
+                            }
+                        ) { Text("Excluir") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteCardBackgroundDialog = false }) { Text("Cancelar") }
+                    }
+                )
+            }
 
   backgroundToDelete?.let { (themeKey, background) ->
                 AlertDialog(
