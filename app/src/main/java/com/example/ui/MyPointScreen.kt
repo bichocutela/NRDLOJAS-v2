@@ -1177,7 +1177,7 @@ private fun PointEntryCard(entry: PointEntry, palette: ProfileThemePalette? = nu
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = if (expressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal,
                 modifier = Modifier.padding(start = 8.dp),
-                color = palette?.text
+                color = palette?.text ?: MaterialTheme.colorScheme.onSurface
             )
         }
         Spacer(Modifier.height(5.dp)); Text("Entrada: ${entry.entry ?: "—"}   Saída: ${entry.exit ?: "—"}", color = palette?.text ?: MaterialTheme.colorScheme.onSurface)
