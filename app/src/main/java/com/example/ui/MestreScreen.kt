@@ -529,8 +529,6 @@ fun MestreScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (currentPage == MestrePanelPage.DASHBOARD) {
-                NfcInstallTestPanel()
-                Spacer(modifier = Modifier.height(20.dp))
                 MestreDashboardOverview(
                     pendingSuggestions = suggestions.count { it.status == com.example.data.ProductSuggestion.STATUS_PENDING },
                     productCount = allProducts.size,

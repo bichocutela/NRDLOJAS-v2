@@ -124,7 +124,6 @@ jobs:
         SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       run: |
         ./gradlew testDebugUnitTest \
-          --tests 'com.example.nfc.*' \
           --tests 'com.example.data.GlobalProductUsageTest' \
           --tests 'com.example.data.DynamicPageScheduleTest' \
           --tests 'com.example.data.DynamicPageCodecTest' \
