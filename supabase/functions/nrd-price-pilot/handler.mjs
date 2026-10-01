@@ -1,9 +1,9 @@
+import { normalizeProductPage } from "./product-contract.mjs";
 // Internal pilot. Never forward client-supplied URLs, headers, credentials or raw upstream bodies.
 const TENANT = "https://nordestao12.acp.app.br";
 const API = "https://api.acp.app.br";
-const fields = ["id","code","barCode","description","unit","value","previousValue","clubValue","wholesaleValue","wholesaleQuantity","quantityTake","quantityPay","secondUnitDiscount","unitLimitPerCPF","stockQuantity","packageQuantity","characteristic","contentQuantity","contentUnit","startDate","initialDate","validFrom","startAt","offerStartDate","endDate","finalDate","validTo","endAt","offerEndDate","cashback","cashbackValue","validOffer","dueDate","showOffersExpirationDate","stock"];
 const reply = (status, body) => new Response(JSON.stringify(body), {status, headers: {"Content-Type":"application/json", "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff"}});
-export function createHandler({authenticate, credentials, fetcher = fetch}) {
+export function createHandler({authenticate, credentials, consumeBudget = async()=>false, fetcher = fetch}) {
   return async (req) => {
     if (req.method !== "POST") return reply(405,{error:"METHOD_NOT_ALLOWED"});
     try { if (!(await authenticate(req))) return reply(403,{error:"ACCESS_DENIED"}); }
@@ -21,6 +21,8 @@ export function createHandler({authenticate, credentials, fetcher = fetch}) {
           !["code","barCode","description"].includes(input.field) ||
           !Number.isInteger(input.page ?? 0) || (input.page ?? 0)<0 || (input.page ?? 0)>100)
         return reply(400,{error:"INVALID_REQUEST"});
+      stage="rate-limit";
+      if (!(await consumeBudget(req))) return reply(429,{error:"RATE_LIMITED"});
       const secret=credentials();
       if (!secret.login || !secret.password) return reply(503,{error:"SERVICE_NOT_READY"});
       // Every pilot request gets a separate cookie jar; no user/session mixing.
@@ -58,10 +60,7 @@ export function createHandler({authenticate, credentials, fetcher = fetch}) {
       const payload=JSON.parse(raw);
       // Fail closed on an unknown envelope; mapping must be validated before Android migration.
       stage="mapping";
-      const items=Array.isArray(payload)?payload:Array.isArray(payload.items)?payload.items:Array.isArray(payload.data)?payload.data:null;
-      if(!items)throw new Error("UPSTREAM_FAILURE");
-      const products=items.slice(0,20).map(item=>Object.fromEntries(fields.filter(k=>["string","number","boolean"].includes(typeof item?.[k]) || item?.[k]===null).map(k=>[k,item[k]])));
-      return reply(200,{products,page:input.page??0});
+      return reply(200,normalizeProductPage(payload,input.page??0));
     } catch { console.warn("NRD_PRICE_PILOT_FAILURE",stage); return reply(502,{error:"CONSULTATION_UNAVAILABLE"}); }
   };
 }
