@@ -183,12 +183,9 @@ ficha, com horário da consulta (não é data de atualização comercial da ACP)
 Testes HTTP de recuperação e atualização são sintéticos: não comprovam que a ACP
 aceitará renovar uma sessão real. Persistência e câmera ainda exigem aparelho.
 
-## Transição dos nomes dos Secrets
+## Nomes dos Secrets
 
-Os nomes atuais são `INTEGRATION_USER` e `INTEGRATION_PASSWORD`, com os mesmos
-valores do acesso existente. Cadastrar ambos em Settings → Secrets and variables
-→ Actions. Os workflows usam o par novo somente quando ambos estão preenchidos;
-até lá, usam o par antigo `ACP_LOGIN`/`ACP_PASSWORD` para preservar a build.
-Depois de validar a build e o acesso com o par novo, remover o fallback dos
-workflows e os Secrets antigos. Renomear não impede extrair os valores do APK;
-a retirada das credenciais para o servidor é uma alteração separada.
+Os workflows usam exclusivamente `INTEGRATION_USER` e `INTEGRATION_PASSWORD`.
+Os valores continuam sendo o login e a senha do acesso existente. Renomear os
+campos não impede extrair os valores do APK; a retirada das credenciais para o
+servidor é uma alteração separada.

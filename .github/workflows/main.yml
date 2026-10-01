@@ -105,8 +105,8 @@ jobs:
 
     - name: Validate bundled integration access
       env:
-        INTEGRATION_USER: ${{ secrets.INTEGRATION_USER != '' && secrets.INTEGRATION_PASSWORD != '' && secrets.INTEGRATION_USER || secrets.ACP_LOGIN }}
-        INTEGRATION_PASSWORD: ${{ secrets.INTEGRATION_USER != '' && secrets.INTEGRATION_PASSWORD != '' && secrets.INTEGRATION_PASSWORD || secrets.ACP_PASSWORD }}
+        INTEGRATION_USER: ${{ secrets.INTEGRATION_USER }}
+        INTEGRATION_PASSWORD: ${{ secrets.INTEGRATION_PASSWORD }}
       run: |
         if [ -z "$INTEGRATION_USER" ] || [ -z "$INTEGRATION_PASSWORD" ]; then
           echo "Configure INTEGRATION_USER and INTEGRATION_PASSWORD in repository Actions secrets before building."
@@ -115,8 +115,8 @@ jobs:
 
     - name: Build with Gradle
       env:
-        INTEGRATION_USER: ${{ secrets.INTEGRATION_USER != '' && secrets.INTEGRATION_PASSWORD != '' && secrets.INTEGRATION_USER || secrets.ACP_LOGIN }}
-        INTEGRATION_PASSWORD: ${{ secrets.INTEGRATION_USER != '' && secrets.INTEGRATION_PASSWORD != '' && secrets.INTEGRATION_PASSWORD || secrets.ACP_PASSWORD }}
+        INTEGRATION_USER: ${{ secrets.INTEGRATION_USER }}
+        INTEGRATION_PASSWORD: ${{ secrets.INTEGRATION_PASSWORD }}
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
