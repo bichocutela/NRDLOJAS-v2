@@ -3,7 +3,7 @@
 Entrada no menu: **Consultar Produtos**. A tela **Confirme** apresenta campos
 mascarados e somente leitura. O primeiro acesso de cada aparelho precisa ser
 configurado por um administrador somente em builds sem credencial incorporada.
-A build de distribuição recebe ACP_LOGIN e ACP_PASSWORD dos Actions secrets e
+A build de distribuição recebe INTEGRATION_USER e INTEGRATION_PASSWORD dos Actions secrets e
 incorpora esses valores ao APK, conforme solicitado pelo responsável. Os valores
 não ficam no código versionado, mas podem ser extraídos do APK.
 
@@ -141,7 +141,7 @@ precedência entre campanhas nesta etapa.
 
 ## Acesso pronto no APK
 
-Cadastrar uma única vez os repository Actions secrets `ACP_LOGIN` e `ACP_PASSWORD`
+Cadastrar uma única vez os repository Actions secrets `INTEGRATION_USER` e `INTEGRATION_PASSWORD`
 antes da build de distribuição. O workflow interrompe a build se estiverem ausentes.
 Não há backend novo. Em builds configuradas, qualquer usuário do NRD vê os campos
 mascarados e bloqueados e toca em Entrar; não precisa configurar cada aparelho.
@@ -182,3 +182,10 @@ ficha, com horário da consulta (não é data de atualização comercial da ACP)
 
 Testes HTTP de recuperação e atualização são sintéticos: não comprovam que a ACP
 aceitará renovar uma sessão real. Persistência e câmera ainda exigem aparelho.
+
+## Nomes dos Secrets
+
+Os workflows usam exclusivamente `INTEGRATION_USER` e `INTEGRATION_PASSWORD`.
+Os valores continuam sendo o login e a senha do acesso existente. Renomear os
+campos não impede extrair os valores do APK; a retirada das credenciais para o
+servidor é uma alteração separada.

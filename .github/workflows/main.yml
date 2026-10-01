@@ -103,20 +103,20 @@ jobs:
         echo "NEXT_TAG=$NEXT_TAG" >> "$GITHUB_ENV"
         echo "TAG=$NEXT_TAG" >> $GITHUB_OUTPUT
 
-    - name: Validate bundled ACP access
+    - name: Validate bundled integration access
       env:
-        ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
-        ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        INTEGRATION_USER: ${{ secrets.INTEGRATION_USER }}
+        INTEGRATION_PASSWORD: ${{ secrets.INTEGRATION_PASSWORD }}
       run: |
-        if [ -z "$ACP_LOGIN" ] || [ -z "$ACP_PASSWORD" ]; then
-          echo "Configure ACP_LOGIN and ACP_PASSWORD in repository Actions secrets before building."
+        if [ -z "$INTEGRATION_USER" ] || [ -z "$INTEGRATION_PASSWORD" ]; then
+          echo "Configure INTEGRATION_USER and INTEGRATION_PASSWORD in repository Actions secrets before building."
           exit 1
         fi
 
     - name: Build with Gradle
       env:
-        ACP_LOGIN: ${{ secrets.ACP_LOGIN }}
-        ACP_PASSWORD: ${{ secrets.ACP_PASSWORD }}
+        INTEGRATION_USER: ${{ secrets.INTEGRATION_USER }}
+        INTEGRATION_PASSWORD: ${{ secrets.INTEGRATION_PASSWORD }}
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
