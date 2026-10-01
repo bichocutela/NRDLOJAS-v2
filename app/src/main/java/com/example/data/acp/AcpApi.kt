@@ -32,7 +32,7 @@ internal class AcpFailure(message: String) : IOException(message)
 /** Isolated NextAuth session; never changes NRD/Firebase/Nossa Gente authentication. */
 internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient.Builder = OkHttpClient.Builder(),
     private val bundledLogin: String = "", private val bundledPassword: String = "") {
-    constructor(context: Context) : this(AcpSecureStore(context), bundledLogin = BuildConfig.ACP_LOGIN, bundledPassword = BuildConfig.ACP_PASSWORD)
+    constructor(context: Context) : this(AcpSecureStore(context), bundledLogin = BuildConfig.INTEGRATION_USER, bundledPassword = BuildConfig.INTEGRATION_PASSWORD)
     private val sessionLock = Mutex()
     private var accessConfirmed = false
     private var clubCategoryId: String? = null

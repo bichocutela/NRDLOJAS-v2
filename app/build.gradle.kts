@@ -22,8 +22,8 @@ android {
     targetSdk = 36
     versionCode = System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: 59
     versionName = System.getenv("APP_VERSION_NAME") ?: "1.0.59"
-    buildConfigField("String", "ACP_LOGIN", acpJavaString(System.getenv("ACP_LOGIN") ?: ""))
-    buildConfigField("String", "ACP_PASSWORD", acpJavaString(System.getenv("ACP_PASSWORD") ?: ""))
+    buildConfigField("String", "INTEGRATION_USER", acpJavaString(System.getenv("INTEGRATION_USER") ?: ""))
+    buildConfigField("String", "INTEGRATION_PASSWORD", acpJavaString(System.getenv("INTEGRATION_PASSWORD") ?: ""))
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         val supabaseUrl = System.getenv("SUPABASE_URL") ?: "https://kkayksyzksexoarpfxyj.supabase.co"
     buildConfigField("String", "SUPABASE_URL", "\"${supabaseUrl}\"")
