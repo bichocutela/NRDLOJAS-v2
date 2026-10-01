@@ -39,3 +39,10 @@ test("unknown supplier envelope is not forwarded",async()=>{
  const h=createHandler({authenticate:async()=>true,credentials:()=>({login:"x",password:"y"}),fetcher:async()=>new Response(JSON.stringify(payloads[n++]))});
  assert.equal((await h(request(valid))).status,502);
 });
+
+test("real items envelope is accepted without exposing nested metadata",async()=>{
+ let n=0;const payloads=[{csrfToken:"x"},{},{user:{accessToken:"x"}},{items:[{code:"25",description:"Produto",quantityTake:4,quantityPay:3,secondUnitDiscount:50,user:{secret:"x"}}],totalCount:1}];
+ const h=createHandler({authenticate:async()=>true,credentials:()=>({login:"x",password:"y"}),fetcher:async()=>new Response(JSON.stringify(payloads[n++]))});
+ const res=await h(request(valid));assert.equal(res.status,200);
+ const data=await res.json();assert.equal(data.products[0].quantityTake,4);assert.equal(data.products[0].quantityPay,3);assert.equal(data.products[0].secondUnitDiscount,50);assert.equal(data.products[0].user,undefined);
+});
