@@ -17,7 +17,7 @@ Esta rota destina-se exclusivamente ao piloto Mestre: não liberar publicamente 
 
 ## Verificação
 node --test supabase/functions/nrd-price-pilot/handler.test.mjs
-6 testes locais com fornecedor simulado passaram. Não houve login nem consulta real ao fornecedor.
+7 testes locais com fornecedor simulado passaram. Em 01/10/2026 o piloto foi publicado (versão 2): chamada sem autenticação 401, token inválido 401 e token Firebase Mestre válido 200 com 20 produtos para busca por descrição. Credenciais ficaram somente nos secrets. Nenhuma alteração no Android; isso não valida ainda equivalência completa das ofertas, categorias, unidades, paginação ou acesso dos usuários comuns.
 
 ## Critérios para bloco 2
 Confirmar envelope real de Product/all e mapear todos os campos comerciais (Clube, atacado, leve/pague, cashback, validade). A lista atual é provisória.
