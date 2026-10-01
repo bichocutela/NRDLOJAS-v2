@@ -28,3 +28,10 @@ Integrar atrás de chave desativada; testar preços, buscas, leitor, ofertas, si
 Migrar Nossa Gente em bloco independente, com sessão por usuário, expiração e logout, sem credencial compartilhada.
 Somente depois remover credenciais/hosts do APK e rotacionar credencial ACP antiga. APKs antigos permanecem expostos até a rotação.
 Rollback antes da remoção: desativar migração; após remoção não restaurar credenciais no APK.
+
+## Bloco de contrato e proteção (01/10/2026)
+Piloto versão 3 publicado: unidades, categorias do produto, família, embalagem, descrições auxiliares, campos comerciais e metadados de paginação projetados explicitamente. Páginas 0 e 1 da busca real retornaram 200, 20 produtos cada e totalPages=4.
+11 testes locais passaram. Rate limit persistente por UID piloto: 60/minuto; bloqueio da 61ª validado em transação revertida. Falha no controle bloqueia a consulta; usuários anon/authenticated não executam o RPC.
+Migração aplicada: internal_price_pilot_rate_limit; rate-limit.sql registra o DDL aplicado (não executar novamente sem consultar histórico).
+Tabela privada com RLS sem políticas é intencional: usuários comuns não acessam; somente service_role tem grants. O advisor informativo está documentado em https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy.
+Ainda faltam rotas de categorias, campanhas e integração, cache/sessão de servidor e autenticação dos usuários comuns; a consulta piloto não substitui todos os caminhos de AcpApi. Android e Nossa Gente permanecem sem migração.
