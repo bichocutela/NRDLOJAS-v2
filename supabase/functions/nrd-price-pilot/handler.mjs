@@ -1,13 +1,14 @@
 // Internal pilot. Never forward client-supplied URLs, headers, credentials or raw upstream bodies.
 const TENANT = "https://nordestao12.acp.app.br";
 const API = "https://api.acp.app.br";
-const fields = ["id","code","barCode","description","unit","value","previousValue","clubValue","wholesaleValue","wholesaleQuantity","take","pay","cashback","cashbackValue","validOffer","dueDate","showOffersExpirationDate","stock"];
+const fields = ["id","code","barCode","description","unit","value","previousValue","clubValue","wholesaleValue","wholesaleQuantity","quantityTake","quantityPay","secondUnitDiscount","unitLimitPerCPF","stockQuantity","packageQuantity","characteristic","contentQuantity","contentUnit","startDate","initialDate","validFrom","startAt","offerStartDate","endDate","finalDate","validTo","endAt","offerEndDate","cashback","cashbackValue","validOffer","dueDate","showOffersExpirationDate","stock"];
 const reply = (status, body) => new Response(JSON.stringify(body), {status, headers: {"Content-Type":"application/json", "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff"}});
 export function createHandler({authenticate, credentials, fetcher = fetch}) {
   return async (req) => {
     if (req.method !== "POST") return reply(405,{error:"METHOD_NOT_ALLOWED"});
     try { if (!(await authenticate(req))) return reply(403,{error:"ACCESS_DENIED"}); }
     catch { return reply(401,{error:"AUTH_REQUIRED"}); }
+    let stage="validation";
     try {
       // Bounded streaming read; Content-Length alone is not trustworthy.
       const reader=req.body?.getReader(); if (!reader) return reply(400,{error:"INVALID_REQUEST"});
@@ -34,28 +35,33 @@ export function createHandler({authenticate, credentials, fetcher = fetch}) {
         const body=await response.text();if(body.length>2000000)throw new Error("UPSTREAM_FAILURE");
         return JSON.parse(body);
       };
+      stage="csrf";
       const csrf=await json(TENANT+"/api/auth/csrf");
       if(typeof csrf.csrfToken!=="string")throw new Error("UPSTREAM_FAILURE");
+      stage="login";
       const callback=await json(TENANT+"/api/auth/callback/credentials",{
         method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded",Origin:TENANT,Referer:TENANT+"/login"},
         body:new URLSearchParams({login:secret.login,password:secret.password,csrfToken:csrf.csrfToken,callbackUrl:TENANT+"/print-template",json:"true"})});
       if(callback.error || (typeof callback.url==="string" && new URL(callback.url,TENANT).searchParams.has("error")))throw new Error("UPSTREAM_FAILURE");
+      stage="session";
       const session=await json(TENANT+"/api/auth/session");
       if(typeof session.user?.accessToken!=="string" || !session.user.accessToken)throw new Error("UPSTREAM_FAILURE");
       const base=session.user.proxyEnable?TENANT+"/api/proxy/api/v1/":API+"/api/v1/";
       const url=new URL(base+"Product/all");
       url.search=new URLSearchParams({pageSize:"20",pageIndex:String(input.page??0),[input.field]:input.query.trim()}).toString();
       // Tenant cookies must never be forwarded to the API host.
+      stage="products";
       const response=await fetcher(url,{method:"GET",redirect:"error",signal:AbortSignal.timeout(15000),
         headers:{Authorization:"Bearer "+session.user.accessToken,Accept:"application/json","Cache-Control":"no-cache",...(session.user.proxyEnable?{Cookie:[...jar].map(([k,v])=>k+"="+v).join("; ")}:{})}});
       if(!response.ok)throw new Error("UPSTREAM_FAILURE");
       const raw=await response.text();if(raw.length>2000000)throw new Error("UPSTREAM_FAILURE");
       const payload=JSON.parse(raw);
       // Fail closed on an unknown envelope; mapping must be validated before Android migration.
-      const items=Array.isArray(payload)?payload:Array.isArray(payload.data)?payload.data:null;
+      stage="mapping";
+      const items=Array.isArray(payload)?payload:Array.isArray(payload.items)?payload.items:Array.isArray(payload.data)?payload.data:null;
       if(!items)throw new Error("UPSTREAM_FAILURE");
       const products=items.slice(0,20).map(item=>Object.fromEntries(fields.filter(k=>["string","number","boolean"].includes(typeof item?.[k]) || item?.[k]===null).map(k=>[k,item[k]])));
       return reply(200,{products,page:input.page??0});
-    } catch { return reply(502,{error:"CONSULTATION_UNAVAILABLE"}); }
+    } catch { console.warn("NRD_PRICE_PILOT_FAILURE",stage); return reply(502,{error:"CONSULTATION_UNAVAILABLE"}); }
   };
 }
