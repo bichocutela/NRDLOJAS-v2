@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const { initializeTestEnvironment, assertSucceeds, assertFails } = require('@firebase/rules-unit-testing');
-const { doc, getDoc, setDoc, updateDoc, collection, getDocs } = require('firebase/firestore');
+const { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc } = require('firebase/firestore');
 
 (async () => {
   const env = await initializeTestEnvironment({ projectId: 'demo-nrd-access', firestore: { rules: fs.readFileSync(require('node:path').resolve(__dirname, '../../firestore.rules'), 'utf8'), host: '127.0.0.1', port: 8088 } });
@@ -51,6 +51,18 @@ const { doc, getDoc, setDoc, updateDoc, collection, getDocs } = require('firebas
     await assertSucceeds(getDoc(doc(publicDb, 'config/update_policy')));
     await assertFails(setDoc(doc(master, 'config/update_policy'), { enabled: true, minimumVersion: 'garbage' }));
     await assertSucceeds(updateDoc(doc(master, 'config/update_policy'), { enabled: false }));
-    console.log('PASS: 32 authorization checks (permissions, public access and update policy).');
+    await assertFails(getDocs(collection(publicDb, 'restricted_access')));
+    await assertFails(getDocs(collection(admin, 'restricted_access')));
+    await assertSucceeds(updateDoc(doc(master, 'restricted_access/ana'), { enabled: true, profile: true, promotions: true, prices: false }));
+    await assertSucceeds(getDoc(doc(ana, 'work_schedules/2026-10')));
+    await assertSucceeds(updateDoc(doc(master, 'restricted_access/ana'), { enabled: true, profile: false, promotions: true, prices: true }));
+    await assertFails(getDoc(doc(ana, 'work_schedules/2026-10')));
+    await assertFails(updateDoc(doc(admin, 'restricted_access/ana'), { profile: true }));
+    await assertFails(deleteDoc(doc(ana, 'restricted_access/ana')));
+    await assertFails(deleteDoc(doc(admin, 'restricted_access/ana')));
+    await assertFails(deleteDoc(doc(publicDb, 'restricted_access/ana')));
+    await assertSucceeds(deleteDoc(doc(master, 'restricted_access/ana')));
+    await assertFails(getDoc(doc(ana, 'work_schedules/2026-10')));
+    console.log('PASS: 44 authorization checks (history, editing, deletion, permissions, public access and update policy).');
   } finally { await env.cleanup(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

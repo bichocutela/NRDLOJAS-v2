@@ -20,6 +20,7 @@ on:
       - "build.gradle.kts"
       - "firestore.rules"
       - "supabase/functions/send-fcm/**"
+      - "supabase/functions/nrd-account-admin/**"
       - ".github/workflows/main.yml"
   workflow_dispatch:
 
@@ -39,6 +40,14 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
         cache: gradle
+
+    - name: Verify Firebase account administration permissions
+      env:
+        FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      run: node scripts/check-account-admin-permissions.mjs
+
+    - name: Test account administration authorization
+      run: node --test supabase/functions/nrd-account-admin/handler.test.mjs
 
     - name: Generate Debug Keystore (if missing)
       run: |
