@@ -88,7 +88,11 @@ export function createHandler({authorize, credentials, fetcher = fetch}) {
   return async req => {
     if (req.method !== 'POST') return reply(405,{error:'METHOD_NOT_ALLOWED'});
     let identity;
-    try { identity = await authorize(req); } catch { return reply(401,{error:'AUTH_REQUIRED'}); }
+    try { identity = await authorize(req); } catch (error) {
+      if (error?.message === 'PERMISSIONS_RATE_LIMITED') return reply(429,{error:'PERMISSIONS_RATE_LIMITED'});
+      if (['INVALID_FIREBASE_PROJECT','FIREBASE_UNAVAILABLE','PERMISSIONS_UNAVAILABLE'].includes(error?.message)) return reply(503,{error:'PERMISSIONS_UNAVAILABLE'});
+      return reply(401,{error:'AUTH_REQUIRED'});
+    }
     if (!identity?.allowed) return reply(403,{error:'ACCESS_DENIED'});
     let input;
     try { input = await boundedJson(req,4096); } catch { return reply(400,{error:'INVALID_REQUEST'}); }

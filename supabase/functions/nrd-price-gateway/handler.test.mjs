@@ -76,3 +76,11 @@ test('CI probe can only execute a fixed readiness read and never receive product
  assert.equal(new URL(server.calls.at(-1).url).searchParams.get('pageSize'),'1');
  assert.equal((await createHandler({authorize:allow,credentials:secret})(req({operation:'health'}))).status,403);
 });
+test('Firestore quota and availability failures deny access without querying ACP',async()=>{
+ let calls=0;
+ for(const [reason,status] of [['PERMISSIONS_RATE_LIMITED',429],['PERMISSIONS_UNAVAILABLE',503]]){
+  const handler=createHandler({authorize:async()=>{throw Error(reason);},credentials:secret,fetcher:async()=>{calls++;throw Error();}});
+  assert.equal((await handler(req(input))).status,status);
+ }
+ assert.equal(calls,0);
+});

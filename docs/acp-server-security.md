@@ -23,9 +23,12 @@ A mesma configuração Firestore do Painel Mestre é consultada a cada chamada:
 `config/restricted_access.publicAccess` libera consultas para todos; do contrário,
 `restricted_access/{uid}` exige `enabled=true` e `prices=true`. Mestre é reconhecido
 pelo e-mail da identidade Firebase assinada. Não há um cadastro paralelo Supabase.
-As leituras usam as próprias regras Firestore e o token do usuário; nenhuma conta
-administrativa Firebase adicional é necessária. Histórico e grupos de investigação
+As leituras usam a conta de serviço `FIREBASE_SERVICE_ACCOUNT` já existente no
+servidor. As autorizações são conferidas explicitamente pelos documentos do Mestre;
+a conta de serviço e seu token nunca são enviados ao Android. Histórico e grupos de investigação
 continuam exclusivos do Mestre. Grants não são cacheados pelo servidor.
+Se o Firestore responder 429, a consulta é bloqueada e o app solicita nova tentativa;
+nenhuma permissão é presumida e nenhum acesso direto à ACP é usado.
 
 O app preserva seu cache comercial, mas valida acesso antes de devolver preço
 cacheado. Uma autorização negada nunca aciona fallback direto para ACP.
