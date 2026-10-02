@@ -22,6 +22,11 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import com.google.firebase.firestore.MetadataChanges
 import kotlinx.coroutines.channels.awaitClose
 import android.util.Log
 
@@ -396,6 +401,7 @@ object FirebaseService {
                     category = category,
                     unit = unit,
                     imageUrl = imageUrl,
+                    categoryMemberships = remoteCategoryMemberships(category, doc.get("categories")),
                     searchCount = searchCount
                 )
             }
@@ -673,7 +679,18 @@ object FirebaseService {
         "timestamp" to System.currentTimeMillis()
     )
 
-    fun observeProductUsage(): Flow<List<GlobalProductUsage>> = callbackFlow {
+    private val catalogScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val productUsageUpdates by lazy {
+        createProductUsageFlow().shareIn(
+            catalogScope,
+            SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000, replayExpirationMillis = 0),
+            replay = 1
+        )
+    }
+
+    fun observeProductUsage(): Flow<List<GlobalProductUsage>> = productUsageUpdates
+
+    private fun createProductUsageFlow(): Flow<List<GlobalProductUsage>> = callbackFlow {
         if (!isFirebaseConfigured()) {
             close()
             return@callbackFlow
@@ -685,12 +702,14 @@ object FirebaseService {
         fun startProductsListener() {
             registration?.remove()
             registration = firestore.collection("products")
-                .addSnapshotListener { snapshot, error ->
+                .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
                     if (error != null) {
                         Log.e("FirebaseService", "Error in observeProducts", error)
                         return@addSnapshotListener
                     }
-                    if (snapshot != null) {
+                    // A cached query can be incomplete. Room remains available offline;
+                    // only a confirmed server snapshot may reconcile deletions.
+                    if (snapshot != null && !snapshot.metadata.isFromCache) {
                         val products = snapshot.documents.mapNotNull { doc ->
                             val code = doc.getString("code") ?: return@mapNotNull null
                             val name = doc.getString("name") ?: ""
@@ -707,6 +726,7 @@ object FirebaseService {
                                     category = category,
                                     unit = unit,
                                     imageUrl = imageUrl,
+                                    categoryMemberships = remoteCategoryMemberships(category, doc.get("categories")),
                                     searchCount = searchCount
                                 ),
                                 lastViewedAt = when (val viewedAt = doc.get("lastViewedAt")) {

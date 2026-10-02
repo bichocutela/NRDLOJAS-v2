@@ -30,4 +30,17 @@ class ProductCategoriesTest {
         assertEquals(listOf("Ofertas", "Mercearia", "Clube"), updated.categoryNames())
         assertTrue(updated.categoryMemberships.isNotBlank())
     }
+
+    @Test fun catalogSnapshotIncludesEveryCategoryWithoutASecondLookup() {
+        val memberships = remoteCategoryMemberships("Mercearia", listOf("Mercearia", "Ofertas", "Clube"))
+        assertEquals(listOf("Mercearia", "Ofertas", "Clube"), product(memberships = memberships).categoryNames())
+    }
+
+    @Test fun legacyRemoteDocumentsStillHaveTheirPrimaryCategory() {
+        assertEquals("Mercearia", remoteCategoryMemberships("Mercearia", null))
+    }
+
+    @Test fun malformedCategoryLinksDoNotDiscardTheProduct() {
+        assertEquals("Mercearia", remoteCategoryMemberships("Mercearia", listOf(null, 7, " ")))
+    }
 }

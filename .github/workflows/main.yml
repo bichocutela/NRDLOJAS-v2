@@ -113,6 +113,8 @@ jobs:
       run: |
         ./gradlew testDebugUnitTest \
           --tests 'com.example.data.GlobalProductUsageTest' \
+          --tests 'com.example.data.ProductCategoriesTest' \
+          --tests 'com.example.data.ProductRepositorySearchTest' \
           --tests 'com.example.data.RestrictedAccessLoginTest' \
           --tests 'com.example.data.UpdatePolicyTest' \
           --tests 'com.example.data.DynamicPageScheduleTest' \
