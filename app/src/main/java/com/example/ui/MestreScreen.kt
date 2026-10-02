@@ -101,6 +101,7 @@ private enum class MestrePanelPage(val title: String) {
     CATEGORIES("Categorias"),
     SETTINGS("Configuração do aplicativo"),
     NOVELTY_SETTINGS("Inserir Novidade"),
+    ACCESS_SETTINGS("Cadastros e Acessos"),
     WORK_SCHEDULE_SETTINGS("Inserir Escala"),
     HOME_SETTINGS("Configurações da Home"),
     NOTIFICATION_SETTINGS("Notificações globais"),
@@ -591,7 +592,8 @@ fun MestreScreen(
                     onOpenConsultationAppearance = { openPage(MestrePanelPage.CONSULTATION_APPEARANCE_SETTINGS) },
                     onOpenNotifications = { openPage(MestrePanelPage.NOTIFICATION_SETTINGS) },
                     onOpenNovelties = { openPage(MestrePanelPage.NOVELTY_SETTINGS) },
-                    onOpenWorkSchedule = { openPage(MestrePanelPage.WORK_SCHEDULE_SETTINGS) }
+                    onOpenWorkSchedule = { openPage(MestrePanelPage.WORK_SCHEDULE_SETTINGS) },
+                    onOpenAccess = { openPage(MestrePanelPage.ACCESS_SETTINGS) }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -601,6 +603,7 @@ fun MestreScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
+            if (currentPage == MestrePanelPage.ACCESS_SETTINGS) { MestreAccessSettings() }
             if (currentPage == MestrePanelPage.WORK_SCHEDULE_SETTINGS) {
                 MestreWorkScheduleSettings()
                 Spacer(modifier = Modifier.height(16.dp))
