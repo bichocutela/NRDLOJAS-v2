@@ -35,6 +35,15 @@ const { doc, getDoc, setDoc, updateDoc, collection, getDocs } = require('firebas
     await assertFails(getDoc(doc(carla, 'work_schedules/2026-10')));
     await assertSucceeds(updateDoc(doc(master, 'restricted_access/ana'), { enabled: false }));
     await assertFails(getDoc(doc(ana, 'work_schedules/2026-10')));
-    console.log('PASS: 17 authorization checks (public, owner, Master, revocation and schema).');
+    await assertFails(setDoc(doc(publicDb, 'config/restricted_access'), { publicAccess: true }));
+    await assertFails(setDoc(doc(admin, 'config/restricted_access'), { publicAccess: true }));
+    await assertFails(setDoc(doc(master, 'config/restricted_access'), { publicAccess: 'true' }));
+    await assertSucceeds(setDoc(doc(master, 'config/restricted_access'), { publicAccess: true }));
+    await assertSucceeds(getDoc(doc(publicDb, 'work_schedules/2026-10')));
+    await assertSucceeds(getDoc(doc(bia, 'work_schedules/2026-10')));
+    await assertSucceeds(setDoc(doc(master, 'config/restricted_access'), { publicAccess: false }));
+    await assertFails(getDoc(doc(publicDb, 'work_schedules/2026-10')));
+    await assertFails(getDoc(doc(ana, 'work_schedules/2026-10')));
+    console.log('PASS: 26 authorization checks (individual access, public toggle, revocation and schema).');
   } finally { await env.cleanup(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -10,7 +10,7 @@ import kotlinx.coroutines.tasks.await
 import java.util.Locale
 import java.util.UUID
 
-data class RestrictedAccess(val loading: Boolean = false, val enabled: Boolean = false, val profile: Boolean = false, val promotions: Boolean = false, val prices: Boolean = false)
+data class RestrictedAccess(val loading: Boolean = false, val enabled: Boolean = false, val profile: Boolean = false, val promotions: Boolean = false, val prices: Boolean = false, val publicAccess: Boolean = false, val publicLoading: Boolean = true)
 
 object RestrictedAccessRepository {
     fun loginEmail(login: String): String {
@@ -20,24 +20,51 @@ object RestrictedAccessRepository {
     }
     fun observe() = callbackFlow {
         val auth = FirebaseAuth.getInstance()
+        val database = FirebaseFirestore.getInstance()
         var registration: com.google.firebase.firestore.ListenerRegistration? = null
+        var accountAccess = RestrictedAccess(loading = true)
+        var publicAccess = false
+        var publicLoading = true
+        fun publish() {
+            val effective = if (publicAccess) RestrictedAccess(enabled = true, profile = true, promotions = true, prices = true, publicAccess = true) else accountAccess
+            trySend(effective.copy(loading = effective.loading || (publicLoading && !effective.enabled), publicLoading = publicLoading))
+        }
+        val publicRegistration = database.collection("config").document("restricted_access")
+            .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { doc, error ->
+                publicLoading = error == null && (doc == null || doc.metadata.isFromCache)
+                publicAccess = !publicLoading && error == null && doc?.getBoolean("publicAccess") == true
+                publish()
+            }
         val listener = FirebaseAuth.AuthStateListener {
             registration?.remove()
             val user = it.currentUser
-            trySend(RestrictedAccess(loading = user != null))
-            if (user == null) trySend(RestrictedAccess())
-            else if (user.email == "mestre@nrdlojas.com") trySend(RestrictedAccess(enabled = true, profile = true, promotions = true, prices = true))
-            else registration = FirebaseFirestore.getInstance().collection("restricted_access").document(user.uid)
-                .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { doc, error ->
-                    if (auth.currentUser?.uid == user.uid) {
-                        if (error != null || doc == null) trySend(RestrictedAccess())
-                        else if (doc.metadata.isFromCache) trySend(RestrictedAccess(loading = true))
-                        else trySend(fromDocument(doc))
+            accountAccess = when {
+                user == null -> RestrictedAccess()
+                user.email == "mestre@nrdlojas.com" -> RestrictedAccess(enabled = true, profile = true, promotions = true, prices = true)
+                else -> RestrictedAccess(loading = true)
+            }
+            publish()
+            if (user != null && user.email != "mestre@nrdlojas.com") {
+                registration = database.collection("restricted_access").document(user.uid)
+                    .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { doc, error ->
+                        if (auth.currentUser?.uid == user.uid) {
+                            accountAccess = when {
+                                error != null || doc == null -> RestrictedAccess()
+                                doc.metadata.isFromCache -> RestrictedAccess(loading = true)
+                                else -> fromDocument(doc)
+                            }
+                            publish()
+                        }
                     }
-                }
+            }
         }
         auth.addAuthStateListener(listener)
-        awaitClose { registration?.remove(); auth.removeAuthStateListener(listener) }
+        awaitClose { publicRegistration.remove(); registration?.remove(); auth.removeAuthStateListener(listener) }
+    }
+    suspend fun setPublicAccess(enabled: Boolean) {
+        check(FirebaseAuth.getInstance().currentUser?.email == "mestre@nrdlojas.com") { "Acesso exclusivo do Mestre." }
+        FirebaseFirestore.getInstance().collection("config").document("restricted_access")
+            .set(mapOf("publicAccess" to enabled)).await()
     }
     private fun fromDocument(doc: com.google.firebase.firestore.DocumentSnapshot): RestrictedAccess {
         val enabled = doc.getBoolean("enabled") == true
@@ -45,11 +72,18 @@ object RestrictedAccessRepository {
             promotions = enabled && doc.getBoolean("promotions") == true, prices = enabled && doc.getBoolean("prices") == true)
     }
     suspend fun current(): RestrictedAccess {
-        val user = FirebaseAuth.getInstance().currentUser ?: return RestrictedAccess()
-        if (user.email == "mestre@nrdlojas.com") return RestrictedAccess(enabled = true, profile = true, promotions = true, prices = true)
+        val auth = FirebaseAuth.getInstance()
+        if (auth.currentUser?.email == "mestre@nrdlojas.com") return RestrictedAccess(enabled = true, profile = true, promotions = true, prices = true)
         return try {
-            val doc = FirebaseFirestore.getInstance().collection("restricted_access").document(user.uid).get(Source.SERVER).await()
-            if (FirebaseAuth.getInstance().currentUser?.uid == user.uid) fromDocument(doc) else RestrictedAccess()
+            val database = FirebaseFirestore.getInstance()
+            val settings = database.collection("config").document("restricted_access").get(Source.SERVER).await()
+            if (settings.getBoolean("publicAccess") == true) {
+                RestrictedAccess(enabled = true, profile = true, promotions = true, prices = true, publicAccess = true)
+            } else {
+                val user = auth.currentUser ?: return RestrictedAccess()
+                val doc = database.collection("restricted_access").document(user.uid).get(Source.SERVER).await()
+                if (auth.currentUser?.uid == user.uid) fromDocument(doc) else RestrictedAccess()
+            }
         } catch (_: Exception) { RestrictedAccess() }
     }
     suspend fun create(login: String, password: String, profile: Boolean, promotions: Boolean, prices: Boolean) {

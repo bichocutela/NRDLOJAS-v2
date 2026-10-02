@@ -41,6 +41,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.TimeoutCancellationException
 import com.google.firebase.FirebaseNetworkException
@@ -124,7 +125,10 @@ fun AppNavGraph(
     }
 
     LaunchedEffect(access.profile) {
-        if (!access.profile) com.example.util.FcmTopicSubscription.reconcileWorkSchedules(false)
+        val enabled = access.profile && nossaGenteCredentialStore.isScheduleNotificationsEnabled() &&
+            viewModel.userPreferences.notificationsEnabled.first() &&
+            runCatching { FirebaseService.getNotificationSettings().enabled }.getOrDefault(false)
+        com.example.util.FcmTopicSubscription.reconcileWorkSchedules(enabled)
     }
 
     LaunchedEffect(profileEnabled, profileRefreshKey, access.profile) {
