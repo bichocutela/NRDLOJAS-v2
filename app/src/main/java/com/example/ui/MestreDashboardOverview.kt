@@ -335,7 +335,8 @@ internal fun MestreSettingsHub(
     onOpenConsultationAppearance: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenNovelties: () -> Unit,
-    onOpenWorkSchedule: () -> Unit
+    onOpenWorkSchedule: () -> Unit,
+    onOpenAccess: () -> Unit
 ) {
     Text("Escolha o que deseja configurar", style = MaterialTheme.typography.titleMedium)
     Text(
@@ -399,6 +400,8 @@ internal fun MestreSettingsHub(
         icon = Icons.Default.CalendarMonth,
         onClick = onOpenWorkSchedule
     )
+    Spacer(modifier = Modifier.height(6.dp))
+    PanelAreaCard(title = "Cadastros e Acessos", description = "Criar login e escolher as abas permitidas", icon = Icons.Default.Settings, onClick = onOpenAccess)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

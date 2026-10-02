@@ -25,6 +25,7 @@ class PromotionNotificationWorker(
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
+        if (!com.example.data.RestrictedAccessRepository.current().promotions) return Result.success()
         val preferences = UserPreferences(applicationContext)
         val localNotificationsEnabled = preferences.notificationsEnabled.first()
         val remoteSettings = FirebaseService.getNotificationSettingsOrNull()

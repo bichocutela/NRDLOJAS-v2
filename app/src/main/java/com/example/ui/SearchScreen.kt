@@ -380,6 +380,8 @@ fun SearchScreen(
     onOpenDrawer: () -> Unit = {},
     canQuickEditBanner: Boolean = false,
     canQuickAddProduct: Boolean = false,
+    canAccessProfile: Boolean = false,
+    canAccessPromotions: Boolean = false,
     onOpenProfileNotification: (String) -> Unit = {},
     onQuickEditBanner: (String) -> Unit = {}
 ) {
@@ -489,7 +491,11 @@ fun SearchScreen(
     }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var sheetQuery by remember { mutableStateOf("") }
-    val notificationHistory by viewModel.notificationHistory.collectAsStateWithLifecycle()
+    val storedNotificationHistory by viewModel.notificationHistory.collectAsStateWithLifecycle()
+    val notificationHistory = storedNotificationHistory.filter {
+        (canAccessProfile || com.example.util.ProfileNotificationRouting.profileSection(it.type) == null) &&
+            (canAccessPromotions || it.type != "PROMOTION_UPDATED")
+    }
     val unreadNotifications = notificationHistory.count { !it.read }
     val mostUsedListState = rememberLazyListState()
     val homeListState = rememberLazyListState()

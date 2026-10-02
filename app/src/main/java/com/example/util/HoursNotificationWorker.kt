@@ -26,6 +26,7 @@ class HoursNotificationWorker(
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
+        if (!com.example.data.RestrictedAccessRepository.current().profile) return Result.success()
         val credentialStore = NossaGenteCredentialStore(applicationContext)
         if (!credentialStore.isHoursNotificationsEnabled()) return Result.success()
 

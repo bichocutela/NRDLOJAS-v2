@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit
 
 class PointNotificationWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        if (!com.example.data.RestrictedAccessRepository.current().profile) return Result.success()
         val store = NossaGenteCredentialStore(applicationContext)
         if (!store.isPointNotificationsEnabled()) return Result.success()
         val api = NossaGenteApi(applicationContext)

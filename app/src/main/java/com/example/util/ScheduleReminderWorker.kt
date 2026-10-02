@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit
 /** Local best-effort day-before/day-of reminders from schedules already downloaded in Meu Perfil. */
 class ScheduleReminderWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        if (!com.example.data.RestrictedAccessRepository.current().profile) return Result.success()
         val store = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val credentials = com.example.data.NossaGenteCredentialStore(applicationContext)
         val registration = store.getString(KEY_REGISTRATION, null)?.filter(Char::isDigit).orEmpty()

@@ -18,6 +18,25 @@ service cloud.firestore {
       );
     }
 
+    function isMaster() {
+      return isSignedIn() && request.auth.token.email == 'mestre@nrdlojas.com';
+    }
+    function canReadProfile() {
+      return isMaster() || (isSignedIn() &&
+        exists(/databases/$(database)/documents/restricted_access/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/restricted_access/$(request.auth.uid)).data.enabled == true &&
+        get(/databases/$(database)/documents/restricted_access/$(request.auth.uid)).data.profile == true);
+    }
+    match /restricted_access/{uid} {
+      allow get: if isMaster() || (isSignedIn() && request.auth.uid == uid);
+      allow list, delete: if isMaster();
+      allow create, update: if isMaster() &&
+        request.resource.data.keys().hasOnly(['login', 'enabled', 'profile', 'promotions', 'prices']) &&
+        request.resource.data.login is string && request.resource.data.login.size() <= 64 &&
+        request.resource.data.enabled is bool && request.resource.data.profile is bool &&
+        request.resource.data.promotions is bool && request.resource.data.prices is bool;
+    }
+
     // Catálogo público para consulta. Criação, remoção e alterações de conteúdo
     // ficam restritas a Admin/Mestre. O único update público permitido é o
     // incremento unitário do contador global de visualização.
@@ -49,7 +68,7 @@ service cloud.firestore {
 
     // Escalas publicadas para leitura pelos colaboradores; apenas Mestre/Admin altera.
     match /work_schedules/{monthKey} {
-      allow read: if true;
+      allow read: if canReadProfile();
       allow create, update: if isManager() &&
         request.resource.data.year is int &&
         request.resource.data.month is int && request.resource.data.month >= 1 && request.resource.data.month <= 12 &&

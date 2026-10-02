@@ -37,6 +37,11 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val preferences = UserPreferences(applicationContext)
 
         runBlocking {
+            if (type == TYPE_PROMOTION_UPDATED || ProfileNotificationRouting.profileSection(type) != null) {
+                val access = com.example.data.RestrictedAccessRepository.current()
+                if (type == TYPE_PROMOTION_UPDATED && !access.promotions) return@runBlocking
+                if (ProfileNotificationRouting.profileSection(type) != null && !access.profile) return@runBlocking
+            }
             if (type == TYPE_APP_UPDATE && FcmTopicSubscription.isMasterAuthenticated()) {
                 runCatching { UpdateAvailabilityState.refresh(applicationContext) }
                     .onFailure { Log.w(TAG, "Falha ao atualizar indicador imediato do Mestre", it) }
@@ -137,7 +142,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             )
             val installationId = preferences.getOrCreateInstallationId()
             FcmTopicSubscription.reconcileSuggestionTopic(effectiveNotificationsEnabled, installationId)
-            FcmTopicSubscription.reconcileWorkSchedules(effectiveNotificationsEnabled && NossaGenteCredentialStore(applicationContext).isScheduleNotificationsEnabled())
+            FcmTopicSubscription.reconcileWorkSchedules(effectiveNotificationsEnabled && com.example.data.RestrictedAccessRepository.current().profile && NossaGenteCredentialStore(applicationContext).isScheduleNotificationsEnabled())
         }
     }
 

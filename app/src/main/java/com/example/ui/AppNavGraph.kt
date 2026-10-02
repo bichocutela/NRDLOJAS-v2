@@ -84,8 +84,9 @@ fun AppNavGraph(
     var requestedProfileSection by remember { mutableStateOf<String?>(null) }
     var profileFocusRequestKey by remember { mutableLongStateOf(0L) }
     val firebaseAuth = remember { FirebaseAuth.getInstance() }
+    val access by remember { com.example.data.RestrictedAccessRepository.observe() }.collectAsState(initial = com.example.data.RestrictedAccess(loading = true))
     val initialRole = remember(firebaseAuth) { managementRoleForEmail(firebaseAuth.currentUser?.email) }
-    var isLoggedIn by remember { mutableStateOf(initialRole != null) }
+    var isLoggedIn by remember { mutableStateOf(firebaseAuth.currentUser != null) }
     var userRole by remember { mutableStateOf(initialRole ?: "user") }
     val glassSoftStyle = LocalGlassSoftStyle.current
     val expressiveStyle = LocalExpressiveStyle.current
@@ -109,7 +110,7 @@ fun AppNavGraph(
                 isLoggedIn = true
                 userRole = authenticatedRole
             } else {
-                isLoggedIn = false
+                isLoggedIn = auth.currentUser != null
                 userRole = "user"
             }
             scope.launch {
@@ -122,8 +123,12 @@ fun AppNavGraph(
         onDispose { firebaseAuth.removeAuthStateListener(listener) }
     }
 
-    LaunchedEffect(profileEnabled, profileRefreshKey) {
-        if (!profileEnabled || !nossaGenteApi.hasSession()) {
+    LaunchedEffect(access.profile) {
+        if (!access.profile) com.example.util.FcmTopicSubscription.reconcileWorkSchedules(false)
+    }
+
+    LaunchedEffect(profileEnabled, profileRefreshKey, access.profile) {
+        if (!access.profile || !profileEnabled || !nossaGenteApi.hasSession()) {
             drawerEmployeeProfile = null
             drawerProfilePhotoModel = null
         } else {
@@ -145,8 +150,8 @@ fun AppNavGraph(
         }
     }
 
-    LaunchedEffect(openPromotionsFromNotification) {
-        if (openPromotionsFromNotification) {
+    LaunchedEffect(openPromotionsFromNotification, access.promotions) {
+        if (openPromotionsFromNotification && access.promotions) {
             navController.navigate(
                 if (nossaGenteApi.hasSession() && promotionsEnabled) "promotions" else "promotions_login"
             ) {
@@ -155,7 +160,23 @@ fun AppNavGraph(
         }
     }
 
+    fun clearPersonalSession() {
+        nossaGenteApi.logout()
+        nossaGenteCredentialStore.clear()
+        nossaGenteCredentialStore.setProfileEnabled(false)
+        nossaGenteCredentialStore.setPromotionsEnabled(false)
+        profileEnabled = false
+        promotionsEnabled = false
+        drawerEmployeeProfile = null
+        drawerProfilePhotoModel = null
+        listOf("profile_schedule_reminders", "nossa_gente_point_snapshot", "nossa_gente_hours_snapshot", "nossa_gente_benefit_snapshot").forEach {
+            context.applicationContext.getSharedPreferences(it, android.content.Context.MODE_PRIVATE).edit().clear().apply()
+        }
+        scope.launch { viewModel.userPreferences.clearRestrictedNotifications() }
+    }
+
     fun openProfileSection(section: String) {
+        if (!access.profile) return
         requestedProfileSection = section
         profileFocusRequestKey += 1L
         val destination = if (profileEnabled && nossaGenteApi.hasSession()) "my_profile" else "my_point_login"
@@ -165,7 +186,7 @@ fun AppNavGraph(
         }
     }
 
-    LaunchedEffect(profileSectionFromNotification, profileNotificationNavigationKey) {
+    LaunchedEffect(profileSectionFromNotification, profileNotificationNavigationKey, access.profile) {
         val section = profileSectionFromNotification
         if (profileNotificationNavigationKey > 0L && !section.isNullOrBlank()) {
             openProfileSection(section)
@@ -203,22 +224,26 @@ fun AppNavGraph(
                     viewModel = viewModel,
                     isLoggedIn = isLoggedIn,
                     userRole = userRole,
-                    showMyProfile = nossaGenteApi.hasSession() && profileEnabled,
+                    showMyProfile = access.profile,
+                    showPromotions = access.promotions,
+                    showPrices = access.prices,
                     myProfilePhotoModel = drawerProfilePhotoModel,
                     myProfileName = drawerEmployeeProfile?.name,
                     onLoginSuccess = { role ->
+                        if (role == "user") clearPersonalSession()
                         isLoggedIn = true
                         userRole = role
                         scope.launch { drawerState.close() }
                         when (role) {
                             "mestre" -> navController.navigate("mestre")
                             "admin" -> navController.navigate("admin")
-                            "teste" -> navController.navigate("search")
+                            else -> navController.navigate("search")
                         }
                     },
                     onLogout = {
                         scope.launch { com.example.util.FcmTopicSubscription.reconcileMasterUpdates(isMaster = false) }
                         firebaseAuth.signOut()
+                        clearPersonalSession()
                         isLoggedIn = false
                         userRole = "user"
                         scope.launch { drawerState.close() }
@@ -234,7 +259,7 @@ fun AppNavGraph(
                     },
                     onGoToMyPoint = {
                         scope.launch { drawerState.close() }
-                        navController.navigate("my_profile") { launchSingleTop = true }
+                        openProfileSection("profile")
                     },
                     onGoToSettings = { scope.launch { drawerState.close() }; navController.navigate("settings") },
                     onGoToAcp = { scope.launch { drawerState.close() }; navController.navigate("acp_consultation") { launchSingleTop = true } },
@@ -277,6 +302,8 @@ fun AppNavGraph(
                         onOpenDrawer = { scope.launch { drawerState.open() } },
                         canQuickEditBanner = isLoggedIn && userRole == "mestre",
                         canQuickAddProduct = isLoggedIn && userRole == "mestre",
+                        canAccessProfile = access.profile,
+                        canAccessPromotions = access.promotions,
                         onOpenProfileNotification = ::openProfileSection,
                         onQuickEditBanner = { themeKey ->
                             navController.navigate("mestre/banner/$themeKey") { launchSingleTop = true }
@@ -317,74 +344,90 @@ fun AppNavGraph(
                     }
                 }
                 composable("promotions_login") {
-                    PromotionsLoginScreen(
-                        api = nossaGenteApi,
-                        onLoginSuccess = {
-                            profileEnabled = nossaGenteCredentialStore.isProfileEnabled()
-                            promotionsEnabled = true
-                            nossaGenteCredentialStore.setPromotionsEnabled(true)
-                            navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true }
-                        },
-                        onNavigateBack = { navController.popBackStack() },
-                        reuseExistingSession = promotionsEnabled,
-                    )
+                    RestrictedRoute(access.loading, access.promotions, { navController.navigateToSearch() }) {
+                        PromotionsLoginScreen(
+                            api = nossaGenteApi,
+                            onLoginSuccess = {
+                                profileEnabled = nossaGenteCredentialStore.isProfileEnabled()
+                                promotionsEnabled = true
+                                nossaGenteCredentialStore.setPromotionsEnabled(true)
+                                navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true }
+                            },
+                            onNavigateBack = { navController.popBackStack() },
+                            reuseExistingSession = promotionsEnabled,
+                        )
+                    }
                 }
                 composable("promotions") {
-                    PromotionsScreen(
-                        api = nossaGenteApi,
-                        onNavigateBack = { navController.popBackStack() },
-                        onRequireLogin = { navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true } } },
-                        onLogout = {
-                            promotionsEnabled = false
-                            nossaGenteCredentialStore.setPromotionsEnabled(false)
-                            if (!profileEnabled) nossaGenteApi.logout()
-                            navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true }; launchSingleTop = true }
-                        },
-                        showReactivateProfile = !profileEnabled && nossaGenteApi.hasSession(),
-                        onReactivateProfile = {
-                            profileEnabled = true
-                            nossaGenteCredentialStore.setProfileEnabled(true)
-                        }
-                    )
+                    RestrictedRoute(access.loading, access.promotions, { navController.navigateToSearch() }) {
+                        PromotionsScreen(
+                            api = nossaGenteApi,
+                            onNavigateBack = { navController.popBackStack() },
+                            onRequireLogin = { navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true } } },
+                            onLogout = {
+                                promotionsEnabled = false
+                                nossaGenteCredentialStore.setPromotionsEnabled(false)
+                                if (!profileEnabled) nossaGenteApi.logout()
+                                navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true }; launchSingleTop = true }
+                            },
+                            showReactivateProfile = access.profile && !profileEnabled && nossaGenteApi.hasSession(),
+                            onReactivateProfile = {
+                                profileEnabled = true
+                                nossaGenteCredentialStore.setProfileEnabled(true)
+                            }
+                        )
+                    }
                 }
                 composable("my_point_login") {
-                    PromotionsLoginScreen(
-                        api = nossaGenteApi,
-                        onLoginSuccess = {
-                            profileEnabled = true
-                            nossaGenteCredentialStore.setProfileEnabled(true)
-                            profileRefreshKey++
-                            navController.navigate("my_profile") { popUpTo("my_point_login") { inclusive = true }; launchSingleTop = true }
-                        },
-                        onNavigateBack = { navController.popBackStack() },
-                        reuseExistingSession = false,
-                        title = "Acesso ao Meu Perfil"
-                    )
+                    RestrictedRoute(access.loading, access.profile, { navController.navigateToSearch() }) {
+                        PromotionsLoginScreen(
+                            api = nossaGenteApi,
+                            onLoginSuccess = {
+                                profileEnabled = true
+                                nossaGenteCredentialStore.setProfileEnabled(true)
+                                profileRefreshKey++
+                                navController.navigate("my_profile") { popUpTo("my_point_login") { inclusive = true }; launchSingleTop = true }
+                            },
+                            onNavigateBack = { navController.popBackStack() },
+                            reuseExistingSession = false,
+                            title = "Acesso ao Meu Perfil"
+                        )
+                    }
                 }
                 composable("my_profile") {
-                    MyPointScreen(
-                        api = nossaGenteApi,
-                        focusSection = requestedProfileSection,
-                        focusRequestKey = profileFocusRequestKey,
-                        onNavigateBack = { navController.popBackStack() },
-                        onSignOut = {
-                            profileEnabled = false
-                            nossaGenteCredentialStore.setProfileEnabled(false)
-                            if (!promotionsEnabled) nossaGenteApi.logout()
-                            navController.navigate("search") { popUpTo("my_profile") { inclusive = true } }
-                        }
-                    )
+                    RestrictedRoute(access.loading, access.profile, { navController.navigateToSearch() }) {
+                        MyPointScreen(
+                            api = nossaGenteApi,
+                            focusSection = requestedProfileSection,
+                            focusRequestKey = profileFocusRequestKey,
+                            onNavigateBack = { navController.popBackStack() },
+                            onSignOut = {
+                                profileEnabled = false
+                                nossaGenteCredentialStore.setProfileEnabled(false)
+                                if (!promotionsEnabled) nossaGenteApi.logout()
+                                navController.navigate("search") { popUpTo("my_profile") { inclusive = true } }
+                            }
+                        )
+                    }
                 }
-                composable("my_point") { LaunchedEffect(Unit) { navController.navigate("my_profile") { popUpTo("my_point") { inclusive = true } } } }
+                composable("my_point") {
+                    RestrictedRoute(access.loading, access.profile, { navController.navigateToSearch() }) {
+                        LaunchedEffect(Unit) {
+                            navController.navigate("my_profile") { popUpTo("my_point") { inclusive = true } }
+                        }
+                    }
+                }
                 composable("settings") { SettingsScreen(viewModel, onNavigateBack = { navController.popBackStack() }) }
                 composable("acp_consultation") {
-                    AcpConsultationScreen(
-                        canConfigure = isLoggedIn && userRole in setOf("admin", "mestre"),
-                        onNavigateBack = { navController.popBackStack() },
-                        externalPdfUri = if (isLoggedIn && userRole == "mestre") sharedOrderPdfUri else null,
-                        externalPdfRequestKey = sharedOrderPdfRequestKey,
-                        onExternalPdfConsumed = onSharedOrderPdfConsumed
-                    )
+                    RestrictedRoute(access.loading, access.prices, { navController.navigateToSearch() }) {
+                        AcpConsultationScreen(
+                            canConfigure = isLoggedIn && userRole in setOf("admin", "mestre"),
+                            onNavigateBack = { navController.popBackStack() },
+                            externalPdfUri = if (isLoggedIn && userRole == "mestre") sharedOrderPdfUri else null,
+                            externalPdfRequestKey = sharedOrderPdfRequestKey,
+                            onExternalPdfConsumed = onSharedOrderPdfConsumed
+                        )
+                    }
                 }
                 composable("about") { AboutScreen(onNavigateBack = { navController.popBackStack() }) }
             }
@@ -620,6 +663,8 @@ fun LoginDrawerContent(
     isLoggedIn: Boolean,
     userRole: String,
     showMyProfile: Boolean,
+    showPromotions: Boolean,
+    showPrices: Boolean,
     myProfilePhotoModel: Any?,
     myProfileName: String?,
     onLoginSuccess: (String) -> Unit,
@@ -775,50 +820,27 @@ fun LoginDrawerContent(
                 Button(
                 onClick = {
                     if (isLoading) return@Button
-                    val inputUser = username.trim().lowercase()
-                    if ((inputUser == "admin" || inputUser == "mestre") && password == "nrdlojas") {
-                        val email = if (inputUser == "admin") "admin@nrdlojas.com" else "mestre@nrdlojas.com"
-                        val passwordSnapshot = password
-                        isLoading = true
-                        loginStatus = null
-                        scope.launch {
-                            try {
-                                val auth = FirebaseAuth.getInstance()
-                                val currentRole = managementRoleForEmail(auth.currentUser?.email)
-                                val authenticatedRole = if (currentRole == inputUser) {
-                                    currentRole
-                                } else {
-                                    val result = withTimeout(ADMIN_LOGIN_TIMEOUT_MS) {
-                                        auth.signInWithEmailAndPassword(email, passwordSnapshot).await()
-                                    }
-                                    managementRoleForEmail(result.user?.email)
-                                }
-
-                                if (authenticatedRole == inputUser) {
-                                    Log.d(ADMIN_LOGIN_TAG, "Sessão Firebase administrativa validada com sucesso")
-                                    password = ""
-                                    loginStatus = null
-                                    onLoginSuccess(authenticatedRole)
-                                } else {
-                                    auth.signOut()
-                                    loginStatus = "Usuário sem acesso administrativo"
-                                }
-                            } catch (_: TimeoutCancellationException) {
-                                loginStatus = "A autenticação demorou demais. Verifique sua conexão e tente novamente."
-                            } catch (_: FirebaseNetworkException) {
-                                loginStatus = "Sem conexão com o serviço de login. Verifique sua internet e tente novamente."
-                            } catch (_: FirebaseTooManyRequestsException) {
-                                loginStatus = "Muitas tentativas seguidas. Aguarde um instante e tente novamente."
-                            } catch (error: Exception) {
-                                Log.e(ADMIN_LOGIN_TAG, "Falha ao autenticar sessão administrativa", error)
-                                loginStatus = "Não foi possível autenticar o acesso administrativo. Tente novamente."
-                            } finally {
-                                isLoading = false
+                    val passwordSnapshot = password
+                    isLoading = true
+                    loginStatus = null
+                    scope.launch {
+                        try {
+                            val auth = FirebaseAuth.getInstance()
+                            val email = com.example.data.RestrictedAccessRepository.loginEmail(username)
+                            val result = withTimeout(ADMIN_LOGIN_TIMEOUT_MS) {
+                                auth.signInWithEmailAndPassword(email, passwordSnapshot).await()
                             }
-                        }
-                    } else {
-                        isLoading = false
-                        loginStatus = "Usuário ou senha incorretos"
+                            val role = managementRoleForEmail(result.user?.email)
+                            if (role != null || com.example.data.RestrictedAccessRepository.current().enabled) {
+                                password = ""
+                                onLoginSuccess(role ?: "user")
+                            } else {
+                                auth.signOut()
+                                loginStatus = "Acesso não liberado pelo Mestre."
+                            }
+                        } catch (_: Exception) {
+                            loginStatus = "Não foi possível entrar. Confira o login, a senha e a conexão."
+                        } finally { isLoading = false }
                     }
                 },
                 enabled = !isLoading,
@@ -911,14 +933,14 @@ fun LoginDrawerContent(
             HorizontalDivider()
             Spacer(modifier = Modifier.height(10.dp))
         }
-        DrawerActionButton(
+        if (showPrices) DrawerActionButton(
             label = "Consultar Preços",
             icon = Icons.Default.Search,
             onClick = onGoToAcp,
             emphasized = expressive
         )
         Spacer(modifier = Modifier.height(if (expressive) 6.dp else 8.dp))
-        DrawerActionButton(
+        if (showPromotions) DrawerActionButton(
             label = "Promoções",
             icon = Icons.Default.LocalOffer,
             onClick = onGoToPromotions
@@ -1165,4 +1187,11 @@ fun CategoryItem(category: String, viewModel: MainViewModel, isExpanded: Boolean
             }
         }
     }
+}
+
+@Composable
+private fun RestrictedRoute(loading: Boolean, allowed: Boolean, onDenied: () -> Unit, content: @Composable () -> Unit) {
+    if (loading) { CircularProgressIndicator() }
+    else if (allowed) content()
+    else LaunchedEffect(Unit) { onDenied() }
 }
