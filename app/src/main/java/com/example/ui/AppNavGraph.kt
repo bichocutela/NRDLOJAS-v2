@@ -215,6 +215,14 @@ fun AppNavGraph(
                     myProfilePhotoModel = drawerProfilePhotoModel,
                     myProfileName = drawerEmployeeProfile?.name,
                     onLoginSuccess = { role ->
+                        if (role == "user") {
+                            nossaGenteApi.logout()
+                            nossaGenteCredentialStore.clear()
+                            nossaGenteCredentialStore.setProfileEnabled(false)
+                            nossaGenteCredentialStore.setPromotionsEnabled(false)
+                            profileEnabled = false
+                            promotionsEnabled = false
+                        }
                         isLoggedIn = true
                         userRole = role
                         scope.launch { drawerState.close() }
@@ -227,6 +235,14 @@ fun AppNavGraph(
                     onLogout = {
                         scope.launch { com.example.util.FcmTopicSubscription.reconcileMasterUpdates(isMaster = false) }
                         firebaseAuth.signOut()
+                        nossaGenteApi.logout()
+                        nossaGenteCredentialStore.clear()
+                        nossaGenteCredentialStore.setProfileEnabled(false)
+                        nossaGenteCredentialStore.setPromotionsEnabled(false)
+                        profileEnabled = false
+                        promotionsEnabled = false
+                        drawerEmployeeProfile = null
+                        drawerProfilePhotoModel = null
                         isLoggedIn = false
                         userRole = "user"
                         scope.launch { drawerState.close() }
@@ -285,6 +301,8 @@ fun AppNavGraph(
                         onOpenDrawer = { scope.launch { drawerState.open() } },
                         canQuickEditBanner = isLoggedIn && userRole == "mestre",
                         canQuickAddProduct = isLoggedIn && userRole == "mestre",
+                        canAccessProfile = access.profile,
+                        canAccessPromotions = access.promotions,
                         onOpenProfileNotification = ::openProfileSection,
                         onQuickEditBanner = { themeKey ->
                             navController.navigate("mestre/banner/$themeKey") { launchSingleTop = true }
@@ -326,72 +344,72 @@ fun AppNavGraph(
                 }
                 composable("promotions_login") {
                     RestrictedRoute(access.loading, access.promotions, { navController.navigateToSearch() }) {
-                    PromotionsLoginScreen(
-                        api = nossaGenteApi,
-                        onLoginSuccess = {
-                            profileEnabled = nossaGenteCredentialStore.isProfileEnabled()
-                            promotionsEnabled = true
-                            nossaGenteCredentialStore.setPromotionsEnabled(true)
-                            navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true }
-                        },
-                        onNavigateBack = { navController.popBackStack() },
-                        reuseExistingSession = promotionsEnabled,
-                    )
+                        PromotionsLoginScreen(
+                            api = nossaGenteApi,
+                            onLoginSuccess = {
+                                profileEnabled = nossaGenteCredentialStore.isProfileEnabled()
+                                promotionsEnabled = true
+                                nossaGenteCredentialStore.setPromotionsEnabled(true)
+                                navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true }
+                            },
+                            onNavigateBack = { navController.popBackStack() },
+                            reuseExistingSession = promotionsEnabled,
+                        )
 
                     }
                 }
                 composable("promotions") {
                     RestrictedRoute(access.loading, access.promotions, { navController.navigateToSearch() }) {
-                    PromotionsScreen(
-                        api = nossaGenteApi,
-                        onNavigateBack = { navController.popBackStack() },
-                        onRequireLogin = { navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true } } },
-                        onLogout = {
-                            promotionsEnabled = false
-                            nossaGenteCredentialStore.setPromotionsEnabled(false)
-                            if (!profileEnabled) nossaGenteApi.logout()
-                            navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true }; launchSingleTop = true }
-                        },
-                        showReactivateProfile = access.profile && !profileEnabled && nossaGenteApi.hasSession(),
-                        onReactivateProfile = {
-                            profileEnabled = true
-                            nossaGenteCredentialStore.setProfileEnabled(true)
-                        }
-                    )
+                        PromotionsScreen(
+                            api = nossaGenteApi,
+                            onNavigateBack = { navController.popBackStack() },
+                            onRequireLogin = { navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true } } },
+                            onLogout = {
+                                promotionsEnabled = false
+                                nossaGenteCredentialStore.setPromotionsEnabled(false)
+                                if (!profileEnabled) nossaGenteApi.logout()
+                                navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true }; launchSingleTop = true }
+                            },
+                            showReactivateProfile = access.profile && !profileEnabled && nossaGenteApi.hasSession(),
+                            onReactivateProfile = {
+                                profileEnabled = true
+                                nossaGenteCredentialStore.setProfileEnabled(true)
+                            }
+                        )
 
                     }
                 }
                 composable("my_point_login") {
                     RestrictedRoute(access.loading, access.profile, { navController.navigateToSearch() }) {
-                    PromotionsLoginScreen(
-                        api = nossaGenteApi,
-                        onLoginSuccess = {
-                            profileEnabled = true
-                            nossaGenteCredentialStore.setProfileEnabled(true)
-                            profileRefreshKey++
-                            navController.navigate("my_profile") { popUpTo("my_point_login") { inclusive = true }; launchSingleTop = true }
-                        },
-                        onNavigateBack = { navController.popBackStack() },
-                        reuseExistingSession = false,
-                        title = "Acesso ao Meu Perfil"
-                    )
+                        PromotionsLoginScreen(
+                            api = nossaGenteApi,
+                            onLoginSuccess = {
+                                profileEnabled = true
+                                nossaGenteCredentialStore.setProfileEnabled(true)
+                                profileRefreshKey++
+                                navController.navigate("my_profile") { popUpTo("my_point_login") { inclusive = true }; launchSingleTop = true }
+                            },
+                            onNavigateBack = { navController.popBackStack() },
+                            reuseExistingSession = false,
+                            title = "Acesso ao Meu Perfil"
+                        )
 
                     }
                 }
                 composable("my_profile") {
                     RestrictedRoute(access.loading, access.profile, { navController.navigateToSearch() }) {
-                    MyPointScreen(
-                        api = nossaGenteApi,
-                        focusSection = requestedProfileSection,
-                        focusRequestKey = profileFocusRequestKey,
-                        onNavigateBack = { navController.popBackStack() },
-                        onSignOut = {
-                            profileEnabled = false
-                            nossaGenteCredentialStore.setProfileEnabled(false)
-                            if (!promotionsEnabled) nossaGenteApi.logout()
-                            navController.navigate("search") { popUpTo("my_profile") { inclusive = true } }
-                        }
-                    )
+                        MyPointScreen(
+                            api = nossaGenteApi,
+                            focusSection = requestedProfileSection,
+                            focusRequestKey = profileFocusRequestKey,
+                            onNavigateBack = { navController.popBackStack() },
+                            onSignOut = {
+                                profileEnabled = false
+                                nossaGenteCredentialStore.setProfileEnabled(false)
+                                if (!promotionsEnabled) nossaGenteApi.logout()
+                                navController.navigate("search") { popUpTo("my_profile") { inclusive = true } }
+                            }
+                        )
 
                     }
                 }
@@ -402,13 +420,13 @@ fun AppNavGraph(
                 composable("settings") { SettingsScreen(viewModel, onNavigateBack = { navController.popBackStack() }) }
                 composable("acp_consultation") {
                     RestrictedRoute(access.loading, access.prices, { navController.navigateToSearch() }) {
-                    AcpConsultationScreen(
-                        canConfigure = isLoggedIn && userRole in setOf("admin", "mestre"),
-                        onNavigateBack = { navController.popBackStack() },
-                        externalPdfUri = if (isLoggedIn && userRole == "mestre") sharedOrderPdfUri else null,
-                        externalPdfRequestKey = sharedOrderPdfRequestKey,
-                        onExternalPdfConsumed = onSharedOrderPdfConsumed
-                    )
+                        AcpConsultationScreen(
+                            canConfigure = isLoggedIn && userRole in setOf("admin", "mestre"),
+                            onNavigateBack = { navController.popBackStack() },
+                            externalPdfUri = if (isLoggedIn && userRole == "mestre") sharedOrderPdfUri else null,
+                            externalPdfRequestKey = sharedOrderPdfRequestKey,
+                            onExternalPdfConsumed = onSharedOrderPdfConsumed
+                        )
 
                     }
                 }

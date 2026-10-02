@@ -125,6 +125,7 @@ jobs:
       run: |
         ./gradlew testDebugUnitTest \
           --tests 'com.example.data.GlobalProductUsageTest' \
+          --tests 'com.example.data.RestrictedAccessLoginTest' \
           --tests 'com.example.data.DynamicPageScheduleTest' \
           --tests 'com.example.data.DynamicPageCodecTest' \
           --tests 'com.example.data.acp.*' \
