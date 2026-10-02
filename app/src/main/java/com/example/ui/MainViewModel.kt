@@ -155,7 +155,8 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             }
         }
         viewModelScope.launch {
-            FirebaseService.observeProductUsage().collect { remoteUsage ->
+            FirebaseService.observeProductCatalog().collect { catalog ->
+                val remoteUsage = catalog.usage
                 val localProducts = repository.getAllProductsSync()
                 val localProductsByCode = localProducts.associateBy { it.code }
                 val rankedUsage = remoteUsage.map { usage ->
@@ -174,8 +175,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                 )
                 _latestAdded.value = rankLatestAddedProducts(rankedUsage)
                 val remoteProducts = remoteUsage.map { it.product }
-                val remoteIds = remoteProducts.map { it.code }.toSet()
-                val toDelete = localProducts.filter { it.code !in remoteIds }
+                val toDelete = catalog.productsToDelete(localProducts)
 
                 if (toDelete.isNotEmpty() && !_isSyncing.value) {
                     repository.deleteProducts(toDelete)

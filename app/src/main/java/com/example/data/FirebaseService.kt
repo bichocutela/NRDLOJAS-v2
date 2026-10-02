@@ -688,9 +688,12 @@ object FirebaseService {
         )
     }
 
-    fun observeProductUsage(): Flow<List<GlobalProductUsage>> = productUsageUpdates
+    fun observeProductCatalog(): Flow<ProductCatalogSnapshot> = productUsageUpdates
 
-    private fun createProductUsageFlow(): Flow<List<GlobalProductUsage>> = callbackFlow {
+    fun observeProductUsage(): Flow<List<GlobalProductUsage>> =
+        observeProductCatalog().map { it.usage }
+
+    private fun createProductUsageFlow(): Flow<ProductCatalogSnapshot> = callbackFlow {
         if (!isFirebaseConfigured()) {
             close()
             return@callbackFlow
@@ -707,9 +710,7 @@ object FirebaseService {
                         Log.e("FirebaseService", "Error in observeProducts", error)
                         return@addSnapshotListener
                     }
-                    // A cached query can be incomplete. Room remains available offline;
-                    // only a confirmed server snapshot may reconcile deletions.
-                    if (snapshot != null && !snapshot.metadata.isFromCache) {
+                    if (snapshot != null) {
                         val products = snapshot.documents.mapNotNull { doc ->
                             val code = doc.getString("code") ?: return@mapNotNull null
                             val name = doc.getString("name") ?: ""
@@ -741,7 +742,7 @@ object FirebaseService {
                                 }
                             )
                         }
-                        trySend(products)
+                        trySend(ProductCatalogSnapshot(products, snapshot.metadata.isFromCache))
                     }
                 }
         }

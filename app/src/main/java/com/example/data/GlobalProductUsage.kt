@@ -6,6 +6,18 @@ data class GlobalProductUsage(
     val createdAt: Long? = null
 )
 
+/** Cached query results may be partial and must never delete Room products. */
+data class ProductCatalogSnapshot(
+    val usage: List<GlobalProductUsage>,
+    val isFromCache: Boolean
+) {
+    fun productsToDelete(localProducts: List<Product>): List<Product> {
+        if (isFromCache) return emptyList()
+        val remoteCodes = usage.map { it.product.code }.toSet()
+        return localProducts.filter { it.code !in remoteCodes }
+    }
+}
+
 /**
  * Ranking global exibido no carrossel "Mais Utilizados".
  *
