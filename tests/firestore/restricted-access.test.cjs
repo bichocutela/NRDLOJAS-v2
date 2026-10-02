@@ -44,6 +44,13 @@ const { doc, getDoc, setDoc, updateDoc, collection, getDocs } = require('firebas
     await assertSucceeds(setDoc(doc(master, 'config/restricted_access'), { publicAccess: false }));
     await assertFails(getDoc(doc(publicDb, 'work_schedules/2026-10')));
     await assertFails(getDoc(doc(ana, 'work_schedules/2026-10')));
-    console.log('PASS: 26 authorization checks (individual access, public toggle, revocation and schema).');
+    const policy = { enabled: true, minimumVersion: 'v1.0.705' };
+    await assertFails(setDoc(doc(publicDb, 'config/update_policy'), policy));
+    await assertFails(setDoc(doc(admin, 'config/update_policy'), policy));
+    await assertSucceeds(setDoc(doc(master, 'config/update_policy'), policy));
+    await assertSucceeds(getDoc(doc(publicDb, 'config/update_policy')));
+    await assertFails(setDoc(doc(master, 'config/update_policy'), { enabled: true, minimumVersion: 'garbage' }));
+    await assertSucceeds(updateDoc(doc(master, 'config/update_policy'), { enabled: false }));
+    console.log('PASS: 32 authorization checks (permissions, public access and update policy).');
   } finally { await env.cleanup(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

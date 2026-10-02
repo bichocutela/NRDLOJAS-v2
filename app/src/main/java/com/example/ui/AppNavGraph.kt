@@ -75,6 +75,28 @@ fun AppNavGraph(
     val drawerOpenSignal = LocalNrdDrawerIsOpen.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val updatePolicy by remember { com.example.data.UpdatePolicyRepository.observe(context) }
+        .collectAsState(initial = com.example.data.UpdatePolicyRepository.cached(context))
+    var showRequiredUpdatePage by remember { mutableStateOf(false) }
+    val requiresUpdate = updatePolicy.requiresUpdate(com.example.BuildConfig.VERSION_NAME)
+    LaunchedEffect(requiresUpdate) { if (!requiresUpdate) showRequiredUpdatePage = false }
+    if (requiresUpdate) {
+        androidx.activity.compose.BackHandler { showRequiredUpdatePage = false }
+        if (showRequiredUpdatePage) {
+            AboutScreen(onNavigateBack = { showRequiredUpdatePage = false }, updateRequired = true)
+        } else {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                AlertDialog(
+                    onDismissRequest = {},
+                    properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+                    title = { Text("Vamos atualizar o NRD?") },
+                    text = { Text("Uma atualização importante está disponível para continuar usando o NRD. Seus dados serão mantidos. Toque em Atualizar para acessar a tela de atualização.") },
+                    confirmButton = { Button(onClick = { showRequiredUpdatePage = true }) { Text("Atualizar") } }
+                )
+            }
+        }
+        return
+    }
     val nossaGenteApi = remember { com.example.data.NossaGenteApi(context) }
     val nossaGenteCredentialStore = remember { com.example.data.NossaGenteCredentialStore(context.applicationContext) }
     var profileEnabled by remember { mutableStateOf(nossaGenteCredentialStore.isProfileEnabled()) }

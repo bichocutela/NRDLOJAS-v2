@@ -61,10 +61,15 @@ service cloud.firestore {
     // podem ser publicadas por perfis administrativos autenticados.
     match /config/{document} {
       allow read: if true;
-      allow write: if document != 'restricted_access' && isManager();
+      allow write: if document != 'restricted_access' && document != 'update_policy' && isManager();
       allow create, update: if document == 'restricted_access' && isMaster() &&
         request.resource.data.keys().hasOnly(['publicAccess']) && request.resource.data.publicAccess is bool;
       allow delete: if document == 'restricted_access' && isMaster();
+      allow create, update: if document == 'update_policy' && isMaster() &&
+        request.resource.data.keys().hasOnly(['enabled', 'minimumVersion']) &&
+        request.resource.data.enabled is bool && request.resource.data.minimumVersion is string &&
+        request.resource.data.minimumVersion.matches('v?[0-9]+[.][0-9]+[.][0-9]+');
+      allow delete: if document == 'update_policy' && isMaster();
     }
 
     // Histórico de novidades publicado pelo Painel Mestre.

@@ -58,6 +58,34 @@ object UpdateChecker {
         return false
     }
 
+    /** Only published releases containing the Android APK can be selected as a minimum. */
+    suspend fun publishedVersionTags(): List<String> = withContext(Dispatchers.IO) {
+        var connection: HttpURLConnection? = null
+        try {
+            connection = (URL(LATEST_RELEASE_URL.removeSuffix("/latest") + "?per_page=100").openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15_000
+                readTimeout = 15_000
+                setRequestProperty("User-Agent", "NRDLOJAS-Update-Checker")
+            }
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) return@withContext emptyList()
+            val releases = org.json.JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
+            (0 until releases.length()).mapNotNull { index ->
+                val release = releases.getJSONObject(index)
+                val tag = release.optString("tag_name")
+                val assets = release.optJSONArray("assets")
+                val hasApk = assets != null && (0 until assets.length()).any { assets.getJSONObject(it).optString("name") == "app-release.apk" }
+                tag.takeIf { !release.optBoolean("draft") && !release.optBoolean("prerelease") && hasApk && com.example.data.UpdatePolicy.validVersion(tag) }
+            }.distinct().sortedWith { first, second ->
+                when {
+                    isRemoteVersionNewer(first, second) -> 1
+                    isRemoteVersionNewer(second, first) -> -1
+                    else -> 0
+                }
+            }
+        } catch (_: Exception) { emptyList() }
+        finally { connection?.disconnect() }
+    }
+
     suspend fun checkLatestRelease(): ReleaseCheckResult {
         val apiResult = checkLatestReleaseFromApi()
         if (apiResult is ReleaseCheckResult.HttpError &&
