@@ -1,0 +1,9 @@
+# Histórico de cadastros
+
+No Painel Mestre → Cadastros e Acessos, os documentos existentes em `restricted_access` são listados por login. Tocar no login expande as três permissões. Salvar atualiza o documento existente; desmarcar todas mantém o login sem abas liberadas. A opção global de liberar para todos continua prevalecendo sobre as permissões individuais.
+
+A exclusão exige confirmação e chama `nrd-account-admin`. A função verifica assinatura, emissor, público e validade do ID token Firebase, exige a identidade Mestre ainda ativa e protege contas administrativas. Somente cadastros com documento de acesso e endereço correspondente em `usuarios.nrdlojas.com` podem ser excluídos. Primeiro revoga o documento, depois exclui o usuário Firebase Auth e por último remove o documento. Uma falha parcial mantém o acesso revogado e permite repetir a exclusão. A exclusão bem-sucedida permite reutilizar o nome em um novo cadastro, com outro UID.
+
+A função reutiliza `FIREBASE_SERVICE_ACCOUNT` já configurado no Supabase; nenhum segredo administrativo é enviado ao app. A conta de serviço precisa de `firebaseauth.users.get`, `firebaseauth.users.delete` e leitura/atualização/exclusão de documentos Firestore. A CI verifica essas permissões na conta de serviço Firebase configurada no GitHub sem excluir usuários reais. As contas de serviço no GitHub e Supabase devem ter essas permissões.
+
+Testes: `node --test supabase/functions/nrd-account-admin/handler.test.mjs`, `npm test --prefix tests/firestore`, e compilação assinada na CI. A validação de exclusão e falhas usa dependências simuladas; o teste de regras usa projeto Firebase de demonstração. Não são excluídas contas de produção nos testes.

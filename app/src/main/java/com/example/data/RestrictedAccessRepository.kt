@@ -1,5 +1,14 @@
 package com.example.data
 
+import com.example.BuildConfig
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MediaType.Companion.toMediaType
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -12,7 +21,54 @@ import java.util.UUID
 
 data class RestrictedAccess(val loading: Boolean = false, val enabled: Boolean = false, val profile: Boolean = false, val promotions: Boolean = false, val prices: Boolean = false, val publicAccess: Boolean = false, val publicLoading: Boolean = true)
 
+data class AccessAccount(val uid: String, val login: String, val enabled: Boolean, val profile: Boolean, val promotions: Boolean, val prices: Boolean)
+data class AccessHistory(val loading: Boolean = true, val accounts: List<AccessAccount> = emptyList(), val error: String? = null)
+
 object RestrictedAccessRepository {
+    private val accountClient = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
+        .connectTimeout(15, TimeUnit.SECONDS).callTimeout(45, TimeUnit.SECONDS).build()
+
+    fun observeAccounts() = callbackFlow {
+        val registration = FirebaseFirestore.getInstance().collection("restricted_access")
+            .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snapshot, error ->
+                when {
+                    error != null -> trySend(AccessHistory(loading = false, error = "Não foi possível carregar os cadastros. Verifique a conexão."))
+                    snapshot == null || snapshot.metadata.isFromCache -> trySend(AccessHistory())
+                    else -> trySend(AccessHistory(loading = false, accounts = snapshot.documents.mapNotNull { doc ->
+                        val login = doc.getString("login") ?: return@mapNotNull null
+                        AccessAccount(doc.id, login, doc.getBoolean("enabled") == true,
+                            doc.getBoolean("profile") == true, doc.getBoolean("promotions") == true, doc.getBoolean("prices") == true)
+                    }.sortedBy { it.login }))
+                }
+            }
+        awaitClose { registration.remove() }
+    }
+
+    suspend fun updatePermissions(uid: String, profile: Boolean, promotions: Boolean, prices: Boolean) {
+        check(FirebaseAuth.getInstance().currentUser?.email == "mestre@nrdlojas.com") { "Acesso exclusivo do Mestre." }
+        FirebaseFirestore.getInstance().collection("restricted_access").document(uid)
+            .update(mapOf("enabled" to (profile || promotions || prices), "profile" to profile,
+                "promotions" to promotions, "prices" to prices)).await()
+    }
+
+    suspend fun deleteAccount(uid: String) {
+        val user = FirebaseAuth.getInstance().currentUser
+        check(user?.email == "mestre@nrdlojas.com") { "Acesso exclusivo do Mestre." }
+        val token = user!!.getIdToken(true).await().token ?: error("Entre novamente como Mestre.")
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder().url(BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/nrd-account-admin")
+                .header("x-firebase-token", token).header("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .post(JSONObject().put("uid", uid).toString().toRequestBody("application/json".toMediaType())).build()
+            accountClient.newCall(request).execute().use { response ->
+                val result = runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull()
+                check(response.isSuccessful && result?.optBoolean("deleted") == true) {
+                    if (result?.optString("error") == "DELETE_INCOMPLETE") "O acesso foi bloqueado, mas a exclusão não terminou. Tente excluir novamente."
+                    else "Não foi possível excluir o login. Verifique a conexão e tente novamente."
+                }
+            }
+        }
+    }
+
     fun loginEmail(login: String): String {
         val value = login.trim().lowercase(Locale.ROOT)
         require(value.matches(Regex("[a-z0-9._-]{3,64}"))) { "Use um login de 3 a 64 letras, números, ponto, traço ou sublinhado." }
