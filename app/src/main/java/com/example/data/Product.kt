@@ -50,3 +50,9 @@ fun Product.withCategoryNames(categories: Collection<String>): Product {
     require(normalized.isNotEmpty()) { "Produto precisa pertencer a pelo menos uma categoria." }
     return copy(category = normalized.first(), categoryMemberships = encodeProductCategories(normalized))
 }
+
+/** Category links arrive in the catalog snapshot; no additional Firestore query is needed. */
+internal fun remoteCategoryMemberships(primaryCategory: String, remoteCategories: Any?): String {
+    val categories = (remoteCategories as? List<*>)?.mapNotNull { it as? String }.orEmpty()
+    return encodeProductCategories(listOf(primaryCategory) + categories)
+}

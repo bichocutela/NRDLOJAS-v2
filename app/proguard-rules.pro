@@ -19,3 +19,10 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Preserve generic metadata required by libraries while allowing application code obfuscation.
+-keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod
+# JavaScript bridge methods are called by WebView using their annotated names.
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}

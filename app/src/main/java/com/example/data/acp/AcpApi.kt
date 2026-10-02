@@ -1,7 +1,6 @@
 package com.example.data.acp
 
 import android.content.Context
-import com.example.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,8 +30,13 @@ internal class AcpFailure(message: String) : IOException(message)
 
 /** Isolated NextAuth session; never changes NRD/Firebase/Nossa Gente authentication. */
 internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient.Builder = OkHttpClient.Builder(),
-    private val bundledLogin: String = "", private val bundledPassword: String = "") {
-    constructor(context: Context) : this(AcpSecureStore(context), bundledLogin = BuildConfig.INTEGRATION_USER, bundledPassword = BuildConfig.INTEGRATION_PASSWORD)
+    private val bundledLogin: String = "", private val bundledPassword: String = "",
+    private val gateway: AcpGatewayClient? = null) {
+    constructor(context: Context) : this(AcpSecureStore(context).also {
+        // Clear old device credentials and ACP sessions on migration; preserve product cache.
+        it.clear("access")
+        it.clear("session")
+    }, gateway = AcpGatewayClient())
     private val sessionLock = Mutex()
     private var accessConfirmed = false
     private var clubCategoryId: String? = null
@@ -52,10 +56,11 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val refreshingKeys = mutableSetOf<String>()
 
-    suspend fun hasCredentials(): Boolean = withContext(Dispatchers.IO) { credentials() != null }
+    suspend fun hasCredentials(): Boolean = withContext(Dispatchers.IO) { gateway != null || credentials() != null }
 
     suspend fun configure(login: String, password: String) = sessionLock.withLock {
         withContext(Dispatchers.IO) {
+            check(gateway == null) { "O acesso é configurado pelo Mestre no servidor." }
             require(login.isNotBlank() && password.isNotBlank())
             store.write("access", JSONObject().put("login", login.trim()).put("password", password).toString())
             accessConfirmed = false
@@ -69,6 +74,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     suspend fun restoreSession(): Boolean = sessionLock.withLock {
         withContext(Dispatchers.IO) {
             accessConfirmed = false
+            gateway?.let { it.checkAccess(); accessConfirmed = true; return@withContext true }
             if (cookies.loadForRequest("$ORIGIN/api/auth/session".toHttpUrl()).isEmpty()) return@withContext false
             try {
                 session()
@@ -81,6 +87,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     suspend fun confirmAccess() = sessionLock.withLock {
         withContext(Dispatchers.IO) {
             accessConfirmed = false
+            gateway?.let { it.checkAccess(); accessConfirmed = true; return@withContext }
             try { session() } catch (_: AcpUnauthorized) { signIn() }
             accessConfirmed = true
         }
@@ -156,7 +163,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         session() // A successful callback alone is not proof of authentication.
     }
 
-    fun hasBundledAccess(): Boolean = bundledLogin.isNotBlank() && bundledPassword.isNotBlank()
+    fun hasBundledAccess(): Boolean = gateway != null || (bundledLogin.isNotBlank() && bundledPassword.isNotBlank())
 
     private fun credentials(): JSONObject? {
         if (hasBundledAccess()) return JSONObject().put("login", bundledLogin).put("password", bundledPassword)
@@ -213,6 +220,8 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         if (path in DAILY_CACHE_ENDPOINTS) {
             val cached = withContext(Dispatchers.IO) { readCachedResponse(path, effectiveParameters) }
             if (cached != null) {
+                // A cached price is available only while the server still grants access.
+                gateway?.checkAccess()
                 recordDiagnostic(path, effectiveParameters, cached.payload)
                 if (!isFresh(cached.savedAtMillis)) {
                     if (path in SILENT_PAGED_ENDPOINTS && pageIndex(effectiveParameters) == 0) {
@@ -324,6 +333,11 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     private suspend fun authenticatedRead(path: String, parameters: List<Pair<String, String>>, record: Boolean): JSONObject =
         sessionLock.withLock {
             withContext(Dispatchers.IO) {
+                if (gateway != null) {
+                    return@withContext gateway.read(path, parameters).also {
+                        if (record) recordDiagnostic(path, parameters, it)
+                    }
+                }
                 try { readOnce(path, parameters, record) } catch (expired: AcpUnauthorized) {
                     val mayRenew = accessConfirmed
                     accessConfirmed = false

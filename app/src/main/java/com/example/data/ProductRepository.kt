@@ -67,18 +67,11 @@ class ProductRepository(
 
     suspend fun insertProducts(products: List<Product>) {
         val existingProducts = dao.getAllProductsSync().associateBy { it.code }
-        if (existingProducts.isEmpty() && products.isNotEmpty()) {
-            NrdProductImportService.refreshCategoryCache()
-        }
-        val allowSingleDocumentLookup = existingProducts.isNotEmpty() && products.size <= 20
         val updatedProducts = mutableListOf<Product>()
         for (remote in products) {
             val local = existingProducts[remote.code]
-            val cachedCategories = NrdProductImportService.cachedCategories(remote.code)
-                ?: if (local == null && allowSingleDocumentLookup) NrdProductImportService.categoriesForCode(remote.code) else null
             val memberships = when {
                 remote.categoryMemberships.isNotBlank() -> remote.categoryMemberships
-                !cachedCategories.isNullOrEmpty() -> encodeProductCategories(cachedCategories)
                 local?.categoryMemberships?.isNotBlank() == true -> local.categoryMemberships
                 else -> encodeProductCategories(listOfNotNull(remote.category.takeIf { it.isNotBlank() }))
             }
@@ -113,21 +106,7 @@ class ProductRepository(
         dao.updateProduct(product)
     }
 
-    suspend fun populateInitialDataIfNeeded() {
-        val memberships = NrdProductImportService.refreshCategoryCache()
-        if (memberships.isEmpty()) return
-        val current = dao.getAllProductsSync()
-        val changed = current.mapNotNull { product ->
-            val categories = memberships[product.code] ?: return@mapNotNull null
-            val encoded = encodeProductCategories(categories)
-            if (encoded == product.categoryMemberships && product.category == categories.firstOrNull()) null
-            else product.copy(
-                category = categories.firstOrNull() ?: product.category,
-                categoryMemberships = encoded
-            )
-        }
-        if (changed.isNotEmpty()) dao.insertProducts(changed)
-    }
+
 }
 
 private data class SearchMatch(

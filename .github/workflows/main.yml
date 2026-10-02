@@ -103,20 +103,8 @@ jobs:
         echo "NEXT_TAG=$NEXT_TAG" >> "$GITHUB_ENV"
         echo "TAG=$NEXT_TAG" >> $GITHUB_OUTPUT
 
-    - name: Validate bundled integration access
-      env:
-        INTEGRATION_USER: ${{ secrets.INTEGRATION_USER }}
-        INTEGRATION_PASSWORD: ${{ secrets.INTEGRATION_PASSWORD }}
-      run: |
-        if [ -z "$INTEGRATION_USER" ] || [ -z "$INTEGRATION_PASSWORD" ]; then
-          echo "Configure INTEGRATION_USER and INTEGRATION_PASSWORD in repository Actions secrets before building."
-          exit 1
-        fi
-
     - name: Build with Gradle
       env:
-        INTEGRATION_USER: ${{ secrets.INTEGRATION_USER }}
-        INTEGRATION_PASSWORD: ${{ secrets.INTEGRATION_PASSWORD }}
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -125,6 +113,8 @@ jobs:
       run: |
         ./gradlew testDebugUnitTest \
           --tests 'com.example.data.GlobalProductUsageTest' \
+          --tests 'com.example.data.ProductCategoriesTest' \
+          --tests 'com.example.data.ProductRepositorySearchTest' \
           --tests 'com.example.data.RestrictedAccessLoginTest' \
           --tests 'com.example.data.UpdatePolicyTest' \
           --tests 'com.example.data.DynamicPageScheduleTest' \
@@ -220,6 +210,13 @@ jobs:
       with:
         name: app-release
         path: app/build/outputs/apk/release/app-release.apk
+
+    - name: Upload R8 mapping for crash diagnosis
+      uses: actions/upload-artifact@v4
+      with:
+        name: r8-mapping
+        path: app/build/outputs/mapping/release/mapping.txt
+        if-no-files-found: error
 
     - name: Create GitHub Release
       if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')

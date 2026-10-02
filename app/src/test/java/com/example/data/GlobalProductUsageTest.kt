@@ -76,6 +76,26 @@ class GlobalProductUsageTest {
         assertEquals(listOf("newest", "older"), ranked.map { it.code })
     }
 
+    @Test
+    fun partialCacheNeverDeletesProductsStoredOnDevice() {
+        val retained = usage("retained", 2, 100L).product
+        val cached = usage("cached", 3, 200L)
+        assertEquals(emptyList<Product>(), ProductCatalogSnapshot(listOf(cached), true)
+            .productsToDelete(listOf(retained, cached.product)))
+        assertEquals(emptyList<Product>(), ProductCatalogSnapshot(emptyList(), true)
+            .productsToDelete(listOf(retained)))
+    }
+
+    @Test
+    fun confirmedServerSnapshotStillRemovesDeletedProducts() {
+        val deleted = usage("deleted", 2, 100L).product
+        val retained = usage("retained", 3, 200L)
+        assertEquals(listOf(deleted), ProductCatalogSnapshot(listOf(retained), false)
+            .productsToDelete(listOf(deleted, retained.product)))
+        assertEquals(listOf(deleted), ProductCatalogSnapshot(emptyList(), false)
+            .productsToDelete(listOf(deleted)))
+    }
+
     private fun usage(
         code: String,
         count: Int,

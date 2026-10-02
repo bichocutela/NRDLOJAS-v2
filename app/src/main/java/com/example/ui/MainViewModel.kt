@@ -155,7 +155,8 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             }
         }
         viewModelScope.launch {
-            FirebaseService.observeProductUsage().collect { remoteUsage ->
+            FirebaseService.observeProductCatalog().collect { catalog ->
+                val remoteUsage = catalog.usage
                 val localProducts = repository.getAllProductsSync()
                 val localProductsByCode = localProducts.associateBy { it.code }
                 val rankedUsage = remoteUsage.map { usage ->
@@ -174,8 +175,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                 )
                 _latestAdded.value = rankLatestAddedProducts(rankedUsage)
                 val remoteProducts = remoteUsage.map { it.product }
-                val remoteIds = remoteProducts.map { it.code }.toSet()
-                val toDelete = localProducts.filter { it.code !in remoteIds }
+                val toDelete = catalog.productsToDelete(localProducts)
 
                 if (toDelete.isNotEmpty() && !_isSyncing.value) {
                     repository.deleteProducts(toDelete)
@@ -189,6 +189,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                     } else if (
                         local.name != remote.name || local.imageUrl != remote.imageUrl ||
                         local.category != remote.category || local.unit != remote.unit ||
+                        local.categoryMemberships != remote.categoryMemberships ||
                         local.searchCount != remote.searchCount
                     ) {
                         remote.copy(id = local.id, lastSearchedAt = local.lastSearchedAt, isFavorite = local.isFavorite)
@@ -207,11 +208,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                 }
             }
         }
-        viewModelScope.launch {
-            repository.populateInitialDataIfNeeded()
-            // O listener observeProductUsage() já mantém o catálogo local sincronizado.
-            // Evita uma segunda leitura completa da coleção em toda inicialização.
-        }
+        // O listener do catálogo também traz as categorias; não repetir consultas na inicialização.
     }
 
     val searchResults: StateFlow<List<Product>> = _searchQuery
@@ -744,6 +741,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
                     } else if (
                         local.name != remote.name || local.imageUrl != remote.imageUrl ||
                         local.category != remote.category || local.unit != remote.unit ||
+                        local.categoryMemberships != remote.categoryMemberships ||
                         local.searchCount != remote.searchCount
                     ) {
                         remote.copy(id = local.id, lastSearchedAt = local.lastSearchedAt, isFavorite = local.isFavorite)

@@ -9,9 +9,6 @@ plugins {
   alias(libs.plugins.google.services)
   
 }
-fun acpJavaString(value: String): String = "\"" + value
-    .replace("\\", "\\\\").replace("\"", "\\\"")
-    .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\""
 
 android {
   namespace = "com.example"
@@ -22,8 +19,6 @@ android {
     targetSdk = 36
     versionCode = System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: 59
     versionName = System.getenv("APP_VERSION_NAME") ?: "1.0.59"
-    buildConfigField("String", "INTEGRATION_USER", acpJavaString(System.getenv("INTEGRATION_USER") ?: ""))
-    buildConfigField("String", "INTEGRATION_PASSWORD", acpJavaString(System.getenv("INTEGRATION_PASSWORD") ?: ""))
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         val supabaseUrl = System.getenv("SUPABASE_URL") ?: "https://kkayksyzksexoarpfxyj.supabase.co"
     buildConfigField("String", "SUPABASE_URL", "\"${supabaseUrl}\"")
@@ -44,7 +39,7 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = false
+      isMinifyEnabled = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
@@ -65,6 +60,7 @@ android {
 secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
+  ignoreList.addAll(listOf("INTEGRATION_USER", "INTEGRATION_PASSWORD", "NRD_PRICE_LOGIN", "NRD_PRICE_PASSWORD", "ACP_LOGIN", "ACP_PASSWORD"))
 }
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future when needed.
