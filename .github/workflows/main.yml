@@ -103,20 +103,8 @@ jobs:
         echo "NEXT_TAG=$NEXT_TAG" >> "$GITHUB_ENV"
         echo "TAG=$NEXT_TAG" >> $GITHUB_OUTPUT
 
-    - name: Validate bundled integration access
-      env:
-        INTEGRATION_USER: ${{ secrets.INTEGRATION_USER }}
-        INTEGRATION_PASSWORD: ${{ secrets.INTEGRATION_PASSWORD }}
-      run: |
-        if [ -z "$INTEGRATION_USER" ] || [ -z "$INTEGRATION_PASSWORD" ]; then
-          echo "Configure INTEGRATION_USER and INTEGRATION_PASSWORD in repository Actions secrets before building."
-          exit 1
-        fi
-
     - name: Build with Gradle
       env:
-        INTEGRATION_USER: ${{ secrets.INTEGRATION_USER }}
-        INTEGRATION_PASSWORD: ${{ secrets.INTEGRATION_PASSWORD }}
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}

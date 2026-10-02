@@ -1,0 +1,3 @@
+# Firebase JWT is verified inside the function; a Supabase anon key is not a user identity.
+[functions.nrd-price-gateway]
+verify_jwt = false

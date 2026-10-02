@@ -1,0 +1,45 @@
+name: ACP server security
+on:
+  push:
+    branches: [codex/acp-server-security, main]
+    paths:
+      - 'supabase/functions/nrd-price-gateway/**'
+      - '.github/workflows/acp-security.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  gateway:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify server authorization and commercial contract
+        run: node --test supabase/functions/nrd-price-gateway/handler.test.mjs
+      - name: Verify deployed gateway and server-side ACP credentials
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request, urllib.error
+          def post(body, headers=None):
+              url = (os.environ.get('SUPABASE_URL') or 'https://kkayksyzksexoarpfxyj.supabase.co').rstrip('/') + '/functions/v1/nrd-price-gateway'
+              request = urllib.request.Request(url, data=json.dumps(body).encode(), headers={'Content-Type':'application/json', **(headers or {})})
+              try:
+                  response = urllib.request.urlopen(request, timeout=90)
+                  return response.status, json.load(response)
+              except urllib.error.HTTPError as error:
+                  return error.code, json.load(error)
+          status, _ = post({'operation':'access'}, {'x-firebase-token':'synthetic-invalid-token'})
+          assert status == 401, 'Invalid Firebase token was not rejected'
+          token_url = os.environ['ACTIONS_ID_TOKEN_REQUEST_URL'] + '&audience=nrd-acp-security-check'
+          request = urllib.request.Request(token_url, headers={'Authorization':'Bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
+          token = json.load(urllib.request.urlopen(request, timeout=20))['value']
+          status, body = post({'operation':'health'}, {'x-github-oidc-token':token})
+          assert status == 200 and body == {'ok':True}, f'Gateway readiness failed: HTTP {status}, {body.get("error", "invalid result")}'
+          print('Gateway rejected invalid identity and completed authenticated ACP read using server secrets.')
+          PY
