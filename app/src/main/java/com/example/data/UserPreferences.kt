@@ -189,6 +189,16 @@ class UserPreferences(private val context: Context) {
             preferences[NOTIFICATION_HISTORY_JSON] = encodeNotifications(updated)
         }
     }
+    suspend fun clearRestrictedNotifications() {
+        context.dataStore.edit { preferences ->
+            val publicItems = decodeNotifications(preferences[NOTIFICATION_HISTORY_JSON].orEmpty()).filter {
+                com.example.util.ProfileNotificationRouting.profileSection(it.type) == null &&
+                    it.type != "PROMOTION_UPDATED" && it.type != "SCHEDULE_NEW"
+            }
+            preferences[NOTIFICATION_HISTORY_JSON] = encodeNotifications(publicItems)
+        }
+    }
+
     suspend fun markNotificationRead(id: Long) {
         context.dataStore.edit { preferences ->
             val updated = decodeNotifications(preferences[NOTIFICATION_HISTORY_JSON].orEmpty())

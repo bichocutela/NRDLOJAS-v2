@@ -160,6 +160,21 @@ fun AppNavGraph(
         }
     }
 
+    fun clearPersonalSession() {
+        nossaGenteApi.logout()
+        nossaGenteCredentialStore.clear()
+        nossaGenteCredentialStore.setProfileEnabled(false)
+        nossaGenteCredentialStore.setPromotionsEnabled(false)
+        profileEnabled = false
+        promotionsEnabled = false
+        drawerEmployeeProfile = null
+        drawerProfilePhotoModel = null
+        listOf("profile_schedule_reminders", "nossa_gente_point_snapshot", "nossa_gente_hours_snapshot", "nossa_gente_benefit_snapshot").forEach {
+            context.applicationContext.getSharedPreferences(it, android.content.Context.MODE_PRIVATE).edit().clear().apply()
+        }
+        scope.launch { viewModel.userPreferences.clearRestrictedNotifications() }
+    }
+
     fun openProfileSection(section: String) {
         if (!access.profile) return
         requestedProfileSection = section
@@ -215,14 +230,7 @@ fun AppNavGraph(
                     myProfilePhotoModel = drawerProfilePhotoModel,
                     myProfileName = drawerEmployeeProfile?.name,
                     onLoginSuccess = { role ->
-                        if (role == "user") {
-                            nossaGenteApi.logout()
-                            nossaGenteCredentialStore.clear()
-                            nossaGenteCredentialStore.setProfileEnabled(false)
-                            nossaGenteCredentialStore.setPromotionsEnabled(false)
-                            profileEnabled = false
-                            promotionsEnabled = false
-                        }
+                        if (role == "user") clearPersonalSession()
                         isLoggedIn = true
                         userRole = role
                         scope.launch { drawerState.close() }
@@ -235,14 +243,7 @@ fun AppNavGraph(
                     onLogout = {
                         scope.launch { com.example.util.FcmTopicSubscription.reconcileMasterUpdates(isMaster = false) }
                         firebaseAuth.signOut()
-                        nossaGenteApi.logout()
-                        nossaGenteCredentialStore.clear()
-                        nossaGenteCredentialStore.setProfileEnabled(false)
-                        nossaGenteCredentialStore.setPromotionsEnabled(false)
-                        profileEnabled = false
-                        promotionsEnabled = false
-                        drawerEmployeeProfile = null
-                        drawerProfilePhotoModel = null
+                        clearPersonalSession()
                         isLoggedIn = false
                         userRole = "user"
                         scope.launch { drawerState.close() }
@@ -355,7 +356,6 @@ fun AppNavGraph(
                             onNavigateBack = { navController.popBackStack() },
                             reuseExistingSession = promotionsEnabled,
                         )
-
                     }
                 }
                 composable("promotions") {
@@ -376,7 +376,6 @@ fun AppNavGraph(
                                 nossaGenteCredentialStore.setProfileEnabled(true)
                             }
                         )
-
                     }
                 }
                 composable("my_point_login") {
@@ -393,7 +392,6 @@ fun AppNavGraph(
                             reuseExistingSession = false,
                             title = "Acesso ao Meu Perfil"
                         )
-
                     }
                 }
                 composable("my_profile") {
@@ -410,11 +408,13 @@ fun AppNavGraph(
                                 navController.navigate("search") { popUpTo("my_profile") { inclusive = true } }
                             }
                         )
-
                     }
                 }
                 composable("my_point") {
-                    RestrictedRoute(access.loading, access.profile, { navController.navigateToSearch() }) { LaunchedEffect(Unit) { navController.navigate("my_profile") { popUpTo("my_point") { inclusive = true } } }
+                    RestrictedRoute(access.loading, access.profile, { navController.navigateToSearch() }) {
+                        LaunchedEffect(Unit) {
+                            navController.navigate("my_profile") { popUpTo("my_point") { inclusive = true } }
+                        }
                     }
                 }
                 composable("settings") { SettingsScreen(viewModel, onNavigateBack = { navController.popBackStack() }) }
@@ -427,7 +427,6 @@ fun AppNavGraph(
                             externalPdfRequestKey = sharedOrderPdfRequestKey,
                             onExternalPdfConsumed = onSharedOrderPdfConsumed
                         )
-
                     }
                 }
                 composable("about") { AboutScreen(onNavigateBack = { navController.popBackStack() }) }
