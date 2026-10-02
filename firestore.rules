@@ -21,8 +21,12 @@ service cloud.firestore {
     function isMaster() {
       return isSignedIn() && request.auth.token.email == 'mestre@nrdlojas.com';
     }
+    function publicRestrictedAccess() {
+      return exists(/databases/$(database)/documents/config/restricted_access) &&
+        get(/databases/$(database)/documents/config/restricted_access).data.publicAccess == true;
+    }
     function canReadProfile() {
-      return isMaster() || (isSignedIn() &&
+      return publicRestrictedAccess() || isMaster() || (isSignedIn() &&
         exists(/databases/$(database)/documents/restricted_access/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/restricted_access/$(request.auth.uid)).data.enabled == true &&
         get(/databases/$(database)/documents/restricted_access/$(request.auth.uid)).data.profile == true);
@@ -57,7 +61,10 @@ service cloud.firestore {
     // podem ser publicadas por perfis administrativos autenticados.
     match /config/{document} {
       allow read: if true;
-      allow write: if isManager();
+      allow write: if document != 'restricted_access' && isManager();
+      allow create, update: if document == 'restricted_access' && isMaster() &&
+        request.resource.data.keys().hasOnly(['publicAccess']) && request.resource.data.publicAccess is bool;
+      allow delete: if document == 'restricted_access' && isMaster();
     }
 
     // Histórico de novidades publicado pelo Painel Mestre.
