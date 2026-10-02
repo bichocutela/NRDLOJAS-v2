@@ -46,7 +46,7 @@ private const val IPHONE_PWA_URL = "https://bichocutela.github.io"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AboutScreen(onNavigateBack: () -> Unit) {
+fun AboutScreen(onNavigateBack: () -> Unit, updateRequired: Boolean = false) {
     val uriHandler = LocalUriHandler.current
     val currentYear = Calendar.getInstance().get(Calendar.YEAR)
     val copyrightYear = if (currentYear <= 2026) "2026" else "2026-$currentYear"
@@ -90,6 +90,11 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
                     vertical = if (screenProfile.compact) 8.dp else 12.dp
                 )
         ) {
+            if (updateRequired) {
+                Text("Atualização necessária", style = MaterialTheme.typography.titleLarge)
+                Text("Baixe e instale a atualização abaixo para continuar. Se estiver sem conexão, conecte-se à internet e tente novamente.")
+                Spacer(modifier = Modifier.height(12.dp))
+            } else {
             if (expressive) {
                 val infoShape = RoundedCornerShape(if (screenProfile.compact) 22.dp else 28.dp)
                 Surface(
@@ -152,6 +157,7 @@ fun AboutScreen(onNavigateBack: () -> Unit) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            }
             val context = androidx.compose.ui.platform.LocalContext.current
             val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
             var updateTag by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
