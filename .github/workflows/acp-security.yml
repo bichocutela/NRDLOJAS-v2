@@ -36,6 +36,8 @@ jobs:
                   return error.code, json.load(error)
           status, _ = post({'operation':'access'}, {'x-firebase-token':'synthetic-invalid-token'})
           assert status == 401, 'Invalid Firebase token was not rejected'
+          status, _ = post({'operation':'access'})
+          assert status in (200, 403), f'Public access permission check unavailable: HTTP {status}'
           token_url = os.environ['ACTIONS_ID_TOKEN_REQUEST_URL'] + '&audience=nrd-acp-security-check'
           request = urllib.request.Request(token_url, headers={'Authorization':'Bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
           token = json.load(urllib.request.urlopen(request, timeout=20))['value']
