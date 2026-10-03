@@ -5,3 +5,7 @@ verify_jwt = false
 [functions.nrd-account-admin]
 # Firebase ID tokens are verified cryptographically in the function, with Mestre authorization.
 verify_jwt = false
+
+[functions.nrd-installation-event]
+# SHA-256 capability authenticates an immutable Firestore event. No arbitrary FCM payloads accepted.
+verify_jwt = false

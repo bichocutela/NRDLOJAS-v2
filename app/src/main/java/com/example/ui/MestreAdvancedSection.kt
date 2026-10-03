@@ -214,12 +214,12 @@ internal fun MestreAdvancedSection(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Notificar nova instalação",
+                        "Notificar instalações e atualizações",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                     )
                     Text(
-                        "Avisa o Mestre quando surgir um aparelho novo. Reinstalar no mesmo aparelho não conta novamente.",
+                        "Avisa o Mestre quando um aparelho instala ou atualiza o app. Cada versão é avisada uma vez por aparelho.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

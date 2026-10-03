@@ -37,6 +37,22 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val preferences = UserPreferences(applicationContext)
 
         runBlocking {
+            if (type == "NEW_INSTALLATION") {
+                val eventId = message.data["eventId"]
+                if (!InstallationNotificationPolicy.shouldDisplay(
+                    FcmTopicSubscription.isMasterAuthenticated(), preferences.notificationsEnabled.first(),
+                    preferences.masterInstallationNotificationsEnabled.first(), eventId)) return@runBlocking
+                val delivered = applicationContext.getSharedPreferences("master_installation_events", MODE_PRIVATE)
+                val key = "${com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid}:$eventId"
+                if (delivered.getBoolean(key, false)) return@runBlocking
+                NotificationHelper.showNotification(applicationContext, type, title, body, notificationTag = eventId)
+                preferences.addNotification(com.example.data.AppNotification(
+                    id = System.currentTimeMillis(), type = type, title = title, body = body,
+                    read = false, timestamp = System.currentTimeMillis()))
+                delivered.edit().putBoolean(key, true).apply()
+                return@runBlocking
+            }
+
             if (type == TYPE_PROMOTION_UPDATED || ProfileNotificationRouting.profileSection(type) != null) {
                 val access = com.example.data.RestrictedAccessRepository.current()
                 if (type == TYPE_PROMOTION_UPDATED && !access.promotions) return@runBlocking
@@ -162,7 +178,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             TYPE_APP_UPDATE,
             TYPE_PROMOTION_UPDATED,
             TYPE_SCHEDULE_INSERTED,
-            TYPE_SCHEDULE_CHANGED
+            TYPE_SCHEDULE_CHANGED,
+            "NEW_INSTALLATION"
         )
     }
 }

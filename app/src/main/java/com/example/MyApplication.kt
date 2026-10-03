@@ -22,7 +22,9 @@ class MyApplication : Application() {
             com.example.data.FirebaseService.initialize(this)
             Log.d("MyApplication", "Firebase initialized manually")
             applicationScope.launch {
-                com.example.data.DeviceInstallationTracker.register(this@MyApplication)
+                if (!com.example.data.DeviceInstallationTracker.register(this@MyApplication)) {
+                    com.example.util.InstallationRegistrationWorker.schedule(this@MyApplication)
+                }
             }
             scheduleCatalogCodeMigration()
         } catch (e: Exception) {
@@ -64,19 +66,9 @@ class MyApplication : Application() {
         } catch (e: IllegalStateException) {
             Log.w("MyApplication", "Hours notification check not scheduled in this process", e)
         }
-        applicationScope.launch {
-            try {
-                val enabled = com.example.data.UserPreferences(this@MyApplication)
-                    .masterInstallationNotificationsEnabled.first()
-                if (enabled) {
-                    com.example.util.InstallationNotificationWorker.schedule(this@MyApplication)
-                } else {
-                    com.example.util.InstallationNotificationWorker.cancel(this@MyApplication)
-                }
-            } catch (e: Exception) {
-                Log.w("MyApplication", "Installation notification check not scheduled", e)
-            }
-        }
+        // Cancel the old polling job; installation events now arrive through FCM.
+        runCatching { com.example.util.InstallationNotificationWorker.cancel(this) }
+            .onFailure { Log.w("MyApplication", "Legacy installation job could not be cancelled", it) }
         try {
             com.example.util.AcpCatalogSyncWorker.schedule(this)
             Log.d("MyApplication", "ACP catalog sync scheduled")

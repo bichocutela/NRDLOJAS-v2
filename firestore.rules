@@ -192,6 +192,20 @@ service cloud.firestore {
       allow delete: if isManager();
     }
 
+    // Immutable event proof: only its holder can ask the server to deliver it.
+    // No enumeration, reads or modification from public clients.
+    match /app_installation_events/{eventId} {
+      allow create: if eventId.matches('[0-9a-f]{64}') &&
+        request.resource.data.keys().hasOnly(['deviceIdHash', 'appVersion', 'appVersionCode', 'firstSeenAt', 'createdAt']) &&
+        request.resource.data.deviceIdHash is string &&
+        request.resource.data.deviceIdHash.matches('[0-9a-f]{64}') &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.firstSeenAt == getAfter(/databases/$(database)/documents/app_installations/$(request.resource.data.deviceIdHash)).data.firstSeenAt &&
+        request.resource.data.appVersion == getAfter(/databases/$(database)/documents/app_installations/$(request.resource.data.deviceIdHash)).data.appVersion &&
+        request.resource.data.appVersionCode == getAfter(/databases/$(database)/documents/app_installations/$(request.resource.data.deviceIdHash)).data.appVersionCode;
+      allow read, update, delete: if false;
+    }
+
     // Qualquer coleção não declarada acima permanece bloqueada por padrão.
     match /{document=**} {
       allow read, write: if false;

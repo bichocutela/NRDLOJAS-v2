@@ -1,5 +1,16 @@
 package com.example.data
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MediaType.Companion.toMediaType
+import org.json.JSONObject
+import java.util.UUID
 import android.content.Context
 import android.provider.Settings
 import com.example.BuildConfig
@@ -29,44 +40,61 @@ object DeviceInstallationTracker {
     private const val COLLECTION = "app_installations"
     private val activeWindowMs = TimeUnit.DAYS.toMillis(7)
 
-    suspend fun register(context: Context): Boolean {
-        if (!FirebaseService.isFirebaseConfigured()) return false
-        val hash = deviceHash(context)
-        if (hash.isBlank()) return false
+    private val registrationMutex = Mutex()
+    private val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
+        .connectTimeout(15, TimeUnit.SECONDS).callTimeout(60, TimeUnit.SECONDS).build()
 
+    /** Register immediately; a persisted capability lets retries notify only this immutable event. */
+    suspend fun register(context: Context): Boolean = registrationMutex.withLock {
+        if (!FirebaseService.isFirebaseConfigured()) return@withLock false
+        val hash = deviceHash(context)
+        if (hash.isBlank()) return@withLock false
+        val prefs = context.getSharedPreferences("installation_delivery", Context.MODE_PRIVATE)
+        val versionKey = "$hash:${BuildConfig.VERSION_CODE}"
+        val acknowledged = prefs.getBoolean("ack:$versionKey", false)
+        val proof = if (acknowledged) null else (prefs.getString("proof:$versionKey", null)
+            ?: (UUID.randomUUID().toString() + UUID.randomUUID().toString()).replace("-", "").also {
+                if (!prefs.edit().putString("proof:$versionKey", it).commit()) return@withLock false
+            })
+        val proofHash = proof?.let { value -> MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
+            .joinToString("") { "%02x".format(it) } }
         val firestore = FirebaseFirestore.getInstance()
         val reference = firestore.collection(COLLECTION).document(hash)
-        return try {
+        val eventPublished = prefs.getBoolean("published:$versionKey", false)
+        val registered = runCatching {
             firestore.runTransaction { transaction ->
                 val snapshot = transaction.get(reference)
-                if (!snapshot.exists()) {
-                    transaction.set(
-                        reference,
-                        mapOf(
-                            "deviceIdHash" to hash,
-                            "firstSeenAt" to FieldValue.serverTimestamp(),
-                            "lastSeenAt" to FieldValue.serverTimestamp(),
-                            "appVersion" to BuildConfig.VERSION_NAME,
-                            "appVersionCode" to BuildConfig.VERSION_CODE,
-                            "platform" to "android"
-                        )
-                    )
-                    true
-                } else {
-                    transaction.update(
-                        reference,
-                        mapOf(
-                            "lastSeenAt" to FieldValue.serverTimestamp(),
-                            "appVersion" to BuildConfig.VERSION_NAME,
-                            "appVersionCode" to BuildConfig.VERSION_CODE
-                        )
-                    )
-                    false
+                val firstSeen: Any = snapshot.getTimestamp("firstSeenAt") ?: FieldValue.serverTimestamp()
+                val fields = mapOf("lastSeenAt" to FieldValue.serverTimestamp(),
+                    "appVersion" to BuildConfig.VERSION_NAME, "appVersionCode" to BuildConfig.VERSION_CODE)
+                if (!snapshot.exists()) transaction.set(reference, fields + mapOf(
+                    "deviceIdHash" to hash, "firstSeenAt" to firstSeen, "platform" to "android"))
+                else transaction.update(reference, fields)
+                if (proofHash != null && !eventPublished) {
+                    transaction.set(firestore.collection("app_installation_events").document(proofHash), mapOf(
+                        "deviceIdHash" to hash, "appVersion" to BuildConfig.VERSION_NAME,
+                        "appVersionCode" to BuildConfig.VERSION_CODE,
+                        "firstSeenAt" to firstSeen, "createdAt" to FieldValue.serverTimestamp()))
                 }
             }.await()
-        } catch (_: Exception) {
-            false
-        }
+            if (proofHash != null) prefs.edit().putBoolean("published:$versionKey", true).commit()
+            true
+        }.getOrElse { if (it is CancellationException) throw it; false }
+        if (proof == null) return@withLock registered
+        // Also retry the server after an interrupted local commit: the event may already exist.
+        val delivered = runCatching {
+            withContext(Dispatchers.IO) {
+                val request = Request.Builder().url(BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/nrd-installation-event")
+                    .header("x-installation-proof", proof).header("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .post("{}".toRequestBody("application/json".toMediaType())).build()
+                client.newCall(request).execute().use { response ->
+                    response.isSuccessful && JSONObject(response.body?.string().orEmpty()).optBoolean("delivered")
+                }
+            }
+        }.getOrElse { if (it is CancellationException) throw it; false }
+        if (delivered) prefs.edit().putBoolean("ack:$versionKey", true)
+            .remove("proof:$versionKey").remove("published:$versionKey").commit()
+        delivered
     }
 
     suspend fun fetchSummary(nowMillis: Long = System.currentTimeMillis()): DeviceInstallationSummaryResult {

@@ -76,8 +76,8 @@ object NotificationHelper {
                 description = "Avisos pessoais de folgas e publicação de escalas"
             })
 
-            val channelInstallations = NotificationChannel("installation_updates", "Novas instalações", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Notificações exclusivas do Mestre quando o NRD V2 é instalado em um aparelho novo"
+            val channelInstallations = NotificationChannel("installation_updates", "Instalações e atualizações", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Avisos exclusivos do Mestre quando alguém instala ou atualiza o NRD V2"
             }
             notificationManager.createNotificationChannel(channelInstallations)
             

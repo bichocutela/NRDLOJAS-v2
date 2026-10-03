@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const { initializeTestEnvironment, assertSucceeds, assertFails } = require('@firebase/rules-unit-testing');
-const { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc } = require('firebase/firestore');
+const { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc, writeBatch, serverTimestamp } = require('firebase/firestore');
 
 (async () => {
   const env = await initializeTestEnvironment({ projectId: 'demo-nrd-access', firestore: { rules: fs.readFileSync(require('node:path').resolve(__dirname, '../../firestore.rules'), 'utf8'), host: '127.0.0.1', port: 8088 } });
@@ -63,6 +63,30 @@ const { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc } = requi
     await assertFails(deleteDoc(doc(publicDb, 'restricted_access/ana')));
     await assertSucceeds(deleteDoc(doc(master, 'restricted_access/ana')));
     await assertFails(getDoc(doc(ana, 'work_schedules/2026-10')));
-    console.log('PASS: 44 authorization checks (history, editing, deletion, permissions, public access and update policy).');
+    const deviceId = 'a'.repeat(64);
+    const eventId = 'b'.repeat(64);
+    const installation = { deviceIdHash: deviceId, appVersion: '1.0.708', appVersionCode: 708,
+      firstSeenAt: serverTimestamp(), lastSeenAt: serverTimestamp(), platform: 'android' };
+    const event = { deviceIdHash: deviceId, appVersion: '1.0.708', appVersionCode: 708,
+      firstSeenAt: serverTimestamp(), createdAt: serverTimestamp() };
+    const initial = writeBatch(publicDb);
+    initial.set(doc(publicDb, 'app_installations/' + deviceId), installation);
+    initial.set(doc(publicDb, 'app_installation_events/' + eventId), event);
+    await assertSucceeds(initial.commit());
+    await assertFails(getDoc(doc(publicDb, 'app_installation_events/' + eventId)));
+    await assertFails(getDocs(collection(master, 'app_installation_events')));
+    await assertFails(updateDoc(doc(publicDb, 'app_installation_events/' + eventId), { appVersionCode: 999 }));
+    await assertFails(deleteDoc(doc(master, 'app_installation_events/' + eventId)));
+    await assertFails(setDoc(doc(publicDb, 'app_installation_events/' + 'c'.repeat(64)), { ...event, appVersionCode: 999 }));
+    await assertFails(setDoc(doc(publicDb, 'app_installation_deliveries/fake'), { sent: true }));
+    await assertFails(getDoc(doc(publicDb, 'app_installation_deliveries/fake')));
+    const original = await getDoc(doc(publicDb, 'app_installations/' + deviceId));
+    const update = writeBatch(publicDb);
+    update.update(doc(publicDb, 'app_installations/' + deviceId), { appVersion: '1.0.709', appVersionCode: 709, lastSeenAt: serverTimestamp() });
+    update.set(doc(publicDb, 'app_installation_events/' + 'd'.repeat(64)), { ...event, appVersion: '1.0.709', appVersionCode: 709, firstSeenAt: original.get('firstSeenAt') });
+    await assertSucceeds(update.commit());
+    // Legacy clients keep their existing heartbeat writes; no new fields required.
+    await assertSucceeds(updateDoc(doc(publicDb, 'app_installations/' + deviceId), { lastSeenAt: serverTimestamp() }));
+    console.log('PASS: access, update policy, immutable installation events and private delivery security checks.');
   } finally { await env.cleanup(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

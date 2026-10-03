@@ -46,8 +46,8 @@ jobs:
         FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       run: node scripts/check-account-admin-permissions.mjs
 
-    - name: Test account administration authorization
-      run: node --test supabase/functions/nrd-account-admin/handler.test.mjs
+    - name: Test account and installation event authorization
+      run: node --test supabase/functions/nrd-account-admin/handler.test.mjs supabase/functions/nrd-installation-event/handler.test.mjs
 
     - name: Generate Debug Keystore (if missing)
       run: |
@@ -134,7 +134,8 @@ jobs:
           --tests 'com.example.ui.DynamicMediaUrlTest' \
           --tests 'com.example.ui.theme.GlassSoftThemeTest' \
           --tests 'com.example.ui.theme.ExpressiveThemeTest' \
-          --tests 'com.example.util.ProfileNotificationRoutingTest'
+          --tests 'com.example.util.ProfileNotificationRoutingTest' \
+          --tests 'com.example.util.InstallationNotificationPolicyTest'
         ./gradlew assembleRelease \
           -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.keystore \
           -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
@@ -204,6 +205,15 @@ jobs:
         fi
 
         echo "Firestore rules published successfully: $RULESET_NAME"
+
+    - name: Verify live installation notification server
+      if: github.ref == 'refs/heads/main'
+      run: |
+        RESPONSE=$(curl --fail --silent --show-error "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=nrd-installation-event-check" -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}")
+        TOKEN=$(printf '%s' "$RESPONSE" | jq -r '.value')
+        echo "::add-mask::$TOKEN"
+        RESULT=$(curl --fail --silent --show-error --max-time 45 -X POST "https://kkayksyzksexoarpfxyj.supabase.co/functions/v1/nrd-installation-event" -H "x-github-oidc-token: $TOKEN")
+        printf '%s' "$RESULT" | jq -e '.ready == true'
 
     - name: Verify APK Signature
       run: |

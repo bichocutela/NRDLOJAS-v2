@@ -657,24 +657,8 @@ fun MestreScreen(
                     },
                     onInstallationNotificationsChange = { enabled ->
                         coroutineScope.launch {
-                            if (enabled) {
-                                val baseline = when (val result = DeviceInstallationTracker.fetchSummary()) {
-                                    is DeviceInstallationSummaryResult.Success -> {
-                                        installationSummary = result.summary
-                                        result.summary.lastInstallationAt ?: System.currentTimeMillis()
-                                    }
-                                    is DeviceInstallationSummaryResult.Error -> {
-                                        installationSummaryError = result.message
-                                        System.currentTimeMillis()
-                                    }
-                                }
-                                masterPreferences.setMasterInstallationNotificationBaseline(baseline)
-                                masterPreferences.setMasterInstallationNotificationsEnabled(true)
-                                com.example.util.InstallationNotificationWorker.schedule(context.applicationContext)
-                            } else {
-                                masterPreferences.setMasterInstallationNotificationsEnabled(false)
-                                com.example.util.InstallationNotificationWorker.cancel(context.applicationContext)
-                            }
+                            masterPreferences.setMasterInstallationNotificationsEnabled(enabled)
+                            com.example.util.InstallationNotificationWorker.cancel(context.applicationContext)
                         }
                     },
                     onCreateCatalogSnapshot = { viewModel.createCatalogSnapshot() },
