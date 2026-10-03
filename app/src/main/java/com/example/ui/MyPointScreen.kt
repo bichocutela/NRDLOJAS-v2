@@ -198,7 +198,9 @@ fun MyPointScreen(
                 NossaGenteBenefitResult.Unauthorized -> onSignOut()
                 is NossaGenteBenefitResult.Error -> if (error == null) error = result.message
             }
-            workSchedules = FirebaseService.fetchWorkSchedules()
+            api.fetchMyWorkSchedules()
+                .onSuccess { workSchedules = it }
+                .onFailure { error = it.message ?: "Não foi possível recuperar suas folgas. Atualize o perfil para tentar novamente." }
             val profileRegistration = employeeProfile?.registration.orEmpty().filter(Char::isDigit)
             val today = java.util.Calendar.getInstance()
             val changedPreviousMonth = com.example.util.ScheduleReminderWorker.changedPreviousMonthKey(
@@ -699,7 +701,7 @@ private fun MyDaysOffCard(
                                             .onSuccess {
                                                 onDaysOffSaved(selectedKey, selectedDays.sorted())
                                                 editing = false
-                                                saveMessage = "Folgas salvas e sincronizadas no seu perfil."
+                                                saveMessage = "Folgas salvas no seu login Nossa Gente. Disponíveis também em outro aparelho."
                                             }
                                             .onFailure { saveMessage = it.message ?: "Não foi possível salvar as folgas." }
                                         saving = false

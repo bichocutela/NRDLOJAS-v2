@@ -113,9 +113,36 @@ Deno.serve(async (req: Request) => {
     if (!employeeName) return reply({ error: "A Nossa Gente não informou seu nome. As folgas não foram alteradas." }, 422);
 
     const input = await req.json();
+    const action = String(input.action ?? "saveDaysOff");
+    if (action === "readMySchedules") {
+      const accountRaw = Deno.env.get("FIREBASE_SERVICE_ACCOUNT");
+      if (!accountRaw) return reply({ error: "Sincronização segura indisponível no servidor." }, 503);
+      const accessToken = await firestoreAccessToken(JSON.parse(accountRaw));
+      const collectionUrl = "https://firestore.googleapis.com/v1/projects/" + projectId +
+        "/databases/(default)/documents/work_schedules?pageSize=100";
+      const schedules = [];
+      let pageToken = "";
+      do {
+        const response = await fetch(collectionUrl + (pageToken ? "&pageToken=" + encodeURIComponent(pageToken) : ""), {
+          headers: { Authorization: "Bearer " + accessToken },
+        });
+        if (!response.ok) return reply({ error: "Não foi possível recuperar suas folgas. Tente atualizar o perfil." }, 502);
+        const page = await response.json();
+        for (const document of page.documents ?? []) {
+          const schedule = readFields(document.fields ?? {});
+          const employees = (Array.isArray(schedule.employees) ? schedule.employees : [])
+            .filter((row: any) => String(row.registration ?? "").replace(/\D/g, "") === registration);
+          if (employees.length) schedules.push({
+            monthKey: document.name.split("/").pop(), year: schedule.year, month: schedule.month,
+            employees, updatedAt: schedule.updatedAt ?? 0, revision: schedule.revision ?? 1,
+          });
+        }
+        pageToken = page.nextPageToken ?? "";
+      } while (pageToken);
+      return reply({ ok: true, registration, schedules });
+    }
     const year = Number(input.year);
     const month = Number(input.month);
-    const action = String(input.action ?? "saveDaysOff");
     if (!Number.isInteger(year) || year < 2000 || year > 2100 || !Number.isInteger(month) || month < 1 || month > 12 || !["saveDaysOff", "saveRosterPhoto"].includes(action)) {
       return reply({ error: "Mês, ano ou ação inválidos." }, 400);
     }

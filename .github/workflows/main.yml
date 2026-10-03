@@ -41,13 +41,17 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+
     - name: Verify Firebase account administration permissions
       env:
         FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       run: node scripts/check-account-admin-permissions.mjs
 
     - name: Test account and installation event authorization
-      run: node --test supabase/functions/nrd-account-admin/handler.test.mjs supabase/functions/nrd-installation-event/handler.test.mjs
+      run: node --test supabase/functions/nrd-account-admin/handler.test.mjs supabase/functions/nrd-installation-event/handler.test.mjs tests/days-off/sync.test.mjs
 
     - name: Generate Debug Keystore (if missing)
       run: |

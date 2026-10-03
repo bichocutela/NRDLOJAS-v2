@@ -120,6 +120,42 @@ class NossaGenteApi(context: Context) {
         findEmployeeByRegistrationOnce(expected, allowSavedCredentialRecovery = true)
     }
 
+    /** Recupera somente a escala da identidade Nossa Gente confirmada no servidor. */
+    suspend fun fetchMyWorkSchedules(): Result<List<WorkSchedule>> = withContext(Dispatchers.IO) {
+        val token = currentToken() ?: return@withContext Result.failure(IllegalStateException("Entre no Nossa Gente para recuperar suas folgas."))
+        runCatching {
+            val supabaseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
+            val supabaseKey = BuildConfig.SUPABASE_ANON_KEY.trim()
+            check(supabaseUrl.isNotBlank() && supabaseKey.isNotBlank()) { "Sincronização de folgas indisponível neste build." }
+            val request = Request.Builder().url("$supabaseUrl/functions/v1/save-my-days-off")
+                .post(JSONObject().put("action", "readMySchedules").toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .header("Authorization", "Bearer $supabaseKey").header("apikey", supabaseKey)
+                .header("x-nossa-gente-token", token).header("Accept", "application/json").build()
+            client.newCall(request).execute().use { response ->
+                val json = JSONObject(response.body?.string().orEmpty())
+                check(response.isSuccessful && json.optBoolean("ok")) {
+                    json.optString("error").takeIf { it.isNotBlank() } ?: "Não foi possível recuperar suas folgas."
+                }
+                val schedules = json.getJSONArray("schedules")
+                (0 until schedules.length()).map { index ->
+                    val schedule = schedules.getJSONObject(index)
+                    val rows = schedule.getJSONArray("employees")
+                    fun days(row: JSONObject, key: String): List<Int> {
+                        val values = row.optJSONArray(key) ?: return emptyList()
+                        return (0 until values.length()).map { values.getInt(it) }.distinct().sorted()
+                    }
+                    WorkSchedule(schedule.getString("monthKey"), schedule.getInt("year"), schedule.getInt("month"),
+                        (0 until rows.length()).map { rowIndex ->
+                            val row = rows.getJSONObject(rowIndex)
+                            WorkScheduleEmployee(row.getString("registration"), row.getString("name"),
+                                row.optString("shift"), days(row, "daysOff"), days(row, "vacationDays"),
+                                row.optBoolean("verified"), row.optString("rosterPhotoUrl"))
+                        }, schedule.optLong("updatedAt"), schedule.optInt("revision", 1))
+                }.sortedByDescending { it.monthKey }
+            }
+        }
+    }
+
     /** Persiste somente as folgas da matrícula retornada pelo /me autenticado. */
     suspend fun saveMyScheduleDaysOff(year: Int, month: Int, days: List<Int>): Result<Unit> = withContext(Dispatchers.IO) {
         val token = currentToken() ?: return@withContext Result.failure(IllegalStateException("Entre no Nossa Gente para salvar suas folgas."))
