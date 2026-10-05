@@ -22,6 +22,7 @@ internal fun MestreAccessSettings() {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var expandedUid by remember { mutableStateOf<String?>(null) }
+    var editing by remember { mutableStateOf<AccessAccount?>(null) }
     var deleting by remember { mutableStateOf<AccessAccount?>(null) }
     val history by remember { RestrictedAccessRepository.observeAccounts() }.collectAsState(initial = AccessHistory())
     val scope = rememberCoroutineScope()
@@ -69,7 +70,7 @@ internal fun MestreAccessSettings() {
     HorizontalDivider()
     Spacer(Modifier.height(16.dp))
     Text("Histórico de cadastros", style = MaterialTheme.typography.titleLarge)
-    Text("Toque em um login para editar as abas ou excluir o cadastro.")
+    Text("Toque em um login para editar as abas, alterar os dados ou excluir o cadastro.")
     when {
         history.loading -> Text("Carregando cadastros...")
         history.error != null -> Text(history.error!!, color = MaterialTheme.colorScheme.error)
@@ -88,9 +89,39 @@ internal fun MestreAccessSettings() {
                             } catch (_: Exception) { message = "Não foi possível salvar as permissões. Tente novamente." }
                             finally { busy = false }
                         }
-                    }, onDelete = { deleting = account })
+                    }, onDelete = { deleting = account }, onEdit = { editing = account })
             }
         }
+    }
+    editing?.let { account ->
+        var editedLogin by remember(account.uid) { mutableStateOf(account.login) }
+        var editedPassword by remember(account.uid) { mutableStateOf("") }
+        var editError by remember(account.uid) { mutableStateOf<String?>(null) }
+        AlertDialog(onDismissRequest = { if (!busy) editing = null },
+            title = { Text("Alterar dados") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(editedLogin, { editedLogin = it; editError = null }, label = { Text("Login") },
+                        singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(editedPassword, { editedPassword = it; editError = null }, label = { Text("Nova senha") },
+                        supportingText = { Text("Deixe em branco para manter a senha atual. Mínimo 8 caracteres.") },
+                        singleLine = true, enabled = !busy, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                    editError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            confirmButton = { TextButton(enabled = !busy, onClick = {
+                busy = true; editError = null
+                scope.launch {
+                    try {
+                        RestrictedAccessRepository.updateAccount(account.uid, editedLogin, editedPassword)
+                        editing = null; message = "Dados do cadastro atualizados."
+                    } catch (error: Exception) {
+                        editError = if (error is IllegalArgumentException || error is IllegalStateException) error.message
+                            else "Não foi possível alterar os dados. Tente novamente."
+                    } finally { busy = false }
+                }
+            }) { Text(if (busy) "Salvando..." else "Salvar dados") } },
+            dismissButton = { TextButton(enabled = !busy, onClick = { editing = null }) { Text("Cancelar") } })
     }
     deleting?.let { account ->
         AlertDialog(onDismissRequest = { if (!busy) deleting = null },
@@ -115,7 +146,7 @@ internal fun MestreAccessSettings() {
 
 @Composable
 private fun AccountHistoryCard(account: AccessAccount, expanded: Boolean, busy: Boolean,
-    onToggle: () -> Unit, onSave: (Boolean, Boolean, Boolean) -> Unit, onDelete: () -> Unit) {
+    onToggle: () -> Unit, onSave: (Boolean, Boolean, Boolean) -> Unit, onDelete: () -> Unit, onEdit: () -> Unit) {
     OutlinedCard(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(Modifier.fillMaxWidth().clickable(enabled = !busy, onClick = onToggle),
@@ -136,9 +167,10 @@ private fun AccountHistoryCard(account: AccessAccount, expanded: Boolean, busy: 
                 Row { Checkbox(profile, { profile = it }, enabled = !busy); Text("Meu Perfil", Modifier.padding(top = 12.dp)) }
                 Row { Checkbox(promotions, { promotions = it }, enabled = !busy); Text("Promoções", Modifier.padding(top = 12.dp)) }
                 Row { Checkbox(prices, { prices = it }, enabled = !busy); Text("Consultar Preços", Modifier.padding(top = 12.dp)) }
+                Button(enabled = !busy, onClick = { onSave(profile, promotions, prices) }) { Text("Salvar permissões") }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(enabled = !busy, onClick = { onSave(profile, promotions, prices) }) { Text("Salvar permissões") }
                     TextButton(enabled = !busy, onClick = onDelete) { Text("Excluir", color = MaterialTheme.colorScheme.error) }
+                    TextButton(enabled = !busy, onClick = onEdit) { Text("Alterar dados") }
                 }
             }
         }

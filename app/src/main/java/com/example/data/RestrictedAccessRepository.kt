@@ -51,6 +51,33 @@ object RestrictedAccessRepository {
                 "promotions" to promotions, "prices" to prices)).await()
     }
 
+    suspend fun updateAccount(uid: String, login: String, password: String) {
+        val email = loginEmail(login)
+        require(!email.endsWith("@nrdlojas.com")) { "Esse login está reservado." }
+        require(password.isEmpty() || password.length in 8..128) { "A nova senha deve ter de 8 a 128 caracteres." }
+        val user = FirebaseAuth.getInstance().currentUser
+        check(user?.email == "mestre@nrdlojas.com") { "Acesso exclusivo do Mestre." }
+        val token = user!!.getIdToken(true).await().token ?: error("Entre novamente como Mestre.")
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("action", "update").put("uid", uid).put("login", email.substringBefore('@'))
+            if (password.isNotEmpty()) body.put("password", password)
+            val request = Request.Builder().url(BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/nrd-account-admin")
+                .header("x-firebase-token", token).header("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+            accountClient.newCall(request).execute().use { response ->
+                val result = runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull()
+                check(response.isSuccessful && result?.optBoolean("updated") == true) {
+                    when (result?.optString("error")) {
+                        "LOGIN_EXISTS" -> "Esse login já está em uso. Escolha outro."
+                        "UPDATE_INCOMPLETE" -> "Os dados de acesso foram alterados, mas o histórico não foi atualizado. Salve novamente com o mesmo login."
+                        "ACCOUNT_NOT_FOUND" -> "Cadastro não encontrado. Atualize a lista."
+                        else -> "Não foi possível alterar os dados. Verifique a conexão e tente novamente."
+                    }
+                }
+            }
+        }
+    }
+
     suspend fun deleteAccount(uid: String) {
         val user = FirebaseAuth.getInstance().currentUser
         check(user?.email == "mestre@nrdlojas.com") { "Acesso exclusivo do Mestre." }

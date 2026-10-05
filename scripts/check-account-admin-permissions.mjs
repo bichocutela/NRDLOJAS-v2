@@ -14,7 +14,7 @@ try {
     body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion})});
   const token=await oauth.json();
   if(!oauth.ok || typeof token.access_token!=='string')throw Error('Firebase readiness OAuth failed');
-  const permissions=['firebaseauth.users.get','firebaseauth.users.delete','datastore.entities.get','datastore.entities.update','datastore.entities.delete'];
+  const permissions=['firebaseauth.users.get','firebaseauth.users.delete','firebaseauth.users.update','datastore.entities.get','datastore.entities.update','datastore.entities.delete'];
   const response=await fetch(`https://cloudresourcemanager.googleapis.com/v1/projects/${project}:testIamPermissions`,{
     method:'POST',signal:AbortSignal.timeout(15000),headers:{Authorization:'Bearer '+token.access_token,'Content-Type':'application/json'},
     body:JSON.stringify({permissions})});

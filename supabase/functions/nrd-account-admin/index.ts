@@ -22,7 +22,10 @@ async function call(url: string, method='GET', body?: unknown) {
   const response=await fetch(url,{method,signal:AbortSignal.timeout(10000),headers:{Authorization:'Bearer '+await token(),'Content-Type':'application/json'},
     ...(body === undefined ? {} : {body:JSON.stringify(body)})});
   if(response.status===404 && method==='GET')return null;
-  if(!response.ok)throw Error('FIREBASE_FAILED');
+  if(!response.ok) {
+    const error=await response.json().catch(()=>null);
+    throw Error(error?.error?.message==='EMAIL_EXISTS'?'EMAIL_EXISTS':'FIREBASE_FAILED');
+  }
   return method==='DELETE'?{}:response.json();
 }
 async function lookup(uid: string) {
@@ -41,6 +44,10 @@ Deno.serve(createHandler({
     return doc?{login:doc.fields?.login?.stringValue}:null;
   },
   disable: (uid: string) => call(base+encodeURIComponent(uid)+'?updateMask.fieldPaths=enabled','PATCH',{fields:{enabled:{booleanValue:false}}}),
+  updateUser: (uid: string, email: string, password?: string) => call(`https://identitytoolkit.googleapis.com/v1/projects/${project}/accounts:update`,'POST',{
+    localId:uid,email,...(password===undefined?{}:{password}),
+  }),
+  updateLogin: (uid: string, login: string) => call(base+encodeURIComponent(uid)+'?updateMask.fieldPaths=login','PATCH',{fields:{login:{stringValue:login}}}),
   removeUser: (uid: string) => call(`https://identitytoolkit.googleapis.com/v1/projects/${project}/accounts:delete`,'POST',{localId:uid}),
   removeGrant: (uid: string) => call(base+encodeURIComponent(uid),'DELETE'),
 }));
