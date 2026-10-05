@@ -32,6 +32,7 @@ class AuthRepository {
             val result = kotlinx.coroutines.withTimeout(15000L) {
                 auth.signInWithEmailAndPassword(email, pass).await()
             }
+            RestrictedAccessRepository.claimDeviceSession()
             val authenticatedEmail = result.user?.email ?: ""
             android.util.Log.d("LoginDebug", "Firebase login sucesso. currentUser email: $authenticatedEmail")
             _authState.value = AuthState.Authenticated(authenticatedEmail)
@@ -94,9 +95,9 @@ class AuthRepository {
         }
     }
 
-    fun logout() {
+    suspend fun logout() {
         if (isConfigured) {
-            FirebaseAuth.getInstance().signOut()
+            RestrictedAccessRepository.logout()
         }
         _authState.value = AuthState.Unauthenticated
     }

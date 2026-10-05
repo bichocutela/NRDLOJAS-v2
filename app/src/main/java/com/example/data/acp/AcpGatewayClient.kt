@@ -23,7 +23,8 @@ internal class AcpGatewayClient(
         .callTimeout(75, TimeUnit.SECONDS).build(),
     private val tokenProvider: suspend () -> String? = {
         FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
-    }
+    },
+    private val deviceTokenProvider: suspend () -> String? = { com.example.data.RestrictedAccessRepository.deviceSessionHeader() }
 ) {
     suspend fun checkAccess() { execute(JSONObject().put("operation", "access")) }
 
@@ -34,6 +35,7 @@ internal class AcpGatewayClient(
     )
 
     private suspend fun execute(payload: JSONObject): JSONObject {
+        val deviceToken = deviceTokenProvider()
         val token = tokenProvider()
         return withContext(Dispatchers.IO) {
             if (!baseUrl.startsWith("https://")) throw AcpFailure("Serviço de consulta indisponível nesta versão.")
@@ -42,6 +44,7 @@ internal class AcpGatewayClient(
                 .header("Accept", "application/json")
                 .apply {
                     if (apiKey.isNotBlank()) header("apikey", apiKey)
+                    if (!deviceToken.isNullOrBlank()) header("x-device-session", deviceToken)
                     if (!token.isNullOrBlank()) header("x-firebase-token", token)
                 }.build()
             client.newCall(request).execute().use { response ->

@@ -84,3 +84,12 @@ test('Firestore quota and availability failures deny access without querying ACP
  }
  assert.equal(calls,0);
 });
+test('restricted accounts need the owning device capability and matching auth time',async()=>{
+  const device='a'.repeat(64);let session={deviceHash:{stringValue:'hashed'},authTime:{integerValue:'100'}};
+  const auth=createAuthorizer({verify:async()=>({uid:'uid',email:'teste@usuarios.nrdlojas.com',authTime:100}),hash:async()=> 'hashed',document:async path=>path.startsWith('access_sessions/')?session:{enabled:{booleanValue:true},prices:{booleanValue:true}}});
+  assert.equal((await auth(req({},'user'))).allowed,false);
+  const request=new Request('https://gateway.invalid',{headers:{'x-firebase-token':'user','x-device-session':device}});
+  assert.equal((await auth(request)).allowed,true);
+  session.authTime.integerValue='99';assert.equal((await auth(request)).allowed,false);
+  session.authTime.integerValue='100';session.deviceHash.stringValue='other';assert.equal((await auth(request)).allowed,false);
+});

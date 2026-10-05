@@ -31,7 +31,17 @@ class AcpGatewayClientTest {
         override fun write(name: String, value: String) { entries[name] = value }
     }
     private fun gateway(server: Server, token: String? = "firebase-test-token") = AcpGatewayClient(
-        "https://gateway.invalid", "public-test-key", OkHttpClient.Builder().addInterceptor(server).build(), { token })
+        "https://gateway.invalid", "public-test-key", OkHttpClient.Builder().addInterceptor(server).build(), { token }, deviceTokenProvider = { null })
+
+    @Test fun restrictedDeviceCapabilityTravelsOnlyInHeader() = runBlocking {
+        val server = Server()
+        val deviceToken = "a".repeat(64)
+        AcpGatewayClient("https://gateway.invalid", "public-test-key", OkHttpClient.Builder().addInterceptor(server).build(),
+            { "firebase-test-token" }, { deviceToken }).checkAccess()
+        val request = server.requests.single()
+        assertEquals(deviceToken, request.header("x-device-session"))
+        assertEquals("firebase-test-token", request.header("x-firebase-token"))
+    }
 
     @Test fun readsUseGatewayWithFirebaseIdentityAndPreserveRepeatedFilters() = runBlocking {
         val server = Server()

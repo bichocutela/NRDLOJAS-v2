@@ -267,16 +267,22 @@ fun AppNavGraph(
                         }
                     },
                     onLogout = {
-                        scope.launch { com.example.util.FcmTopicSubscription.reconcileMasterUpdates(isMaster = false) }
-                        firebaseAuth.signOut()
-                        clearPersonalSession()
-                        isLoggedIn = false
-                        userRole = "user"
-                        scope.launch { drawerState.close() }
-                        navController.navigate("search") {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
+                        scope.launch {
+                            try {
+                                com.example.data.RestrictedAccessRepository.logout()
+                                com.example.util.FcmTopicSubscription.reconcileMasterUpdates(isMaster = false)
+                                clearPersonalSession()
+                                isLoggedIn = false
+                                userRole = "user"
+                                drawerState.close()
+                                navController.navigate("search") {
+                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            } catch (error: Exception) {
+                                android.widget.Toast.makeText(context, error.message ?: "Não foi possível sair. Tente novamente.", android.widget.Toast.LENGTH_LONG).show()
+                            }
                         }
                     },
                     onGoToPromotions = {
@@ -857,15 +863,18 @@ fun LoginDrawerContent(
                                 auth.signInWithEmailAndPassword(email, passwordSnapshot).await()
                             }
                             val role = managementRoleForEmail(result.user?.email)
+                            if (role == null) com.example.data.RestrictedAccessRepository.claimDeviceSession()
                             if (role != null || com.example.data.RestrictedAccessRepository.current().enabled) {
                                 password = ""
                                 onLoginSuccess(role ?: "user")
                             } else {
-                                auth.signOut()
+                                com.example.data.RestrictedAccessRepository.abandonLogin()
                                 loginStatus = "Acesso não liberado pelo Mestre."
                             }
-                        } catch (_: Exception) {
-                            loginStatus = "Não foi possível entrar. Confira o login, a senha e a conexão."
+                        } catch (error: Exception) {
+                            runCatching { com.example.data.RestrictedAccessRepository.abandonLogin() }
+                            loginStatus = if (error is IllegalStateException) error.message
+                                else "Não foi possível entrar. Confira o login, a senha e a conexão."
                         } finally { isLoading = false }
                     }
                 },

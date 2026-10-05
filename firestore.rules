@@ -25,8 +25,16 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/config/restricted_access) &&
         get(/databases/$(database)/documents/config/restricted_access).data.publicAccess == true;
     }
+    function hasDeviceSession() {
+      return isSignedIn() && exists(/databases/$(database)/documents/access_sessions/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/access_sessions/$(request.auth.uid)).data.authTime == request.auth.token.auth_time;
+    }
+    match /access_sessions/{uid} {
+      // Only the server manages device capabilities. Clients cannot read or replace them.
+      allow read, write: if false;
+    }
     function canReadProfile() {
-      return publicRestrictedAccess() || isMaster() || (isSignedIn() &&
+      return publicRestrictedAccess() || isMaster() || (hasDeviceSession() &&
         exists(/databases/$(database)/documents/restricted_access/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/restricted_access/$(request.auth.uid)).data.enabled == true &&
         get(/databases/$(database)/documents/restricted_access/$(request.auth.uid)).data.profile == true);

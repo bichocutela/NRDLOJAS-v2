@@ -33,10 +33,12 @@ async function document(path: string) {
   return (await boundedJson(response)).fields ?? {};
 }
 // No cached grant: revocation and "liberar para todos" are checked against the server each call.
-const appAuthorize = createAuthorizer({document, verify: async (token: string) => {
+const appAuthorize = createAuthorizer({document,
+  hash: async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))).map(v=>v.toString(16).padStart(2,'0')).join(''),
+  verify: async (token: string) => {
   const {payload} = await jwtVerify(token,jwks,{algorithms:['RS256'],issuer:`https://securetoken.google.com/${project}`,audience:project});
   if (!payload.sub || payload.sub.length > 128) throw Error('INVALID_IDENTITY');
-  return {uid:payload.sub,email:payload.email,token};
+  return {uid:payload.sub,email:payload.email,authTime:payload.auth_time,token};
 }});
 const githubKeys = createRemoteJWKSet(new URL('https://token.actions.githubusercontent.com/.well-known/jwks'));
 Deno.serve(createHandler({

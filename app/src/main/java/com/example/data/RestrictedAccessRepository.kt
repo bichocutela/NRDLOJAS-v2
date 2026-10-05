@@ -18,6 +18,11 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import java.util.Locale
 import java.util.UUID
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.security.SecureRandom
+import java.io.File
 
 data class RestrictedAccess(val loading: Boolean = false, val enabled: Boolean = false, val profile: Boolean = false, val promotions: Boolean = false, val prices: Boolean = false, val publicAccess: Boolean = false, val publicLoading: Boolean = true)
 
@@ -27,6 +32,68 @@ data class AccessHistory(val loading: Boolean = true, val accounts: List<AccessA
 object RestrictedAccessRepository {
     private val accountClient = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
         .connectTimeout(15, TimeUnit.SECONDS).callTimeout(45, TimeUnit.SECONDS).build()
+
+    private val sessionMutex = Mutex()
+    @Volatile private var verifiedSessionUid: String? = null
+
+    private fun deviceToken(): String {
+        val directory = FirebaseApp.getInstance().applicationContext.noBackupFilesDir
+        val file = File(directory, "restricted-device-session")
+        if (file.exists()) return file.readText().also { check(it.matches(Regex("[a-f0-9]{64}"))) }
+        val bytes = ByteArray(32).also { SecureRandom().nextBytes(it) }
+        val value = bytes.joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        file.writeText(value)
+        return value
+    }
+
+    suspend fun claimDeviceSession() = sessionMutex.withLock {
+        val user = FirebaseAuth.getInstance().currentUser ?: error("Entre novamente.")
+        if (user.email?.endsWith("@usuarios.nrdlojas.com") != true) return@withLock
+        if (verifiedSessionUid == user.uid) return@withLock
+        sessionRequest("claim")
+        if (FirebaseAuth.getInstance().currentUser?.uid == user.uid) verifiedSessionUid = user.uid
+    }
+
+    suspend fun deviceSessionHeader(): String? {
+        if (runCatching { FirebaseAuth.getInstance().currentUser?.email?.endsWith("@usuarios.nrdlojas.com") == true }.getOrDefault(false)) {
+            claimDeviceSession()
+            return withContext(Dispatchers.IO) { deviceToken() }
+        }
+        return null
+    }
+
+    suspend fun abandonLogin() = sessionMutex.withLock {
+        val user = FirebaseAuth.getInstance().currentUser
+        if (user != null && verifiedSessionUid == user.uid) sessionRequest("release")
+        verifiedSessionUid = null
+        FirebaseAuth.getInstance().signOut()
+    }
+
+    suspend fun logout() = sessionMutex.withLock {
+        val user = FirebaseAuth.getInstance().currentUser
+        if (user?.email?.endsWith("@usuarios.nrdlojas.com") == true) sessionRequest("release")
+        verifiedSessionUid = null
+        FirebaseAuth.getInstance().signOut()
+    }
+
+    private suspend fun sessionRequest(action: String) {
+        val user = FirebaseAuth.getInstance().currentUser ?: error("Entre novamente.")
+        val token = user.getIdToken(true).await().token ?: error("Entre novamente.")
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("action", action).put("deviceToken", deviceToken())
+            val request = Request.Builder().url(BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/nrd-account-admin/session")
+                .header("x-firebase-token", token).header("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+            accountClient.newCall(request).execute().use { response ->
+                val result = runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull()
+                check(response.isSuccessful && result?.optBoolean(if (action == "claim") "claimed" else "released") == true) {
+                    if (result?.optString("error") == "DEVICE_IN_USE") "Esta conta está conectada em outro aparelho. Saia da conta no outro aparelho para entrar aqui."
+                    else if (action == "release") "Não foi possível sair da conta. Conecte-se à internet e tente novamente para liberar o outro aparelho."
+                    else "Não foi possível verificar o aparelho. Verifique a conexão e tente novamente."
+                }
+            }
+        }
+    }
 
     fun observeAccounts() = callbackFlow {
         val registration = FirebaseFirestore.getInstance().collection("restricted_access")
@@ -109,6 +176,11 @@ object RestrictedAccessRepository {
         var publicAccess = false
         var publicLoading = true
         fun publish() {
+            val restrictedUser = auth.currentUser?.email?.endsWith("@usuarios.nrdlojas.com") == true
+            if (restrictedUser && verifiedSessionUid != auth.currentUser?.uid) {
+                trySend(RestrictedAccess(loading = accountAccess.loading, publicLoading = publicLoading))
+                return
+            }
             val effective = if (publicAccess) RestrictedAccess(enabled = true, profile = true, promotions = true, prices = true, publicAccess = true) else accountAccess
             trySend(effective.copy(loading = effective.loading || (publicLoading && !effective.enabled), publicLoading = publicLoading))
         }
@@ -120,7 +192,9 @@ object RestrictedAccessRepository {
             }
         val listener = FirebaseAuth.AuthStateListener {
             registration?.remove()
+            registration = null
             val user = it.currentUser
+            if (user == null) verifiedSessionUid = null
             accountAccess = when {
                 user == null -> RestrictedAccess()
                 user.email == "mestre@nrdlojas.com" -> RestrictedAccess(enabled = true, profile = true, promotions = true, prices = true)
@@ -128,7 +202,14 @@ object RestrictedAccessRepository {
             }
             publish()
             if (user != null && user.email != "mestre@nrdlojas.com") {
-                registration = database.collection("restricted_access").document(user.uid)
+                launch {
+                    try { claimDeviceSession() }
+                    catch (_: Exception) {
+                        if (auth.currentUser?.uid == user.uid) { accountAccess = RestrictedAccess(); publish() }
+                        return@launch
+                    }
+                    if (auth.currentUser?.uid != user.uid) return@launch
+                    registration = database.collection("restricted_access").document(user.uid)
                     .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { doc, error ->
                         if (auth.currentUser?.uid == user.uid) {
                             accountAccess = when {
@@ -139,6 +220,7 @@ object RestrictedAccessRepository {
                             publish()
                         }
                     }
+                }
             }
         }
         auth.addAuthStateListener(listener)
@@ -158,6 +240,7 @@ object RestrictedAccessRepository {
         val auth = FirebaseAuth.getInstance()
         if (auth.currentUser?.email == "mestre@nrdlojas.com") return RestrictedAccess(enabled = true, profile = true, promotions = true, prices = true)
         return try {
+            if (auth.currentUser?.email?.endsWith("@usuarios.nrdlojas.com") == true) claimDeviceSession()
             val database = FirebaseFirestore.getInstance()
             val settings = database.collection("config").document("restricted_access").get(Source.SERVER).await()
             if (settings.getBoolean("publicAccess") == true) {
