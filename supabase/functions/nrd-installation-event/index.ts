@@ -23,7 +23,13 @@ async function call(url: string,method='GET',body?: unknown) {
 async function read(path: string) {
   const response=await call(base+'/'+path);
   if(response.status===404)return null;
-  if(!response.ok)throw Error('READ_FAILED');return response.json();
+  if(!response.ok){
+    const detail=await response.json().catch(()=>({}));
+    const reasons=(detail.error?.details ?? []).map((item: {reason?: string})=>item.reason).filter((reason: unknown)=>typeof reason==='string' && /^[A-Z_]+$/.test(reason));
+    console.error('installation_firestore_read_failed', JSON.stringify({status:response.status,reasons}));
+    throw Error('READ_HTTP_'+response.status);
+  }
+  return response.json();
 }
 async function digest(value: string) {
   const data=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));
