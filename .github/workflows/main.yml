@@ -59,8 +59,18 @@ jobs:
         RESPONSE=$(curl --fail --silent --show-error "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=nrd-installation-event-check" -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}")
         TOKEN=$(printf '%s' "$RESPONSE" | jq -r '.value')
         echo "::add-mask::$TOKEN"
-        RESULT=$(curl --fail --silent --show-error --max-time 45 -X POST "https://kkayksyzksexoarpfxyj.supabase.co/functions/v1/nrd-installation-event" -H "x-github-oidc-token: $TOKEN")
-        printf '%s' "$RESULT" | jq -e '.ready == true'
+        RESULT_FILE="$(mktemp)"
+        STATUS=$(curl --silent --show-error --max-time 45 -o "$RESULT_FILE" -w '%{http_code}' -X POST "https://kkayksyzksexoarpfxyj.supabase.co/functions/v1/nrd-installation-event" -H "x-github-oidc-token: $TOKEN")
+        if [ "$STATUS" = "503" ] && jq -e '.error == "SERVER_NOT_READY"' "$RESULT_FILE" >/dev/null; then
+          echo "::warning::Serviço de notificações indisponível. A publicação do APK continuará; notificações de instalação podem atrasar."
+          echo "### Aviso: serviço de notificações indisponível (HTTP 503)" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+        if [ "$STATUS" != "200" ]; then
+          echo "::error::Falha na verificação do serviço de notificações (HTTP $STATUS)."
+          exit 1
+        fi
+        jq -e '.ready == true' "$RESULT_FILE"
 
     - name: Generate Debug Keystore (if missing)
       run: |
