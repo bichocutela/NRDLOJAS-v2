@@ -15,6 +15,25 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 class NossaGenteApiTest {
     @Test
+    fun installationAuthorizationFailureDoesNotBlameCredentials() {
+        assertEquals("A integração de acesso precisa de autorização do serviço. Avise o Mestre.",
+            nossaGenteLoginErrorMessage(403, """{"erro":"app_nao_autorizado","mensagem":"Não foi possível validar o acesso ao Nossa Gente."}"""))
+        assertEquals("A integração de acesso precisa ser atualizada. Avise o Mestre.",
+            nossaGenteLoginErrorMessage(401, """{"erro":"app_atualizacao_necessaria"}"""))
+        assertEquals("Não foi possível validar o acesso ao serviço. Avise o Mestre.",
+            nossaGenteLoginErrorMessage(403, """{"erro":"seguranca_api_indisponivel"}"""))
+    }
+
+    @Test
+    fun loginErrorsPreserveCredentialAndServiceFailureDistinction() {
+        assertEquals("CPF ou senha incorretos.", nossaGenteLoginErrorMessage(401, """{"erro":"credenciais_invalidas"}"""))
+        assertEquals("O serviço não autorizou este acesso. Avise o Mestre.", nossaGenteLoginErrorMessage(403, "{}"))
+        assertEquals("Muitas tentativas. Aguarde um pouco e tente novamente.", nossaGenteLoginErrorMessage(429, "{}"))
+        assertEquals("Não foi possível autenticar agora.", nossaGenteLoginErrorMessage(503, "not json"))
+        assertEquals("Acesso bloqueado. Procure o suporte do Nossa Gente.", nossaGenteLoginErrorMessage(403, """{"erro":"usuario_bloqueado"}"""))
+    }
+
+    @Test
     fun parsesPaginatedCollaboratorsAndFindsOtherEmployees() {
         val first = parseCollaboratorsPage("""{"data":[{"nome":"Alessandro Paulo da Silva","matricula":"10293613"}],"current_page":1,"last_page":2}""")!!
         assertEquals("10293613", first.employees.single().registration)
