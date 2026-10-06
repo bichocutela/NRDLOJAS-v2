@@ -75,12 +75,26 @@ Deno.serve(async request=>{
       payload.workflow_ref!=='bichocutela/NRDLOJAS-v2/.github/workflows/main.yml@refs/heads/main' ||
       !['push','workflow_dispatch'].includes(String(payload.event_name)))throw Error('UNAUTHORIZED');
   }catch{return Response.json({error:'UNAUTHORIZED'},{status:403});}
+  let readinessStage = 'oauth';
   try {
+    await token();
+    readinessStage = 'iam';
     const permissions=['datastore.entities.get','datastore.entities.create','datastore.entities.update','cloudmessaging.messages.create'];
     const response=await call(`https://cloudresourcemanager.googleapis.com/v1/projects/${project}:testIamPermissions`,'POST',{permissions});
     const result=await response.json();
-    if(!response.ok || permissions.some(p=>!result.permissions?.includes(p)))throw Error('NOT_READY');
+    if(!response.ok)throw Error('IAM_HTTP_'+response.status);
+    const missingPermissions=permissions.filter(p=>!result.permissions?.includes(p));
+    if(missingPermissions.length){
+      console.error('installation_readiness_missing_permissions', JSON.stringify(missingPermissions));
+      throw Error('MISSING_PERMISSIONS');
+    }
+    readinessStage = 'firestore';
     await read('app_installation_deliveries/readiness_probe');
     return Response.json({ready:true});
-  }catch{return Response.json({error:'SERVER_NOT_READY'},{status:503});}
+  }catch(error){
+    const message=error instanceof Error ? error.message : '';
+    const code=/^[A-Z_]+(?:_[0-9]{3})?$/.test(message) ? message : 'DEPENDENCY_FAILED';
+    console.error('installation_readiness_failed', JSON.stringify({stage:readinessStage,code}));
+    return Response.json({error:'SERVER_NOT_READY'},{status:503});
+  }
 });

@@ -53,6 +53,15 @@ jobs:
     - name: Test account and installation event authorization
       run: node --test supabase/functions/nrd-account-admin/*.test.mjs supabase/functions/nrd-installation-event/handler.test.mjs tests/days-off/sync.test.mjs
 
+    - name: Verify live installation notification server
+      if: github.ref == 'refs/heads/main'
+      run: |
+        RESPONSE=$(curl --fail --silent --show-error "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=nrd-installation-event-check" -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}")
+        TOKEN=$(printf '%s' "$RESPONSE" | jq -r '.value')
+        echo "::add-mask::$TOKEN"
+        RESULT=$(curl --fail --silent --show-error --max-time 45 -X POST "https://kkayksyzksexoarpfxyj.supabase.co/functions/v1/nrd-installation-event" -H "x-github-oidc-token: $TOKEN")
+        printf '%s' "$RESULT" | jq -e '.ready == true'
+
     - name: Generate Debug Keystore (if missing)
       run: |
         if [ ! -f "debug.keystore" ]; then
@@ -209,15 +218,6 @@ jobs:
         fi
 
         echo "Firestore rules published successfully: $RULESET_NAME"
-
-    - name: Verify live installation notification server
-      if: github.ref == 'refs/heads/main'
-      run: |
-        RESPONSE=$(curl --fail --silent --show-error "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=nrd-installation-event-check" -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}")
-        TOKEN=$(printf '%s' "$RESPONSE" | jq -r '.value')
-        echo "::add-mask::$TOKEN"
-        RESULT=$(curl --fail --silent --show-error --max-time 45 -X POST "https://kkayksyzksexoarpfxyj.supabase.co/functions/v1/nrd-installation-event" -H "x-github-oidc-token: $TOKEN")
-        printf '%s' "$RESULT" | jq -e '.ready == true'
 
     - name: Verify APK Signature
       run: |
