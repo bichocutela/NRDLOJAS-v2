@@ -1127,18 +1127,7 @@ class NossaGenteApi(context: Context) {
     /** Assinatura estável do conteúdo comercial; a ordem da resposta não altera o resultado. */
     private fun fingerprintPromotions(promotions: List<Promotion>): String = fingerprintPromotionsForTest(promotions)
 
-    private fun loginErrorMessage(code: Int, body: String): String {
-        val serverCode = runCatching {
-            val json = JSONObject(body)
-            json.optString("erro").ifBlank { json.optString("code") }
-        }.getOrNull().orEmpty().lowercase()
-        return when {
-            code == 401 || code == 403 -> "CPF ou senha incorretos."
-            serverCode in setOf("dados_invalidos", "credenciais_invalidas", "login_invalido") -> "CPF ou senha incorretos."
-            serverCode.contains("bloque") -> "Acesso bloqueado. Procure o suporte do Nossa Gente."
-            else -> "Não foi possível autenticar agora."
-        }
-    }
+    private fun loginErrorMessage(code: Int, body: String): String = nossaGenteLoginErrorMessage(code, body)
 
     private fun isEmptyPromotionsPayload(raw: String): Boolean = runCatching {
         val trimmed = raw.trim()
@@ -1520,4 +1509,23 @@ sealed interface NossaGentePointResult {
     data class Success(val point: PointSummary) : NossaGentePointResult
     data object Unauthorized : NossaGentePointResult
     data class Error(val message: String) : NossaGentePointResult
+}
+
+/** Authentication failures must distinguish installation authorization from user credentials. */
+internal fun nossaGenteLoginErrorMessage(code: Int, body: String): String {
+    val serverCode = runCatching {
+        val json = JSONObject(body)
+        json.optString("erro").ifBlank { json.optString("code") }
+    }.getOrNull().orEmpty().lowercase(Locale.ROOT)
+    return when {
+        serverCode == "app_nao_autorizado" -> "A integração de acesso precisa de autorização do serviço. Avise o Mestre."
+        serverCode == "app_atualizacao_necessaria" -> "A integração de acesso precisa ser atualizada. Avise o Mestre."
+        serverCode.startsWith("seguranca_") || serverCode == "configuracao_seguranca_invalida" -> "Não foi possível validar o acesso ao serviço. Avise o Mestre."
+        serverCode in setOf("login_email_nao_confirmado", "email_nao_verificado") -> "Confirme seu e-mail no aplicativo oficial antes de entrar."
+        serverCode.contains("bloque") -> "Acesso bloqueado. Procure o suporte do Nossa Gente."
+        code == 429 || serverCode.contains("rate_limit") -> "Muitas tentativas. Aguarde um pouco e tente novamente."
+        serverCode in setOf("dados_invalidos", "credenciais_invalidas", "login_invalido") || code == 401 -> "CPF ou senha incorretos."
+        code == 403 -> "O serviço não autorizou este acesso. Avise o Mestre."
+        else -> "Não foi possível autenticar agora."
+    }
 }
