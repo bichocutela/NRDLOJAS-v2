@@ -338,7 +338,8 @@ internal fun MestreSettingsHub(
     onOpenWorkSchedule: () -> Unit,
     onOpenAccess: () -> Unit,
     onOpenUpdates: () -> Unit,
-    onOpenPwa: () -> Unit
+    onOpenPwa: () -> Unit,
+    onOpenPromotionStores: () -> Unit
 ) {
     Text("Escolha o que deseja configurar", style = MaterialTheme.typography.titleMedium)
     Text(
@@ -406,6 +407,8 @@ internal fun MestreSettingsHub(
     PanelAreaCard(title = "Cadastros e Acessos", description = "Criar login e escolher as abas permitidas", icon = Icons.Default.Settings, onClick = onOpenAccess)
     Spacer(modifier = Modifier.height(6.dp))
     PanelAreaCard(title = "Atualização do aplicativo", description = "Escolher a versão mínima permitida", icon = Icons.Default.Settings, onClick = onOpenUpdates)
+    Spacer(modifier = Modifier.height(6.dp))
+    PanelAreaCard(title = "Habilitar lojas", description = "Habilitar lojas e publicar documentos Visual Mix de promoções", icon = Icons.Default.Settings, onClick = onOpenPromotionStores)
     Spacer(modifier = Modifier.height(6.dp))
     PanelAreaCard(title = "PWA", description = "Mostrar ou ocultar Promoções e Consultar Preços na versão web", icon = Icons.Default.Settings, onClick = onOpenPwa)
 }

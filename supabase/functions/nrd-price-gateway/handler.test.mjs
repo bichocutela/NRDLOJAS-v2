@@ -6,6 +6,32 @@ const secret = () => ({login:'synthetic-user',password:'synthetic-password'});
 const req = (body,token) => new Request('https://gateway.invalid',{method:'POST',body:JSON.stringify(body),headers:token?{'x-firebase-token':token}:{}});
 const input = {path:'Product/all',parameters:[['description','Açúcar & Café'],['productCategoryIds','1'],['productCategoryIds','2']]};
 const allow = async () => ({allowed:true,master:false});
+test('promotion permission cannot read the general catalogue or arbitrary category',async()=>{
+  const authorize=createAuthorizer({verify:async()=>({uid:'uid',email:'user@example.com'}),
+    document:async path=>path.startsWith('config/')?{}:{enabled:{booleanValue:true},promotions:{booleanValue:true},prices:{booleanValue:false}}});
+  const scoped = body => new Request('https://gateway.invalid',{method:'POST',body:JSON.stringify(body),
+    headers:{'x-firebase-token':'synthetic','x-nrd-scope':'promotions'}});
+  assert.equal((await authorize(req({},'synthetic'))).allowed,false);
+  assert.equal((await authorize(scoped({}))).allowed,true);
+  let calls=0;
+  const handler=createHandler({authorize,credentials:secret,fetcher:async()=>{calls++;throw Error();}});
+  assert.equal((await handler(scoped(input))).status,403);
+  assert.equal((await handler(scoped({path:'ProductCategory/all',parameters:[]}))).status,403);
+  assert.equal((await handler(scoped({path:'Promotion/all',parameters:[['productCategoryIds','9']]}))).status,400);
+  assert.equal(calls,0);
+});
+test('promotion read dynamically resolves De/Por and preserves pagination and prices',async()=>{
+  const server=upstream();
+  const handler=createHandler({authorize:async()=>({allowed:true,master:false,promotionsOnly:true}),credentials:secret,
+    fetcher:async(url,options)=>new URL(url).pathname.endsWith('/ProductCategory/all')
+      ? Response.json({items:[{id:77,description:'De-Por'}],totalPages:1}) : server.fetcher(url,options)});
+  const response=await handler(req({path:'Promotion/all',parameters:[['pageIndex','2'],['pageSize','250']]}));
+  assert.equal(response.status,200);
+  assert.equal((await response.json()).items[0].value,45.49);
+  const url=new URL(server.calls.at(-1).url);
+  assert.equal(url.searchParams.get('productCategoryIds'),'77');
+  assert.equal(url.searchParams.get('pageIndex'),'2');
+});
 test('master, per-account grants, public access and revocation use current documents',async()=>{
   let settings={},account={enabled:{booleanValue:true},prices:{booleanValue:true}};
   const auth=createAuthorizer({verify:async t=>{if(t==='bad')throw Error();return {uid:'uid',email:t==='master'?'mestre@nrdlojas.com':'user@example.com'};},

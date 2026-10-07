@@ -60,6 +60,17 @@ internal object FlyerImportEngine {
         analyzeBlocks(context, label, "gallery", label, blocks)
     }
 
+    /** Same PDF/text extraction and Visual Mix parser as Consultar Preços; no inferred prices. */
+    suspend fun analyzeVisualMixUri(context: Context, uri: Uri): FlyerAnalysisResult = withContext(Dispatchers.IO) {
+        val label = sourceLabel(context, uri)
+        val text = extractBlocks(context, uri)
+            .sortedWith(compareBy<FlyerTextBlock> { it.page }.thenBy { it.top }.thenBy { it.left })
+            .joinToString("\n") { it.text }
+        val draft = VisualMixReportParser.parse(label, text)
+            ?: throw IllegalArgumentException("Envie o Relatório de Produtos Alterados do Visual Mix, usado em Consultar Preços.")
+        FlyerAnalysisResult(draft.name, draft.validFrom, draft.validTo, draft.offers, draft.warnings, "visual_mix", label)
+    }
+
     suspend fun analyzeDriveLink(context: Context, rawUrl: String): FlyerAnalysisResult = withContext(Dispatchers.IO) {
         val normalized = normalizeDriveUrl(rawUrl)
             ?: throw IllegalArgumentException("Use um link compartilhado válido do Google Drive.")

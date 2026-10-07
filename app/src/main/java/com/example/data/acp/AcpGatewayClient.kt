@@ -24,7 +24,8 @@ internal class AcpGatewayClient(
     private val tokenProvider: suspend () -> String? = {
         FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
     },
-    private val deviceTokenProvider: suspend () -> String? = { com.example.data.RestrictedAccessRepository.deviceSessionHeader() }
+    private val deviceTokenProvider: suspend () -> String? = { com.example.data.RestrictedAccessRepository.deviceSessionHeader() },
+    private val promotionsOnly: Boolean = false
 ) {
     suspend fun checkAccess() { execute(JSONObject().put("operation", "access")) }
 
@@ -43,6 +44,7 @@ internal class AcpGatewayClient(
                 .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
                 .header("Accept", "application/json")
                 .apply {
+                    if (promotionsOnly) header("x-nrd-scope", "promotions")
                     if (apiKey.isNotBlank()) header("apikey", apiKey)
                     if (!deviceToken.isNullOrBlank()) header("x-device-session", deviceToken)
                     if (!token.isNullOrBlank()) header("x-firebase-token", token)
@@ -50,7 +52,7 @@ internal class AcpGatewayClient(
             client.newCall(request).execute().use { response ->
                 when (response.code) {
                     401 -> throw AcpUnauthorized()
-                    403 -> throw AcpFailure("Peça ao Mestre para liberar seu acesso à consulta de preços.")
+                    403 -> throw AcpFailure(if (promotionsOnly) "Peça ao Mestre para liberar seu acesso às promoções." else "Peça ao Mestre para liberar seu acesso à consulta de preços.")
                     429 -> throw AcpFailure("Muitas consultas. Aguarde um momento e tente novamente.")
                     503 -> throw AcpFailure("O serviço de consulta ainda não está configurado. Avise o Mestre.")
                 }

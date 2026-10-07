@@ -18,7 +18,7 @@ import java.util.zip.GZIPOutputStream
 
 private const val MAX_SNAPSHOT_ENTRIES = 60_000
 private const val MAX_DAILY_CHANGES = 5_000
-private const val HISTORY_FILE_NAME = "nossa_gente_offer_history.json.gz"
+private const val HISTORY_FILE_NAME = "acp_offer_history.json.gz"
 
 enum class PromotionChangeType {
     ADDED,
