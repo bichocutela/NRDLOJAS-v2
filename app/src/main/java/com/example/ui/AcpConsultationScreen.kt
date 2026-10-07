@@ -227,7 +227,16 @@ fun AcpConsultationScreen(
                         .then(if (authenticated) Modifier else Modifier.verticalScroll(rememberScrollState())),
                     verticalArrangement = Arrangement.spacedBy(if (authenticated) 8.dp else 16.dp)
                 ) {
-                    if (authenticated) {
+                    if (checking || busy) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            CircularProgressIndicator()
+                            Text("Verificando acesso…", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    } else if (authenticated) {
                         AcpProductsExperience(
                             api = api,
                             canAddToNrd = canConfigure,
@@ -245,33 +254,10 @@ fun AcpConsultationScreen(
                         )
                     } else {
                         Text(
-                            "Acesso ACP",
+                            "Consulta de preços",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = if (isExpressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal
                         )
-                        Text(if (configured) "A sessão é renovada automaticamente. Tente novamente apenas se a ACP não responder." else "Acesse a consulta de preços do Nordestão.")
-                        val loginShape = if (isExpressive) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraSmall
-                        OutlinedTextField(
-                            if (configured) "********" else "",
-                            {},
-                            readOnly = true,
-                            label = { Text("Login") },
-                            shape = loginShape,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .expressiveShadow(loginShape, 5.dp)
-                        )
-                        OutlinedTextField(
-                            if (configured) "********" else "",
-                            {},
-                            readOnly = true,
-                            label = { Text("Senha") },
-                            shape = loginShape,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .expressiveShadow(loginShape, 5.dp)
-                        )
-                        if (checking || busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         Button(
                             onClick = {
