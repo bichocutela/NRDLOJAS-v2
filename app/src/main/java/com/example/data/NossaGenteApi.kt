@@ -1374,7 +1374,9 @@ data class Promotion(
         val discount: String?,
         val storeCode: String? = null,
         val imageUrl: String? = null,
-        val linkUrl: String? = null
+        val linkUrl: String? = null,
+        val barcode: String? = null,
+        val detailsJson: String? = null
     )
 
 

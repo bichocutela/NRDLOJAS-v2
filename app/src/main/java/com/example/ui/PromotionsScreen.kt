@@ -455,17 +455,6 @@ fun PromotionsScreen(
         }
     }
 
-    fun openOfferFromImage(imageUrl: String) {
-        val offer = offerGroups.firstOrNull { group ->
-            group.imageUrl == imageUrl || group.stores.any { store -> store.imageUrl == imageUrl }
-        }
-        if (offer != null) {
-            selectedOffer = offer
-        } else {
-            enlargedImageUrl = imageUrl
-        }
-    }
-
     LaunchedEffect(Unit) {
         favoriteStoreCode = userPreferences.favoriteStoreCode.first()
         checkForPromotions(initialLoad = true)
@@ -565,6 +554,7 @@ fun PromotionsScreen(
     selectedOffer?.let { offer ->
         PromotionDetailsDialog(
             offer = offer,
+            selectedStore = selectedStore,
             onDismiss = { selectedOffer = null },
             onOpenStore = { storeCode ->
                 if (storeCode in enabledStores) selectedStore = storeCode
@@ -757,7 +747,7 @@ fun PromotionsScreen(
                 onLoadMore = {
                     visibleOfferCount = (visibleOfferCount + OFFER_PAGE_INCREMENT).coerceAtMost(visibleOffers.size)
                 },
-                onImageClick = ::openOfferFromImage,
+                onOfferClick = { selectedOffer = it },
                 onBack = { selectedCategory = null }
             )
             else -> PromotionsHome(
@@ -770,7 +760,7 @@ fun PromotionsScreen(
                 onSearchQueryChange = { searchQuery = it.take(MAX_SEARCH_LENGTH) },
                 categories = categoryGroups,
                 onCategoryClick = { selectedCategory = it },
-                onImageClick = ::openOfferFromImage
+                onOfferClick = { selectedOffer = it }
             )
         }
     }
@@ -883,7 +873,7 @@ private fun PromotionsHome(
     onSearchQueryChange: (String) -> Unit,
     categories: List<Pair<String, List<OfferGroup>>>,
     onCategoryClick: (String) -> Unit,
-    onImageClick: (String) -> Unit
+    onOfferClick: (OfferGroup) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.padding(innerPadding).fillMaxSize(),
@@ -927,7 +917,7 @@ private fun PromotionsHome(
                     offers = offers.take(CATEGORY_PREVIEW_LIMIT),
                     totalOffers = offers.size,
                     onCategoryClick = onCategoryClick,
-                    onImageClick = onImageClick
+                    onOfferClick = onOfferClick
                 )
             }
         }
@@ -1059,7 +1049,7 @@ private fun CategoryPreviewSection(
     offers: List<OfferGroup>,
     totalOffers: Int,
     onCategoryClick: (String) -> Unit,
-    onImageClick: (String) -> Unit
+    onOfferClick: (OfferGroup) -> Unit
 ) {
     val expressive = LocalExpressiveStyle.current.enabled
     val sectionShape = if (expressive) RoundedCornerShape(30.dp) else RoundedCornerShape(0.dp)
@@ -1104,19 +1094,20 @@ private fun CategoryPreviewSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(offers, key = { it.id }) { offer ->
-                CompactOfferCard(offer = offer, onImageClick = onImageClick)
+                CompactOfferCard(offer = offer, onOfferClick = onOfferClick)
             }
         }
     }
 }
 
 @Composable
-private fun CompactOfferCard(offer: OfferGroup, onImageClick: (String) -> Unit) {
+private fun CompactOfferCard(offer: OfferGroup, onOfferClick: (OfferGroup) -> Unit) {
     val expressive = LocalExpressiveStyle.current.enabled
     val cardShape = if (expressive) RoundedCornerShape(26.dp) else RoundedCornerShape(12.dp)
     Card(
         modifier = Modifier
             .widthIn(min = 156.dp, max = 176.dp)
+            .clickable { onOfferClick(offer) }
             .glassSoftShadow(cardShape)
             .expressiveShadow(cardShape, 6.dp),
         shape = cardShape,
@@ -1132,7 +1123,7 @@ private fun CompactOfferCard(offer: OfferGroup, onImageClick: (String) -> Unit) 
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(136.dp),
-                onClick = onImageClick,
+                onClick = { onOfferClick(offer) },
                 validTo = offer.validTo
             )
             Column(modifier = Modifier.padding(8.dp)) {
@@ -1146,6 +1137,8 @@ private fun CompactOfferCard(offer: OfferGroup, onImageClick: (String) -> Unit) 
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(3.dp))
+                Text("Código ${offer.code}", style = MaterialTheme.typography.labelSmall)
+                Text("EAN: ${offer.barcode.ifBlank { "não informado" }}", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 PriceSummary(offer = offer, compact = true)
             }
         }
@@ -1164,7 +1157,7 @@ private fun PromotionCategoryList(
     visibleOffers: List<OfferGroup>,
     visibleOfferCount: Int,
     onLoadMore: () -> Unit,
-    onImageClick: (String) -> Unit,
+    onOfferClick: (OfferGroup) -> Unit,
     onBack: () -> Unit
 ) {
     val offersToRender = visibleOffers.take(visibleOfferCount)
@@ -1221,7 +1214,7 @@ private fun PromotionCategoryList(
                 DetailedOfferCard(
                     offer = offer,
                     selectedStore = selectedStore,
-                    onImageClick = onImageClick
+                    onOfferClick = onOfferClick
                 )
             }
         }
@@ -1286,7 +1279,7 @@ private fun OfferSortSelector(
 private fun DetailedOfferCard(
     offer: OfferGroup,
     selectedStore: String,
-    onImageClick: (String) -> Unit
+    onOfferClick: (OfferGroup) -> Unit
 ) {
     val expressive = LocalExpressiveStyle.current.enabled
     val cardShape = if (expressive) RoundedCornerShape(30.dp) else RoundedCornerShape(16.dp)
@@ -1304,7 +1297,7 @@ private fun DetailedOfferCard(
                 drawLayer(shareLayer)
             }
             .combinedClickable(
-                onClick = {},
+                onClick = { onOfferClick(offer) },
                 onLongClick = {
                     scope.launch {
                         val copied = copyProductCardToClipboard(
@@ -1341,7 +1334,7 @@ private fun DetailedOfferCard(
                             MaterialTheme.colorScheme.outlineVariant,
                             if (expressive) RoundedCornerShape(18.dp) else RoundedCornerShape(10.dp)
                         ),
-                    onClick = onImageClick,
+                    onClick = { onOfferClick(offer) },
                     validTo = offer.validTo
                 )
                 Spacer(Modifier.width(10.dp))
@@ -1357,7 +1350,7 @@ private fun DetailedOfferCard(
                     )
                     if (offer.code.isNotBlank()) {
                         Spacer(Modifier.height(4.dp))
-                        Text("Código ${offer.code}", style = MaterialTheme.typography.bodySmall)
+                        Text("Código ${offer.code} • EAN ${offer.barcode.ifBlank { "não informado" }}", style = MaterialTheme.typography.bodySmall)
                     }
                     if (offer.validity.isNotBlank()) {
                         Spacer(Modifier.height(5.dp))
@@ -1637,6 +1630,7 @@ private fun PromotionImageDialog(imageUrl: String, onDismiss: () -> Unit) {
 @Composable
 private fun PromotionDetailsDialog(
     offer: OfferGroup,
+    selectedStore: String,
     onDismiss: () -> Unit,
     onOpenStore: (String) -> Unit
 ) {
@@ -1711,6 +1705,10 @@ private fun PromotionDetailsDialog(
                     }
                 }
                 item {
+                    val store = offer.stores.firstOrNull { it.storeCode == selectedStore } ?: offer.bestOffer
+                    PromotionProductDetailsContent(store?.detailsJson, store?.barcode, offer.code, offer.name)
+                }
+                item {
                     SelectionContainer {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
@@ -1721,7 +1719,7 @@ private fun PromotionDetailsDialog(
                             Spacer(Modifier.height(4.dp))
                             if (offer.code.isNotBlank()) {
                                 Text(
-                                    "Código ${offer.code}",
+                                    "Código ${offer.code} • EAN ${offer.barcode.ifBlank { "não informado" }}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1899,6 +1897,7 @@ private data class OfferGroup(
     val validTo: String?,
     val stores: List<StoreOffer>
 ) {
+    val barcode: String get() = stores.firstOrNull { !it.barcode.isNullOrBlank() }?.barcode.orEmpty()
     val bestOffer: StoreOffer?
         get() = stores.minByOrNull { it.offerNumeric ?: Double.MAX_VALUE }
 
@@ -1917,7 +1916,9 @@ private data class StoreOffer(
     val discount: String?,
     val imageUrl: String?,
     val linkUrl: String?,
-    val offerNumeric: Double?
+    val offerNumeric: Double?,
+    val barcode: String? = null,
+    val detailsJson: String? = null
 )
 
 private fun List<OfferGroup>.findOfferForChange(change: PromotionChange): OfferGroup? {
@@ -1980,7 +1981,9 @@ private fun buildOfferGroups(promotions: List<Promotion>): List<OfferGroup> {
                     discount = product.discount,
                     imageUrl = product.imageUrl ?: promotion.imageUrl,
                     linkUrl = product.linkUrl,
-                    offerNumeric = product.offerPrice.toNumericPrice()
+                    offerNumeric = product.offerPrice.toNumericPrice(),
+                    barcode = product.barcode,
+                    detailsJson = product.detailsJson
                 )
             }
         }
@@ -2003,7 +2006,9 @@ private fun buildOfferGroups(promotions: List<Promotion>): List<OfferGroup> {
                         discount = store.discount,
                         imageUrl = store.imageUrl,
                         linkUrl = store.linkUrl,
-                        offerNumeric = store.offerNumeric
+                        offerNumeric = store.offerNumeric,
+                        barcode = store.barcode,
+                        detailsJson = store.detailsJson
                     )
                 }
                 .sortedBy { it.storeCode.lowercase() }
@@ -2090,7 +2095,9 @@ private data class MutableStoreOffer(
     val discount: String?,
     val imageUrl: String?,
     val linkUrl: String?,
-    val offerNumeric: Double?
+    val offerNumeric: Double?,
+    val barcode: String? = null,
+    val detailsJson: String? = null
 )
 
 private fun String?.toNumericPrice(): Double? = this
