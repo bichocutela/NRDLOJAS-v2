@@ -45,7 +45,7 @@ const appAuthorize = createAuthorizer({document,
 }});
 const serverCache = new ServerCache({project, token:firestoreToken});
 const categorizer = createCategorizer({cache:serverCache, apiKey:Deno.env.get('GEMINI_API_KEY'),
-  model:Deno.env.get('PROMOTION_GEMINI_MODEL') ?? 'gemini-2.5-flash',
+  model:Deno.env.get('PROMOTION_GEMINI_MODEL') ?? 'gemini-3.5-flash-lite',
   background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)});
 const githubKeys = createRemoteJWKSet(new URL('https://token.actions.githubusercontent.com/.well-known/jwks'));
 Deno.serve(createHandler({

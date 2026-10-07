@@ -17,3 +17,23 @@ test('cache key stable for unchanged full description and changes on revised des
   assert.equal(await categoryKey(a),await categoryKey({...a}));
   assert.notEqual(await categoryKey(a),await categoryKey({...a,description:'Produto B'}));
 });
+
+test('classification pipeline persists strict Gemini result and never resends a cached product',async()=>{
+  const {createCategorizer}=await import('./categories.mjs');
+  const values=new Map(), tasks=[]; let calls=0;
+  const cache={many:async keys=>new Map(keys.map(k=>[k,values.get(k)])),
+    claim:async(key)=>({payload:values.get(key)?.payload ?? {},version:'claim'}),
+    finish:async(key,claim,payload)=>{values.set(key,{payload});return true;},write:async()=>true};
+  const product={code:'1',barCode:'3017620422003',description:'CREME DE AVELÃ 350G'};
+  const enrich=createCategorizer({cache,apiKey:'synthetic',background:p=>tasks.push(p),fetcher:async(url,options)=>{
+    calls++; const request=JSON.parse(options.body);
+    assert.equal(request.generationConfig.responseMimeType,'application/json');
+    assert.ok(request.generationConfig.responseSchema.items.properties.categoria_correta.enum.includes('Mercearia'));
+    return Response.json({candidates:[{content:{parts:[{text:JSON.stringify([{ean:product.barCode,categoria_correta:'Mercearia'}])}]}}]});
+  }});
+  const initial=await enrich([product]); assert.equal(initial[0].nrdCategory,null);
+  await Promise.all(tasks); assert.equal(calls,1);
+  assert.equal((await enrich([product]))[0].nrdCategory,'Mercearia');
+  await Promise.all(tasks); assert.equal(calls,1);
+  assert.equal(await enrich.verify([product]),true); assert.equal(calls,1);
+});

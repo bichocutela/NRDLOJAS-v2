@@ -130,3 +130,18 @@ test('restricted accounts need the owning device capability and matching auth ti
   session.authTime.integerValue='99';assert.equal((await auth(request)).allowed,false);
   session.authTime.integerValue='100';session.deviceHash.stringValue='other';assert.equal((await auth(request)).allowed,false);
 });
+
+test('expired session during De/Por category discovery signs in once again',async()=>{
+  const server=upstream(); let categoryCalls=0;
+  const handler=createHandler({authorize:async()=>({allowed:true,promotionsOnly:true}),credentials:secret,
+    fetcher:async(url,options)=>{
+      if(new URL(url).pathname.endsWith('/ProductCategory/all')) {
+        if(++categoryCalls===1) return new Response('',{status:401});
+        return Response.json({items:[{id:77,description:'De-Por'}],totalPages:1});
+      }
+      return server.fetcher(url,options);
+    }});
+  const response=await handler(req({path:'Promotion/all',parameters:[['pageIndex','0'],['pageSize','1']]}));
+  assert.equal(response.status,200);
+  assert.equal(categoryCalls,2);
+});
