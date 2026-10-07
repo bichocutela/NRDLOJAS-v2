@@ -20,7 +20,7 @@ O gateway autentica identidade Firebase ou capacidade de sessão do NRD, verific
 | Imagens | `data/promotions/ProductImageRepository.kt` | Consulta desacoplada por GTIN válido, família Open Facts, cache persistente de URLs/ausência e limitação global de requisições. Apenas cards visíveis consultam imagens. ACP tem prioridade, placeholder em erros. Créditos CC BY-SA vinculados à fonte. |
 | Categorias | `categories.mjs`, `server-cache.mjs`, `PromotionCategory.kt` | Gemini 3.5 Flash-Lite no servidor, descrições completas tratadas como dados, enum fechado e JSON validado. Cache por EAN/código/descrição/taxonomia com lease e precondições; sucesso nunca é reenviado. Regras locais corrigem termos ambíguos e permitem operação sem IA. |
 | Persistência/sync | `promotion-sync.mjs`, `PromotionDelta.kt`, `PromotionDatabase.kt`, `AcpPromotionsRepository.kt` | Snapshot ACP compartilhado, páginas imutáveis e ponteiro atômico. Room guarda fonte bruta sanitizada, ofertas e metadados; delta, remoções e revisão são publicados numa transação. Documentos Visual Mix são reutilizados por revisão. |
-| Estado/background | `PromotionSyncCoordinator.kt`, `PromotionsViewModel.kt`, `PromotionNotificationWorker.kt` | Um coordenador serializa tela, monitor e worker. StateFlow distingue requisição de dados/refresh explícito de checagem silenciosa. Room alimenta a UI independente da tela estar aberta. Outbox persistente limitada a 100 ciclos pendentes e tags estáveis evitam duplicar notificações. |
+| Estado/background | `PromotionSyncCoordinator.kt`, `PromotionsViewModel.kt`, `PromotionNotificationWorker.kt` | Um coordenador serializa tela, monitor e worker. `PromotionSyncRequests.kt` agrupa solicitações repetidas e preserva uma varredura manual após uma checagem silenciosa em andamento. StateFlow distingue requisição de dados/refresh explícito de checagem silenciosa. Room alimenta a UI independente da tela estar aberta. Outbox persistente limitada a 100 ciclos pendentes e tags estáveis evitam duplicar notificações. |
 
 ## Sincronização incremental
 
@@ -51,3 +51,9 @@ A transação de sincronização grava eventos numa outbox antes da entrega. Em 
 ## Verificação
 
 Testes Node cobrem autorização, contratos ACP, sanitização, JSON/categorias controladas, lease com um vencedor, hashes estáveis, troca com contagem igual, deltas e preservação de snapshot em falhas. Testes Android cobrem GTIN/categoria, baseline, deltas, rollback da transação, reabertura do banco com EAN/estoque/validade e estado offline. O CI reserva uma tag única de forma atômica e a vincula ao SHA compilado, evitando que builds paralelas sobrescrevam o APK da mesma versão. Compila/testa Android e gera APK assinado e verifica a rota ACP e a sincronização implantada através de OIDC restrito do GitHub.
+
+## Revisão de continuidade
+
+Os cinco blocos estão presentes na main. A PR #176 adicionou o gesto de puxar e a varredura manual que aguarda o snapshot do servidor. Esta revisão impede enfileirar múltiplas varreduras por toques repetidos e informa falhas por snackbar mantendo a lista local disponível. O spinner acompanha a sincronização em execução; esperar uma tarefa na fila não o mantém girando.
+
+Validação de concorrência: `PromotionSyncRequestsTest.kt` simula uma checagem silenciosa bloqueada seguida de dez gestos manuais; apenas uma varredura manual deve ocorrer ao liberar a checagem. Os testes Android exigem o Gradle e o SDK do ambiente de CI.
