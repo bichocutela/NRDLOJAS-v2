@@ -35,6 +35,12 @@ internal class AcpGatewayClient(
         })
     )
 
+    suspend fun promotionStatus(): JSONObject = execute(JSONObject().put("operation", "promotion_status"))
+
+    suspend fun promotionSync(revision: String, manifest: JSONArray): JSONObject = execute(
+        JSONObject().put("operation", "promotion_sync").put("revision", revision).put("manifest", manifest)
+    )
+
     private suspend fun execute(payload: JSONObject): JSONObject {
         val deviceToken = deviceTokenProvider()
         val token = tokenProvider()

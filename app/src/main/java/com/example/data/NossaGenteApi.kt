@@ -1356,6 +1356,7 @@ private fun StringBuilder.appendFingerprintValue(value: String?) {
     append(safeValue.length).append(':').append(safeValue)
 }
 
+@kotlinx.serialization.Serializable
 data class Promotion(
     val id: String,
     val title: String,
@@ -1366,6 +1367,7 @@ data class Promotion(
     val products: List<PromotionProduct>
 )
 
+    @kotlinx.serialization.Serializable
     data class PromotionProduct(
         val code: String,
         val name: String,

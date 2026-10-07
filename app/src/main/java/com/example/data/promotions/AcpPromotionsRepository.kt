@@ -1,6 +1,15 @@
 package com.example.data.promotions
 
 import android.content.Context
+import androidx.room.withTransaction
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import org.json.JSONArray
+import org.json.JSONObject
 import com.example.data.NossaGentePromotionsResult
 import com.example.data.Promotion
 import com.example.data.PromotionProduct
@@ -18,31 +27,59 @@ import java.util.Date
 
 internal class AcpPromotionsRepository(context: Context) {
     private val gateway = AcpGatewayClient(promotionsOnly = true)
+    internal val database = PromotionDatabase.get(context)
+    internal val dao = database.promotions()
+    fun observeOffers() = dao.observeOffers().map { rows -> rows.map { PromotionCodec.decode(it.payload) }
+        .filter { active(it.validFrom, it.validTo) } }.distinctUntilChanged()
+    fun observeLatestAdded() = dao.observeLatestAdded().map { values ->
+        val array = JSONArray(values.firstOrNull()?.value ?: "[]")
+        (0 until array.length()).map { array.getString(it) }.toSet()
+    }
+    suspend fun isInitialized(): Boolean = dao.metadata("initialized") == "1"
+    suspend fun cached(): NossaGentePromotionsResult.Success? = if (isInitialized()) {
+        NossaGentePromotionsResult.Success(dao.offers().map { PromotionCodec.decode(it.payload) }.filter { active(it.validFrom, it.validTo) },
+            dao.metadata("fingerprint").orEmpty())
+    } else null
 
-    suspend fun fetchPromotions(): NossaGentePromotionsResult = try {
+    private suspend fun importedRecords(store: PromotionStore): List<StorePromotionRecord> {
+        if (store.revision.isBlank()) return emptyList()
+        val key = "import_${store.code}"
+        if (dao.metadata(key + "_revision") == store.revision) {
+            dao.metadata(key)?.let { return PromotionCodec.records(it) }
+        }
+        return PromotionStores.readRecords(store).also { records ->
+            database.withTransaction {
+                dao.put(PromotionMetadata(key, PromotionCodec.records(records)))
+                dao.put(PromotionMetadata(key + "_revision", store.revision))
+            }
+        }
+    }
+
+    suspend fun fetchPromotions(onNetwork: (Boolean) -> Unit = {}): NossaGentePromotionsResult = withContext(Dispatchers.IO) {
+      syncMutex.withLock {
+       try {
+        val previousRows = dao.rows()
+        var delta: PromotionDelta? = null
+        var cityProducts = previousRows
+        if (!isInitialized()) onNetwork(true)
         val stores = PromotionStores.read().filter { it.enabled }
         val promotions = mutableListOf<Promotion>()
         for (store in stores) {
-            val imported = PromotionStores.readRecords(store)
+            val imported = importedRecords(store)
             if (store.code == "0012") {
                 val validity = FirebaseFirestore.getInstance().collection("config")
                     .document("acpOfferValidity").get().await().data.orEmpty()
-                val products = mutableListOf<AcpProduct>()
-                var page = 0
-                var expectedCount: Int? = null
-                do {
-                    val response = AcpProductParser.page(gateway.read("Promotion/all",
-                        listOf("pageIndex" to page.toString(), "pageSize" to "250")), page)
-                    require(response.pageIndex == page && response.totalPages <= 100) { "Paginação de promoções inválida." }
-                    if (expectedCount == null) expectedCount = response.totalCount
-                    require(expectedCount == response.totalCount) { "As ofertas mudaram durante a consulta. Tentando novamente na próxima atualização." }
-                    products += response.items
-                    page++
-                    val more = page < response.totalPages
-                    require(!more || response.items.isNotEmpty()) { "Consulta de promoções incompleta." }
-                } while (more)
-                val uniqueProducts = products.distinctBy { it.id }
-                require(uniqueProducts.size == expectedCount) { "Consulta de promoções incompleta. Tente novamente." }
+                val currentRevision = dao.metadata("acp_revision").orEmpty()
+                val status = gateway.promotionStatus()
+                val revision = status.getString("revision")
+                if (currentRevision != revision) {
+                    onNetwork(true)
+                    val manifest = JSONArray().apply { previousRows.forEach { put(JSONObject().put("id", it.id).put("hash", it.hash)) } }
+                    delta = PromotionDelta.parse(gateway.promotionSync(currentRevision, manifest))
+                    cityProducts = delta!!.applyTo(previousRows)
+                }
+                val uniqueProducts = AcpProductParser.page(JSONObject().put("items",
+                    JSONArray().apply { cityProducts.forEach { put(JSONObject(it.payload)) } }), 0).items
                 uniqueProducts.forEach { product ->
                     val offer = product.offers().firstOrNull { it.family == AcpOfferFamily.DE_POR } ?: return@forEach
                     val document = imported.firstOrNull { record ->
@@ -74,23 +111,48 @@ internal class AcpPromotionsRepository(context: Context) {
         }
         val fingerprint = MessageDigest.getInstance("SHA-256").digest(promotions.sortedBy { it.id }.toString().toByteArray())
             .joinToString("") { "%02x".format(it.toInt() and 255) }
-        // Publish only complete snapshots; a failed page never removes visible offers.
+        val previousOffers = dao.offers().associateBy { it.id }
+        val nextOffers = promotions.associate { it.id to CachedOffer(it.id, PromotionCodec.encode(it)) }
+        require(nextOffers.size == promotions.size) { "Existem ofertas duplicadas no documento." }
+        val initialized = isInitialized()
+        val changedOffers = nextOffers.values.filter { previousOffers[it.id]?.payload != it.payload }
+        val removedOffers = previousOffers.keys - nextOffers.keys
+        val added = addedOfferIds(previousOffers.keys, nextOffers.keys, initialized)
+        // ACP rows, domain offers, revision and latest additions become visible together.
+        database.withTransaction {
+            delta?.let { update ->
+                dao.upsertRows(update.changed)
+                update.removed.chunked(500).forEach { dao.deleteRows(it) }
+                dao.put(PromotionMetadata("acp_revision", update.revision))
+            }
+            dao.upsertOffers(changedOffers)
+            removedOffers.chunked(500).forEach { dao.deleteOffers(it) }
+            if (!initialized || changedOffers.isNotEmpty() || removedOffers.isNotEmpty()) {
+                dao.put(PromotionMetadata("latest_added", JSONArray(added.toList()).toString()))
+                dao.put(PromotionMetadata("cycle", java.util.UUID.randomUUID().toString()))
+            }
+            dao.put(PromotionMetadata("fingerprint", fingerprint))
+            dao.put(PromotionMetadata("initialized", "1"))
+        }
         NossaGentePromotionsResult.Success(promotions, fingerprint)
-    } catch (cancelled: CancellationException) {
+       } catch (cancelled: CancellationException) {
         throw cancelled
-    } catch (failure: Exception) {
+       } catch (failure: Exception) {
         NossaGentePromotionsResult.Error(failure.message ?: "Não foi possível atualizar as ofertas do ACP.")
+       } finally { onNetwork(false) }
+      }
     }
 
     private fun promotion(store: String, code: String, name: String, price: BigDecimal, previous: BigDecimal,
         from: String?, to: String?, image: String?, barcode: String?, detailsJson: String?, categoryOverride: String? = null): Promotion {
         val category = categoryOverride?.takeIf { it in PromotionCategory.categories } ?: PromotionCategory.forDescription(name)
         val discount = previous.subtract(price).multiply(BigDecimal(100)).divide(previous, 0, RoundingMode.HALF_UP)
-        return Promotion("$store|$code|$name", "De/Por", category, image, isoDate(from), isoDate(to),
+        return Promotion(offerIdentity(store, code), "De/Por", category, image, isoDate(from), isoDate(to),
             listOf(PromotionProduct(code, name, price.brl(), previous.brl(), "$discount%", store, image, barcode = barcode, detailsJson = detailsJson)))
     }
 
     companion object {
+        private val syncMutex = Mutex()
         internal fun isoDate(raw: String?): String? {
             val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
             val text = value.take(10)

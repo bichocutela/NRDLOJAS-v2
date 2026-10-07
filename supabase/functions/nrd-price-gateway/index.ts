@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, jwtVerify, importPKCS8, SignJWT } from 'npm:jose@5.9.6';
 import { createHandler, boundedJson } from './handler.mjs';
+import { createPromotionSync } from './promotion-sync.mjs';
 import { ServerCache } from './server-cache.mjs';
 import { createCategorizer } from './categories.mjs';
 import { createAuthorizer } from './access.mjs';
@@ -60,5 +61,6 @@ Deno.serve(createHandler({
     return {allowed:true,master:false,probe:true};
   },
   enrichPromotions: categorizer,
+  promotionSync: createPromotionSync({cache:serverCache, background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)}),
   credentials: () => ({login:Deno.env.get('NRD_PRICE_LOGIN'),password:Deno.env.get('NRD_PRICE_PASSWORD')}),
 }));
