@@ -52,7 +52,7 @@ A arquitetura mantém a interface separada das camadas de dados e integra recurs
 
 ## Visual e temas
 
-Uma galeria dos banners do NRD Códigos, organizada por paleta e estilo. As oito imagens PNG usam fundo transparente e proporção original de **3:1**, sem recorte ou deformação.
+Uma galeria dos banners do NRD Códigos, organizada por paleta e estilo. As oito imagens WebP preservam a proporção original de **3:1**, sem recorte ou deformação.
 
 ### Temas por cor
 
