@@ -70,6 +70,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -380,7 +381,9 @@ fun PromotionsScreen(
     var enlargedImageUrl by remember { mutableStateOf<String?>(null) }
     var selectedOffer by remember { mutableStateOf<OfferGroup?>(null) }
     val scope = rememberCoroutineScope()
-    fun handleRefreshClick() { model.refresh() }
+    fun handleRefreshClick() {
+        if (!isLoading && !isChecking) model.refresh()
+    }
 
     LaunchedEffect(Unit) { favoriteStoreCode = userPreferences.favoriteStoreCode.first() }
     LaunchedEffect(ui.offers) {
@@ -533,7 +536,7 @@ fun PromotionsScreen(
                         } else {
                             Icon(
                                 Icons.Default.Refresh,
-                                contentDescription = "Verificar atualizações",
+                                contentDescription = "Buscar novas ofertas agora",
                                 tint = if (expressive) {
                                     MaterialTheme.colorScheme.onPrimaryContainer
                                 } else {
@@ -638,7 +641,9 @@ fun PromotionsScreen(
                     visibleOfferCount = (visibleOfferCount + OFFER_PAGE_INCREMENT).coerceAtMost(visibleOffers.size)
                 },
                 onOfferClick = { selectedOffer = it },
-                onBack = { selectedCategory = null }
+                onBack = { selectedCategory = null },
+                isRefreshing = isChecking,
+                onRefresh = ::handleRefreshClick
             )
             else -> PromotionsHome(
                 innerPadding = innerPadding,
@@ -650,7 +655,9 @@ fun PromotionsScreen(
                 onSearchQueryChange = { searchQuery = it.take(MAX_SEARCH_LENGTH) },
                 categories = categoryGroups,
                 onCategoryClick = { selectedCategory = it },
-                onOfferClick = { selectedOffer = it }
+                onOfferClick = { selectedOffer = it },
+                isRefreshing = isChecking,
+                onRefresh = ::handleRefreshClick
             )
         }
     }
@@ -752,6 +759,7 @@ private fun EmptyPromotionsState(innerPadding: PaddingValues, onRetry: () -> Uni
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PromotionsHome(
     innerPadding: PaddingValues,
@@ -763,13 +771,20 @@ private fun PromotionsHome(
     onSearchQueryChange: (String) -> Unit,
     categories: List<Pair<String, List<OfferGroup>>>,
     onCategoryClick: (String) -> Unit,
-    onOfferClick: (OfferGroup) -> Unit
+    onOfferClick: (OfferGroup) -> Unit,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit
 ) {
-    LazyColumn(
-        modifier = Modifier.padding(innerPadding).fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.padding(innerPadding).fillMaxSize()
     ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
         item {
             StoreTabs(
                 storeOptions = storeOptions,
@@ -813,10 +828,11 @@ private fun PromotionsHome(
         }
         item {
             Text(
-                "Atualização automática a cada minuto enquanto esta tela estiver aberta.",
+                "Atualização automática a cada minuto. Puxe para baixo ou toque em atualizar para buscar novas ofertas agora.",
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 style = MaterialTheme.typography.bodySmall
             )
+        }
         }
     }
 }
@@ -1036,6 +1052,7 @@ private fun CompactOfferCard(offer: OfferGroup, onOfferClick: (OfferGroup) -> Un
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PromotionCategoryList(
     innerPadding: PaddingValues,
@@ -1049,14 +1066,21 @@ private fun PromotionCategoryList(
     visibleOfferCount: Int,
     onLoadMore: () -> Unit,
     onOfferClick: (OfferGroup) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit
 ) {
     val offersToRender = visibleOffers.take(visibleOfferCount)
-    LazyColumn(
-        modifier = Modifier.padding(innerPadding).fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.padding(innerPadding).fillMaxSize()
     ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
         item {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
@@ -1118,6 +1142,7 @@ private fun PromotionCategoryList(
                     Text("Carregar mais ofertas (${visibleOffers.size - visibleOfferCount} restantes)")
                 }
             }
+        }
         }
     }
 }
