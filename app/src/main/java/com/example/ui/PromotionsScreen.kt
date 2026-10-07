@@ -482,6 +482,9 @@ fun PromotionsScreen(
     LaunchedEffect(stores) {
         if (selectedStore !in selectableStores) selectedStore = enabledStores.firstOrNull() ?: "0012"
         selectedOffer = null
+        offerGroups = offerGroups.map { it.copy(stores = it.stores.filter { store -> store.storeCode in enabledStores }) }
+            .filter { it.stores.isNotEmpty() }
+        dailyChanges = dailyChanges.filter { it.storeCode in enabledStores }
         checkForPromotions(initialLoad = loadedFingerprint == null)
     }
     val normalizedQuery = searchQuery.trim().lowercase()
@@ -741,10 +744,6 @@ fun PromotionsScreen(
                 message = error!!,
                 onRetry = { checkForPromotions(initialLoad = true) }
             )
-            !hasPromotions -> EmptyPromotionsState(
-                innerPadding = innerPadding,
-                onRetry = { checkForPromotions(initialLoad = true) }
-            )
             selectedCategory != null -> PromotionCategoryList(
                 innerPadding = innerPadding,
                 categoryName = selectedCategory.orEmpty(),
@@ -904,6 +903,7 @@ private fun PromotionsHome(
         }
         item {
             Column(modifier = Modifier.padding(horizontal = 12.dp)) {
+                if (categories.isEmpty()) Text("Nenhuma oferta vigente nesta loja.")
                 Text("Ofertas por categoria", style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(4.dp))
                 Text(

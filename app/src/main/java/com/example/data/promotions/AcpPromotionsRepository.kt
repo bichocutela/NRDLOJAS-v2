@@ -54,10 +54,11 @@ internal class AcpPromotionsRepository(context: Context) {
                     val raw = validity[AcpOfferValidityStore.keyFor(product.description, AcpOfferFamily.DE_POR)] as? Map<*, *>
                     val fallback = AcpOfferValidity(document?.from ?: raw?.get("startDate") as? String ?: "",
                         document?.to ?: raw?.get("endDate") as? String ?: "")
-                    if (product.isWithinOfferValidity(fallback)) {
+                    val effective = product.offerValidityOr(fallback)
+                    if (active(effective?.startDate, effective?.endDate)) {
                         promotions += promotion(store.code, product.code.ifBlank { product.barcode }, product.description,
-                            offer.price!!, offer.referencePrice!!, product.validFrom ?: fallback.startDate,
-                            product.validTo ?: fallback.endDate, product.imageUrl)
+                            offer.price!!, offer.referencePrice!!, effective?.startDate,
+                            effective?.endDate, product.imageUrl)
                     }
                 }
             } else {

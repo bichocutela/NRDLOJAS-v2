@@ -46,5 +46,7 @@ jobs:
           token = json.load(urllib.request.urlopen(request, timeout=20))['value']
           status, body = post({'operation':'health'}, {'x-github-oidc-token':token})
           assert status == 200 and body == {'ok':True}, f'Gateway readiness failed: HTTP {status}, {body.get("error", "invalid result")}'
+          status, body = post({'operation':'health_promotions'}, {'x-github-oidc-token':token})
+          assert status == 200 and body == {'ok':True}, f'De/Por readiness failed: HTTP {status}, {body.get("error", "invalid result")}'
           print('Gateway rejected invalid identity and completed authenticated ACP read using server secrets.')
           PY

@@ -32,6 +32,17 @@ test('promotion read dynamically resolves De/Por and preserves pagination and pr
   assert.equal(url.searchParams.get('productCategoryIds'),'77');
   assert.equal(url.searchParams.get('pageIndex'),'2');
 });
+test('promotion readiness is a fixed CI read and never returns product data',async()=>{
+  const server=upstream();
+  const handler=createHandler({authorize:async()=>({allowed:true,probe:true}),credentials:secret,
+    fetcher:async(url,options)=>new URL(url).pathname.endsWith('/ProductCategory/all')
+      ? Response.json({items:[{id:3,description:'De-Por'}],totalPages:1}) : server.fetcher(url,options)});
+  assert.deepEqual(await (await handler(req({operation:'health_promotions'}))).json(),{ok:true});
+  const url=new URL(server.calls.at(-1).url);
+  assert.equal(url.searchParams.get('pageSize'),'1');
+  assert.equal(url.searchParams.get('pageIndex'),'0');
+  assert.equal((await createHandler({authorize:allow,credentials:secret})(req({operation:'health_promotions'}))).status,403);
+});
 test('master, per-account grants, public access and revocation use current documents',async()=>{
   let settings={},account={enabled:{booleanValue:true},prices:{booleanValue:true}};
   const auth=createAuthorizer({verify:async t=>{if(t==='bad')throw Error();return {uid:'uid',email:t==='master'?'mestre@nrdlojas.com':'user@example.com'};},

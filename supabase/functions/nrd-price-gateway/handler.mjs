@@ -36,7 +36,7 @@ export function clean(value, depth = 0) {
 }
 export function validate(input) {
   if (!input || Array.isArray(input) || typeof input !== 'object') return false;
-  if (['access','health'].includes(input.operation)) return Object.keys(input).length === 1;
+  if (['access','health','health_promotions'].includes(input.operation)) return Object.keys(input).length === 1;
   if (Object.keys(input).some(k => !['path','parameters'].includes(k)) || !routes.has(input.path) || !Array.isArray(input.parameters) || input.parameters.length > 24) return false;
   if (input.path === "Promotion/all" && input.parameters.some(pair => !["pageSize","pageIndex"].includes(pair?.[0]))) return false;
   const seen = new Set();
@@ -101,14 +101,14 @@ export function createHandler({authorize, credentials, fetcher = fetch}) {
     if (!validate(input)) return reply(400,{error:'INVALID_REQUEST'});
     if (identity.promotionsOnly && input.operation !== 'access' && input.path !== 'Promotion/all') return reply(403,{error:'ACCESS_DENIED'});
     // CI may exercise exactly one fixed read to validate migration readiness, never arbitrary queries.
-    if (identity.probe && input.operation !== 'health') return reply(403,{error:'ACCESS_DENIED'});
-    if (input.operation === 'health' && !identity.probe) return reply(403,{error:'ACCESS_DENIED'});
+    if (identity.probe && !['health','health_promotions'].includes(input.operation)) return reply(403,{error:'ACCESS_DENIED'});
+    if (['health','health_promotions'].includes(input.operation) && !identity.probe) return reply(403,{error:'ACCESS_DENIED'});
     if (masterRoutes.has(input.path) && !identity.master) return reply(403,{error:'ACCESS_DENIED'});
     const secret = credentials();
     if (!secret.login || !secret.password) return reply(503,{error:'SERVICE_NOT_READY'});
     if (input.operation === 'access') return reply(200,{ok:true});
-    const health = input.operation === 'health';
-    if (health) input = {path:'ProductCategory/all',parameters:[['pageSize','1'],['pageIndex','0']]};
+    const health = ['health','health_promotions'].includes(input.operation);
+    if (health) input = {path:input.operation === 'health_promotions' ? 'Promotion/all' : 'ProductCategory/all',parameters:[['pageSize','1'],['pageIndex','0']]};
     try {
       for (let attempt = 0; attempt < 2; attempt++) {
         const auth = await signIn();
