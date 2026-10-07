@@ -50,5 +50,13 @@ jobs:
           assert status == 200 and body == {'ok':True}, f'De/Por readiness failed: HTTP {status}, {body.get("error", "invalid result")}'
           status, body = post({'operation':'health_sync'}, {'x-github-oidc-token':token})
           assert status == 200 and body == {'ok':True}, f'Differential sync readiness failed: HTTP {status}, {body.get("error", "invalid result")}'
+          import time
+          for attempt in range(4):
+              status, body = post({'operation':'health_categories'}, {'x-github-oidc-token':token})
+              if status == 200 and body == {'ok':True}:
+                  break
+              if attempt < 3:
+                  time.sleep(10)
+          assert status == 200 and body == {'ok':True}, f'Gemini/cache readiness failed: HTTP {status}, {body.get("error", "invalid result")}'
           print('Gateway rejected invalid identity and completed authenticated ACP read using server secrets.')
           PY

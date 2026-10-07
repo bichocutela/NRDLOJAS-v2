@@ -38,6 +38,7 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
     private var monitoring = false
     private var monitorJob: Job? = null
     private var lastSuccessAt = 0L
+    private var requestedJob: Job? = null
 
     fun startForegroundMonitoring() {
         if (monitoring) return
@@ -60,7 +61,14 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
         })
     }
 
-    fun requestSync(interactive: Boolean = false): Job = scope.launch { sync(interactive) }
+    @Synchronized
+    fun requestSync(interactive: Boolean = false): Job {
+        requestedJob?.takeIf { it.isActive }?.let { existing ->
+            if (interactive) mutableState.value = mutableState.value.copy(visibleNetwork = true)
+            return existing
+        }
+        return scope.launch { sync(interactive) }.also { requestedJob = it }
+    }
 
     suspend fun sync(interactive: Boolean = false): NossaGentePromotionsResult = gate.withLock {
         mutableState.value = PromotionSyncState(running = true, visibleNetwork = interactive, attempted = true)

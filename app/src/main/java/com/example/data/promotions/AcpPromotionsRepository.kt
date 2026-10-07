@@ -134,6 +134,9 @@ internal class AcpPromotionsRepository(context: Context) {
                 if (added.isNotEmpty()) {
                     dao.put(PromotionMetadata("outbox_$cycle", JSONObject().put("createdAt", System.currentTimeMillis())
                         .put("ids", JSONArray(added.toList())).toString()))
+                    // Bound persistent events during prolonged remote-settings outages.
+                    dao.outbox().sortedBy { JSONObject(it.value).optLong("createdAt") }.dropLast(100)
+                        .forEach { dao.deleteMetadata(it.key) }
                 }
             }
             dao.put(PromotionMetadata("fingerprint", fingerprint))
