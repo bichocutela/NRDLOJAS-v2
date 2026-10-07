@@ -34,7 +34,7 @@ O primeiro download é uma baseline, inclusive se tiver zero produtos; não gera
 
 `ProcessLifecycleOwner` inicia um monitor de 60 segundos enquanto o aplicativo está em primeiro plano, inclusive em outras abas. Ele começa a consultar após o primeiro uso das ofertas. WorkManager executa o mesmo coordenador a cada 15 minutos, com conectividade e backoff, quando permitido pelo Android. Doze, economia de bateria e “Forçar parada” podem adiar ou impedir tarefas; isto não é push instantâneo.
 
-O botão Ofertas novas mostra um badge e filtra os produtos adicionados no último ciclo de alteração das ofertas, por loja selecionada. Outra checagem sem alterações mantém a seleção anterior. Toque novamente em Todas as ofertas para remover o filtro. Preço/categoria/estoque alterados não contam como adição.
+O botão Ofertas novas mostra um badge e filtra os produtos adicionados no último ciclo que trouxe adições, por loja selecionada. Checagens sem adições, inclusive alterações de preço, estoque e categoria, mantêm esse lote; remoções retiram os itens que já não estão em oferta. Toque novamente em Todas as ofertas para remover o filtro. Preço/categoria/estoque alterados não contam como adição.
 
 A transação de sincronização grava eventos numa outbox antes da entrega. Em primeiro plano, a novidade aparece na UI. Fora dele, a entrega respeita preferências locais, configuração remota e permissão de notificações Android. Se houver loja favorita, restringe a ela; sem favorita, abrange as lojas habilitadas. O clique abre Promoções. Tags Android e IDs de histórico estáveis tornam uma tentativa repetida idempotente.
 

@@ -14,4 +14,12 @@ class PromotionDeltaTest {
         assertEquals(setOf("0012|10"), addedOfferIds(setOf("0012|9"), setOf("0012|9", "0012|10"), true))
         assertEquals("0012|9", offerIdentity("0012", "9"))
     }
+    @Test fun preservesLastAdditionBatchThroughPriceStockAndCategoryUpdates() {
+        val batch = setOf("0012|9", "0012|10")
+        assertEquals(batch, latestAddedOfferIds(batch, emptySet(), batch, true))
+        assertEquals(setOf("0012|9"), latestAddedOfferIds(batch, emptySet(), setOf("0012|9"), true))
+        assertEquals(setOf("0012|11"), latestAddedOfferIds(batch, setOf("0012|11"), batch + "0012|11", true))
+        assertTrue(latestAddedOfferIds(batch, batch, batch, false).isEmpty())
+    }
+
 }
