@@ -1464,7 +1464,6 @@ private fun ProductImage(
     category: String = "Outras ofertas"
 ) {
     val context = LocalContext.current
-    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     var external by remember(ean, category) { mutableStateOf<com.example.data.promotions.BarcodeImage?>(null) }
     LaunchedEffect(imageUrl, ean, category) {
         if (imageUrl.isNullOrBlank()) external = com.example.data.promotions.ProductImageRepository.get(context).find(ean, category)
@@ -1498,12 +1497,6 @@ private fun ProductImage(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit
             )
-        }
-        external?.let { image ->
-            Text(image.credit + " · CC BY-SA", style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.BottomCenter).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
-                    .clickable { uriHandler.openUri(image.source) }.padding(3.dp))
         }
         ValidityBadge(
             validTo = validTo,
