@@ -63,6 +63,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -384,6 +386,10 @@ fun PromotionsScreen(
     fun handleRefreshClick() {
         if (!isLoading && !isChecking) model.refresh()
     }
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(ui.sync.error, ui.initialized) {
+        if (ui.initialized) ui.sync.error?.let { snackbarHostState.showSnackbar(it) }
+    }
 
     LaunchedEffect(Unit) { favoriteStoreCode = userPreferences.favoriteStoreCode.first() }
     LaunchedEffect(ui.offers) {
@@ -472,6 +478,7 @@ fun PromotionsScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = if (glassStyle.enabled || expressive) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(

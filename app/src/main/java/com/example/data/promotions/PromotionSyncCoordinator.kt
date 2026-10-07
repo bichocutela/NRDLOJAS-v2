@@ -38,7 +38,7 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
     private var monitoring = false
     private var monitorJob: Job? = null
     private var lastSuccessAt = 0L
-    private var requestedJob: Job? = null
+    private val requests = PromotionSyncRequests(scope) { sync(it) }
 
     fun startForegroundMonitoring() {
         if (monitoring) return
@@ -61,19 +61,7 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
         })
     }
 
-    @Synchronized
-    fun requestSync(interactive: Boolean = false): Job {
-        requestedJob?.takeIf { it.isActive }?.let { existing ->
-            if (!interactive) return existing
-            // A pull/button refresh must never be swallowed by a silent check already in flight.
-            mutableState.value = mutableState.value.copy(visibleNetwork = true)
-            return scope.launch {
-                existing.join()
-                sync(interactive = true)
-            }.also { requestedJob = it }
-        }
-        return scope.launch { sync(interactive) }.also { requestedJob = it }
-    }
+    fun requestSync(interactive: Boolean = false): Job = requests.request(interactive)
 
     suspend fun sync(interactive: Boolean = false): NossaGentePromotionsResult = gate.withLock {
         mutableState.value = PromotionSyncState(running = true, visibleNetwork = interactive, attempted = true)
