@@ -55,7 +55,10 @@ internal class AcpPromotionsRepository(context: Context) {
         }
     }
 
-    suspend fun fetchPromotions(onNetwork: (Boolean) -> Unit = {}): NossaGentePromotionsResult = withContext(Dispatchers.IO) {
+    suspend fun fetchPromotions(
+        forceRefresh: Boolean = false,
+        onNetwork: (Boolean) -> Unit = {}
+    ): NossaGentePromotionsResult = withContext(Dispatchers.IO) {
       syncMutex.withLock {
        try {
         val previousRows = dao.rows()
@@ -70,15 +73,23 @@ internal class AcpPromotionsRepository(context: Context) {
                 val validity = FirebaseFirestore.getInstance().collection("config")
                     .document("acpOfferValidity").get().await().data.orEmpty()
                 val currentRevision = dao.metadata("acp_revision").orEmpty()
-                val status = gateway.promotionStatus()
-                val revision = status.getString("revision")
-                val serverCount = status.getInt("count")
-                require(Regex("[a-f0-9]{64}").matches(revision) && serverCount in 0..10_000)
-                if (currentRevision != revision || previousRows.size != serverCount) {
+                val manifest = JSONArray().apply {
+                    previousRows.forEach { put(JSONObject().put("id", it.id).put("hash", it.hash)) }
+                }
+                if (forceRefresh) {
                     onNetwork(true)
-                    val manifest = JSONArray().apply { previousRows.forEach { put(JSONObject().put("id", it.id).put("hash", it.hash)) } }
-                    delta = PromotionDelta.parse(gateway.promotionSync(currentRevision, manifest))
+                    delta = PromotionDelta.parse(gateway.promotionRefresh(currentRevision, manifest))
                     cityProducts = delta!!.applyTo(previousRows)
+                } else {
+                    val status = gateway.promotionStatus()
+                    val revision = status.getString("revision")
+                    val serverCount = status.getInt("count")
+                    require(Regex("[a-f0-9]{64}").matches(revision) && serverCount in 0..10_000)
+                    if (currentRevision != revision || previousRows.size != serverCount) {
+                        onNetwork(true)
+                        delta = PromotionDelta.parse(gateway.promotionSync(currentRevision, manifest))
+                        cityProducts = delta!!.applyTo(previousRows)
+                    }
                 }
                 val uniqueProducts = AcpProductParser.page(JSONObject().put("items",
                     JSONArray().apply { cityProducts.forEach { put(JSONObject(it.payload)) } }), 0).items
