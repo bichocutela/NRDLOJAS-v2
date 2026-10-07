@@ -136,6 +136,22 @@ test('Firestore quota and availability failures deny access without querying ACP
  }
  assert.equal(calls,0);
 });
+test('readiness distinguishes cache quota from unavailable sync and classification',async()=>{
+ for (const [reason,limited] of [['CACHE_RATE_LIMITED',true],['CACHE_UNAVAILABLE',false]]) {
+  const server=upstream();
+  const enrich=async items=>items;
+  enrich.verify=async()=>{throw Error(reason);};
+  const handler=createHandler({authorize:async()=>({allowed:true,probe:true}),credentials:secret,
+   promotionSync:async()=>{throw Error(reason);},enrichPromotions:enrich,
+   fetcher:async(url,options)=>new URL(url).pathname.endsWith('/ProductCategory/all')
+    ? Response.json({items:[{id:77,description:'De-Por'}],totalPages:1}) : server.fetcher(url,options)});
+  for (const [operation,status,error] of [['health_sync',502,'SYNC_UNAVAILABLE'],['health_categories',503,'CLASSIFICATION_NOT_READY']]) {
+   const response=await handler(req({operation}));
+   assert.equal(response.status,limited?429:status);
+   assert.deepEqual(await response.json(),{error:limited?'SYNC_RATE_LIMITED':error});
+  }
+ }
+});
 test('restricted accounts need the owning device capability and matching auth time',async()=>{
   const device='a'.repeat(64);let session={deviceHash:{stringValue:'hashed'},authTime:{integerValue:'100'}};
   const auth=createAuthorizer({verify:async()=>({uid:'uid',email:'teste@usuarios.nrdlojas.com',authTime:100}),hash:async()=> 'hashed',document:async path=>path.startsWith('access_sessions/')?session:{enabled:{booleanValue:true},prices:{booleanValue:true}}});

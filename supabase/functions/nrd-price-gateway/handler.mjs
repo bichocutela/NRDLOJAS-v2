@@ -164,6 +164,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
         return reply(200,{ok:true});
       } catch(error) {
         const code = error?.message;
+        if (code === 'CACHE_RATE_LIMITED') return reply(429,{error:'SYNC_RATE_LIMITED'});
         return reply(503,{error:/^(GEMINI_NOT_CONFIGURED|GEMINI_HTTP_[0-9]{3}|CLASSIFICATION_NOT_READY|INVALID_CATEGORIES)$/.test(code) ? code : 'CLASSIFICATION_NOT_READY'});
       }
     }
@@ -176,7 +177,10 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
         const next = await promotionSync({input:{operation:'promotion_sync',revision:status.revision,manifest},readPage});
         if (next.revision === status.revision && (next.items.length || next.removedIds.length)) throw Error('INVALID_DELTA');
         return reply(200,{ok:true});
-      } catch { return reply(502,{error:'SYNC_UNAVAILABLE'}); }
+      } catch(error) {
+        if (error?.message === 'CACHE_RATE_LIMITED') return reply(429,{error:'SYNC_RATE_LIMITED'});
+        return reply(502,{error:'SYNC_UNAVAILABLE'});
+      }
     }
     const health = ['health','health_promotions'].includes(input.operation);
     if (health) input = {path:input.operation === 'health_promotions' ? 'Promotion/all' : 'ProductCategory/all',parameters:[['pageSize','1'],['pageIndex','0']]};
