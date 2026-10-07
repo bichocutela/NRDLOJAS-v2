@@ -72,6 +72,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -103,10 +104,8 @@ import coil.request.ImageRequest
 import com.example.data.NossaGenteApi
 import com.example.data.NossaGenteCredentialStore
 import com.example.data.NossaGenteLoginResult
-import com.example.data.NossaGentePromotionsResult
 import com.example.data.Promotion
 import com.example.data.PromotionChange
-import com.example.data.PromotionChangeStore
 import com.example.data.PromotionChangeType
 import com.example.data.StoreCatalog
 import com.example.data.UserPreferences
@@ -137,12 +136,6 @@ private enum class OfferSortOption(val label: String) {
     PRICE_ASC("Preço menor para maior"),
     PRICE_DESC("Preço maior para menor")
 }
-
-private data class PendingPromotionUpdate(
-    val promotions: List<Promotion>,
-    val offerGroups: List<OfferGroup>,
-    val fingerprint: String
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -360,16 +353,13 @@ fun PromotionsScreen(
     showReactivateProfile: Boolean = false,
     onReactivateProfile: () -> Unit = {}
 ) {
-    var hasPromotions by remember { mutableStateOf(false) }
+    val model: PromotionsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val ui by model.state.collectAsStateWithLifecycle()
     var offerGroups by remember { mutableStateOf<List<OfferGroup>>(emptyList()) }
-    var loadedFingerprint by remember { mutableStateOf<String?>(null) }
-    var pendingUpdate by remember { mutableStateOf<PendingPromotionUpdate?>(null) }
-    var dailyChanges by remember { mutableStateOf<List<PromotionChange>>(emptyList()) }
-    var dailyChangesLimited by remember { mutableStateOf(false) }
     var showNewOffers by rememberSaveable { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(true) }
-    var isChecking by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val isLoading = ui.loading
+    val isChecking = ui.sync.visibleNetwork && ui.initialized
+    val error = ui.sync.error?.takeIf { !ui.initialized }
     var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedStore by rememberSaveable { mutableStateOf("0012") }
     var favoriteStoreCode by rememberSaveable { mutableStateOf<String?>(null) }
@@ -377,152 +367,72 @@ fun PromotionsScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var visibleOfferCount by rememberSaveable { mutableStateOf(INITIAL_OFFER_PAGE) }
     val context = LocalContext.current
-    val repository = remember(context) { com.example.data.promotions.AcpPromotionsRepository(context) }
     val stores by remember { com.example.data.promotions.PromotionStores.observe() }
-        .collectAsState(initial = com.example.data.promotions.PromotionStores.defaults)
+        .collectAsStateWithLifecycle(initialValue = com.example.data.promotions.PromotionStores.defaults)
     val enabledStores = stores.filter { it.enabled }.map { it.code }.toSet()
     val selectableStores = enabledStores + if (enabledStores.size > 1) setOf(ALL_STORES_LABEL) else emptySet()
     val compactHeader = LocalConfiguration.current.screenWidthDp < 420
     val glassStyle = LocalGlassSoftStyle.current
     val expressive = LocalExpressiveStyle.current.enabled
     val userPreferences = remember { UserPreferences(context) }
-    val promotionChangeStore = remember { PromotionChangeStore(context) }
     val sortOption = OfferSortOption.values().firstOrNull { it.name == sortOptionName }
         ?: OfferSortOption.ADDED
     var enlargedImageUrl by remember { mutableStateOf<String?>(null) }
     var selectedOffer by remember { mutableStateOf<OfferGroup?>(null) }
     val scope = rememberCoroutineScope()
-    var promotionRequestRunning by remember { mutableStateOf(false) }
+    fun handleRefreshClick() { model.refresh() }
 
-    fun applyPromotionUpdate(update: PendingPromotionUpdate) {
-        hasPromotions = update.promotions.isNotEmpty()
-        offerGroups = update.offerGroups
-        loadedFingerprint = update.fingerprint
-        pendingUpdate = null
-        if (selectedCategory != null && update.offerGroups.none { it.category == selectedCategory }) {
-            selectedCategory = null
-        }
-        visibleOfferCount = INITIAL_OFFER_PAGE
+    LaunchedEffect(Unit) { favoriteStoreCode = userPreferences.favoriteStoreCode.first() }
+    LaunchedEffect(ui.offers) {
+        offerGroups = withContext(Dispatchers.Default) { buildOfferGroups(ui.offers) }
+        if (selectedCategory != null && offerGroups.none { it.category == selectedCategory }) selectedCategory = null
     }
-
-    fun checkForPromotions(initialLoad: Boolean, interactive: Boolean = false) {
-        if (promotionRequestRunning) return
-        promotionRequestRunning = true
-        scope.launch {
-            if (initialLoad) {
-                isLoading = true
-                error = null
-            } else if (interactive) {
-                isChecking = true
-            }
-            try {
-            when (val result = repository.fetchPromotions { active -> scope.launch { isChecking = active || (interactive && promotionRequestRunning) } }) {
-                is NossaGentePromotionsResult.Success -> {
-                    val nextPromotions = result.promotions
-                    val changeState = promotionChangeStore.compareAndSave(nextPromotions)
-                    dailyChanges = changeState.changes
-                    dailyChangesLimited = changeState.limitedBySafetyCap
-                    val nextOfferGroups = withContext(Dispatchers.Default) {
-                        buildOfferGroups(nextPromotions)
-                    }
-                    val update = PendingPromotionUpdate(
-                        promotions = nextPromotions,
-                        offerGroups = nextOfferGroups,
-                        fingerprint = result.fingerprint
-                    )
-                    if (initialLoad || result.fingerprint != loadedFingerprint) applyPromotionUpdate(update)
-                    error = null
-                }
-                NossaGentePromotionsResult.Unauthorized -> {
-                    if (initialLoad || !hasPromotions) {
-                        error = "As ofertas estão indisponíveis no momento."
-                    }
-                }
-                is NossaGentePromotionsResult.Error -> {
-                    if (initialLoad || !hasPromotions) error = result.message
-                }
-            }
-            } finally {
-                isLoading = false
-                isChecking = false
-                promotionRequestRunning = false
-            }
-        }
-    }
-
-    fun handleRefreshClick() {
-        val update = pendingUpdate
-        if (update != null) {
-            applyPromotionUpdate(update)
-        } else if (!isChecking && !isLoading) {
-            checkForPromotions(initialLoad = false, interactive = true)
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        favoriteStoreCode = userPreferences.favoriteStoreCode.first()
-        val cached = withContext(Dispatchers.IO) { repository.cached() }
-        if (cached != null) {
-            applyPromotionUpdate(PendingPromotionUpdate(cached.promotions, buildOfferGroups(cached.promotions), cached.fingerprint))
-            isLoading = false
-        }
-        checkForPromotions(initialLoad = cached == null)
-    }
-
-    LaunchedEffect(repository) {
-        repository.observeOffers().collect { offers ->
-            if (offers.isNotEmpty() || withContext(Dispatchers.IO) { repository.isInitialized() }) {
-                offerGroups = withContext(Dispatchers.Default) { buildOfferGroups(offers) }
-                hasPromotions = offers.isNotEmpty()
-                isLoading = false
-            }
-        }
-    }
-
-    LaunchedEffect(repository) {
-        while (kotlinx.coroutines.currentCoroutineContext().isActive) {
-            delay(60_000)
-            checkForPromotions(initialLoad = false)
-        }
-    }
-
     val storeOptions = if (enabledStores.size > 1) listOf(ALL_STORES_LABEL) + StoreCatalog.codes else StoreCatalog.codes
     LaunchedEffect(stores) {
         if (selectedStore !in selectableStores) selectedStore = enabledStores.firstOrNull() ?: "0012"
         selectedOffer = null
         offerGroups = offerGroups.map { it.copy(stores = it.stores.filter { store -> store.storeCode in enabledStores }) }
             .filter { it.stores.isNotEmpty() }
-        dailyChanges = dailyChanges.filter { it.storeCode in enabledStores }
-        checkForPromotions(initialLoad = loadedFingerprint == null)
+        model.storesChanged()
     }
     val normalizedQuery = searchQuery.trim().lowercase()
-    val visibleOffers = remember(offerGroups, selectedStore, normalizedQuery, selectedCategory, sortOption, enabledStores) {
+    val visibleOffers = remember(offerGroups, selectedStore, normalizedQuery, selectedCategory, sortOption, enabledStores, showNewOffers, ui.latestAddedIds) {
         val filtered = offerGroups.filter { offer ->
             val matchesCategory = selectedCategory == null || offer.category == selectedCategory
             val matchesStore = selectedStore == ALL_STORES_LABEL || offer.stores.any { it.storeCode == selectedStore }
             val matchesSearch = normalizedQuery.isBlank() ||
                 offer.name.lowercase().contains(normalizedQuery) ||
-                offer.code.lowercase().contains(normalizedQuery)
-            matchesCategory && matchesStore && matchesSearch && offer.stores.any { it.storeCode in enabledStores }
+                offer.code.lowercase().contains(normalizedQuery) ||
+                offer.barcode.contains(normalizedQuery)
+            val matchesNew = !showNewOffers || offer.stores.any {
+                (selectedStore == ALL_STORES_LABEL || it.storeCode == selectedStore) &&
+                    com.example.data.promotions.offerIdentity(it.storeCode, offer.code) in ui.latestAddedIds
+            }
+            matchesCategory && matchesStore && matchesSearch && matchesNew && offer.stores.any { it.storeCode in enabledStores }
         }
         sortOfferGroups(filtered, sortOption)
     }
-    val categoryGroups = remember(offerGroups, selectedStore, normalizedQuery, enabledStores) {
+    val categoryGroups = remember(offerGroups, selectedStore, normalizedQuery, enabledStores, showNewOffers, ui.latestAddedIds) {
         offerGroups
             .asSequence()
             .filter { offer ->
                 val matchesStore = selectedStore == ALL_STORES_LABEL || offer.stores.any { it.storeCode == selectedStore }
                 val matchesSearch = normalizedQuery.isBlank() ||
                     offer.name.lowercase().contains(normalizedQuery) ||
-                    offer.code.lowercase().contains(normalizedQuery)
-                matchesStore && matchesSearch && offer.stores.any { it.storeCode in enabledStores }
+                    offer.code.lowercase().contains(normalizedQuery) ||
+                offer.barcode.contains(normalizedQuery)
+                val matchesNew = !showNewOffers || offer.stores.any {
+                    (selectedStore == ALL_STORES_LABEL || it.storeCode == selectedStore) &&
+                        com.example.data.promotions.offerIdentity(it.storeCode, offer.code) in ui.latestAddedIds
+                }
+                matchesStore && matchesSearch && matchesNew && offer.stores.any { it.storeCode in enabledStores }
             }
             .groupBy { it.category }
             .toList()
             .sortedBy { it.first.lowercase() }
     }
 
-    LaunchedEffect(selectedCategory, selectedStore, normalizedQuery, sortOptionName) {
+    LaunchedEffect(selectedCategory, selectedStore, normalizedQuery, sortOptionName, showNewOffers, ui.latestAddedIds) {
         visibleOfferCount = INITIAL_OFFER_PAGE
     }
 
@@ -531,43 +441,10 @@ fun PromotionsScreen(
         if (selectedStore !in selectableStores) selectedStore = enabledStores.firstOrNull() ?: "0012"
     }
 
-    val newestOfferGroups = pendingUpdate?.offerGroups ?: offerGroups
-    val offerChangesForSelectedStore = remember(dailyChanges, selectedStore) {
-        dailyChanges
-            .asReversed()
-            .asSequence()
-            .filter { selectedStore == ALL_STORES_LABEL || it.storeCode == selectedStore }
-            .distinctBy { it.stableKey }
-            .toList()
-    }
-
-    if (showNewOffers) {
-        NewOffersDialog(
-            changes = offerChangesForSelectedStore,
-            selectedStore = selectedStore,
-            limitedBySafetyCap = dailyChangesLimited,
-            canOpenOffer = { change -> newestOfferGroups.findOfferForChange(change) != null },
-            onDismiss = { showNewOffers = false },
-            onOfferClick = { change ->
-                val sourceGroups = pendingUpdate?.offerGroups ?: offerGroups
-                val offer = sourceGroups.findOfferForChange(change)
-
-                pendingUpdate?.let { applyPromotionUpdate(it) }
-
-                if (change.storeCode.isNotBlank() && change.storeCode in enabledStores) {
-                    selectedStore = change.storeCode
-                }
-                selectedCategory = (offer?.category ?: change.category).takeIf { it.isNotBlank() }
-                searchQuery = (
-                    offer?.code?.takeIf { it.isNotBlank() }
-                        ?: change.productCode.takeIf { it.isNotBlank() }
-                        ?: change.productName
-                ).take(MAX_SEARCH_LENGTH)
-                visibleOfferCount = INITIAL_OFFER_PAGE
-                showNewOffers = false
-                if (offer != null) selectedOffer = offer
-            }
-        )
+    val newOffersCount = offerGroups.count { offer ->
+        offer.stores.any { store -> store.storeCode in enabledStores &&
+            (selectedStore == ALL_STORES_LABEL || store.storeCode == selectedStore) &&
+            com.example.data.promotions.offerIdentity(store.storeCode, offer.code) in ui.latestAddedIds }
     }
 
     selectedOffer?.let { offer ->
@@ -606,12 +483,14 @@ fun PromotionsScreen(
                         )
                         Spacer(Modifier.width(6.dp))
                         NewOffersButton(
-                            changeCount = offerChangesForSelectedStore.size,
-                            highlighted = offerChangesForSelectedStore.isNotEmpty(),
+                            changeCount = newOffersCount,
+                            highlighted = showNewOffers || newOffersCount > 0,
+                            showingNew = showNewOffers,
                             enabled = !isLoading,
                             onClick = {
-                                pendingUpdate?.let { applyPromotionUpdate(it) }
-                                showNewOffers = true
+                                showNewOffers = !showNewOffers
+                                selectedCategory = null
+                                searchQuery = ""
                             }
                         )
                     }
@@ -632,9 +511,7 @@ fun PromotionsScreen(
                         modifier = Modifier
                             .glassSoftShadow(CircleShape, 4.dp)
                             .background(
-                                color = if (pendingUpdate != null) {
-                                    MaterialTheme.colorScheme.primaryContainer
-                                } else if (glassStyle.enabled) {
+                                color = if (glassStyle.enabled) {
                                     MaterialTheme.colorScheme.surface
                                 } else if (expressive) {
                                     MaterialTheme.colorScheme.primaryContainer
@@ -656,14 +533,8 @@ fun PromotionsScreen(
                         } else {
                             Icon(
                                 Icons.Default.Refresh,
-                                contentDescription = if (pendingUpdate != null) {
-                                    "Aplicar novas promoções"
-                                } else {
-                                    "Verificar atualizações"
-                                },
-                                tint = if (pendingUpdate != null) {
-                                    MaterialTheme.colorScheme.primary
-                                } else if (expressive) {
+                                contentDescription = "Verificar atualizações",
+                                tint = if (expressive) {
                                     MaterialTheme.colorScheme.onPrimaryContainer
                                 } else {
                                     MaterialTheme.colorScheme.onSurfaceVariant
@@ -751,7 +622,7 @@ fun PromotionsScreen(
             error != null -> ErrorPromotionsState(
                 innerPadding = innerPadding,
                 message = error!!,
-                onRetry = { checkForPromotions(initialLoad = true) }
+                onRetry = { model.refresh() }
             )
             selectedCategory != null -> PromotionCategoryList(
                 innerPadding = innerPadding,
@@ -2123,6 +1994,7 @@ private fun String?.toNumericPrice(): Double? = this
 private fun NewOffersButton(
     changeCount: Int,
     highlighted: Boolean,
+    showingNew: Boolean = false,
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
@@ -2159,7 +2031,7 @@ private fun NewOffersButton(
             Icon(Icons.Default.LocalOffer, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(4.dp))
             Text(
-                "Ofertas novas",
+                if (showingNew) "Todas as ofertas" else "Ofertas novas",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = if (highlighted) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,

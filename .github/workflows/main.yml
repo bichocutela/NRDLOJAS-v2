@@ -155,6 +155,7 @@ jobs:
           --tests 'com.example.data.DynamicPageScheduleTest' \
           --tests 'com.example.data.DynamicPageCodecTest' \
           --tests 'com.example.data.acp.*' \
+          --tests 'com.example.data.promotions.*' \
           --tests 'com.example.data.flyer.*' \
           --tests 'com.example.data.NossaGenteApiTest' \
           --tests 'com.example.ui.DynamicMediaUrlTest' \
