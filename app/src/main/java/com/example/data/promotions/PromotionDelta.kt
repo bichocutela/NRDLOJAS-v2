@@ -34,3 +34,7 @@ internal data class PromotionDelta(val revision: String, val count: Int, val cha
 internal fun offerIdentity(store: String, code: String): String = "$store|$code"
 internal fun addedOfferIds(previous: Set<String>, current: Set<String>, initialized: Boolean): Set<String> =
     if (initialized) current - previous else emptySet()
+
+/** Price, stock and classification updates must not erase additions the user has not opened yet. */
+internal fun latestAddedOfferIds(previousBatch: Set<String>, added: Set<String>, current: Set<String>, initialized: Boolean): Set<String> =
+    if (!initialized) emptySet() else (added.takeIf { it.isNotEmpty() } ?: previousBatch).intersect(current)

@@ -120,6 +120,10 @@ internal class AcpPromotionsRepository(context: Context) {
         val changedOffers = nextOffers.values.filter { previousOffers[it.id]?.payload != it.payload }
         val removedOffers = previousOffers.keys - nextOffers.keys
         val added = addedOfferIds(previousOffers.keys, nextOffers.keys, initialized)
+        val previousBatch = JSONArray(dao.metadata("latest_added") ?: "[]").let { array ->
+            (0 until array.length()).map { array.getString(it) }.toSet()
+        }
+        val latestAdded = latestAddedOfferIds(previousBatch, added, nextOffers.keys, initialized)
         // ACP rows, domain offers, revision and latest additions become visible together.
         database.withTransaction {
             delta?.let { update ->
@@ -130,7 +134,7 @@ internal class AcpPromotionsRepository(context: Context) {
             dao.upsertOffers(changedOffers)
             removedOffers.chunked(500).forEach { dao.deleteOffers(it) }
             if (!initialized || changedOffers.isNotEmpty() || removedOffers.isNotEmpty()) {
-                dao.put(PromotionMetadata("latest_added", JSONArray(added.toList()).toString()))
+                dao.put(PromotionMetadata("latest_added", JSONArray(latestAdded.toList()).toString()))
                 val cycle = java.util.UUID.randomUUID().toString()
                 dao.put(PromotionMetadata("cycle", cycle))
                 if (added.isNotEmpty()) {
