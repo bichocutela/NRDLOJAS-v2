@@ -64,8 +64,13 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
     @Synchronized
     fun requestSync(interactive: Boolean = false): Job {
         requestedJob?.takeIf { it.isActive }?.let { existing ->
-            if (interactive) mutableState.value = mutableState.value.copy(visibleNetwork = true)
-            return existing
+            if (!interactive) return existing
+            // A pull/button refresh must never be swallowed by a silent check already in flight.
+            mutableState.value = mutableState.value.copy(visibleNetwork = true)
+            return scope.launch {
+                existing.join()
+                sync(interactive = true)
+            }.also { requestedJob = it }
         }
         return scope.launch { sync(interactive) }.also { requestedJob = it }
     }
