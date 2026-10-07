@@ -381,7 +381,9 @@ fun PromotionsScreen(
     var enlargedImageUrl by remember { mutableStateOf<String?>(null) }
     var selectedOffer by remember { mutableStateOf<OfferGroup?>(null) }
     val scope = rememberCoroutineScope()
-    fun handleRefreshClick() { model.refresh() }
+    fun handleRefreshClick() {
+        if (!isLoading && !isChecking) model.refresh()
+    }
 
     LaunchedEffect(Unit) { favoriteStoreCode = userPreferences.favoriteStoreCode.first() }
     LaunchedEffect(ui.offers) {
