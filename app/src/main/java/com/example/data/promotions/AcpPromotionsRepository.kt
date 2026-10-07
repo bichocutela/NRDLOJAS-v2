@@ -29,20 +29,27 @@ internal class AcpPromotionsRepository(context: Context) {
                     .document("acpOfferValidity").get().await().data.orEmpty()
                 val products = mutableListOf<AcpProduct>()
                 var page = 0
+                var expectedCount: Int? = null
                 do {
                     val response = AcpProductParser.page(gateway.read("Promotion/all",
                         listOf("pageIndex" to page.toString(), "pageSize" to "250")), page)
                     require(response.pageIndex == page && response.totalPages <= 100) { "Paginação de promoções inválida." }
+                    if (expectedCount == null) expectedCount = response.totalCount
+                    require(expectedCount == response.totalCount) { "As ofertas mudaram durante a consulta. Tentando novamente na próxima atualização." }
                     products += response.items
                     page++
                     val more = page < response.totalPages
                     require(!more || response.items.isNotEmpty()) { "Consulta de promoções incompleta." }
                 } while (more)
-                products.distinctBy { it.id }.forEach { product ->
+                val uniqueProducts = products.distinctBy { it.id }
+                require(uniqueProducts.size == expectedCount) { "Consulta de promoções incompleta. Tente novamente." }
+                uniqueProducts.forEach { product ->
                     val offer = product.offers().firstOrNull { it.family == AcpOfferFamily.DE_POR } ?: return@forEach
                     val document = imported.firstOrNull { record ->
-                        (record.code.isNotBlank() && record.code == product.code) ||
-                            (record.barcode.isNotBlank() && record.barcode == product.barcode)
+                        BigDecimal.valueOf(record.price).setScale(2, RoundingMode.HALF_UP) == offer.price!!.setScale(2, RoundingMode.HALF_UP) &&
+                        BigDecimal.valueOf(record.previous).setScale(2, RoundingMode.HALF_UP) == offer.referencePrice!!.setScale(2, RoundingMode.HALF_UP) &&
+                        ((record.code.isNotBlank() && record.code == product.code) ||
+                            (record.barcode.isNotBlank() && record.barcode == product.barcode))
                     }
                     val raw = validity[AcpOfferValidityStore.keyFor(product.description, AcpOfferFamily.DE_POR)] as? Map<*, *>
                     val fallback = AcpOfferValidity(document?.from ?: raw?.get("startDate") as? String ?: "",

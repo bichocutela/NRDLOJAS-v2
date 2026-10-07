@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
 internal fun MestrePromotionStores() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val stores by PromotionStores.observe().collectAsState(initial = PromotionStores.defaults)
+    val stores by remember { PromotionStores.observe() }.collectAsState(initial = PromotionStores.defaults)
     var selectedStore by remember { mutableStateOf("0012") }
     var analysis by remember { mutableStateOf<FlyerAnalysisResult?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -73,16 +73,16 @@ internal fun MestrePromotionStores() {
             title = { Text("Publicar em ${StoreCatalog.nameFor(selectedStore)}?") },
             text = {
                 LazyColumn(Modifier.heightIn(max = 420.dp)) {
-                    item {
+                    item { Column {
                     Text("${records.size} ofertas De/Por. ${result.offers.size - records.size} linhas de outras regras ou inválidas não serão publicadas.")
                     result.warnings.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-                    }
-                    items(records) { record ->
+                    } }
+                    items(records) { record -> Column {
                         HorizontalDivider(Modifier.padding(vertical = 6.dp))
                         Text("${record.code.ifBlank { record.barcode }} • ${record.name}")
                         Text("De R$ %.2f por R$ %.2f".format(java.util.Locale("pt", "BR"), record.previous, record.price))
                         Text("${record.from ?: "Início não informado"} até ${record.to ?: "Fim não informado"}", style = MaterialTheme.typography.bodySmall)
-                    }
+                    } }
                 }
             },
             confirmButton = { TextButton(enabled = !busy && records.isNotEmpty(), onClick = { scope.launch {
