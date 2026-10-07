@@ -67,10 +67,28 @@ export function createCategorizer({cache, apiKey, model = 'gemini-3.5-flash-lite
   }
   const enrich = async items => {
     const entries = await Promise.all(items.map(async item=>({item,key:await categoryKey(item)})));
-    const cached = await cache.many(entries.map(e=>e.key));
+    if (!entries.length) return [];
+    // A persistent page summary costs one Firestore read instead of one per product,
+    // including cold Edge starts. Individual records remain the source of truth.
+    const keys = [...new Set(entries.map(e=>e.key))].sort();
+    const hash = new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(keys))));
+    const groupKey = 'category_group_'+Array.from(hash).map(x=>x.toString(16).padStart(2,'0')).join('');
+    const group = (await cache.many([groupKey])).get(groupKey);
+    const categories = Object.fromEntries(keys.filter(key => CATEGORIES.includes(group?.payload.categories?.[key]))
+      .map(key => [key,group.payload.categories[key]]));
+    const unresolved = keys.filter(key => !categories[key]);
+    const cached = await cache.many(unresolved);
+    for (const key of unresolved) {
+      const category = cached.get(key)?.payload.category;
+      if (CATEGORIES.includes(category)) categories[key] = category;
+    }
+    if (Object.keys(categories).length > Object.keys(group?.payload.categories ?? {}).length) {
+      // CAS avoids overwriting newer summaries. Existing classification records are retained.
+      await cache.write(groupKey,{categories},0,group?.version ?? null).catch(() => {});
+    }
     const missing = [];
     const enriched = entries.map(entry => {
-      const category = cached.get(entry.key)?.payload.category;
+      const category = categories[entry.key];
       if (!category && (cached.get(entry.key)?.payload.retryAt ?? 0) <= Date.now()) missing.push(entry);
       return {...entry.item,nrdCategory:strongCategory(entry.item.description) ?? (CATEGORIES.includes(category) ? category : null)};
     });

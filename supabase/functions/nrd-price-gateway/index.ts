@@ -2,6 +2,7 @@ import { createRemoteJWKSet, jwtVerify, importPKCS8, SignJWT } from 'npm:jose@5.
 import { createHandler, boundedJson } from './handler.mjs';
 import { createPromotionSync } from './promotion-sync.mjs';
 import { ServerCache } from './server-cache.mjs';
+import { ReadCache } from './read-cache.mjs';
 import { createCategorizer } from './categories.mjs';
 import { createAuthorizer } from './access.mjs';
 const project = 'appcodigo-7f245';
@@ -43,7 +44,7 @@ const appAuthorize = createAuthorizer({document,
   if (!payload.sub || payload.sub.length > 128) throw Error('INVALID_IDENTITY');
   return {uid:payload.sub,email:payload.email,authTime:payload.auth_time,token};
 }});
-const serverCache = new ServerCache({project, token:firestoreToken});
+const serverCache = new ReadCache(new ServerCache({project, token:firestoreToken}));
 const categorizer = createCategorizer({cache:serverCache, apiKey:Deno.env.get('GEMINI_API_KEY'),
   model:Deno.env.get('PROMOTION_GEMINI_MODEL') ?? 'gemini-3.5-flash-lite',
   background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)});

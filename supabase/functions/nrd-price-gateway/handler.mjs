@@ -192,7 +192,11 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
         return reply(200,{ok:true});
       }
       return reply(200,payload);
-    } catch { /* Deliberately do not log credentials, tokens, cookies or upstream bodies. */ }
+    } catch (error) {
+      // Record only a controlled code; never tokens, credentials or upstream bodies.
+      if (error?.message === 'CACHE_RATE_LIMITED') return reply(429,{error:'SYNC_RATE_LIMITED'});
+      if (error?.message === 'CACHE_UNAVAILABLE') console.warn('PROMOTION_SYNC_FAILURE','CACHE_UNAVAILABLE');
+    }
     return reply(502,{error:'CONSULTATION_UNAVAILABLE'});
   };
 }

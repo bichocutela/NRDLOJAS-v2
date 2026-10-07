@@ -48,13 +48,16 @@ internal object PromotionStores {
 
     fun observe() = callbackFlow {
         val listener = config.addSnapshotListener { snapshot, error ->
-            if (error == null) trySend(parse(snapshot?.data))
+            if (error == null && snapshot != null) {
+                if (!snapshot.metadata.isFromCache) PromotionConfigCache.remember(config, snapshot.data.orEmpty())
+                trySend(parse(snapshot.data))
+            }
             // Keep the last known configuration on a transient listener error.
         }
         awaitClose { listener.remove() }
     }
 
-    suspend fun read(): List<PromotionStore> = parse(config.get().await().data)
+    suspend fun read(forceRefresh: Boolean = false): List<PromotionStore> = parse(PromotionConfigCache.read(config, forceRefresh))
 
     private fun requireMaster(code: String) {
         check(FirebaseAuth.getInstance().currentUser?.email?.lowercase() == "mestre@nrdlojas.com") {

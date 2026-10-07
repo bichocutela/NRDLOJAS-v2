@@ -18,6 +18,26 @@ test('cache key stable for unchanged full description and changes on revised des
   assert.notEqual(await categoryKey(a),await categoryKey({...a,description:'Produto B'}));
 });
 
+test('persistent page summary reduces 250 category reads to one across cold starts',async()=>{
+  const {createCategorizer}=await import('./categories.mjs');
+  const products=Array.from({length:250},(_,i)=>({code:String(i),barCode:String(i),description:`Produto ${i}`}));
+  const docs=new Map(await Promise.all(products.map(async item=>[await categoryKey(item),{payload:{category:'Mercearia'},version:'v1'}])));
+  let reads=0, calls=0;
+  const cache={many:async keys=>{reads+=keys.length;return new Map(keys.filter(key=>docs.has(key)).map(key=>[key,docs.get(key)]));},
+    write:async(key,payload)=>{docs.set(key,{payload,version:'v1'});return docs.get(key);}};
+  const options={cache,apiKey:'',background:()=>{},fetcher:async()=>{calls++;throw Error('unexpected');}};
+  const warm=await createCategorizer(options)(products);
+  assert.equal(reads,251); assert.ok(warm.every(item=>item.nrdCategory==='Mercearia'));
+  reads=0;
+  // Recreate categorizer to simulate losing all Edge memory between invocations.
+  const cold=await createCategorizer(options)([...products].reverse());
+  assert.equal(reads,1); assert.ok(cold.every(item=>item.nrdCategory==='Mercearia'));
+  assert.equal(calls,0);
+  reads=0;
+  await createCategorizer(options)(products.map((p,i)=>i===0?{...p,description:'Descrição alterada'}:p));
+  assert.equal(reads,251); // Revised descriptions cannot inherit another classification.
+});
+
 test('classification pipeline persists strict Gemini result and never resends a cached product',async()=>{
   const {createCategorizer}=await import('./categories.mjs');
   const values=new Map(), tasks=[]; let calls=0;
