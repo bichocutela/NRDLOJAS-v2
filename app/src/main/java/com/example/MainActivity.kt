@@ -288,13 +288,6 @@ class MainActivity : ComponentActivity() {
                     expressiveReflectionOpacity = expressiveReflectionOpacity
                 ) {
 
-                var showSplash by remember { mutableStateOf(true) }
-                
-                LaunchedEffect(Unit) {
-                    delay(1500)
-                    showSplash = false
-                }
-                
                 NrdAppBackground(modifier = Modifier.fillMaxSize()) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
@@ -305,7 +298,6 @@ class MainActivity : ComponentActivity() {
                         contentColor = MaterialTheme.colorScheme.onBackground
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
-                        if (!showSplash) {
                             androidx.compose.runtime.key(productNotificationNavigationKey) {
                                 AppNavGraph(
                                 viewModel = viewModel,
@@ -324,26 +316,9 @@ class MainActivity : ComponentActivity() {
                             hostState = snackbarHostState,
                             modifier = Modifier.align(Alignment.BottomCenter)
                             )
-                        }
-                        
-                        AnimatedVisibility(
-                            visible = showSplash,
-                            enter = fadeIn(animationSpec = tween(500)),
-                            exit = fadeOut(animationSpec = tween(220))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.background),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                coil.compose.AsyncImage(
-                                    model = R.drawable.splash_logo,
-                                    contentDescription = "Logo",
-                                    modifier = Modifier.size(150.dp)
-                                )
-                        }
-                    }
+
+                        com.example.ui.NrdLaunchAnimation(appTheme = effectiveAppTheme)
+
                 }
                 }
                 }
