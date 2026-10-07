@@ -132,6 +132,28 @@ jobs:
         if [ "$PATCH" -lt 130 ]; then PATCH=130; fi
         NEXT_PATCH=$((PATCH + 1))
         NEXT_TAG="v1.0.$NEXT_PATCH"
+        # Reserve the tag atomically: parallel merged builds must not overwrite one APK version.
+        if [ "$GITHUB_REF" = "refs/heads/main" ] && { [ "$GITHUB_EVENT_NAME" = "push" ] || [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; }; then
+          RESERVED=false
+          for ATTEMPT in $(seq 1 50); do
+            NEXT_TAG="v1.0.$NEXT_PATCH"
+            ERROR_FILE="$(mktemp)"
+            if gh api --method POST "repos/${{ github.repository }}/git/refs" \
+              -f "ref=refs/tags/$NEXT_TAG" -f "sha=$GITHUB_SHA" >/dev/null 2>"$ERROR_FILE"; then
+              RESERVED=true
+              rm -f "$ERROR_FILE"
+              break
+            fi
+            if ! gh api "repos/${{ github.repository }}/git/ref/tags/$NEXT_TAG" >/dev/null 2>&1; then
+              cat "$ERROR_FILE"
+              rm -f "$ERROR_FILE"
+              exit 1
+            fi
+            rm -f "$ERROR_FILE"
+            NEXT_PATCH=$((NEXT_PATCH + 1))
+          done
+          if [ "$RESERVED" != true ]; then echo "::error::Não foi possível reservar uma versão única."; exit 1; fi
+        fi
         echo "Calculated next tag: $NEXT_TAG"
         echo "APP_VERSION_CODE=$NEXT_PATCH" >> "$GITHUB_ENV"
         echo "APP_VERSION_NAME=1.0.$NEXT_PATCH" >> "$GITHUB_ENV"
@@ -260,6 +282,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ env.NEXT_TAG }}
+        target_commitish: ${{ github.sha }}
         name: NRDCodigos ${{ env.NEXT_TAG }}
         files: app/build/outputs/apk/release/app-release.apk
       env:

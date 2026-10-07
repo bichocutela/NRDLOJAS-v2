@@ -90,7 +90,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     try { return await signingIn; } finally { signingIn = null; }
   }
   async function consult(input) {
-      for (let attempt = 0; attempt < 2; attempt++) {
+      attempts: for (let attempt = 0; attempt < 2; attempt++) {
         const auth = await signIn();
         const base = auth.proxy ? TENANT+'/api/proxy/api/v1/' : API+'/api/v1/';
         let path = input.path;
@@ -103,6 +103,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
               categoryUrl.searchParams.set('pageSize','250'); categoryUrl.searchParams.set('pageIndex',String(page));
               const categoryResponse = await fetcher(categoryUrl,{redirect:'error',signal:AbortSignal.timeout(25000),
                 headers:{Accept:'application/json','Cache-Control':'no-cache',Authorization:'Bearer '+auth.token,...(auth.proxy ? {Cookie:auth.cookie} : {})}});
+              if (categoryResponse.status === 401 && attempt === 0) { session = null; continue attempts; }
               if (!categoryResponse.ok) throw Error('UPSTREAM_FAILURE');
               const categoryPayload = await boundedJson(categoryResponse);
               const items = Array.isArray(categoryPayload) ? categoryPayload : categoryPayload.items;
@@ -161,12 +162,19 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
         const page = await consult({path:'Promotion/all',parameters:[['pageIndex','0'],['pageSize','1']]});
         if (!enrichPromotions.verify || !await enrichPromotions.verify(page.items)) throw Error('CLASSIFICATION_NOT_READY');
         return reply(200,{ok:true});
-      } catch { return reply(503,{error:'CLASSIFICATION_NOT_READY'}); }
+      } catch(error) {
+        const code = error?.message;
+        return reply(503,{error:/^(GEMINI_NOT_CONFIGURED|GEMINI_HTTP_[0-9]{3}|CLASSIFICATION_NOT_READY|INVALID_CATEGORIES)$/.test(code) ? code : 'CLASSIFICATION_NOT_READY'});
+      }
     }
     if (input.operation === 'health_sync') {
       try {
-        const status = await promotionSync({input:{operation:'promotion_status'},readPage:page=>consult({path:'Promotion/all',parameters:[['pageIndex',String(page)],['pageSize','250']]})});
-        if (!/^[a-f0-9]{64}$/.test(status.revision)) throw Error('INVALID_SNAPSHOT');
+        const readPage = page=>consult({path:'Promotion/all',parameters:[['pageIndex',String(page)],['pageSize','250']]});
+        const status = await promotionSync({input:{operation:'promotion_sync',revision:'',manifest:[]},readPage});
+        if (!/^[a-f0-9]{64}$/.test(status.revision) || status.items.length !== status.count || status.removedIds.length) throw Error('INVALID_SNAPSHOT');
+        const manifest = status.items.map(({id,hash})=>({id,hash}));
+        const next = await promotionSync({input:{operation:'promotion_sync',revision:status.revision,manifest},readPage});
+        if (next.revision === status.revision && (next.items.length || next.removedIds.length)) throw Error('INVALID_DELTA');
         return reply(200,{ok:true});
       } catch { return reply(502,{error:'SYNC_UNAVAILABLE'}); }
     }

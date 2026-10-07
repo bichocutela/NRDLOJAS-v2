@@ -18,7 +18,7 @@ O gateway autentica identidade Firebase ou capacidade de sessão do NRD, verific
 | --- | --- | --- |
 | Detalhes | `ui/PromotionProductDetailsContent.kt`, `ui/AcpProductsPanel.kt`, `ui/PromotionsScreen.kt` | Cards clicáveis, EAN e mesmo componente comercial/barcode de Consultar Preços. Os detalhes usam o snapshot ACP local; nenhum GET adicional ao tocar. Campanhas e banners da consulta de preços permanecem disponíveis. |
 | Imagens | `data/promotions/ProductImageRepository.kt` | Consulta desacoplada por GTIN válido, família Open Facts, cache persistente de URLs/ausência e limitação global de requisições. Apenas cards visíveis consultam imagens. ACP tem prioridade, placeholder em erros. Créditos CC BY-SA vinculados à fonte. |
-| Categorias | `categories.mjs`, `server-cache.mjs`, `PromotionCategory.kt` | Gemini 2.5 Flash no servidor, descrições completas tratadas como dados, enum fechado e JSON validado. Cache por EAN/código/descrição/taxonomia com lease e precondições; sucesso nunca é reenviado. Regras locais corrigem termos ambíguos e permitem operação sem IA. |
+| Categorias | `categories.mjs`, `server-cache.mjs`, `PromotionCategory.kt` | Gemini 3.5 Flash-Lite no servidor, descrições completas tratadas como dados, enum fechado e JSON validado. Cache por EAN/código/descrição/taxonomia com lease e precondições; sucesso nunca é reenviado. Regras locais corrigem termos ambíguos e permitem operação sem IA. |
 | Persistência/sync | `promotion-sync.mjs`, `PromotionDelta.kt`, `PromotionDatabase.kt`, `AcpPromotionsRepository.kt` | Snapshot ACP compartilhado, páginas imutáveis e ponteiro atômico. Room guarda fonte bruta sanitizada, ofertas e metadados; delta, remoções e revisão são publicados numa transação. Documentos Visual Mix são reutilizados por revisão. |
 | Estado/background | `PromotionSyncCoordinator.kt`, `PromotionsViewModel.kt`, `PromotionNotificationWorker.kt` | Um coordenador serializa tela, monitor e worker. StateFlow distingue requisição de dados/refresh explícito de checagem silenciosa. Room alimenta a UI independente da tela estar aberta. Outbox persistente limitada a 100 ciclos pendentes e tags estáveis evitam duplicar notificações. |
 
@@ -40,7 +40,7 @@ A transação de sincronização grava eventos numa outbox antes da entrega. Em 
 
 ## Configuração e limites reais
 
-- `GEMINI_API_KEY` no ambiente da Edge Function; modelo opcional `PROMOTION_GEMINI_MODEL`, padrão `gemini-2.5-flash`. Nenhuma chave privada entra no APK.
+- `GEMINI_API_KEY` no ambiente da Edge Function; modelo opcional `PROMOTION_GEMINI_MODEL`, padrão `gemini-3.5-flash-lite`. Nenhuma chave privada entra no APK.
 - `server_promotion_cache` é coleção exclusiva do servidor, bloqueada pelas regras Firestore para clientes. Leases são cercados por `updateTime`, evitando sobrescrita por instâncias antigas.
 - Classificação acontece em lotes limitados, com cooldown, cache permanente de sucesso e retry de falhas. Descrição alterada é um novo conteúdo a classificar. Categorias são sugestões validadas, não promessa de precisão absoluta.
 - O Room também persiste a categoria no snapshot comercial; abertura offline não chama Gemini.
@@ -50,4 +50,4 @@ A transação de sincronização grava eventos numa outbox antes da entrega. Em 
 
 ## Verificação
 
-Testes Node cobrem autorização, contratos ACP, sanitização, JSON/categorias controladas, lease com um vencedor, hashes estáveis, troca com contagem igual, deltas e preservação de snapshot em falhas. Testes Android cobrem GTIN/categoria, baseline, deltas, rollback da transação, reabertura do banco com EAN/estoque/validade e estado offline. O CI compila/testa Android, gera APK assinado e verifica a rota ACP e a sincronização implantada através de OIDC restrito do GitHub.
+Testes Node cobrem autorização, contratos ACP, sanitização, JSON/categorias controladas, lease com um vencedor, hashes estáveis, troca com contagem igual, deltas e preservação de snapshot em falhas. Testes Android cobrem GTIN/categoria, baseline, deltas, rollback da transação, reabertura do banco com EAN/estoque/validade e estado offline. O CI reserva uma tag única de forma atômica e a vincula ao SHA compilado, evitando que builds paralelas sobrescrevam o APK da mesma versão. Compila/testa Android e gera APK assinado e verifica a rota ACP e a sincronização implantada através de OIDC restrito do GitHub.

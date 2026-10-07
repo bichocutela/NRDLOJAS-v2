@@ -72,7 +72,9 @@ internal class AcpPromotionsRepository(context: Context) {
                 val currentRevision = dao.metadata("acp_revision").orEmpty()
                 val status = gateway.promotionStatus()
                 val revision = status.getString("revision")
-                if (currentRevision != revision) {
+                val serverCount = status.getInt("count")
+                require(Regex("[a-f0-9]{64}").matches(revision) && serverCount in 0..10_000)
+                if (currentRevision != revision || previousRows.size != serverCount) {
                     onNetwork(true)
                     val manifest = JSONArray().apply { previousRows.forEach { put(JSONObject().put("id", it.id).put("hash", it.hash)) } }
                     delta = PromotionDelta.parse(gateway.promotionSync(currentRevision, manifest))
