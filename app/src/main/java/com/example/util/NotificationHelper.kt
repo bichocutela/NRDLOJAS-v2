@@ -251,6 +251,8 @@ object NotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
 
+        if (notificationTag != null) builder.setOnlyAlertOnce(true)
+
         when (type) {
             "NEW_PRODUCT", "CODE_CHANGED" -> {
                 productCode?.takeIf { it.isNotBlank() }?.let { code ->

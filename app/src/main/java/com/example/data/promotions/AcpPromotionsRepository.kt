@@ -129,7 +129,12 @@ internal class AcpPromotionsRepository(context: Context) {
             removedOffers.chunked(500).forEach { dao.deleteOffers(it) }
             if (!initialized || changedOffers.isNotEmpty() || removedOffers.isNotEmpty()) {
                 dao.put(PromotionMetadata("latest_added", JSONArray(added.toList()).toString()))
-                dao.put(PromotionMetadata("cycle", java.util.UUID.randomUUID().toString()))
+                val cycle = java.util.UUID.randomUUID().toString()
+                dao.put(PromotionMetadata("cycle", cycle))
+                if (added.isNotEmpty()) {
+                    dao.put(PromotionMetadata("outbox_$cycle", JSONObject().put("createdAt", System.currentTimeMillis())
+                        .put("ids", JSONArray(added.toList())).toString()))
+                }
             }
             dao.put(PromotionMetadata("fingerprint", fingerprint))
             dao.put(PromotionMetadata("initialized", "1"))

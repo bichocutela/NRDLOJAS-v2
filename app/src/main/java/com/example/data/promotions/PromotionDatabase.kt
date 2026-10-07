@@ -22,6 +22,9 @@ internal interface PromotionDao {
     @Query("SELECT * FROM acp_rows ORDER BY id") suspend fun rows(): List<CachedAcpRow>
     @Query("SELECT value FROM promotion_metadata WHERE `key` = :key") suspend fun metadata(key: String): String?
     @Query("SELECT * FROM promotion_metadata WHERE `key` = 'latest_added'") fun observeLatestAdded(): Flow<List<PromotionMetadata>>
+    @Query("SELECT * FROM promotion_metadata WHERE `key` = 'initialized'") fun observeInitialized(): Flow<List<PromotionMetadata>>
+    @Query("SELECT * FROM promotion_metadata WHERE `key` LIKE 'outbox_%' ORDER BY `key`") suspend fun outbox(): List<PromotionMetadata>
+    @Query("DELETE FROM promotion_metadata WHERE `key` = :key") suspend fun deleteMetadata(key: String)
     @Upsert suspend fun upsertOffers(rows: List<CachedOffer>)
     @Upsert suspend fun upsertRows(rows: List<CachedAcpRow>)
     @Upsert suspend fun put(value: PromotionMetadata)

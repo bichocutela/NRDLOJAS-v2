@@ -18,6 +18,7 @@ class MyApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashReporter.setup(this)
+        com.example.data.promotions.PromotionSyncCoordinator.get(this).startForegroundMonitoring()
         try {
             com.example.data.FirebaseService.initialize(this)
             Log.d("MyApplication", "Firebase initialized manually")

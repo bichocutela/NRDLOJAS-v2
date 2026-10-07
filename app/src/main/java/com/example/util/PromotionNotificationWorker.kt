@@ -9,14 +9,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.example.data.AppNotification
-import com.example.data.FirebaseService
-import com.example.data.NossaGenteApi
 import com.example.data.NossaGentePromotionsResult
-import com.example.data.StoreCatalog
-import com.example.data.UserPreferences
-import kotlinx.coroutines.flow.first
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class PromotionNotificationWorker(
@@ -25,116 +18,17 @@ class PromotionNotificationWorker(
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
-        if (!com.example.data.RestrictedAccessRepository.current().promotions) return Result.success()
-        val preferences = UserPreferences(applicationContext)
-        val localNotificationsEnabled = preferences.notificationsEnabled.first()
-        val remoteSettings = FirebaseService.getNotificationSettingsOrNull()
-        val shouldNotify = localNotificationsEnabled &&
-            remoteSettings?.enabled == true &&
-            remoteSettings.promotionUpdatedEnabled
-        val favoriteStoreCode = preferences.favoriteStoreCode.first()?.trim().orEmpty()
-
-        return when (val result = com.example.data.promotions.AcpPromotionsRepository(applicationContext).fetchPromotions()) {
-            is NossaGentePromotionsResult.Success -> {
-                if (favoriteStoreCode.isBlank()) return Result.success()
-                val favoriteProducts = result.promotions
-                    .flatMap { it.products }
-                    .filter { it.storeCode?.trim() == favoriteStoreCode }
-                if (favoriteProducts.isEmpty()) return Result.success()
-
-                val currentProductKeys = favoriteProducts.mapNotNull { product ->
-                    val code = product.code.trim()
-                    if (code.isNotBlank()) {
-                        "code:${code.lowercase(Locale.ROOT)}"
-                    } else {
-                        product.name.trim()
-                            .takeIf { it.isNotBlank() }
-                            ?.lowercase(Locale.ROOT)
-                            ?.let { "name:$it" }
-                    }
-                }.toSet()
-                if (currentProductKeys.isEmpty()) return Result.success()
-
-                val snapshotPreferences = applicationContext.getSharedPreferences(
-                    SNAPSHOT_PREFERENCES_NAME,
-                    Context.MODE_PRIVATE
-                )
-                val previousStoreCode = snapshotPreferences.getString(KEY_SNAPSHOT_STORE, null)
-                val previousProductKeys = snapshotPreferences
-                    .getStringSet(KEY_SNAPSHOT_PRODUCTS, null)
-                    ?.toSet()
-
-                if (previousStoreCode != favoriteStoreCode || previousProductKeys == null) {
-                    saveSnapshot(snapshotPreferences, favoriteStoreCode, currentProductKeys)
-                    return Result.success()
-                }
-
-                val addedProductKeys = currentProductKeys - previousProductKeys
-                saveSnapshot(snapshotPreferences, favoriteStoreCode, currentProductKeys)
-
-                if (addedProductKeys.isNotEmpty()) {
-                    val storeName = StoreCatalog.nameFor(favoriteStoreCode)
-                    val addedCount = addedProductKeys.size
-                    val title = if (addedCount == 1) {
-                        "Nova promoção em $storeName"
-                    } else {
-                        "Novas promoções em $storeName"
-                    }
-                    val body = if (addedCount == 1) {
-                        "Foi adicionado 1 produto à sua loja favorita."
-                    } else {
-                        "Foram adicionados $addedCount produtos à sua loja favorita."
-                    }
-
-                    if (shouldNotify) {
-                        val now = System.currentTimeMillis()
-                        preferences.addNotification(
-                            AppNotification(
-                                id = now,
-                                type = TYPE_PROMOTION_UPDATED,
-                                title = title,
-                                body = body,
-                                read = false,
-                                timestamp = now,
-                            )
-                        )
-                        NotificationHelper.showNotification(
-                            applicationContext,
-                            TYPE_PROMOTION_UPDATED,
-                            title,
-                            body,
-                        )
-                    } else {
-                        android.util.Log.d(
-                            "PromotionNotificationWorker",
-                            "Novos produtos detectados, mas a notificação está desativada"
-                        )
-                    }
-                }
-                Result.success()
-            }
+        val coordinator = com.example.data.promotions.PromotionSyncCoordinator.get(applicationContext)
+        if (!coordinator.repository.isInitialized()) return Result.success()
+        return when (coordinator.sync()) {
+            is NossaGentePromotionsResult.Success -> Result.success()
             NossaGentePromotionsResult.Unauthorized -> Result.success()
             is NossaGentePromotionsResult.Error -> Result.retry()
         }
     }
 
-    private fun saveSnapshot(
-        preferences: android.content.SharedPreferences,
-        storeCode: String,
-        productKeys: Set<String>
-    ) {
-        preferences.edit()
-            .putString(KEY_SNAPSHOT_STORE, storeCode)
-            .putStringSet(KEY_SNAPSHOT_PRODUCTS, productKeys.toSet())
-            .apply()
-    }
-
     companion object {
         private const val UNIQUE_WORK_NAME = "nrdlojas_favorite_store_promotion_check"
-        private const val TYPE_PROMOTION_UPDATED = "PROMOTION_UPDATED"
-        private const val SNAPSHOT_PREFERENCES_NAME = "favorite_store_promotion_notifications"
-        private const val KEY_SNAPSHOT_STORE = "store_code"
-        private const val KEY_SNAPSHOT_PRODUCTS = "product_keys"
 
         fun schedule(context: Context) {
             val constraints = Constraints.Builder()
@@ -147,7 +41,7 @@ class PromotionNotificationWorker(
 
             WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
                 UNIQUE_WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.UPDATE,
                 request,
             )
         }
