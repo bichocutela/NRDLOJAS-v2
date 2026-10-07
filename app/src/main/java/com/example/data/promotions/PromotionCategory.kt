@@ -18,10 +18,14 @@ internal object PromotionCategory {
         "Mercearia" to "arroz|feijao|acucar|cafe|farinha|fuba|flocao|macarrao|massa|biscoito|bolacha|azeite|oleo|molho|extrato|sal|tempero|vinagre|maionese|ketchup|mostarda|chocolate|bombom|doce|geleia|cereal|aveia|granola|milho|ervilha|atum|sardinha|ovo|tapioca|pipoca|amendoim|castanha"
     ).map { (label, nouns) -> label to Regex("^(?:$nouns)(?:\\b|\\s)") }
 
+    val categories = rules.map { it.first } + "Outras ofertas"
+
     fun forDescription(description: String): String {
         val normalized = Normalizer.normalize(description, Normalizer.Form.NFD)
             .replace(Regex("\\p{M}+"), "").lowercase(Locale.ROOT)
             .replace(Regex("[^a-z0-9]+"), " ").trim()
+        if (Regex("\\b(agua micelar|demaquilante|dermocosmetico|protetor solar|leite de rosas|leite de colonia|locao corporal|tonico facial|serum facial|creme facial)\\b").containsMatchIn(normalized)) return "Higiene e beleza"
+        if (Regex("\\b(agua sanitaria|alvejante|detergente|lava roupas|lava loucas|amaciante|desinfetante|limpador|inseticida|sabao)\\b").containsMatchIn(normalized)) return "Limpeza"
         return rules.firstOrNull { it.second.containsMatchIn(normalized) }?.first ?: "Outras ofertas"
     }
 }

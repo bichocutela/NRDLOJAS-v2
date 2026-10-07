@@ -53,7 +53,7 @@ export function validate(input) {
     return true;
   });
 }
-export function createHandler({authorize, credentials, fetcher = fetch}) {
+export function createHandler({authorize, credentials, fetcher = fetch, enrichPromotions = async items => items}) {
   // ACP session shared only inside this server instance. Login is serialized, not per product.
   let session = null, sessionAt = 0, signingIn = null;
   let dePorCategory = null, dePorCategoryAt = 0;
@@ -151,7 +151,12 @@ export function createHandler({authorize, credentials, fetcher = fetch}) {
           if (!Array.isArray(payload.items) || payload.items.length === 0) throw Error('INVALID_PAYLOAD');
           return reply(200,{ok:true});
         }
-        return reply(200,clean(payload));
+        const sanitized = clean(payload);
+        if (input.path === 'Promotion/all' && Array.isArray(sanitized.items)) {
+          // Classification errors never prevent commercial consultations.
+          try { sanitized.items = await enrichPromotions(sanitized.items); } catch { /* fallback on client */ }
+        }
+        return reply(200,sanitized);
       }
     } catch { /* Deliberately do not log credentials, tokens, cookies or upstream bodies. */ }
     return reply(502,{error:'CONSULTATION_UNAVAILABLE'});

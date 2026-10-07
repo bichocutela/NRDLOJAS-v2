@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: '22'
       - name: Verify server authorization and commercial contract
-        run: node --test supabase/functions/nrd-price-gateway/handler.test.mjs
+        run: node --test supabase/functions/nrd-price-gateway/*.test.mjs
       - name: Verify deployed gateway and server-side ACP credentials
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

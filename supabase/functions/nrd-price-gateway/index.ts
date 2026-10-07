@@ -1,5 +1,7 @@
 import { createRemoteJWKSet, jwtVerify, importPKCS8, SignJWT } from 'npm:jose@5.9.6';
 import { createHandler, boundedJson } from './handler.mjs';
+import { ServerCache } from './server-cache.mjs';
+import { createCategorizer } from './categories.mjs';
 import { createAuthorizer } from './access.mjs';
 const project = 'appcodigo-7f245';
 const jwks = createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
@@ -40,6 +42,10 @@ const appAuthorize = createAuthorizer({document,
   if (!payload.sub || payload.sub.length > 128) throw Error('INVALID_IDENTITY');
   return {uid:payload.sub,email:payload.email,authTime:payload.auth_time,token};
 }});
+const serverCache = new ServerCache({project, token:firestoreToken});
+const categorizer = createCategorizer({cache:serverCache, apiKey:Deno.env.get('GEMINI_API_KEY'),
+  model:Deno.env.get('PROMOTION_GEMINI_MODEL') ?? 'gemini-2.5-flash',
+  background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)});
 const githubKeys = createRemoteJWKSet(new URL('https://token.actions.githubusercontent.com/.well-known/jwks'));
 Deno.serve(createHandler({
   authorize: async (req: Request) => {
@@ -53,5 +59,6 @@ Deno.serve(createHandler({
         !['push','workflow_dispatch'].includes(String(payload.event_name))) throw Error('INVALID_CI_IDENTITY');
     return {allowed:true,master:false,probe:true};
   },
+  enrichPromotions: categorizer,
   credentials: () => ({login:Deno.env.get('NRD_PRICE_LOGIN'),password:Deno.env.get('NRD_PRICE_PASSWORD')}),
 }));
