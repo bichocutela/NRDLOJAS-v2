@@ -2,11 +2,19 @@
 export class ServerCache {
   constructor({project, token, fetcher = fetch}) {
     this.root = `https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents`;
-    this.token = token; this.fetcher = fetcher;
+    this.token = token; this.fetcher = fetcher; this.retryAt = 0;
   }
   async request(url, options = {}) {
-    return this.fetcher(url, {...options, signal:AbortSignal.timeout(10000), headers:{
+    if (Date.now() < this.retryAt) throw Error('CACHE_RATE_LIMITED');
+    const response = await this.fetcher(url, {...options, signal:AbortSignal.timeout(10000), headers:{
       'Content-Type':'application/json', Authorization:'Bearer '+await this.token(), ...options.headers}});
+    if (response.status === 429) {
+      this.retryAt = Date.now() + 60_000;
+      console.warn('PROMOTION_CACHE_HTTP', 429);
+      throw Error('CACHE_RATE_LIMITED');
+    }
+    if (!response.ok && ![404,409,412].includes(response.status)) console.warn('PROMOTION_CACHE_HTTP', response.status);
+    return response;
   }
   url(key) { if (!/^[a-zA-Z0-9_-]{1,160}$/.test(key)) throw Error('INVALID_CACHE_KEY'); return `${this.root}/server_promotion_cache/${key}`; }
   decode(doc) {

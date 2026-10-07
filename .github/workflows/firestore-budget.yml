@@ -1,0 +1,30 @@
+name: Firestore read budget
+on:
+  pull_request:
+    paths:
+      - 'app/src/main/java/com/example/data/**'
+      - 'supabase/functions/nrd-price-gateway/**'
+      - '.github/workflows/firestore-budget.yml'
+permissions:
+  contents: read
+jobs:
+  gateway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test supabase/functions/nrd-price-gateway/*.test.mjs
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile Android and verify promotions
+        run: bash gradlew testDebugUnitTest --tests 'com.example.data.promotions.*' --tests 'com.example.data.acp.*' -x processDebugGoogleServices

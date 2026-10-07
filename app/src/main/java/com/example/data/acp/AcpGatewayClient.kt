@@ -63,8 +63,8 @@ internal class AcpGatewayClient(
                 when (response.code) {
                     401 -> throw AcpUnauthorized()
                     403 -> throw AcpFailure(if (promotionsOnly) "Peça ao Mestre para liberar seu acesso às promoções." else "Peça ao Mestre para liberar seu acesso à consulta de preços.")
-                    429 -> throw AcpFailure("Muitas consultas. Aguarde um momento e tente novamente.")
-                    503 -> throw AcpFailure("O serviço de consulta ainda não está configurado. Avise o Mestre.")
+                    429 -> throw AcpFailure("O serviço atingiu o limite temporário de consultas. Tente novamente mais tarde.")
+                    503 -> throw AcpFailure("O serviço de consulta está temporariamente indisponível. Tente novamente mais tarde.")
                 }
                 if (!response.isSuccessful) throw AcpFailure("Não foi possível consultar os produtos. Tente novamente.")
                 val raw = response.body?.string().orEmpty()

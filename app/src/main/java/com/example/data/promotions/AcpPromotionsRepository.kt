@@ -65,13 +65,13 @@ internal class AcpPromotionsRepository(context: Context) {
         var delta: PromotionDelta? = null
         var cityProducts = previousRows
         if (!isInitialized()) onNetwork(true)
-        val stores = PromotionStores.read().filter { it.enabled }
+        val stores = PromotionStores.read(forceRefresh).filter { it.enabled }
         val promotions = mutableListOf<Promotion>()
         for (store in stores) {
             val imported = importedRecords(store)
             if (store.code == "0012") {
-                val validity = FirebaseFirestore.getInstance().collection("config")
-                    .document("acpOfferValidity").get().await().data.orEmpty()
+                val validity = PromotionConfigCache.read(FirebaseFirestore.getInstance().collection("config")
+                    .document("acpOfferValidity"), forceRefresh)
                 val currentRevision = dao.metadata("acp_revision").orEmpty()
                 val manifest = JSONArray().apply {
                     previousRows.forEach { put(JSONObject().put("id", it.id).put("hash", it.hash)) }

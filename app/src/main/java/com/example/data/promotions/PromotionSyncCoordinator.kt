@@ -38,6 +38,8 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
     private var monitoring = false
     private var monitorJob: Job? = null
     private var lastSuccessAt = 0L
+    private var failureCount = 0
+    private var retryAt = 0L
     private val requests = PromotionSyncRequests(scope) { sync(it) }
 
     fun startForegroundMonitoring() {
@@ -64,6 +66,9 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
     fun requestSync(interactive: Boolean = false): Job = requests.request(interactive)
 
     suspend fun sync(interactive: Boolean = false): NossaGentePromotionsResult = gate.withLock {
+        if (!interactive && System.currentTimeMillis() < retryAt) {
+            return@withLock repository.cached() ?: NossaGentePromotionsResult.Error("Aguardando nova tentativa de sincronização.")
+        }
         mutableState.value = PromotionSyncState(running = true, visibleNetwork = interactive, attempted = true)
         try {
             if (!RestrictedAccessRepository.current().promotions) {
@@ -81,21 +86,35 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
             when (result) {
                 is NossaGentePromotionsResult.Success -> {
                     lastSuccessAt = System.currentTimeMillis()
+                    failureCount = 0
+                    retryAt = 0L
                     mutableState.value = mutableState.value.copy(error = null)
                     deliverPendingNotifications()
                 }
-                is NossaGentePromotionsResult.Error -> mutableState.value = mutableState.value.copy(error = result.message)
-                NossaGentePromotionsResult.Unauthorized -> mutableState.value = mutableState.value.copy(error = "Acesso às ofertas indisponível.")
+                is NossaGentePromotionsResult.Error -> {
+                    deferRetry()
+                    mutableState.value = mutableState.value.copy(error = result.message.takeIf { interactive || !repository.isInitialized() })
+                }
+                NossaGentePromotionsResult.Unauthorized -> {
+                    deferRetry()
+                    mutableState.value = mutableState.value.copy(error = "Acesso às ofertas indisponível.")
+                }
             }
             result
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) {
+            deferRetry()
             val message = "Não foi possível sincronizar agora. A lista salva foi mantida."
-            mutableState.value = mutableState.value.copy(error = message)
+            mutableState.value = mutableState.value.copy(error = message.takeIf { interactive || !repository.isInitialized() })
             NossaGentePromotionsResult.Error(message)
         } finally {
             mutableState.value = mutableState.value.copy(running = false, visibleNetwork = false, attempted = true)
         }
+    }
+
+    private fun deferRetry() {
+        failureCount = (failureCount + 1).coerceAtMost(5)
+        retryAt = System.currentTimeMillis() + (60_000L shl (failureCount - 1)).coerceAtMost(15 * 60_000L)
     }
 
     private suspend fun deliverPendingNotifications() {
