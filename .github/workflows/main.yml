@@ -51,13 +51,13 @@ jobs:
       run: node scripts/check-account-admin-permissions.mjs
 
     - name: Test ACP promotion authorization
-      run: node --test supabase/functions/nrd-price-gateway/handler.test.mjs
+      run: node --test supabase/functions/nrd-price-gateway/*.test.mjs
 
     - name: Test account and installation event authorization
       run: node --test supabase/functions/nrd-account-admin/*.test.mjs supabase/functions/nrd-installation-event/handler.test.mjs tests/days-off/sync.test.mjs
 
     - name: Verify live installation notification server
-      if: github.ref == 'refs/heads/main'
+      if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       run: |
         RESPONSE=$(curl --fail --silent --show-error "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=nrd-installation-event-check" -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}")
         TOKEN=$(printf '%s' "$RESPONSE" | jq -r '.value')
@@ -171,7 +171,7 @@ jobs:
           --stacktrace
 
     - name: Deploy Firestore rules for installation telemetry
-      if: github.ref == 'refs/heads/main'
+      if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       env:
         FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       run: |

@@ -2,7 +2,7 @@ export const CATEGORIES = ['Hortifruti','Açougue e peixaria','Frios e laticíni
 const normalized = text => String(text).normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 export function strongCategory(description) {
   const name = normalized(description);
-  if (/\b(agua micelar|demaquilante|dermocosmetico|protetor solar|leite de rosas|leite de colonia|locao corporal|tonico facial|serum facial|creme facial|sabonete|shampoo|condicionador|desodorante|creme dental|absorvente|fralda|lenço umedecido)\b/.test(name)) return 'Higiene e beleza';
+  if (/\b(agua micelar|agua oxigenada|agua de colonia|demaquilante|dermocosmetico|protetor solar|leite de rosas|leite de colonia|locao corporal|tonico facial|serum facial|creme facial|sabonete|shampoo|condicionador|desodorante|creme dental|absorvente|fralda|lenco umedecido)\b/.test(name)) return 'Higiene e beleza';
   if (/\b(agua sanitaria|alvejante|detergente|lava roupas|lava loucas|amaciante|desinfetante|limpador|inseticida|sabao)\b/.test(name)) return 'Limpeza';
   if (/\b(racao|alimento para caes|alimento para gatos|areia sanitaria|petisco para)\b/.test(name)) return 'Pet';
   return null;
@@ -23,9 +23,9 @@ export function validateCategories(results, products) {
   });
 }
 export function createCategorizer({cache, apiKey, model = 'gemini-2.5-flash', fetcher = fetch, background}) {
-  async function classify(entries) {
+  async function classify(entries, budgetKey = 'gemini_category_budget') {
     if (!apiKey || !entries.length) return;
-    const budget = await cache.claim('gemini_category_budget',45);
+    const budget = await cache.claim(budgetKey,45);
     if (!budget) return;
     const claims = [];
     try {
@@ -55,10 +55,10 @@ export function createCategorizer({cache, apiKey, model = 'gemini-2.5-flash', fe
       for (const entry of claims) await cache.finish(entry.key,entry.claim,{retryAt:Date.now()+15*60_000}).catch(()=>{});
     } finally {
       // Keep a cooldown after each batch, including failures, to bound API cost.
-      await cache.write('gemini_category_budget',{},Date.now()+15_000,budget.version).catch(()=>{});
+      await cache.write(budgetKey,{},Date.now()+15_000,budget.version).catch(()=>{});
     }
   }
-  return async items => {
+  const enrich = async items => {
     const entries = await Promise.all(items.map(async item=>({item,key:await categoryKey(item)})));
     const cached = await cache.many(entries.map(e=>e.key));
     const missing = [];
@@ -70,4 +70,15 @@ export function createCategorizer({cache, apiKey, model = 'gemini-2.5-flash', fe
     background(classify(missing).catch(()=>{}));
     return enriched;
   };
+  enrich.verify = async items => {
+    if (!apiKey || !items.length) throw Error('CLASSIFICATION_NOT_READY');
+    const entries = await Promise.all(items.slice(0,1).map(async item=>({item,key:await categoryKey(item)})));
+    const existing = await cache.many(entries.map(e=>e.key));
+    if (entries.every(e=>CATEGORIES.includes(existing.get(e.key)?.payload.category))) return true;
+    await classify(entries,'gemini_readiness_budget');
+    const updated = await cache.many(entries.map(e=>e.key));
+    if (!entries.every(e=>CATEGORIES.includes(updated.get(e.key)?.payload.category))) throw Error('CLASSIFICATION_NOT_READY');
+    return true;
+  };
+  return enrich;
 }
