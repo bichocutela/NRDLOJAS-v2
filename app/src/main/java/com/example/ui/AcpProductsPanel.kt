@@ -938,7 +938,9 @@ internal fun AcpProductsPanel(
                             }
                         }
                         nrdActionMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
-                        AcpCommercialProductContent(product)
+                        AcpCommercialProductContent(product, campaigns.flatMap { it.offersFor(product) }) { offer ->
+                            appearance.activeOfferBanner(offer.bannerKey)
+                        }
                         HorizontalDivider()
                         ActiveFlyerOffersForAcpProduct(product)
                         OutlinedCard(onClick = { syncExpanded = !syncExpanded }, modifier = Modifier.fillMaxWidth()) {

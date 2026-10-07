@@ -34,7 +34,11 @@ internal fun PromotionProductDetailsContent(raw: String?, ean: String?, code: St
 }
 
 @Composable
-internal fun AcpCommercialProductContent(item: AcpProduct) {
+internal fun AcpCommercialProductContent(
+    item: AcpProduct,
+    additionalOffers: List<AcpOffer> = emptyList(),
+    bannerFor: (AcpOffer) -> com.example.data.ThemeBackground? = { null }
+) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Código: ${item.code.ifBlank { "não informado" }} • EAN: ${item.barcode.ifBlank { "não informado" }}")
         Text("Preço principal: ${item.value?.brl() ?: "não informado"}${item.unit?.let { " / $it" } ?: ""}", style = MaterialTheme.typography.titleMedium)
@@ -43,12 +47,13 @@ internal fun AcpCommercialProductContent(item: AcpProduct) {
             item.stockQuantity?.let { Text("Estoque: ${it.quantity()}") }
             item.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite por CPF: ${it.quantity()}") }
             item.characteristic?.let { Text("Característica: $it") }
+            if (item.categories.isNotEmpty()) Text("Categorias: ${item.categories.joinToString()}")
             item.productFamily?.let { Text("Família: $it") }
             item.packageQuantity?.let { Text("Embalagem: ${it.quantity()} ${item.packageType.orEmpty()}") }
             item.dueDate?.let { Text("Validade do produto: ${acpDateLabel(it)}") }
             item.contentQuantity?.let { Text("Conteúdo: ${it.quantity()} ${item.contentUnit.orEmpty()}") }
             HorizontalDivider()
             Text("Preços e condições", style = MaterialTheme.typography.titleMedium)
-            item.offers().forAutomaticDisplay().forEach { offer -> AcpOfferLandscapePoster(item.description, offer) }
+            (item.offers() + additionalOffers).forAutomaticDisplay().forEach { offer -> AcpOfferLandscapePoster(item.description, offer, bannerFor(offer)) }
     }
 }

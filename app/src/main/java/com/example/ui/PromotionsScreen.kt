@@ -1124,7 +1124,8 @@ private fun CompactOfferCard(offer: OfferGroup, onOfferClick: (OfferGroup) -> Un
                     .fillMaxWidth()
                     .height(136.dp),
                 onClick = { onOfferClick(offer) },
-                validTo = offer.validTo
+                validTo = offer.validTo,
+                ean = offer.barcode, category = offer.category
             )
             Column(modifier = Modifier.padding(8.dp)) {
                 DiscountBadge(discount = offer.bestDiscount, compact = true)
@@ -1335,7 +1336,8 @@ private fun DetailedOfferCard(
                             if (expressive) RoundedCornerShape(18.dp) else RoundedCornerShape(10.dp)
                         ),
                     onClick = { onOfferClick(offer) },
-                    validTo = offer.validTo
+                    validTo = offer.validTo,
+                ean = offer.barcode, category = offer.category
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -1542,8 +1544,17 @@ private fun ProductImage(
     contentDescription: String,
     modifier: Modifier,
     onClick: (String) -> Unit,
-    validTo: String? = null
+    validTo: String? = null,
+    ean: String? = null,
+    category: String = "Outras ofertas"
 ) {
+    val context = LocalContext.current
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    var external by remember(ean, category) { mutableStateOf<com.example.data.promotions.BarcodeImage?>(null) }
+    LaunchedEffect(imageUrl, ean, category) {
+        if (imageUrl.isNullOrBlank()) external = com.example.data.promotions.ProductImageRepository.get(context).find(ean, category)
+    }
+    val effectiveUrl = imageUrl?.takeIf { it.isNotBlank() } ?: external?.url
     val expressive = LocalExpressiveStyle.current.enabled
     val shape = if (expressive) RoundedCornerShape(20.dp) else RoundedCornerShape(10.dp)
     Box(
@@ -1551,8 +1562,8 @@ private fun ProductImage(
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .then(
-                if (!imageUrl.isNullOrBlank()) {
-                    Modifier.clickable { onClick(imageUrl) }
+                if (!effectiveUrl.isNullOrBlank()) {
+                    Modifier.clickable { onClick(effectiveUrl) }
                 } else {
                     Modifier
                 }
@@ -1565,13 +1576,19 @@ private fun ProductImage(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(38.dp)
         )
-        if (!imageUrl.isNullOrBlank()) {
+        if (!effectiveUrl.isNullOrBlank()) {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current).data(imageUrl).size(360, 280).crossfade(false).build(),
+                model = ImageRequest.Builder(LocalContext.current).data(effectiveUrl).size(360, 280).crossfade(false).build(),
                 contentDescription = contentDescription,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit
             )
+        }
+        external?.let { image ->
+            Text(image.credit + " · CC BY-SA", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.BottomCenter).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+                    .clickable { uriHandler.openUri(image.source) }.padding(3.dp))
         }
         ValidityBadge(
             validTo = validTo,
@@ -1675,34 +1692,9 @@ private fun PromotionDetailsDialog(
                     }
                 }
                 item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 250.dp, max = 330.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Image,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        if (!offer.imageUrl.isNullOrBlank()) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current).data(offer.imageUrl).size(1200, 900).crossfade(false).build(),
-                                contentDescription = offer.name,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
-                        ValidityBadge(
-                            validTo = offer.validTo,
-                            modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
-                            compact = false
-                        )
-                    }
+                    ProductImage(imageUrl = offer.imageUrl, contentDescription = offer.name,
+                        modifier = Modifier.fillMaxWidth().height(270.dp), onClick = {},
+                        validTo = offer.validTo, ean = offer.barcode, category = offer.category)
                 }
                 item {
                     val store = offer.stores.firstOrNull { it.storeCode == selectedStore } ?: offer.bestOffer
