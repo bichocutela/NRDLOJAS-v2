@@ -33,6 +33,8 @@ object StoreCatalog {
         "0046" to "Mossoró"
     )
 
+    val codes: List<String> get() = namesByCode.keys.toList()
+
     fun nameFor(code: String): String {
         val normalized = code.trim().padStart(4, '0')
         return namesByCode[normalized] ?: "Loja $normalized"

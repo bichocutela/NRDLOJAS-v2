@@ -71,6 +71,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -355,7 +356,6 @@ fun PromotionsLoginScreen(
 fun PromotionsScreen(
     api: NossaGenteApi,
     onNavigateBack: () -> Unit,
-    onRequireLogin: () -> Unit,
     onLogout: () -> Unit,
     showReactivateProfile: Boolean = false,
     onReactivateProfile: () -> Unit = {}
@@ -370,14 +370,18 @@ fun PromotionsScreen(
     var isLoading by remember { mutableStateOf(true) }
     var isChecking by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var loginRedirectRequested by remember { mutableStateOf(false) }
     var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedStore by rememberSaveable { mutableStateOf(ALL_STORES_LABEL) }
+    var selectedStore by rememberSaveable { mutableStateOf("0012") }
     var favoriteStoreCode by rememberSaveable { mutableStateOf<String?>(null) }
     var sortOptionName by rememberSaveable { mutableStateOf(OfferSortOption.ADDED.name) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var visibleOfferCount by rememberSaveable { mutableStateOf(INITIAL_OFFER_PAGE) }
     val context = LocalContext.current
+    val repository = remember(context) { com.example.data.promotions.AcpPromotionsRepository(context) }
+    val stores by remember { com.example.data.promotions.PromotionStores.observe() }
+        .collectAsState(initial = com.example.data.promotions.PromotionStores.defaults)
+    val enabledStores = stores.filter { it.enabled }.map { it.code }.toSet()
+    val selectableStores = enabledStores + if (enabledStores.size > 1) setOf(ALL_STORES_LABEL) else emptySet()
     val compactHeader = LocalConfiguration.current.screenWidthDp < 420
     val glassStyle = LocalGlassSoftStyle.current
     val expressive = LocalExpressiveStyle.current.enabled
@@ -389,12 +393,6 @@ fun PromotionsScreen(
     var selectedOffer by remember { mutableStateOf<OfferGroup?>(null) }
     val scope = rememberCoroutineScope()
     var promotionRequestRunning by remember { mutableStateOf(false) }
-
-    fun requestLoginOnce() {
-        if (loginRedirectRequested) return
-        loginRedirectRequested = true
-        onRequireLogin()
-    }
 
     fun applyPromotionUpdate(update: PendingPromotionUpdate) {
         hasPromotions = update.promotions.isNotEmpty()
@@ -417,7 +415,7 @@ fun PromotionsScreen(
             } else {
                 isChecking = true
             }
-            when (val result = api.fetchPromotions()) {
+            when (val result = repository.fetchPromotions()) {
                 is NossaGentePromotionsResult.Success -> {
                     val nextPromotions = result.promotions
                     val changeState = promotionChangeStore.compareAndSave(nextPromotions)
@@ -431,20 +429,12 @@ fun PromotionsScreen(
                         offerGroups = nextOfferGroups,
                         fingerprint = result.fingerprint
                     )
-                    if (initialLoad || loadedFingerprint == null) {
-                        applyPromotionUpdate(update)
-                    } else if (result.fingerprint != loadedFingerprint) {
-                        pendingUpdate = update
-                    }
+                    if (initialLoad || result.fingerprint != loadedFingerprint) applyPromotionUpdate(update)
+                    error = null
                 }
                 NossaGentePromotionsResult.Unauthorized -> {
-                    // Atualizar promoções nunca deve expulsar o usuário da tela quando já existe
-                    // catálogo carregado. Porém, na entrada, um token expirado precisa ser
-                    // descartado antes de abrir o login; caso contrário a tela de login detecta
-                    // o mesmo token e volta imediatamente para Promoções, causando o "pisca-pisca".
-                    if (initialLoad && !hasPromotions) {
-                        api.invalidateSession()
-                        requestLoginOnce()
+                    if (initialLoad || !hasPromotions) {
+                        error = "As ofertas estão indisponíveis no momento."
                     }
                 }
                 is NossaGentePromotionsResult.Error -> {
@@ -477,43 +467,39 @@ fun PromotionsScreen(
     }
 
     LaunchedEffect(Unit) {
-        if (!api.hasSession()) {
-            requestLoginOnce()
-        } else {
-            favoriteStoreCode = userPreferences.favoriteStoreCode.first()
-            checkForPromotions(initialLoad = true)
-        }
+        favoriteStoreCode = userPreferences.favoriteStoreCode.first()
+        checkForPromotions(initialLoad = true)
     }
 
-    LaunchedEffect(api) {
+    LaunchedEffect(repository) {
         while (kotlinx.coroutines.currentCoroutineContext().isActive) {
             delay(60_000)
-            if (!api.hasSession()) break
             checkForPromotions(initialLoad = false)
         }
     }
 
-    val storeOptions = remember(offerGroups) {
-        listOf(ALL_STORES_LABEL) + offerGroups
-            .flatMap { it.stores }
-            .map { it.storeCode }
-            .filter { it.isNotBlank() && it != UNKNOWN_STORE_LABEL }
-            .distinct()
-            .sorted()
+    val storeOptions = if (enabledStores.size > 1) listOf(ALL_STORES_LABEL) + StoreCatalog.codes else StoreCatalog.codes
+    LaunchedEffect(stores) {
+        if (selectedStore !in selectableStores) selectedStore = enabledStores.firstOrNull() ?: "0012"
+        selectedOffer = null
+        offerGroups = offerGroups.map { it.copy(stores = it.stores.filter { store -> store.storeCode in enabledStores }) }
+            .filter { it.stores.isNotEmpty() }
+        dailyChanges = dailyChanges.filter { it.storeCode in enabledStores }
+        checkForPromotions(initialLoad = loadedFingerprint == null)
     }
     val normalizedQuery = searchQuery.trim().lowercase()
-    val visibleOffers = remember(offerGroups, selectedStore, normalizedQuery, selectedCategory, sortOption) {
+    val visibleOffers = remember(offerGroups, selectedStore, normalizedQuery, selectedCategory, sortOption, enabledStores) {
         val filtered = offerGroups.filter { offer ->
             val matchesCategory = selectedCategory == null || offer.category == selectedCategory
             val matchesStore = selectedStore == ALL_STORES_LABEL || offer.stores.any { it.storeCode == selectedStore }
             val matchesSearch = normalizedQuery.isBlank() ||
                 offer.name.lowercase().contains(normalizedQuery) ||
                 offer.code.lowercase().contains(normalizedQuery)
-            matchesCategory && matchesStore && matchesSearch
+            matchesCategory && matchesStore && matchesSearch && offer.stores.any { it.storeCode in enabledStores }
         }
         sortOfferGroups(filtered, sortOption)
     }
-    val categoryGroups = remember(offerGroups, selectedStore, normalizedQuery) {
+    val categoryGroups = remember(offerGroups, selectedStore, normalizedQuery, enabledStores) {
         offerGroups
             .asSequence()
             .filter { offer ->
@@ -521,7 +507,7 @@ fun PromotionsScreen(
                 val matchesSearch = normalizedQuery.isBlank() ||
                     offer.name.lowercase().contains(normalizedQuery) ||
                     offer.code.lowercase().contains(normalizedQuery)
-                matchesStore && matchesSearch
+                matchesStore && matchesSearch && offer.stores.any { it.storeCode in enabledStores }
             }
             .groupBy { it.category }
             .toList()
@@ -532,16 +518,9 @@ fun PromotionsScreen(
         visibleOfferCount = INITIAL_OFFER_PAGE
     }
 
-    LaunchedEffect(storeOptions, favoriteStoreCode) {
-        if (selectedStore != ALL_STORES_LABEL && selectedStore !in storeOptions) {
-            selectedStore = ALL_STORES_LABEL
-        } else if (
-            selectedStore == ALL_STORES_LABEL &&
-            favoriteStoreCode != null &&
-            favoriteStoreCode in storeOptions
-        ) {
-            selectedStore = favoriteStoreCode!!
-        }
+    LaunchedEffect(favoriteStoreCode, selectableStores) {
+        if (favoriteStoreCode in enabledStores) selectedStore = favoriteStoreCode!!
+        if (selectedStore !in selectableStores) selectedStore = enabledStores.firstOrNull() ?: "0012"
     }
 
     val newestOfferGroups = pendingUpdate?.offerGroups ?: offerGroups
@@ -567,7 +546,7 @@ fun PromotionsScreen(
 
                 pendingUpdate?.let { applyPromotionUpdate(it) }
 
-                if (change.storeCode.isNotBlank() && change.storeCode != UNKNOWN_STORE_LABEL) {
+                if (change.storeCode.isNotBlank() && change.storeCode in enabledStores) {
                     selectedStore = change.storeCode
                 }
                 selectedCategory = (offer?.category ?: change.category).takeIf { it.isNotBlank() }
@@ -588,7 +567,7 @@ fun PromotionsScreen(
             offer = offer,
             onDismiss = { selectedOffer = null },
             onOpenStore = { storeCode ->
-                selectedStore = storeCode
+                if (storeCode in enabledStores) selectedStore = storeCode
                 selectedCategory = null
                 searchQuery = ""
                 selectedOffer = null
@@ -704,9 +683,9 @@ fun PromotionsScreen(
                                     profileActionsExpanded = false
                                     favoriteStoreCode?.let { code ->
                                         favoriteStoreCode = null
-                                        selectedStore = ALL_STORES_LABEL
+                                        selectedStore = enabledStores.firstOrNull() ?: "0012"
                                         scope.launch { userPreferences.setFavoriteStoreCode(null) }
-                                    } ?: storeOptions.firstOrNull { it != ALL_STORES_LABEL }?.let { store ->
+                                    } ?: storeOptions.firstOrNull { it in enabledStores }?.let { store ->
                                         favoriteStoreCode = store
                                         selectedStore = store
                                         scope.launch { userPreferences.setFavoriteStoreCode(store) }
@@ -724,21 +703,16 @@ fun PromotionsScreen(
                                     leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) }
                                 )
                             }
-                            DropdownMenuItem(
-                                text = { Text("Sair") },
-                                onClick = {
-                                    profileActionsExpanded = false
-                                    scope.launch { onLogout() }
-                                }
-                            )
+
                         }
                     } else {
                         FavoriteStoreSelector(
                             storeOptions = storeOptions,
+                            enabledStores = enabledStores,
                             favoriteStoreCode = favoriteStoreCode,
                             onFavoriteStoreChange = { code ->
                                 favoriteStoreCode = code
-                                selectedStore = code ?: ALL_STORES_LABEL
+                                selectedStore = code?.takeIf { it in enabledStores } ?: enabledStores.firstOrNull() ?: "0012"
                                 scope.launch { userPreferences.setFavoriteStoreCode(code) }
                             }
                         )
@@ -754,9 +728,7 @@ fun PromotionsScreen(
                                 )
                             }
                         }
-                        TextButton(onClick = { scope.launch { onLogout() } }) {
-                            Text("Sair")
-                        }
+
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -770,10 +742,6 @@ fun PromotionsScreen(
             error != null -> ErrorPromotionsState(
                 innerPadding = innerPadding,
                 message = error!!,
-                onRetry = { checkForPromotions(initialLoad = true) }
-            )
-            !hasPromotions -> EmptyPromotionsState(
-                innerPadding = innerPadding,
                 onRetry = { checkForPromotions(initialLoad = true) }
             )
             selectedCategory != null -> PromotionCategoryList(
@@ -796,7 +764,8 @@ fun PromotionsScreen(
                 innerPadding = innerPadding,
                 storeOptions = storeOptions,
                 selectedStore = selectedStore,
-                onStoreSelected = { selectedStore = it },
+                enabledStores = selectableStores,
+                onStoreSelected = { if (it in selectableStores) selectedStore = it },
                 searchQuery = searchQuery,
                 onSearchQueryChange = { searchQuery = it.take(MAX_SEARCH_LENGTH) },
                 categories = categoryGroups,
@@ -907,6 +876,7 @@ private fun EmptyPromotionsState(innerPadding: PaddingValues, onRetry: () -> Uni
 private fun PromotionsHome(
     innerPadding: PaddingValues,
     storeOptions: List<String>,
+    enabledStores: Set<String>,
     selectedStore: String,
     onStoreSelected: (String) -> Unit,
     searchQuery: String,
@@ -923,6 +893,7 @@ private fun PromotionsHome(
         item {
             StoreTabs(
                 storeOptions = storeOptions,
+                enabledStores = enabledStores,
                 selectedStore = selectedStore,
                 onStoreSelected = onStoreSelected
             )
@@ -932,6 +903,7 @@ private fun PromotionsHome(
         }
         item {
             Column(modifier = Modifier.padding(horizontal = 12.dp)) {
+                if (categories.isEmpty()) Text("Nenhuma oferta vigente nesta loja.")
                 Text("Ofertas por categoria", style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -972,6 +944,7 @@ private fun PromotionsHome(
 @Composable
 private fun FavoriteStoreSelector(
     storeOptions: List<String>,
+    enabledStores: Set<String>,
     favoriteStoreCode: String?,
     onFavoriteStoreChange: (String?) -> Unit
 ) {
@@ -1009,6 +982,7 @@ private fun FavoriteStoreSelector(
             )
             safeOptions.forEach { code ->
                 DropdownMenuItem(
+                    enabled = code in enabledStores,
                     text = {
                         Column {
                             Text(StoreCatalog.nameFor(code))
@@ -1028,6 +1002,7 @@ private fun FavoriteStoreSelector(
 @Composable
 private fun StoreTabs(
     storeOptions: List<String>,
+    enabledStores: Set<String>,
     selectedStore: String,
     onStoreSelected: (String) -> Unit
 ) {
@@ -1040,6 +1015,7 @@ private fun StoreTabs(
         safeStores.forEach { store ->
             Tab(
                 selected = store == selectedStore,
+                enabled = store in enabledStores,
                 onClick = { onStoreSelected(store) },
                 text = {
                     Text(

@@ -179,7 +179,7 @@ fun AppNavGraph(
     LaunchedEffect(openPromotionsFromNotification, access.promotions) {
         if (openPromotionsFromNotification && access.promotions) {
             navController.navigate(
-                if (nossaGenteApi.hasSession() && promotionsEnabled) "promotions" else "promotions_login"
+                "promotions"
             ) {
                 launchSingleTop = true
             }
@@ -205,7 +205,7 @@ fun AppNavGraph(
         if (!access.profile) return
         requestedProfileSection = section
         profileFocusRequestKey += 1L
-        val destination = if (profileEnabled && nossaGenteApi.hasSession()) "my_profile" else "my_point_login"
+        val destination = "my_profile"
         navController.navigate(destination) {
             popUpTo(navController.graph.findStartDestination().id) { inclusive = false }
             launchSingleTop = true
@@ -287,7 +287,7 @@ fun AppNavGraph(
                     },
                     onGoToPromotions = {
                         scope.launch { drawerState.close() }
-                        navController.navigate(if (nossaGenteApi.hasSession() && promotionsEnabled) "promotions" else "promotions_login")
+                        navController.navigate("promotions")
                     },
                     onGoToMyPoint = {
                         scope.launch { drawerState.close() }
@@ -377,17 +377,9 @@ fun AppNavGraph(
                 }
                 composable("promotions_login") {
                     RestrictedRoute(access.loading, access.promotions, { navController.navigateToSearch() }) {
-                        PromotionsLoginScreen(
-                            api = nossaGenteApi,
-                            onLoginSuccess = {
-                                profileEnabled = nossaGenteCredentialStore.isProfileEnabled()
-                                promotionsEnabled = true
-                                nossaGenteCredentialStore.setPromotionsEnabled(true)
-                                navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true }
-                            },
-                            onNavigateBack = { navController.popBackStack() },
-                            reuseExistingSession = promotionsEnabled,
-                        )
+                        LaunchedEffect(Unit) {
+                            navController.navigate("promotions") { popUpTo("promotions_login") { inclusive = true }; launchSingleTop = true }
+                        }
                     }
                 }
                 composable("promotions") {
@@ -395,12 +387,11 @@ fun AppNavGraph(
                         PromotionsScreen(
                             api = nossaGenteApi,
                             onNavigateBack = { navController.popBackStack() },
-                            onRequireLogin = { navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true } } },
                             onLogout = {
                                 promotionsEnabled = false
                                 nossaGenteCredentialStore.setPromotionsEnabled(false)
                                 if (!profileEnabled) nossaGenteApi.logout()
-                                navController.navigate("promotions_login") { popUpTo("promotions") { inclusive = true }; launchSingleTop = true }
+                                navController.navigateToSearch()
                             },
                             showReactivateProfile = access.profile && !profileEnabled && nossaGenteApi.hasSession(),
                             onReactivateProfile = {
@@ -412,18 +403,9 @@ fun AppNavGraph(
                 }
                 composable("my_point_login") {
                     RestrictedRoute(access.loading, access.profile, { navController.navigateToSearch() }) {
-                        PromotionsLoginScreen(
-                            api = nossaGenteApi,
-                            onLoginSuccess = {
-                                profileEnabled = true
-                                nossaGenteCredentialStore.setProfileEnabled(true)
-                                profileRefreshKey++
-                                navController.navigate("my_profile") { popUpTo("my_point_login") { inclusive = true }; launchSingleTop = true }
-                            },
-                            onNavigateBack = { navController.popBackStack() },
-                            reuseExistingSession = false,
-                            title = "Acesso ao Meu Perfil"
-                        )
+                        LaunchedEffect(Unit) {
+                            navController.navigate("my_profile") { popUpTo("my_point_login") { inclusive = true }; launchSingleTop = true }
+                        }
                     }
                 }
                 composable("my_profile") {

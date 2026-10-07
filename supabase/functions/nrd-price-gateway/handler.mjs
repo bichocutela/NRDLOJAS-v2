@@ -1,7 +1,7 @@
 // Fixed read-only routes; credentials, upstream tokens and cookies never leave the server.
 export const TENANT = 'https://nordestao12.acp.app.br';
 const API = 'https://api.acp.app.br';
-const routes = new Set(['Product/all', 'ProductCategory/all', 'Product/integrationInfo', 'Campaign/all', 'TemplatePrintLog/all', 'ProductGroup/all']);
+const routes = new Set(['Promotion/all', 'Product/all', 'ProductCategory/all', 'Product/integrationInfo', 'Campaign/all', 'TemplatePrintLog/all', 'ProductGroup/all']);
 const masterRoutes = new Set(['TemplatePrintLog/all', 'ProductGroup/all']);
 const keys = new Set(['pageSize', 'pageIndex', 'code', 'barCode', 'description', 'productCategoryIds', 'orderByDescending', 'profileIdToBeDesconsidered']);
 const headers = {'Content-Type':'application/json', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff'};
@@ -36,8 +36,9 @@ export function clean(value, depth = 0) {
 }
 export function validate(input) {
   if (!input || Array.isArray(input) || typeof input !== 'object') return false;
-  if (['access','health'].includes(input.operation)) return Object.keys(input).length === 1;
+  if (['access','health','health_promotions'].includes(input.operation)) return Object.keys(input).length === 1;
   if (Object.keys(input).some(k => !['path','parameters'].includes(k)) || !routes.has(input.path) || !Array.isArray(input.parameters) || input.parameters.length > 24) return false;
+  if (input.path === "Promotion/all" && input.parameters.some(pair => !["pageSize","pageIndex"].includes(pair?.[0]))) return false;
   const seen = new Set();
   return input.parameters.every(pair => {
     if (!Array.isArray(pair) || pair.length !== 2) return false;
@@ -55,6 +56,7 @@ export function validate(input) {
 export function createHandler({authorize, credentials, fetcher = fetch}) {
   // ACP session shared only inside this server instance. Login is serialized, not per product.
   let session = null, sessionAt = 0, signingIn = null;
+  let dePorCategory = null, dePorCategoryAt = 0;
   async function signIn() {
     if (session && Date.now() - sessionAt < 10 * 60_000) return session;
     if (signingIn) return signingIn;
@@ -97,21 +99,46 @@ export function createHandler({authorize, credentials, fetcher = fetch}) {
     let input;
     try { input = await boundedJson(req,4096); } catch { return reply(400,{error:'INVALID_REQUEST'}); }
     if (!validate(input)) return reply(400,{error:'INVALID_REQUEST'});
+    if (identity.promotionsOnly && input.operation !== 'access' && input.path !== 'Promotion/all') return reply(403,{error:'ACCESS_DENIED'});
     // CI may exercise exactly one fixed read to validate migration readiness, never arbitrary queries.
-    if (identity.probe && input.operation !== 'health') return reply(403,{error:'ACCESS_DENIED'});
-    if (input.operation === 'health' && !identity.probe) return reply(403,{error:'ACCESS_DENIED'});
+    if (identity.probe && !['health','health_promotions'].includes(input.operation)) return reply(403,{error:'ACCESS_DENIED'});
+    if (['health','health_promotions'].includes(input.operation) && !identity.probe) return reply(403,{error:'ACCESS_DENIED'});
     if (masterRoutes.has(input.path) && !identity.master) return reply(403,{error:'ACCESS_DENIED'});
     const secret = credentials();
     if (!secret.login || !secret.password) return reply(503,{error:'SERVICE_NOT_READY'});
     if (input.operation === 'access') return reply(200,{ok:true});
-    const health = input.operation === 'health';
-    if (health) input = {path:'ProductCategory/all',parameters:[['pageSize','1'],['pageIndex','0']]};
+    const health = ['health','health_promotions'].includes(input.operation);
+    if (health) input = {path:input.operation === 'health_promotions' ? 'Promotion/all' : 'ProductCategory/all',parameters:[['pageSize','1'],['pageIndex','0']]};
     try {
       for (let attempt = 0; attempt < 2; attempt++) {
         const auth = await signIn();
         const base = auth.proxy ? TENANT+'/api/proxy/api/v1/' : API+'/api/v1/';
-        const url = new URL(base + input.path);
-        for (const [key,value] of input.parameters) url.searchParams.append(key,value);
+        let path = input.path;
+        let parameters = input.parameters;
+        if (path === 'Promotion/all') {
+          if (!dePorCategory || Date.now() - dePorCategoryAt > 60_000) {
+            let found = null;
+            for (let page = 0; page < 20; page++) {
+              const categoryUrl = new URL(base + 'ProductCategory/all');
+              categoryUrl.searchParams.set('pageSize','250'); categoryUrl.searchParams.set('pageIndex',String(page));
+              const categoryResponse = await fetcher(categoryUrl,{redirect:'error',signal:AbortSignal.timeout(25000),
+                headers:{Accept:'application/json','Cache-Control':'no-cache',Authorization:'Bearer '+auth.token,...(auth.proxy ? {Cookie:auth.cookie} : {})}});
+              if (!categoryResponse.ok) throw Error('UPSTREAM_FAILURE');
+              const categoryPayload = await boundedJson(categoryResponse);
+              const items = Array.isArray(categoryPayload) ? categoryPayload : categoryPayload.items;
+              if (!Array.isArray(items)) throw Error('INVALID_PAYLOAD');
+              const category = items.find(item => String(item.description).toLowerCase().replace(/[^a-z0-9]/g,'') === 'depor');
+              if (category) { found = String(category.id); break; }
+              if (page + 1 >= (categoryPayload.totalPages ?? 1)) break;
+            }
+            if (!found) throw Error('DEPOR_UNAVAILABLE');
+            dePorCategory = found; dePorCategoryAt = Date.now();
+          }
+          path = 'Product/all';
+          parameters = [...input.parameters,['productCategoryIds',dePorCategory]];
+        }
+        const url = new URL(base + path);
+        for (const [key,value] of parameters) url.searchParams.append(key,value);
         const response = await fetcher(url,{redirect:'error',signal:AbortSignal.timeout(25000),
           headers:{Accept:'application/json','Cache-Control':'no-cache',Authorization:'Bearer '+auth.token,...(auth.proxy ? {Cookie:auth.cookie} : {})}});
         if (response.status === 401 && attempt === 0) { session = null; continue; }

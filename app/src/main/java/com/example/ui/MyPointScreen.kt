@@ -162,7 +162,7 @@ fun MyPointScreen(
 
     fun load() {
         if (loading) return
-        if (!api.hasSession()) { onSignOut(); return }
+        if (!api.hasSession()) { error = "Os dados pessoais estão indisponíveis no momento."; return }
         loading = true
         error = null
         scope.launch {
@@ -177,7 +177,7 @@ fun MyPointScreen(
                     }
                 }
                 NossaGenteProfileResult.Unauthorized -> {
-                    onSignOut()
+                    error = "Os dados pessoais estão indisponíveis no momento."
                     loading = false
                     return@launch
                 }
@@ -185,17 +185,17 @@ fun MyPointScreen(
             }
             when (val result = api.fetchHours()) {
                 is NossaGenteHoursResult.Success -> hours = result.hours
-                NossaGenteHoursResult.Unauthorized -> onSignOut()
+                NossaGenteHoursResult.Unauthorized -> error = "Os dados pessoais estão indisponíveis no momento."
                 is NossaGenteHoursResult.Error -> error = result.message
             }
             when (val result = api.fetchPoint()) {
                 is NossaGentePointResult.Success -> point = result.point
-                NossaGentePointResult.Unauthorized -> onSignOut()
+                NossaGentePointResult.Unauthorized -> error = "Os dados pessoais estão indisponíveis no momento."
                 is NossaGentePointResult.Error -> error = result.message
             }
             when (val result = api.fetchBenefit()) {
                 is NossaGenteBenefitResult.Success -> benefit = result.benefit
-                NossaGenteBenefitResult.Unauthorized -> onSignOut()
+                NossaGenteBenefitResult.Unauthorized -> error = "Os dados pessoais estão indisponíveis no momento."
                 is NossaGenteBenefitResult.Error -> if (error == null) error = result.message
             }
             api.fetchMyWorkSchedules()
@@ -278,7 +278,7 @@ fun MyPointScreen(
                 ) {
                     Icon(Icons.Default.Settings, "Configurações de notificações do perfil")
                 }
-                TextButton(
+                if (api.hasSession()) TextButton(
                     onClick = onSignOut,
                     shape = if (isExpressive) RoundedCornerShape(18.dp) else MaterialTheme.shapes.small
                 ) { Text("Sair") }

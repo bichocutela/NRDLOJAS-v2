@@ -33,10 +33,10 @@ class PromotionNotificationWorker(
             remoteSettings?.enabled == true &&
             remoteSettings.promotionUpdatedEnabled
         val favoriteStoreCode = preferences.favoriteStoreCode.first()?.trim().orEmpty()
-        if (favoriteStoreCode.isBlank()) return Result.success()
 
-        return when (val result = NossaGenteApi(applicationContext).fetchPromotions()) {
+        return when (val result = com.example.data.promotions.AcpPromotionsRepository(applicationContext).fetchPromotions()) {
             is NossaGentePromotionsResult.Success -> {
+                if (favoriteStoreCode.isBlank()) return Result.success()
                 val favoriteProducts = result.promotions
                     .flatMap { it.products }
                     .filter { it.storeCode?.trim() == favoriteStoreCode }
