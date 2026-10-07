@@ -355,7 +355,6 @@ fun PromotionsLoginScreen(
 fun PromotionsScreen(
     api: NossaGenteApi,
     onNavigateBack: () -> Unit,
-    onRequireLogin: () -> Unit,
     onLogout: () -> Unit,
     showReactivateProfile: Boolean = false,
     onReactivateProfile: () -> Unit = {}
@@ -370,7 +369,6 @@ fun PromotionsScreen(
     var isLoading by remember { mutableStateOf(true) }
     var isChecking by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var loginRedirectRequested by remember { mutableStateOf(false) }
     var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedStore by rememberSaveable { mutableStateOf(ALL_STORES_LABEL) }
     var favoriteStoreCode by rememberSaveable { mutableStateOf<String?>(null) }
@@ -389,12 +387,6 @@ fun PromotionsScreen(
     var selectedOffer by remember { mutableStateOf<OfferGroup?>(null) }
     val scope = rememberCoroutineScope()
     var promotionRequestRunning by remember { mutableStateOf(false) }
-
-    fun requestLoginOnce() {
-        if (loginRedirectRequested) return
-        loginRedirectRequested = true
-        onRequireLogin()
-    }
 
     fun applyPromotionUpdate(update: PendingPromotionUpdate) {
         hasPromotions = update.promotions.isNotEmpty()
@@ -438,13 +430,8 @@ fun PromotionsScreen(
                     }
                 }
                 NossaGentePromotionsResult.Unauthorized -> {
-                    // Atualizar promoções nunca deve expulsar o usuário da tela quando já existe
-                    // catálogo carregado. Porém, na entrada, um token expirado precisa ser
-                    // descartado antes de abrir o login; caso contrário a tela de login detecta
-                    // o mesmo token e volta imediatamente para Promoções, causando o "pisca-pisca".
-                    if (initialLoad && !hasPromotions) {
-                        api.invalidateSession()
-                        requestLoginOnce()
+                    if (initialLoad || !hasPromotions) {
+                        error = "As ofertas estão indisponíveis no momento."
                     }
                 }
                 is NossaGentePromotionsResult.Error -> {
@@ -478,7 +465,8 @@ fun PromotionsScreen(
 
     LaunchedEffect(Unit) {
         if (!api.hasSession()) {
-            requestLoginOnce()
+            isLoading = false
+            error = "As ofertas estão indisponíveis no momento."
         } else {
             favoriteStoreCode = userPreferences.favoriteStoreCode.first()
             checkForPromotions(initialLoad = true)
@@ -724,7 +712,7 @@ fun PromotionsScreen(
                                     leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) }
                                 )
                             }
-                            DropdownMenuItem(
+                            if (api.hasSession()) DropdownMenuItem(
                                 text = { Text("Sair") },
                                 onClick = {
                                     profileActionsExpanded = false
@@ -754,7 +742,7 @@ fun PromotionsScreen(
                                 )
                             }
                         }
-                        TextButton(onClick = { scope.launch { onLogout() } }) {
+                        if (api.hasSession()) TextButton(onClick = { scope.launch { onLogout() } }) {
                             Text("Sair")
                         }
                     }
