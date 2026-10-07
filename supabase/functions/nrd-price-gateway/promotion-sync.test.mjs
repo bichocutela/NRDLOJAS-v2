@@ -13,26 +13,30 @@ test('stable hashes ignore key order but detect price and same-count replacement
 });
 test('manifest validation rejects duplicate IDs, arbitrary bodies and malformed hashes',()=>{
   assert.ok(validSync({operation:'promotion_sync',revision:'',manifest:[]}));
+  assert.ok(validSync({operation:'promotion_refresh',revision:'',manifest:[]}));
   assert.ok(validSync({operation:'promotion_status'}));
   const row={id:'x',hash:'a'.repeat(64)};
   assert.ok(!validSync({operation:'promotion_sync',revision:'',manifest:[row,row]}));
   assert.ok(!validSync({operation:'promotion_status',path:'Product/all'}));
   assert.ok(!validSync({operation:'promotion_sync',revision:'',manifest:[{...row,hash:'x'}]}));
 });
-test('shared snapshot serves unchanged checks without another ACP download and keeps complete old data on failure',async()=>{
-  const docs=new Map(); let version=0, time=1000, calls=0; const pending=[];
+test('shared snapshot avoids duplicate reads, survives failure and forced refresh bypasses TTL',async()=>{
+  const docs=new Map(); let version=0, time=1000, calls=0; let current={id:1,value:2};
   const cache={get:async k=>docs.get(k),many:async keys=>new Map(keys.map(k=>[k,docs.get(k)])),
     write:async(k,payload)=>{const value={payload,version:++version};docs.set(k,value);return value;},
     claim:async k=>{const value={payload:docs.get(k)?.payload ?? {},version:++version};docs.set(k,value);return value;},
     finish:async(k,c,payload)=>cache.write(k,payload)};
-  const sync=createPromotionSync({cache,now:()=>time,background:p=>pending.push(p)});
-  const readPage=async page=>{calls++;return {items:[{id:1,value:2}],pageIndex:page,totalPages:1,totalCount:1};};
+  const sync=createPromotionSync({cache,now:()=>time,background:()=>{}});
+  const readPage=async page=>{calls++;return {items:[current],pageIndex:page,totalPages:1,totalCount:1};};
   const first=await sync({input:{operation:'promotion_sync',manifest:[]},readPage});
   assert.equal(first.items.length,1); assert.equal(calls,1);
   await sync({input:{operation:'promotion_status'},readPage}); assert.equal(calls,1);
   time+=61000;
   const stale=await sync({input:{operation:'promotion_status'},readPage:async()=>{throw Error('offline');}});
-  await Promise.all(pending);
   assert.equal(stale.revision,first.revision);
-  assert.equal((await sync({input:{operation:'promotion_sync',manifest:[]},readPage})).items.length,1);
+  current={id:1,value:3};
+  const forced=await sync({input:{operation:'promotion_refresh',revision:first.revision,manifest:first.items.map(({id,hash})=>({id,hash}))},readPage});
+  assert.equal(calls,2);
+  assert.equal(forced.items.length,1);
+  assert.notEqual(forced.revision,first.revision);
 });
