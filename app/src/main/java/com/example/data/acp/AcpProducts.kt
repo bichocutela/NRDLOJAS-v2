@@ -72,7 +72,7 @@ internal data class AcpProduct(
     val stockQuantity: BigDecimal? = null, val dueDate: String? = null, val packageQuantity: BigDecimal? = null,
     val packageType: String? = null, val characteristic: String? = null, val contentQuantity: BigDecimal? = null,
     val contentUnit: String? = null, val productFamily: String? = null, val auxDescriptions: List<String> = emptyList(),
-    val validFrom: String? = null, val validTo: String? = null, val imageUrl: String? = null
+    val validFrom: String? = null, val validTo: String? = null, val imageUrl: String? = null, val detailsJson: String? = null
 ) {
     private fun hasCategory(expected: String): Boolean {
         val normalizedExpected = expected.lowercase().replace(Regex("[^a-z0-9]"), "")
@@ -219,7 +219,8 @@ internal object AcpProductParser {
             auxDescriptions = if (aux == null) emptyList() else (0 until aux.length()).mapNotNull { aux.optString(it).trim().takeIf { text -> text.isNotEmpty() && text != "null" } },
             validFrom = firstText(item, "startDate", "initialDate", "validFrom", "startAt", "offerStartDate"),
             validTo = firstText(item, "endDate", "finalDate", "validTo", "endAt", "offerEndDate"),
-            imageUrl = firstText(item, "imageUrl", "imagePath")?.takeIf { it.startsWith("https://") }
+            imageUrl = firstText(item, "imageUrl", "imagePath")?.takeIf { it.startsWith("https://") },
+            detailsJson = item.toString()
         )
     }
     private fun firstText(item: JSONObject, vararg keys: String): String? = keys.asSequence().mapNotNull { item.text(it) }.firstOrNull()

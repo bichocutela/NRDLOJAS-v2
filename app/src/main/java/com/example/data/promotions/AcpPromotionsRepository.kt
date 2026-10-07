@@ -58,7 +58,7 @@ internal class AcpPromotionsRepository(context: Context) {
                     if (active(effective?.startDate, effective?.endDate)) {
                         promotions += promotion(store.code, product.code.ifBlank { product.barcode }, product.description,
                             offer.price!!, offer.referencePrice!!, effective?.startDate,
-                            effective?.endDate, product.imageUrl)
+                            effective?.endDate, product.imageUrl, product.barcode, product.detailsJson)
                     }
                 }
             } else {
@@ -66,7 +66,7 @@ internal class AcpPromotionsRepository(context: Context) {
                     if (record.price.isFinite() && record.previous.isFinite() && record.price > 0 && record.previous > record.price &&
                         active(record.from, record.to)) {
                         promotions += promotion(store.code, record.code.ifBlank { record.barcode }, record.name,
-                            BigDecimal.valueOf(record.price), BigDecimal.valueOf(record.previous), record.from, record.to, null)
+                            BigDecimal.valueOf(record.price), BigDecimal.valueOf(record.previous), record.from, record.to, null, record.barcode, null)
                     }
                 }
             }
@@ -82,11 +82,11 @@ internal class AcpPromotionsRepository(context: Context) {
     }
 
     private fun promotion(store: String, code: String, name: String, price: BigDecimal, previous: BigDecimal,
-        from: String?, to: String?, image: String?): Promotion {
+        from: String?, to: String?, image: String?, barcode: String?, detailsJson: String?): Promotion {
         val category = PromotionCategory.forDescription(name)
         val discount = previous.subtract(price).multiply(BigDecimal(100)).divide(previous, 0, RoundingMode.HALF_UP)
         return Promotion("$store|$code|$name", "De/Por", category, image, isoDate(from), isoDate(to),
-            listOf(PromotionProduct(code, name, price.brl(), previous.brl(), "$discount%", store, image)))
+            listOf(PromotionProduct(code, name, price.brl(), previous.brl(), "$discount%", store, image, barcode = barcode, detailsJson = detailsJson)))
     }
 
     companion object {

@@ -938,60 +938,7 @@ internal fun AcpProductsPanel(
                             }
                         }
                         nrdActionMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
-                        Text("Código: ${product.code.ifBlank { "não informado" }}\nCód. barras: ${product.barcode.ifBlank { "não informado" }}")
-                        Text(
-                            "Preço principal: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-
-                        val hasUsefulProductInfo = product.characteristic != null || product.productFamily != null ||
-                            product.categories.isNotEmpty() || product.unitLimitPerCPF?.signum() == 1
-                        if (hasUsefulProductInfo) {
-                            HorizontalDivider()
-                            Text("Informações do produto", style = MaterialTheme.typography.titleMedium)
-                            product.characteristic?.let { Text("Característica: $it") }
-                            product.productFamily?.let { Text("Família: $it") }
-                            if (product.categories.isNotEmpty()) Text("Categorias: ${product.categories.joinToString()}")
-                            product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let {
-                                Text("Limite cadastrado: ${it.quantity()} unidades por CPF.")
-                            }
-                        }
-
-                        val directOffers = product.offers()
-                        val campaignDetailOffers = campaigns.flatMap { it.offersFor(product) }
-                        val allOffers = (directOffers + campaignDetailOffers).forAutomaticDisplay()
-                        HorizontalDivider()
-                        Text("Preços e condições", style = MaterialTheme.typography.titleMedium)
-                        if (allOffers.isEmpty()) {
-                            AcpOfferPoster(
-                                AcpOffer(
-                                    "Preço cadastrado",
-                                    "Nenhuma condição promocional explícita foi identificada nos dados consultados.",
-                                    product.value
-                                ),
-                                compact = false,
-                                productName = product.description,
-                                banner = appearance.activeOfferBanner(com.example.data.OFFER_BANNER_STANDARD)
-                            )
-                        } else {
-                            Text("Cartazes automáticos em paisagem", style = MaterialTheme.typography.titleSmall)
-                            allOffers.forEachIndexed { index, offer ->
-                                if (index > 0) HorizontalDivider()
-                                AcpOfferLandscapePoster(
-                                    product.description,
-                                    offer,
-                                    appearance.activeOfferBanner(offer.bannerKey)
-                                )
-                            }
-                        }
-                        if (!detailBusy && allOffers.none { it.title == "Cashback" || it.title == "Cashback em valor" }) {
-                            Text(
-                                if (detailWarning == null) "Cashback não informado nos dados consultados."
-                                else "Cashback não confirmado: a consulta complementar ficou incompleta.",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-
+                        AcpCommercialProductContent(product)
                         HorizontalDivider()
                         ActiveFlyerOffersForAcpProduct(product)
                         OutlinedCard(onClick = { syncExpanded = !syncExpanded }, modifier = Modifier.fillMaxWidth()) {
