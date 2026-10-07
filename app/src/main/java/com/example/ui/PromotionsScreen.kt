@@ -1587,10 +1587,6 @@ private fun PromotionDetailsDialog(
                         validTo = offer.validTo, ean = offer.barcode, category = offer.category)
                 }
                 item {
-                    val store = offer.stores.firstOrNull { it.storeCode == selectedStore } ?: offer.bestOffer
-                    PromotionProductDetailsContent(store?.detailsJson, store?.barcode, offer.code, offer.name)
-                }
-                item {
                     SelectionContainer {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
@@ -1651,6 +1647,10 @@ private fun PromotionDetailsDialog(
                             }
                     }
                     }
+                }
+                item {
+                    val store = offer.stores.firstOrNull { it.storeCode == selectedStore } ?: offer.bestOffer
+                    PromotionProductDetailsContent(store?.detailsJson, store?.barcode, offer.code, offer.name)
                 }
                 item {
                     Column(modifier = Modifier.fillMaxWidth()) {
