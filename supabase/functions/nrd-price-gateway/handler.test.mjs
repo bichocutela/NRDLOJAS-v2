@@ -32,6 +32,21 @@ test('promotion read dynamically resolves De/Por and preserves pagination and pr
   assert.equal(url.searchParams.get('productCategoryIds'),'77');
   assert.equal(url.searchParams.get('pageIndex'),'2');
 });
+test('promotion scope can force a fresh snapshot without opening general catalogue access',async()=>{
+  let operation='';
+  const handler=createHandler({
+    authorize:async()=>({allowed:true,master:false,promotionsOnly:true}),
+    credentials:secret,
+    promotionSync:async ({input})=>{
+      operation=input.operation;
+      return {revision:'a'.repeat(64),checkedAt:1,count:0,items:[],removedIds:[]};
+    }
+  });
+  const response=await handler(req({operation:'promotion_refresh',revision:'',manifest:[]}));
+  assert.equal(response.status,200);
+  assert.equal(operation,'promotion_refresh');
+  assert.equal((await response.json()).count,0);
+});
 test('promotion readiness is a fixed CI read and never returns product data',async()=>{
   const server=upstream();
   const handler=createHandler({authorize:async()=>({allowed:true,probe:true}),credentials:secret,
