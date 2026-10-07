@@ -24,7 +24,7 @@ internal fun PromotionProductDetailsContent(raw: String?, ean: String?, code: St
         OutlinedButton(enabled = barcode.isNotBlank(), onClick = { showBarcode = true }, modifier = Modifier.fillMaxWidth()) {
             Text("Ver código de barras")
         }
-        Text("Código: $code • EAN: ${barcode.ifBlank { "não informado" }}", style = MaterialTheme.typography.bodySmall)
+        if (product == null) Text("Código: $code • EAN: ${barcode.ifBlank { "não informado" }}", style = MaterialTheme.typography.bodySmall)
         product?.let { AcpCommercialProductContent(it) }
     }
     if (showBarcode) ProductBarcodeDialog(
@@ -46,6 +46,7 @@ internal fun AcpCommercialProductContent(
             item.unit?.let { Text("Unidade: $it") }
             item.stockQuantity?.let { Text("Estoque: ${it.quantity()}") }
             item.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite por CPF: ${it.quantity()}") }
+            item.auxDescriptions.forEach { Text(it) }
             item.characteristic?.let { Text("Característica: $it") }
             if (item.categories.isNotEmpty()) Text("Categorias: ${item.categories.joinToString()}")
             item.productFamily?.let { Text("Família: $it") }
