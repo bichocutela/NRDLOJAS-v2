@@ -405,17 +405,18 @@ fun PromotionsScreen(
         visibleOfferCount = INITIAL_OFFER_PAGE
     }
 
-    fun checkForPromotions(initialLoad: Boolean) {
+    fun checkForPromotions(initialLoad: Boolean, interactive: Boolean = false) {
         if (promotionRequestRunning) return
         promotionRequestRunning = true
         scope.launch {
             if (initialLoad) {
                 isLoading = true
                 error = null
-            } else {
+            } else if (interactive) {
                 isChecking = true
             }
-            when (val result = repository.fetchPromotions()) {
+            try {
+            when (val result = repository.fetchPromotions { active -> scope.launch { isChecking = active || (interactive && promotionRequestRunning) } }) {
                 is NossaGentePromotionsResult.Success -> {
                     val nextPromotions = result.promotions
                     val changeState = promotionChangeStore.compareAndSave(nextPromotions)
@@ -441,8 +442,11 @@ fun PromotionsScreen(
                     if (initialLoad || !hasPromotions) error = result.message
                 }
             }
-            if (initialLoad) isLoading = false else isChecking = false
-            promotionRequestRunning = false
+            } finally {
+                isLoading = false
+                isChecking = false
+                promotionRequestRunning = false
+            }
         }
     }
 
@@ -451,13 +455,28 @@ fun PromotionsScreen(
         if (update != null) {
             applyPromotionUpdate(update)
         } else if (!isChecking && !isLoading) {
-            checkForPromotions(initialLoad = false)
+            checkForPromotions(initialLoad = false, interactive = true)
         }
     }
 
     LaunchedEffect(Unit) {
         favoriteStoreCode = userPreferences.favoriteStoreCode.first()
-        checkForPromotions(initialLoad = true)
+        val cached = withContext(Dispatchers.IO) { repository.cached() }
+        if (cached != null) {
+            applyPromotionUpdate(PendingPromotionUpdate(cached.promotions, buildOfferGroups(cached.promotions), cached.fingerprint))
+            isLoading = false
+        }
+        checkForPromotions(initialLoad = cached == null)
+    }
+
+    LaunchedEffect(repository) {
+        repository.observeOffers().collect { offers ->
+            if (offers.isNotEmpty() || withContext(Dispatchers.IO) { repository.isInitialized() }) {
+                offerGroups = withContext(Dispatchers.Default) { buildOfferGroups(offers) }
+                hasPromotions = offers.isNotEmpty()
+                isLoading = false
+            }
+        }
     }
 
     LaunchedEffect(repository) {

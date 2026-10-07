@@ -21,6 +21,7 @@ internal data class PromotionStore(
     val updatedAt: Long = 0
 )
 
+@kotlinx.serialization.Serializable
 internal data class StorePromotionRecord(
     val code: String,
     val barcode: String,

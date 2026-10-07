@@ -43,6 +43,10 @@ export class ServerCache {
     if (!response.ok) throw Error('CACHE_UNAVAILABLE');
     return this.decode(await response.json());
   }
+  async remove(key) {
+    const response = await this.request(this.url(key), {method:'DELETE'});
+    if (!response.ok && response.status !== 404) throw Error('CACHE_UNAVAILABLE');
+  }
   async claim(key, seconds = 90) {
     const current = await this.get(key);
     if ((current?.lease ?? 0) > Date.now()) return null;
