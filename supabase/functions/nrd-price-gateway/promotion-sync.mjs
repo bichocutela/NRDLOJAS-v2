@@ -21,7 +21,7 @@ export function diff(rows, manifest) {
 export function validSync(input) {
   if (!input || Array.isArray(input)) return false;
   if (input.operation === 'promotion_status') return Object.keys(input).length === 1;
-  if (input.operation !== 'promotion_sync' || Object.keys(input).some(k=>!['operation','revision','manifest'].includes(k))) return false;
+  if (!['promotion_sync','promotion_refresh'].includes(input.operation) || Object.keys(input).some(k=>!['operation','revision','manifest'].includes(k))) return false;
   if (typeof input.revision !== 'string' || !/^(?:[a-f0-9]{64})?$/.test(input.revision) || !Array.isArray(input.manifest) || input.manifest.length>10000) return false;
   const seen=new Set();
   return input.manifest.every(row=>{
@@ -90,8 +90,17 @@ export function createPromotionSync({cache,background,now=()=>Date.now()}) {
         pointer=(await cache.get('promotion_snapshot'))?.payload;
         if(!pointer?.revision) throw Error('INITIAL_SYNC_BUSY');
       }
+    } else if(input.operation==='promotion_refresh') {
+      // Explicit user refreshes bypass the snapshot TTL and wait for a fresh ACP scan.
+      pointer=await refresh(readPage) ?? (await cache.get('promotion_snapshot'))?.payload ?? pointer;
     } else if(now()-pointer.checkedAt>=60000 && (pointer.retryAt ?? 0)<=now()) {
-      background(refresh(readPage).catch(()=>{}));
+      // Silent checks keep the same one-minute cadence, but wait for the shared refresh
+      // so the current cycle can observe new ACP products instead of one cycle later.
+      try {
+        pointer=await refresh(readPage) ?? (await cache.get('promotion_snapshot'))?.payload ?? pointer;
+      } catch {
+        pointer=(await cache.get('promotion_snapshot'))?.payload ?? pointer;
+      }
     }
     const status={revision:pointer.revision,checkedAt:pointer.checkedAt,count:pointer.count};
     if(input.operation==='promotion_status') return status;
