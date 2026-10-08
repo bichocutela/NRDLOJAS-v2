@@ -630,6 +630,24 @@ internal fun AcpProductsPanel(
             )
         }
 
+        // Ferramenta histórica somente do Mestre. A pesquisa é iniciada manualmente
+        // e nunca mistura cartazes já impressos com ofertas vigentes.
+        if (canAddToNrd && canCopyDiagnostic) {
+            item(key = "acp-history-evidence") {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AcpEvidencePanel(
+                        api = api,
+                        store = freshStore,
+                        exportBusy = historyExportBusy,
+                        onExport = onExportHistory
+                    )
+                    historyExportMessage?.let { message ->
+                        Text(message, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+
         if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         refreshMessage?.let { message ->
             item { Text(message, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
