@@ -103,9 +103,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
             if (type == TYPE_PROMOTION_UPDATED) {
                 val favoriteStoreCode = preferences.favoriteStoreCode.first()?.trim().orEmpty()
-                if (favoriteStoreCode.isNotBlank() &&
-                    (messageStoreCode.isNullOrBlank() || messageStoreCode != favoriteStoreCode)
-                ) {
+                if (!com.example.data.promotions.matchesFavoriteStore(favoriteStoreCode, messageStoreCode)) {
                     Log.d(TAG, "Promoção ignorada: loja diferente da favorita")
                     return@runBlocking
                 }
