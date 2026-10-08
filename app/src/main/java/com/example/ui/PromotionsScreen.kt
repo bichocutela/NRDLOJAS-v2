@@ -354,7 +354,9 @@ fun PromotionsScreen(
     onNavigateBack: () -> Unit,
     onLogout: () -> Unit,
     showReactivateProfile: Boolean = false,
-    onReactivateProfile: () -> Unit = {}
+    onReactivateProfile: () -> Unit = {},
+    showSyncDiagnostics: Boolean = false,
+    showNewOnOpen: Boolean = false
 ) {
     val model: PromotionsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val ui by model.state.collectAsStateWithLifecycle()
@@ -362,7 +364,11 @@ fun PromotionsScreen(
     var showNewOffers by rememberSaveable { mutableStateOf(false) }
     val isLoading = ui.loading
     val isChecking = ui.sync.visibleNetwork && ui.initialized
-    val error = ui.sync.error?.takeIf { !ui.initialized }
+    // Infrastructure failures (including quota) are diagnostics exclusive to the Mestre.
+    // Ordinary users see only a neutral fallback if there is no cached catalog.
+    val error = ui.sync.error?.takeIf { !ui.initialized }?.let {
+        if (showSyncDiagnostics) it else "Ofertas temporariamente indisponíveis. Tente atualizar mais tarde."
+    }
     var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedStore by rememberSaveable { mutableStateOf("0012") }
     var favoriteStoreCode by rememberSaveable { mutableStateOf<String?>(null) }
@@ -387,8 +393,17 @@ fun PromotionsScreen(
         if (!isLoading && !isChecking) model.refresh()
     }
     val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(ui.sync.error, ui.initialized) {
-        if (ui.initialized) ui.sync.error?.let { snackbarHostState.showSnackbar(it) }
+    LaunchedEffect(ui.sync.error, ui.initialized, showSyncDiagnostics) {
+        if (ui.initialized && showSyncDiagnostics) {
+            ui.sync.error?.let { snackbarHostState.showSnackbar(it) }
+        }
+    }
+    LaunchedEffect(showNewOnOpen) {
+        if (showNewOnOpen) {
+            showNewOffers = true
+            selectedCategory = null
+            searchQuery = ""
+        }
     }
 
     LaunchedEffect(Unit) { favoriteStoreCode = userPreferences.favoriteStoreCode.first() }
