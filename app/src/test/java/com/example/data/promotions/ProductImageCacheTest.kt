@@ -31,11 +31,11 @@ class ProductImageCacheTest {
     @Test fun savedPhotoIsAvailableWhenCardIsRecreated() {
         cache("https://example.com/product.jpg")
         assertEquals("https://example.com/product.jpg",
-            ProductImageRepository.get(context).cachedImage(ean, "Bebidas")?.url)
+            ProductImageRepository(context).cachedImage(ean, "Bebidas")?.url)
     }
 
     @Test fun cachedHitAndCachedMissBypassTheNetworkQueue() = runBlocking {
-        val repository = ProductImageRepository.get(context)
+        val repository = ProductImageRepository(context)
         val field = repository.javaClass.getDeclaredField("gate").apply { isAccessible = true }
         val gate = field.get(repository) as kotlinx.coroutines.sync.Mutex
         gate.lock()
@@ -48,7 +48,7 @@ class ProductImageCacheTest {
     }
 
     @Test fun expiredWrongFamilyAndInvalidBarcodeDoNotReusePhotos() {
-        val repository = ProductImageRepository.get(context)
+        val repository = ProductImageRepository(context)
         cache("https://example.com/product.jpg", 1L)
         assertNull(repository.cachedImage(ean, "Bebidas"))
         cache("https://example.com/product.jpg")

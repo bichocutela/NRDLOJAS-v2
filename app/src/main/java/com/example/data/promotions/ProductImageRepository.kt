@@ -61,7 +61,7 @@ internal class OpenFactsImageSource : BarcodeImageSource {
 }
 
 /** Visible cards only. A global gate caps requests below the provider's 15/minute limit. */
-internal class ProductImageRepository private constructor(context: Context) {
+internal class ProductImageRepository internal constructor(context: Context) {
     private val cache = context.applicationContext.getSharedPreferences("ean_images_v1", Context.MODE_PRIVATE)
     private val source: BarcodeImageSource = OpenFactsImageSource()
     private val gate = Mutex()
