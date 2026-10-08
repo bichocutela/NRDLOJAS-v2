@@ -15,6 +15,9 @@ internal data class PromotionsUiState(
     val sync: PromotionSyncState = PromotionSyncState()
 ) {
     val loading: Boolean get() = !initialized && (sync.running || !sync.attempted)
+    /** Falhas do gateway não geram mensagem, toast, snackbar nem estado de erro para não-Mestre. */
+    fun visibleSyncError(showDiagnostics: Boolean): String? =
+        sync.error?.takeIf { showDiagnostics && !initialized }
 }
 
 internal class PromotionsViewModel(application: Application) : AndroidViewModel(application) {
