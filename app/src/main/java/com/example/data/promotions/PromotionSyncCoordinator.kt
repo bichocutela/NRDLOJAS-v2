@@ -78,7 +78,7 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
                 return@withLock repository.cached() ?: NossaGentePromotionsResult.Error("Aguardando sincronização.")
             }
             val result = repository.fetchPromotions(forceRefresh = interactive) { active ->
-                mutableState.value = mutableState.value.copy(visibleNetwork = active || interactive)
+                mutableState.value = mutableState.value.copy(visibleNetwork = interactive && active)
             }
             when (result) {
                 is NossaGentePromotionsResult.Success -> {

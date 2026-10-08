@@ -31,7 +31,7 @@ internal class PromotionsViewModel(application: Application) : AndroidViewModel(
         PromotionsUiState(offers, added, initialized.firstOrNull()?.value == "1", sync)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PromotionsUiState())
 
-    fun screenOpened() { coordinator.requestSync(interactive = true) }
+    fun screenOpened() { coordinator.requestSync() }
     fun refresh() { coordinator.requestSync(interactive = true) }
     fun storesChanged() { coordinator.requestSync() }
 }
