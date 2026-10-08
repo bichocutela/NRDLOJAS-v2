@@ -6,6 +6,7 @@ import com.google.firebase.firestore.Source
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.CancellationException
 
 /** Only public promotion configuration, never user grants or sessions. */
 internal object PromotionConfigCache {
@@ -25,7 +26,18 @@ internal object PromotionConfigCache {
             return@withLock cached.data
         }
         // A failed read does not extend the TTL or replace a valid configuration with defaults.
-        val data = document.get(Source.SERVER).await().data.orEmpty()
+        val data = try {
+            document.get(Source.SERVER).await().data.orEmpty()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            // Public display configuration can be reused; access/session checks stay on the server.
+            cached?.let { return@withLock it.data }
+            val local = try { document.get(Source.CACHE).await() }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { null }
+            return@withLock local?.data ?: throw failure
+        }
         remember(document, data)
         data
     }

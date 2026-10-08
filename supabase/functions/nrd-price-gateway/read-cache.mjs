@@ -52,6 +52,11 @@ export class ReadCache {
     return new Map(values.filter(([, value]) => value !== null));
   }
   async get(key) { return (await this.many([key])).get(key) ?? null; }
+  async getFresh(key) {
+    await this.pending.get(key)?.catch(() => {});
+    this.forget(key);
+    return this.get(key);
+  }
   async write(key, ...args) {
     // A preceding batch may still be reading an older version.
     await this.pending.get(key)?.catch(() => {});

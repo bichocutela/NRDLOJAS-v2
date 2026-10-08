@@ -30,7 +30,7 @@ export function validSync(input) {
   });
 }
 /** Shared ACP snapshot, immutable pages and one atomic pointer; stale data survives failed refresh. */
-export function createPromotionSync({cache,background,now=()=>Date.now()}) {
+export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms))}) {
   let inFlight=null;
   async function refresh(readPage) {
     if (inFlight) return inFlight;
@@ -91,8 +91,22 @@ export function createPromotionSync({cache,background,now=()=>Date.now()}) {
         if(!pointer?.revision) throw Error('INITIAL_SYNC_BUSY');
       }
     } else if(input.operation==='promotion_refresh') {
-      // Explicit user refreshes bypass the snapshot TTL and wait for a fresh ACP scan.
-      pointer=await refresh(readPage) ?? (await cache.get('promotion_snapshot'))?.payload ?? pointer;
+      // Another Edge instance may own the lease. Never report the previous page as a successful fresh scan.
+      const startedAt=now();
+      const previousCheck=pointer.checkedAt;
+      const fresh=await refresh(readPage);
+      if(fresh) pointer=fresh;
+      else {
+        let published=false;
+        for(const delay of [500,1000,2000,4000,8000,8000,6500]) {
+          await sleep(delay);
+          const candidate=(await (cache.getFresh ? cache.getFresh('promotion_snapshot') : cache.get('promotion_snapshot')))?.payload;
+          if(candidate?.revision && candidate.checkedAt>=startedAt && candidate.checkedAt>previousCheck) {
+            pointer=candidate; published=true; break;
+          }
+        }
+        if(!published) throw Error('REFRESH_BUSY');
+      }
     } else if(now()-pointer.checkedAt>=60000 && (pointer.retryAt ?? 0)<=now()) {
       // Silent checks keep the same one-minute cadence, but wait for the shared refresh
       // so the current cycle can observe new ACP products instead of one cycle later.
