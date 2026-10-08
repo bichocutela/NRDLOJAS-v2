@@ -406,6 +406,7 @@ fun PromotionsScreen(
     }
 
     LaunchedEffect(Unit) {
+        if (!showNewOnOpen) showNewOffers = false
         model.screenOpened()
         favoriteStoreCode = userPreferences.favoriteStoreCode.first()
     }
