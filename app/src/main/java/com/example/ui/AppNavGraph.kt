@@ -182,7 +182,7 @@ fun AppNavGraph(
     LaunchedEffect(openPromotionsFromNotification, promotionNotificationNavigationKey, access.promotions) {
         if (openPromotionsFromNotification && access.promotions) {
             // Launch the new-offers filter, even on a repeated tap while the app is open.
-            navController.navigate("promotions?novas=true") { launchSingleTop = true }
+            navController.navigate("promotions?novas=true&request=$promotionNotificationNavigationKey") { launchSingleTop = true }
         }
     }
 
@@ -383,13 +383,17 @@ fun AppNavGraph(
                     }
                 }
                 composable(
-                    route = "promotions?novas={novas}",
-                    arguments = listOf(navArgument("novas") { type = NavType.BoolType; defaultValue = false })
+                    route = "promotions?novas={novas}&request={request}",
+                    arguments = listOf(
+                        navArgument("novas") { type = NavType.BoolType; defaultValue = false },
+                        navArgument("request") { type = NavType.LongType; defaultValue = 0L }
+                    )
                 ) { backStackEntry ->
                     RestrictedRoute(access.loading, access.promotions, { navController.navigateToSearch() }) {
                         PromotionsScreen(
                             showSyncDiagnostics = isLoggedIn && userRole == "mestre",
                             showNewOnOpen = backStackEntry.arguments?.getBoolean("novas") == true,
+                            newOffersRequestId = backStackEntry.arguments?.getLong("request") ?: 0L,
                             api = nossaGenteApi,
                             onNavigateBack = { navController.popBackStack() },
                             onLogout = {
