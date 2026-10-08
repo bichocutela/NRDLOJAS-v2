@@ -356,7 +356,8 @@ fun PromotionsScreen(
     showReactivateProfile: Boolean = false,
     onReactivateProfile: () -> Unit = {},
     showSyncDiagnostics: Boolean = false,
-    showNewOnOpen: Boolean = false
+    showNewOnOpen: Boolean = false,
+    newOffersRequestId: Long = 0L
 ) {
     val model: PromotionsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val ui by model.state.collectAsStateWithLifecycle()
@@ -398,7 +399,7 @@ fun PromotionsScreen(
             ui.sync.error?.let { snackbarHostState.showSnackbar(it) }
         }
     }
-    LaunchedEffect(showNewOnOpen) {
+    LaunchedEffect(showNewOnOpen, newOffersRequestId) {
         if (showNewOnOpen) {
             showNewOffers = true
             selectedCategory = null
