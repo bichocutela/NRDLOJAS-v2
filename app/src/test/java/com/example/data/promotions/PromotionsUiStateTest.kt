@@ -3,6 +3,18 @@ import com.example.ui.PromotionsUiState
 import org.junit.Assert.*
 import org.junit.Test
 class PromotionsUiStateTest {
+    @Test fun entryWaitsForFreshScanEvenWithSavedOffersAndAlwaysFinishesOnFailure() {
+        val entering = PromotionsUiState(initialized = true, opening = true,
+            sync = PromotionSyncState(running = true))
+        assertTrue(entering.loading)
+        assertFalse(entering.copy(opening = false,
+            sync = PromotionSyncState(attempted = true)).loading)
+        val failed = entering.copy(opening = false,
+            sync = PromotionSyncState(attempted = true, error = "offline"))
+        assertFalse(failed.loading)
+        assertNull(failed.visibleSyncError(false))
+    }
+
     @Test fun cachedEmptyListIsReadyAndSilentChecksNeverShowSpinner() {
         assertFalse(PromotionsUiState(initialized = true, sync = PromotionSyncState(running = true)).loading)
         assertTrue(PromotionsUiState(sync = PromotionSyncState(running = true)).loading)

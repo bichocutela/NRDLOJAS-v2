@@ -61,24 +61,37 @@ internal class OpenFactsImageSource : BarcodeImageSource {
 }
 
 /** Visible cards only. A global gate caps requests below the provider's 15/minute limit. */
-internal class ProductImageRepository private constructor(context: Context) {
+internal class ProductImageRepository internal constructor(context: Context) {
     private val cache = context.applicationContext.getSharedPreferences("ean_images_v1", Context.MODE_PRIVATE)
     private val source: BarcodeImageSource = OpenFactsImageSource()
     private val gate = Mutex()
     private var lastRequest = -4_100L
+
+    private fun cachedEntry(key: String): JSONObject? =
+        cache.getString(key, null)?.let { runCatching { JSONObject(it) }.getOrNull() }
+            ?.takeIf { it.optLong("expires") > System.currentTimeMillis() }
+
+    private fun JSONObject.toImage(): BarcodeImage? =
+        optString("url").takeIf { it.isNotBlank() }?.let {
+            BarcodeImage(it, optString("source"), optString("credit"))
+        }
+
+    // Cached images must not wait behind unrelated network requests.
+    fun cachedImage(ean: String?, category: String): BarcodeImage? {
+        val code = ean?.trim().orEmpty()
+        if (!Gtin.valid(code)) return null
+        return cachedEntry("${FactsFamily.forCategory(category).name}:$code")?.toImage()
+    }
 
     suspend fun find(ean: String?, category: String): BarcodeImage? = withContext(Dispatchers.IO) {
         val code = ean?.trim().orEmpty()
         if (!Gtin.valid(code)) return@withContext null
         val family = FactsFamily.forCategory(category)
         val key = "${family.name}:$code"
+        cachedEntry(key)?.let { return@withContext it.toImage() }
         gate.withLock {
-            val cached = cache.getString(key, null)?.let { runCatching { JSONObject(it) }.getOrNull() }
-            if (cached != null && cached.optLong("expires") > System.currentTimeMillis()) {
-                return@withLock cached.optString("url").takeIf { it.isNotBlank() }?.let {
-                    BarcodeImage(it, cached.optString("source"), cached.optString("credit"))
-                }
-            }
+            // A concurrent request may have filled the cache while this one waited.
+            cachedEntry(key)?.let { return@withLock it.toImage() }
             delay((4_100L - (SystemClock.elapsedRealtime() - lastRequest)).coerceAtLeast(0))
             lastRequest = SystemClock.elapsedRealtime()
             var transient = false

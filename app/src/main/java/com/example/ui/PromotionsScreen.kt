@@ -406,6 +406,7 @@ fun PromotionsScreen(
     }
 
     LaunchedEffect(Unit) {
+        if (!showNewOnOpen) showNewOffers = false
         model.screenOpened()
         favoriteStoreCode = userPreferences.favoriteStoreCode.first()
     }
@@ -417,8 +418,6 @@ fun PromotionsScreen(
     LaunchedEffect(stores) {
         if (selectedStore !in selectableStores) selectedStore = enabledStores.firstOrNull() ?: "0012"
         selectedOffer = null
-        offerGroups = offerGroups.map { it.copy(stores = it.stores.filter { store -> store.storeCode in enabledStores }) }
-            .filter { it.stores.isNotEmpty() }
         model.storesChanged()
     }
     val normalizedQuery = searchQuery.trim().lowercase()
@@ -1494,11 +1493,17 @@ private fun ProductImage(
     category: String = "Outras ofertas"
 ) {
     val context = LocalContext.current
-    var external by remember(ean, category) { mutableStateOf<com.example.data.promotions.BarcodeImage?>(null) }
+    val imageRepository = remember(context) { com.example.data.promotions.ProductImageRepository.get(context) }
+    var external by remember(ean, category) {
+        mutableStateOf(imageRepository.cachedImage(ean, category))
+    }
     LaunchedEffect(imageUrl, ean, category) {
-        if (imageUrl.isNullOrBlank()) external = com.example.data.promotions.ProductImageRepository.get(context).find(ean, category)
+        if (imageUrl.isNullOrBlank()) external = imageRepository.find(ean, category)
     }
     val effectiveUrl = imageUrl?.takeIf { it.isNotBlank() } ?: external?.url
+    val imageRequest = remember(context, effectiveUrl) {
+        ImageRequest.Builder(context).data(effectiveUrl).size(360, 280).crossfade(false).build()
+    }
     val expressive = LocalExpressiveStyle.current.enabled
     val shape = if (expressive) RoundedCornerShape(20.dp) else RoundedCornerShape(10.dp)
     Box(
@@ -1522,7 +1527,7 @@ private fun ProductImage(
         )
         if (!effectiveUrl.isNullOrBlank()) {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current).data(effectiveUrl).size(360, 280).crossfade(false).build(),
+                model = imageRequest,
                 contentDescription = contentDescription,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit
