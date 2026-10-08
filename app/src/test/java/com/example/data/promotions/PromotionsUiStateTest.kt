@@ -16,6 +16,22 @@ class PromotionsUiStateTest {
         assertFalse(matchesFavoriteStore("0012", "0021"))
         assertTrue(matchesFavoriteStore("0012", "0012"))
     }
+    @Test fun quotaAndNetworkErrorsAreCompletelyHiddenFromOrdinaryUsers() {
+        for (message in listOf(
+            "O serviço atingiu o limite temporário de consultas. Tente novamente mais tarde.",
+            "O serviço de consulta está temporariamente indisponível.",
+            "Não foi possível sincronizar agora."
+        )) {
+            val noCache = PromotionsUiState(initialized = false,
+                sync = PromotionSyncState(attempted = true, error = message))
+            assertNull(noCache.visibleSyncError(showDiagnostics = false))
+            assertEquals(message, noCache.visibleSyncError(showDiagnostics = true))
+
+            val cached = noCache.copy(initialized = true)
+            assertNull(cached.visibleSyncError(showDiagnostics = false))
+            assertNull(cached.visibleSyncError(showDiagnostics = true))
+        }
+    }
     @Test fun onlyAddedIdentitiesBecomeNewOffersAndReturningProductIsNewAgain() {
         assertTrue(addedOfferIds(setOf("0012|1"), setOf("0012|1"), true).isEmpty())
         assertTrue(addedOfferIds(setOf("0012|1"), emptySet(), true).isEmpty())
