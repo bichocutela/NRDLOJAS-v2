@@ -365,11 +365,9 @@ fun PromotionsScreen(
     var showNewOffers by rememberSaveable { mutableStateOf(false) }
     val isLoading = ui.loading
     val isChecking = ui.sync.visibleNetwork && ui.initialized
-    // Infrastructure failures (including quota) are diagnostics exclusive to the Mestre.
-    // Ordinary users see only a neutral fallback if there is no cached catalog.
-    val error = ui.sync.error?.takeIf { !ui.initialized }?.let {
-        if (showSyncDiagnostics) it else "Ofertas temporariamente indisponíveis. Tente atualizar mais tarde."
-    }
+    // Falhas da sincronização (inclusive cota excedida) são invisíveis ao usuário comum.
+    // Somente o Mestre vê detalhes técnicos. A tela mantém os dados locais existentes.
+    val error = ui.visibleSyncError(showSyncDiagnostics)
     var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedStore by rememberSaveable { mutableStateOf("0012") }
     var favoriteStoreCode by rememberSaveable { mutableStateOf<String?>(null) }
