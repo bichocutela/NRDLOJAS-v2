@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
 
     private var openAboutFromNotification by mutableStateOf(false)
     private var openPromotionsFromNotification by mutableStateOf(false)
+    private var promotionNotificationNavigationKey by mutableStateOf(0L)
     private var profileSectionFromNotification by mutableStateOf<String?>(null)
     private var profileNotificationNavigationKey by mutableStateOf(0L)
     private var productCodeFromNotification: String? = null
@@ -108,6 +109,7 @@ class MainActivity : ComponentActivity() {
         captureSharedOrderPdf(intent)
         openAboutFromNotification = shouldOpenAbout(intent)
         openPromotionsFromNotification = shouldOpenPromotions(intent)
+        if (openPromotionsFromNotification) promotionNotificationNavigationKey = 1L
         profileSectionFromNotification = extractProfileSection(intent)
         if (profileSectionFromNotification != null) profileNotificationNavigationKey = 1L
         productCodeFromNotification = extractProductCode(intent)
@@ -303,6 +305,7 @@ class MainActivity : ComponentActivity() {
                                 viewModel = viewModel,
                                 openAboutFromNotification = openAboutFromNotification,
                                 openPromotionsFromNotification = openPromotionsFromNotification,
+                                promotionNotificationNavigationKey = promotionNotificationNavigationKey,
                                 profileSectionFromNotification = profileSectionFromNotification,
                                 profileNotificationNavigationKey = profileNotificationNavigationKey,
                                 productCodeFromNotification = productCodeFromNotification,
@@ -336,6 +339,7 @@ class MainActivity : ComponentActivity() {
         }
         if (shouldOpenPromotions(intent)) {
             openPromotionsFromNotification = true
+            promotionNotificationNavigationKey += 1L
         }
         extractProfileSection(intent)?.let { section ->
             profileSectionFromNotification = section

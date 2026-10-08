@@ -34,7 +34,6 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
     private val gate = Mutex()
     private val mutableState = MutableStateFlow(PromotionSyncState())
     val state: StateFlow<PromotionSyncState> = mutableState
-    @Volatile private var foreground = false
     private var monitoring = false
     private var monitorJob: Job? = null
     private var lastSuccessAt = 0L
@@ -47,7 +46,6 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
         monitoring = true
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
-                foreground = true
                 monitorJob?.cancel()
                 monitorJob = scope.launch {
                     while (isActive) {
@@ -57,7 +55,6 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
                 }
             }
             override fun onStop(owner: LifecycleOwner) {
-                foreground = false
                 monitorJob?.cancel()
             }
         })
@@ -122,23 +119,29 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
         if (pending.isEmpty()) return
         val preferences = UserPreferences(context)
         val enabled = preferences.notificationsEnabled.first()
-        if (foreground || !enabled) {
+        // Foreground notifications also matter: do not discard new offers while the app is open.
+        if (!enabled) {
+            pending.forEach { repository.dao.deleteMetadata(it.key) }
+            return
+        }
+        val favorite = preferences.favoriteStoreCode.first()?.trim().orEmpty()
+        if (favorite.isBlank()) {
+            // No chosen store: do not notify about unrelated stores.
             pending.forEach { repository.dao.deleteMetadata(it.key) }
             return
         }
         val remote = FirebaseService.getNotificationSettingsOrNull() ?: return // Retry on a later worker if config is unavailable.
-        val favorite = preferences.favoriteStoreCode.first()?.takeIf { it.isNotBlank() }
         val current = repository.cached()?.promotions.orEmpty().associateBy { it.id }
         for (event in pending) {
             val json = JSONObject(event.value)
             val ids = json.getJSONArray("ids")
             val products = (0 until ids.length()).mapNotNull { current[ids.getString(it)] }
-                .filter { favorite == null || it.products.any { product -> product.storeCode == favorite } }
+                .filter { it.products.any { product -> matchesFavoriteStore(favorite, product.storeCode) } }
             if (products.isNotEmpty() && remote.enabled && remote.promotionUpdatedEnabled) {
                 val count = products.size
-                val suffix = favorite?.let { " em ${StoreCatalog.nameFor(it)}" }.orEmpty()
+                val suffix = " em ${StoreCatalog.nameFor(favorite)}"
                 val title = if (count == 1) "Nova oferta$suffix" else "Novas ofertas$suffix"
-                val body = if (count == 1) "1 produto entrou em promoção." else "$count produtos entraram em promoção."
+                val body = if (count == 1) "1 produto entrou em oferta. Toque para ver em Promoções." else "$count produtos entraram em oferta. Toque para ver em Promoções."
                 val timestamp = json.getLong("createdAt")
                 val notificationId = java.util.UUID.fromString(event.key.removePrefix("outbox_")).mostSignificantBits
                 preferences.addNotification(AppNotification(id = notificationId, type = "PROMOTION_UPDATED", title = title,
@@ -157,3 +160,7 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
         }
     }
 }
+
+/** Requires an explicitly selected favorite store: a generic broadcast must never notify every store. */
+internal fun matchesFavoriteStore(favorite: String?, offerStore: String?): Boolean =
+    !favorite.isNullOrBlank() && favorite == offerStore

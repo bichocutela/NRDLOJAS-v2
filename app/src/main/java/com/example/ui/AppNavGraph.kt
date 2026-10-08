@@ -34,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -63,6 +65,7 @@ fun AppNavGraph(
     viewModel: MainViewModel,
     openAboutFromNotification: Boolean = false,
     openPromotionsFromNotification: Boolean = false,
+    promotionNotificationNavigationKey: Long = 0L,
     profileSectionFromNotification: String? = null,
     profileNotificationNavigationKey: Long = 0L,
     productCodeFromNotification: String? = null,
@@ -176,13 +179,10 @@ fun AppNavGraph(
         }
     }
 
-    LaunchedEffect(openPromotionsFromNotification, access.promotions) {
+    LaunchedEffect(openPromotionsFromNotification, promotionNotificationNavigationKey, access.promotions) {
         if (openPromotionsFromNotification && access.promotions) {
-            navController.navigate(
-                "promotions"
-            ) {
-                launchSingleTop = true
-            }
+            // Launch the new-offers filter, even on a repeated tap while the app is open.
+            navController.navigate("promotions?novas=true&request=$promotionNotificationNavigationKey") { launchSingleTop = true }
         }
     }
 
@@ -382,9 +382,18 @@ fun AppNavGraph(
                         }
                     }
                 }
-                composable("promotions") {
+                composable(
+                    route = "promotions?novas={novas}&request={request}",
+                    arguments = listOf(
+                        navArgument("novas") { type = NavType.BoolType; defaultValue = false },
+                        navArgument("request") { type = NavType.LongType; defaultValue = 0L }
+                    )
+                ) { backStackEntry ->
                     RestrictedRoute(access.loading, access.promotions, { navController.navigateToSearch() }) {
                         PromotionsScreen(
+                            showSyncDiagnostics = isLoggedIn && userRole == "mestre",
+                            showNewOnOpen = backStackEntry.arguments?.getBoolean("novas") == true,
+                            newOffersRequestId = backStackEntry.arguments?.getLong("request") ?: 0L,
                             api = nossaGenteApi,
                             onNavigateBack = { navController.popBackStack() },
                             onLogout = {
