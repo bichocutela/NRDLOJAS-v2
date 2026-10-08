@@ -37,4 +37,16 @@ class PromotionsUiStateTest {
         assertTrue(addedOfferIds(setOf("0012|1"), emptySet(), true).isEmpty())
         assertEquals(setOf("0012|1"), addedOfferIds(emptySet(), setOf("0012|1"), true))
     }
+    @Test fun unchangedScansPreserveTheNewBatchAndNeverCreateAdditions() {
+        val old = setOf("0012|1", "0012|2")
+        val batch = setOf("0012|2")
+        val unchanged = addedOfferIds(old, old, true)
+        assertTrue(unchanged.isEmpty())
+        assertEquals(batch, latestAddedOfferIds(batch, unchanged, old, true))
+        val next = old + "0012|3"
+        val added = addedOfferIds(old, next, true)
+        assertEquals(setOf("0012|3"), added)
+        assertEquals(added, latestAddedOfferIds(batch, added, next, true))
+        assertEquals(added, latestAddedOfferIds(added, emptySet(), next, true))
+    }
 }

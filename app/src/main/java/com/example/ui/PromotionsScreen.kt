@@ -405,7 +405,10 @@ fun PromotionsScreen(
         }
     }
 
-    LaunchedEffect(Unit) { favoriteStoreCode = userPreferences.favoriteStoreCode.first() }
+    LaunchedEffect(Unit) {
+        model.screenOpened()
+        favoriteStoreCode = userPreferences.favoriteStoreCode.first()
+    }
     LaunchedEffect(ui.offers) {
         offerGroups = withContext(Dispatchers.Default) { buildOfferGroups(ui.offers) }
         if (selectedCategory != null && offerGroups.none { it.category == selectedCategory }) selectedCategory = null
@@ -499,7 +502,7 @@ fun PromotionsScreen(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = if (selectedCategory == null) "Promoção" else selectedCategory.orEmpty(),
+                            text = selectedCategory ?: if (showNewOffers) "Ofertas novas" else "Promoção",
                             fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -509,12 +512,13 @@ fun PromotionsScreen(
                         NewOffersButton(
                             changeCount = newOffersCount,
                             highlighted = showNewOffers || newOffersCount > 0,
-                            showingNew = showNewOffers,
                             enabled = !isLoading,
                             onClick = {
-                                showNewOffers = !showNewOffers
-                                selectedCategory = null
-                                searchQuery = ""
+                                if (!showNewOffers) {
+                                    selectedCategory = null
+                                    searchQuery = ""
+                                    showNewOffers = true
+                                }
                             }
                         )
                     }
@@ -522,10 +526,15 @@ fun PromotionsScreen(
                 navigationIcon = {
                     IconButton(
                         onClick = {
-                            if (selectedCategory != null) selectedCategory = null else onNavigateBack()
+                            when {
+                                selectedCategory != null -> selectedCategory = null
+                                showNewOffers -> showNewOffers = false
+                                else -> onNavigateBack()
+                            }
                         }
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription =
+                            if (showNewOffers && selectedCategory == null) "Todas as ofertas" else "Voltar")
                     }
                 },
                 actions = {
@@ -2033,7 +2042,6 @@ private fun String?.toNumericPrice(): Double? = this
 private fun NewOffersButton(
     changeCount: Int,
     highlighted: Boolean,
-    showingNew: Boolean = false,
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
@@ -2070,7 +2078,7 @@ private fun NewOffersButton(
             Icon(Icons.Default.LocalOffer, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(4.dp))
             Text(
-                if (showingNew) "Todas as ofertas" else "Ofertas novas",
+                "Ofertas novas",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = if (highlighted) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,

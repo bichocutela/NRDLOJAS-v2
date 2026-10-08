@@ -199,6 +199,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     } catch (error) {
       // Record only a controlled code; never tokens, credentials or upstream bodies.
       if (error?.message === 'CACHE_RATE_LIMITED') return reply(429,{error:'SYNC_RATE_LIMITED'});
+      if (error?.message === 'REFRESH_BUSY') return reply(503,{error:'SYNC_BUSY'});
       if (error?.message === 'CACHE_UNAVAILABLE') console.warn('PROMOTION_SYNC_FAILURE','CACHE_UNAVAILABLE');
     }
     return reply(502,{error:'CONSULTATION_UNAVAILABLE'});

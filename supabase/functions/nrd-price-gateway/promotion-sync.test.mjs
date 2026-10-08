@@ -40,3 +40,25 @@ test('shared snapshot avoids duplicate reads, survives failure and forced refres
   assert.equal(forced.items.length,1);
   assert.notEqual(forced.revision,first.revision);
 });
+test('manual refresh waits for another instance to publish new products instead of returning old offers',async()=>{
+ const before=await snapshot([{id:1,value:2}]);
+ const after=await snapshot([{id:1,value:2},{id:2,value:3}]);
+ let pointer={revision:before.revision,checkedAt:1000,count:1,pages:1,generation:'old'};
+ let waits=0,reads=0;
+ const cache={get:async()=>({payload:pointer}),claim:async()=>null,
+  getFresh:async()=>({payload:pointer}),many:async keys=>new Map(keys.map(key=>[key,{payload:{rows:after.rows}}]))};
+ const sync=createPromotionSync({cache,now:()=>2000,sleep:async()=>{
+  if(++waits===2) pointer={revision:after.revision,checkedAt:2500,count:2,pages:1,generation:'new'};
+ }});
+ const result=await sync({input:{operation:'promotion_refresh',revision:before.revision,manifest:before.rows.map(({id,hash})=>({id,hash}))},
+  readPage:async()=>{reads++;throw Error('duplicate scan');}});
+ assert.equal(reads,0);assert.equal(waits,2);assert.equal(result.revision,after.revision);
+ assert.deepEqual(result.items.map(row=>row.id),['2']);
+});
+test('manual refresh with a stalled remote lease fails rather than claiming a fresh no-change result',async()=>{
+ const before=await snapshot([{id:1,value:2}]);let waits=0;
+ const cache={get:async()=>({payload:{revision:before.revision,checkedAt:1000,count:1,pages:1,generation:'old'}}),claim:async()=>null};
+ const sync=createPromotionSync({cache,now:()=>2000,sleep:async()=>{waits++;}});
+ await assert.rejects(()=>sync({input:{operation:'promotion_refresh',revision:before.revision,manifest:[]},readPage:async()=>{throw Error('duplicate');}}),/REFRESH_BUSY/);
+ assert.equal(waits,7);
+});
