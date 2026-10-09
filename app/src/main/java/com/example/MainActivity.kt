@@ -170,6 +170,9 @@ class MainActivity : ComponentActivity() {
             }
         }
         
+        if (intent?.action == com.example.util.OrderProcessService.ACTION_RESUME) {
+            com.example.ui.VisualMixOrderProcesses.resume(intent?.getStringExtra("orderSessionId"))
+        }
         enableEdgeToEdge()
         setContent {
 
@@ -320,6 +323,7 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.align(Alignment.BottomCenter)
                             )
 
+                        com.example.ui.VisualMixOrderProcessOverlay()
                         com.example.ui.NrdLaunchAnimation(appTheme = effectiveAppTheme)
 
                 }
@@ -334,6 +338,9 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         captureSharedOrderPdf(intent)
+        if (intent.action == com.example.util.OrderProcessService.ACTION_RESUME) {
+            com.example.ui.VisualMixOrderProcesses.resume(intent?.getStringExtra("orderSessionId"))
+        }
         if (shouldOpenAbout(intent)) {
             openAboutFromNotification = true
         }

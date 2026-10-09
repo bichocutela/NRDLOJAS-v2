@@ -27,6 +27,7 @@ import com.example.data.acp.*
 import com.example.data.flyer.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withPermit
 
 @Composable
 internal fun VisualMixOrderImportButton(onClick: () -> Unit) {
@@ -57,60 +58,48 @@ internal fun VisualMixOrderImportHost(
         .currentUser?.email?.trim()?.lowercase() == "mestre@nrdlojas.com"
     if (!isMaster) return
 
-    var sharedOpen by remember { mutableStateOf(false) }
-    var pendingSharedPdf by remember { mutableStateOf<Uri?>(null) }
-    var pendingSharedPdfRequestKey by remember { mutableLongStateOf(0L) }
-
-    LaunchedEffect(externalPdfUri, externalPdfRequestKey, isMaster) {
-        if (isMaster && externalPdfUri != null) {
-            pendingSharedPdf = Uri.parse(externalPdfUri)
-            pendingSharedPdfRequestKey = externalPdfRequestKey
-            sharedOpen = true
+    LaunchedEffect(open) {
+        if (open) VisualMixOrderProcesses.open(api)
+    }
+    LaunchedEffect(externalPdfUri, externalPdfRequestKey) {
+        if (externalPdfUri != null) {
+            VisualMixOrderProcesses.add(api, Uri.parse(externalPdfUri))
             onExternalPdfConsumed()
         }
     }
-
-    if (open || sharedOpen) {
-        VisualMixOrderImportDialog(
-            api = api,
-            initialPdfUri = pendingSharedPdf,
-            initialPdfRequestKey = pendingSharedPdfRequestKey,
-            onInitialPdfConsumed = { pendingSharedPdf = null },
-            onDismiss = {
-                sharedOpen = false
-                onDismiss()
-            }
-        )
+    LaunchedEffect(VisualMixOrderProcesses.minimized.value) {
+        if (VisualMixOrderProcesses.minimized.value) onDismiss()
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun VisualMixOrderImportDialog(
+internal fun VisualMixOrderImportDialog(
     api: AcpApi,
+    session: VisualMixOrderSession,
     initialPdfUri: Uri? = null,
     initialPdfRequestKey: Long = 0L,
     onInitialPdfConsumed: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var analysis by remember { mutableStateOf<FlyerAnalysisResult?>(null) }
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var compareOffer by remember { mutableStateOf<FlyerOffer?>(null) }
-    var compareProduct by remember { mutableStateOf<AcpProduct?>(null) }
-    var compareBusy by remember { mutableStateOf(false) }
-    var compareError by remember { mutableStateOf<String?>(null) }
-    var openPreviewAfterLoad by remember { mutableStateOf(false) }
-    var savingValidity by remember { mutableStateOf(false) }
-    var confirmedKeys by remember { mutableStateOf(VisualMixReviewStore.confirmedKeys(context)) }
-    var draftAvailable by remember { mutableStateOf(VisualMixReviewStore.hasDraft(context)) }
-    var draftMessage by remember { mutableStateOf<String?>(null) }
-    var selectionMode by remember { mutableStateOf(false) }
-    var selectedKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var batchBusy by remember { mutableStateOf(false) }
-    var expandedApproved by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val context = LocalContext.current.applicationContext
+    val scope = session.scope
+    var analysis by session.analysis
+    var busy by session.busy
+    var error by session.error
+    var compareOffer by session.compareOffer
+    var compareProduct by session.compareProduct
+    var compareBusy by session.compareBusy
+    var compareError by session.compareError
+    var openPreviewAfterLoad by session.openPreviewAfterLoad
+    var savingValidity by session.savingValidity
+    var confirmedKeys by session.confirmedKeys
+    var draftAvailable by session.draftAvailable
+    var draftMessage by session.draftMessage
+    var selectionMode by session.selectionMode
+    var selectedKeys by session.selectedKeys
+    var batchBusy by session.batchBusy
+    var expandedApproved by session.expandedApproved
 
     fun stableKey(offer: FlyerOffer) = VisualMixReviewStore.stableKey(offer)
     fun isVerified(offer: FlyerOffer) = stableKey(offer) in confirmedKeys
@@ -122,7 +111,7 @@ private fun VisualMixOrderImportDialog(
         compareError = null
         openPreviewAfterLoad = previewAfterLoad
         compareBusy = true
-        scope.launch {
+        session.processingJob = scope.launch {
             try {
                 if (!api.restoreSession()) api.confirmAccess()
                 compareProduct = findOrderProductInAcp(api, offer)
@@ -137,25 +126,14 @@ private fun VisualMixOrderImportDialog(
         }
     }
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null && !busy) {
-            scope.launch {
-                busy = true
-                error = null
-                analysis = null
-                selectionMode = false
-                selectedKeys = emptySet()
-                draftMessage = null
-                try {
-                    analysis = FlyerImportEngine.analyzeUri(context, uri)
-                    confirmedKeys = VisualMixReviewStore.confirmedKeys(context)
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (failure: Exception) {
-                    error = failure.message ?: "Não foi possível ler a ordem do Visual Mix."
-                } finally {
-                    busy = false
-                }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        uris.forEach { uri ->
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            VisualMixOrderProcesses.add(api, uri).also { document ->
+                document.name.value = runCatching {
+                    context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                        ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                }.getOrNull() ?: "Documento"
             }
         }
     }
@@ -163,6 +141,8 @@ private fun VisualMixOrderImportDialog(
     LaunchedEffect(initialPdfRequestKey) {
         val uri = initialPdfUri ?: return@LaunchedEffect
         if (busy) return@LaunchedEffect
+        onInitialPdfConsumed()
+        session.processingJob = scope.launch {
 
         busy = true
         error = null
@@ -171,7 +151,10 @@ private fun VisualMixOrderImportDialog(
         selectedKeys = emptySet()
         draftMessage = "PDF recebido pelo compartilhamento. Importando automaticamente…"
         try {
-            analysis = FlyerImportEngine.analyzeUri(context, uri)
+            analysis = VisualMixOrderProcesses.importGate.withPermit { FlyerImportEngine.analyzeUri(context, uri) }
+            analysis?.let { VisualMixReviewStore.saveDraft(context, it) }
+            draftAvailable = true
+            analysis?.let { VisualMixReviewStore.saveSession(context, session.id, it, selectedKeys) }
             confirmedKeys = VisualMixReviewStore.confirmedKeys(context)
             draftMessage = "PDF recebido e carregado automaticamente."
         } catch (cancelled: CancellationException) {
@@ -181,11 +164,12 @@ private fun VisualMixOrderImportDialog(
             draftMessage = null
         } finally {
             busy = false
-            onInitialPdfConsumed()
+        }
         }
     }
 
-    Dialog(
+
+    if (!session.minimized.value && VisualMixOrderProcesses.selected.value == session.id) Dialog(
         onDismissRequest = { if (!busy && !savingValidity && !batchBusy) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
@@ -200,7 +184,9 @@ private fun VisualMixOrderImportDialog(
                     }
                 )
 
+                VisualMixOrderDocumentStack(session)
                 LazyColumn(
+                    state = session.listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -214,12 +200,12 @@ private fun VisualMixOrderImportDialog(
                     item {
                         Button(
                             onClick = { picker.launch(arrayOf("application/pdf")) },
-                            enabled = !busy && !batchBusy,
+                            enabled = true,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Default.PictureAsPdf, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text(if (analysis == null) "Selecionar PDF Visual Mix" else "Importar outro PDF")
+                            Text("Adicionar documentos")
                         }
                     }
                     item {
@@ -246,6 +232,10 @@ private fun VisualMixOrderImportDialog(
                                     if (batchBusy) "Confirmando os produtos selecionados…" else "Lendo o PDF e conferindo os produtos no sistema…",
                                     style = MaterialTheme.typography.bodySmall
                                 )
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    TextButton(onClick = { session.cancel() }) { Text("Cancelar") }
+                                    TextButton(onClick = { session.minimize() }) { Text("Minimizar") }
+                                }
                             }
                         }
                     }
@@ -304,12 +294,20 @@ private fun VisualMixOrderImportDialog(
                                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             TextButton(
                                                 onClick = { selectedKeys = eligible.map(::stableKey).toSet() },
+                                                enabled = !batchBusy,
                                                 modifier = Modifier.weight(1f)
                                             ) { Text("Selecionar todos") }
                                             TextButton(
-                                                onClick = { selectionMode = false; selectedKeys = emptySet() },
+                                                onClick = {
+                                                    if (batchBusy) session.cancel()
+                                                    else { selectionMode = false; selectedKeys = emptySet() }
+                                                },
                                                 modifier = Modifier.weight(1f)
                                             ) { Text("Cancelar") }
+                                            if (batchBusy) TextButton(
+                                                onClick = { session.minimize() },
+                                                modifier = Modifier.weight(1f)
+                                            ) { Text("Minimizar") }
                                         }
                                         Button(
                                             onClick = {
@@ -317,37 +315,48 @@ private fun VisualMixOrderImportDialog(
                                                 if (selectedOffers.isEmpty()) return@Button
                                                 batchBusy = true
                                                 error = null
-                                                scope.launch {
+                                                session.processingJob = scope.launch {
                                                     val successes = mutableListOf<FlyerOffer>()
                                                     var failures = 0
                                                     try {
                                                         if (!api.restoreSession()) api.confirmAccess()
                                                         for (offer in selectedOffers) {
                                                             val validity = validityForOrderOffer(result, offer)
-                                                            val product = runCatching { findOrderProductInAcp(api, offer) }.getOrNull()
+                                                            val product = try { findOrderProductInAcp(api, offer) } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
                                                             if (validity == null || product == null) {
                                                                 failures++
                                                                 continue
                                                             }
-                                                            val saved = runCatching {
+                                                            val saved = try {
                                                                 AcpOfferValidityStore.save(
                                                                     productName = product.description,
                                                                     family = offer.orderAcpFamily(),
                                                                     startDate = formatIsoDate(validity.first) ?: validity.first,
                                                                     endDate = formatIsoDate(validity.second) ?: validity.second
                                                                 )
-                                                            }.isSuccess
-                                                            if (saved) successes += offer else failures++
+                                                                true
+                                                            } catch (cancelled: CancellationException) { throw cancelled }
+                                                            catch (_: Exception) { false }
+                                                            if (saved) {
+                                                                successes += offer
+                                                                VisualMixReviewStore.markConfirmed(context, offer)
+                                                                confirmedKeys = VisualMixReviewStore.confirmedKeys(context)
+                                                                selectedKeys = selectedKeys - stableKey(offer)
+                                                                VisualMixReviewStore.saveSessionSelection(context, session.id, selectedKeys)
+                                                            } else failures++
+                                                            draftMessage = "${successes.size + failures} de ${selectedOffers.size} produto(s) processado(s)."
                                                         }
                                                         VisualMixReviewStore.markConfirmed(context, successes)
                                                         confirmedKeys = VisualMixReviewStore.confirmedKeys(context)
-                                                        selectedKeys = emptySet()
-                                                        selectionMode = false
+                                                        selectedKeys = selectedOffers.filter { it !in successes }.map(::stableKey).toSet()
+                                                        selectionMode = selectedKeys.isNotEmpty()
                                                         draftMessage = if (failures == 0) {
                                                             "${successes.size} produto(s) confirmado(s)."
                                                         } else {
                                                             "${successes.size} confirmado(s) e $failures pendente(s) para revisão individual."
                                                         }
+                                                    } catch (cancelled: CancellationException) {
+                                                        throw cancelled
                                                     } catch (_: Exception) {
                                                         error = "Não foi possível concluir a confirmação em lote. Tente novamente."
                                                     } finally {
@@ -389,7 +398,7 @@ private fun VisualMixOrderImportDialog(
         }
     }
 
-    compareOffer?.let { offer ->
+    if (!session.minimized.value && VisualMixOrderProcesses.selected.value == session.id) compareOffer?.let { offer ->
         VisualMixAcpComparisonDialog(
             offer = offer,
             result = analysis,
@@ -399,6 +408,7 @@ private fun VisualMixOrderImportDialog(
             saving = savingValidity,
             applied = isVerified(offer),
             openPreviewInitially = openPreviewAfterLoad,
+            onMinimize = { session.minimize() },
             onDismiss = {
                 if (!savingValidity) {
                     compareOffer = null
@@ -418,7 +428,7 @@ private fun VisualMixOrderImportDialog(
                 }
                 savingValidity = true
                 compareError = null
-                scope.launch {
+                session.processingJob = scope.launch {
                     try {
                         AcpOfferValidityStore.save(
                             productName = product.description,
@@ -428,6 +438,8 @@ private fun VisualMixOrderImportDialog(
                         )
                         VisualMixReviewStore.markConfirmed(context, offer)
                         confirmedKeys = VisualMixReviewStore.confirmedKeys(context)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
                     } catch (_: SecurityException) {
                         compareError = "Somente o Mestre pode confirmar a validade."
                     } catch (_: Exception) {
@@ -544,6 +556,7 @@ private fun VisualMixAcpComparisonDialog(
     saving: Boolean,
     applied: Boolean,
     openPreviewInitially: Boolean,
+    onMinimize: () -> Unit,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
@@ -553,6 +566,7 @@ private fun VisualMixAcpComparisonDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Visual Mix × sistema") },
+        dismissButton = { TextButton(onClick = onMinimize) { Text("Minimizar") } },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("VISUAL MIX", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)

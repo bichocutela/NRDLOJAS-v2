@@ -73,6 +73,27 @@ internal object VisualMixReviewStore {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY_DRAFT).apply()
     }
 
+    fun saveSession(context: Context, id: String, result: FlyerAnalysisResult, selected: Set<String>) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val ids = prefs.getStringSet("session_ids", emptySet()).orEmpty() + id
+        prefs.edit().putStringSet("session_ids", ids)
+            .putString("session_" + id, result.toJson().toString())
+            .putStringSet("selection_" + id, selected).apply()
+    }
+
+    fun saveSessionSelection(context: Context, id: String, selected: Set<String>) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putStringSet("selection_" + id, selected).apply()
+    }
+
+    fun loadSessions(context: Context): List<Triple<String, FlyerAnalysisResult, Set<String>>> {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return prefs.getStringSet("session_ids", emptySet()).orEmpty().mapNotNull { id ->
+            val result = runCatching { JSONObject(prefs.getString("session_" + id, "")!!).toAnalysisResult() }.getOrNull()
+            result?.let { Triple(id, it, prefs.getStringSet("selection_" + id, emptySet()).orEmpty().toSet()) }
+        }
+    }
+
     private fun FlyerAnalysisResult.toJson(): JSONObject = JSONObject().apply {
         put("name", name)
         put("validFrom", validFrom)
