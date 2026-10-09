@@ -185,6 +185,7 @@ jobs:
           --tests 'com.example.data.promotions.*' \
           --tests 'com.example.data.flyer.*' \
           --tests 'com.example.data.NossaGenteApiTest' \
+          --tests 'com.example.ui.VisualMixOrderSessionTest' \
           --tests 'com.example.ui.DynamicMediaUrlTest' \
           --tests 'com.example.ui.theme.GlassSoftThemeTest' \
           --tests 'com.example.ui.theme.ExpressiveThemeTest' \
