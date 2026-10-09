@@ -40,11 +40,11 @@ class OrderProcessService : Service() {
                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             val completedPending = PendingIntent.getActivity(this, completedId.hashCode(), completedTarget,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            val completedError = intent.getStringExtra("completedError")
+            val completedError = intent?.getStringExtra("completedError")
             val completion = NotificationCompat.Builder(this, CHANNEL)
                 .setSmallIcon(R.drawable.ic_notification_default)
                 .setContentTitle(if (completedError == null) "Processo Concluído" else "Processo interrompido")
-                .setContentText(intent.getStringExtra("completedName") + " • " + (completedError ?: "Toque para continuar."))
+                .setContentText(intent?.getStringExtra("completedName") + " • " + (completedError ?: "Toque para continuar."))
                 .setContentIntent(completedPending).setAutoCancel(true).build()
             manager.notify(completedId, completedId.hashCode(), completion)
         }

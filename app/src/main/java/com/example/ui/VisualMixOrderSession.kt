@@ -21,6 +21,7 @@ import com.example.data.acp.*
 import com.example.data.flyer.*
 import com.example.util.OrderProcessService
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collect
 
 /** Process-owned session: hiding the window or navigating never disposes the job or review state. */
 internal class VisualMixOrderSession(val id: String = java.util.UUID.randomUUID().toString()) {
