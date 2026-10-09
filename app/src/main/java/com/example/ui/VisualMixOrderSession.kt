@@ -232,7 +232,8 @@ internal fun VisualMixOrderProcessOverlay() {
     LaunchedEffect(Unit) { VisualMixOrderProcesses.restore(context) }
     VisualMixOrderProcesses.sessions.forEach { session ->
         key(session.id) {
-            val api = session.api ?: return@key
+            val api = session.api
+            if (api != null) {
             LaunchedEffect(session.id) {
                 session.observe(context)
                 session.confirmedKeys.value = VisualMixReviewStore.confirmedKeys(context)
@@ -245,6 +246,7 @@ internal fun VisualMixOrderProcessOverlay() {
                 onInitialPdfConsumed = { session.pdfUri.value = null },
                 onDismiss = { session.close(context) }
             )
+            }
         }
     }
     if (VisualMixOrderProcesses.minimized.value && VisualMixOrderProcesses.sessions.isNotEmpty()) {
