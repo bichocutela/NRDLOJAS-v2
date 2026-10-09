@@ -81,6 +81,11 @@ internal object VisualMixReviewStore {
             .putStringSet("selection_" + id, selected).apply()
     }
 
+    fun saveSessionSelection(context: Context, id: String, selected: Set<String>) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putStringSet("selection_" + id, selected).apply()
+    }
+
     fun loadSessions(context: Context): List<Triple<String, FlyerAnalysisResult, Set<String>>> {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return prefs.getStringSet("session_ids", emptySet()).orEmpty().mapNotNull { id ->

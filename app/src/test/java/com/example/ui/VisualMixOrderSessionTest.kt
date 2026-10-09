@@ -37,6 +37,20 @@ class VisualMixOrderSessionTest {
         assertEquals("a", VisualMixOrderProcesses.selected.value)
         assertFalse(VisualMixOrderProcesses.minimized.value)
     }
+    @Test fun draftsAndSelectionsAreRestoredWithoutMixingDocuments() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val store = com.example.data.flyer.VisualMixReviewStore
+        context.getSharedPreferences("visual_mix_review", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+        val a = com.example.data.flyer.FlyerAnalysisResult("a.pdf", null, null, emptyList(), emptyList(), "pdf", "a.pdf")
+        val b = a.copy(name = "b.pdf", sourceLabel = "b.pdf")
+        store.saveSession(context, "a", a, setOf("product-a"))
+        store.saveSession(context, "b", b, setOf("product-b"))
+        val restored = store.loadSessions(context).associateBy { it.first }
+        assertEquals("a.pdf", restored.getValue("a").second.name)
+        assertEquals(setOf("product-a"), restored.getValue("a").third)
+        assertEquals("b.pdf", restored.getValue("b").second.name)
+        assertEquals(setOf("product-b"), restored.getValue("b").third)
+    }
     @Test fun cancellingOneDocumentNeverCancelsAnother() = runBlocking {
         val first = VisualMixOrderSession("a")
         val second = VisualMixOrderSession("b")

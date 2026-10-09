@@ -63,7 +63,7 @@ internal class VisualMixOrderSession(val id: String = java.util.UUID.randomUUID(
         scope.launch {
             snapshotFlow { Triple(running, error.value ?: compareError.value, selectedKeys.value) }
                 .collect { (running, failure, selected) ->
-                    analysis.value?.let { VisualMixReviewStore.saveSession(context, id, it, selected) }
+                    if (analysis.value != null) VisualMixReviewStore.saveSessionSelection(context, id, selected)
                     updateProcess(context, running, "", failure)
                 }
         }
@@ -99,6 +99,20 @@ internal object VisualMixOrderProcesses {
     val importGate = kotlinx.coroutines.sync.Semaphore(2)
     private var serviceRunning = false
     private var restored = false
+    fun stopAll(context: Context) {
+        val manager = context.getSystemService(android.app.NotificationManager::class.java)
+        sessions.forEach {
+            it.scope.cancel()
+            manager.cancel(it.id, it.id.hashCode())
+        }
+        context.stopService(Intent(context, OrderProcessService::class.java))
+        manager.cancel(OrderProcessService.NOTIFICATION_ID)
+        sessions.clear()
+        selected.value = null
+        minimized.value = false
+        serviceRunning = false
+        restored = false
+    }
     fun restore(context: Context) {
         if (restored) return
         restored = true
@@ -191,7 +205,10 @@ internal fun VisualMixOrderProcessOverlay() {
     val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val master = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
         ?.equals("mestre@nrdlojas.com", ignoreCase = true) == true
-    if (!master) return
+    if (!master) {
+        LaunchedEffect(Unit) { if (VisualMixOrderProcesses.sessions.isNotEmpty()) VisualMixOrderProcesses.stopAll(context) }
+        return
+    }
     LaunchedEffect(Unit) { VisualMixOrderProcesses.restore(context) }
     VisualMixOrderProcesses.sessions.forEach { session ->
         key(session.id) {

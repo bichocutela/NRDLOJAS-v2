@@ -342,7 +342,7 @@ internal fun VisualMixOrderImportDialog(
                                                                 VisualMixReviewStore.markConfirmed(context, offer)
                                                                 confirmedKeys = VisualMixReviewStore.confirmedKeys(context)
                                                                 selectedKeys = selectedKeys - stableKey(offer)
-                                                                VisualMixReviewStore.saveSession(context, session.id, result, selectedKeys)
+                                                                VisualMixReviewStore.saveSessionSelection(context, session.id, selectedKeys)
                                                             } else failures++
                                                             draftMessage = "${successes.size + failures} de ${selectedOffers.size} produto(s) processado(s)."
                                                         }
