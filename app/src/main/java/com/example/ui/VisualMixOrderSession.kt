@@ -99,6 +99,8 @@ internal object VisualMixOrderProcesses {
     val importGate = kotlinx.coroutines.sync.Semaphore(2)
     private var serviceRunning = false
     private var restored = false
+    private var resumeRequested = false
+    private var resumeDocument: String? = null
     fun stopAll(context: Context) {
         val manager = context.getSystemService(android.app.NotificationManager::class.java)
         sessions.forEach {
@@ -130,7 +132,10 @@ internal object VisualMixOrderProcesses {
             sessions += session
         }
         selected.value = sessions.firstOrNull()?.id
-        minimized.value = sessions.isNotEmpty()
+        minimized.value = sessions.isNotEmpty() && !resumeRequested
+        resumeDocument?.let { id -> sessions.firstOrNull { it.id == id }?.let { selected.value = it.id } }
+        resumeRequested = false
+        resumeDocument = null
     }
     fun open(api: AcpApi): VisualMixOrderSession {
         val session = sessions.firstOrNull { it.id == selected.value }
@@ -154,6 +159,7 @@ internal object VisualMixOrderProcesses {
         minimized.value = false
     }
     fun resume(id: String? = null) {
+        if (sessions.isEmpty()) { resumeRequested = true; resumeDocument = id }
         id?.let { target -> sessions.firstOrNull { it.id == target }?.let { selected.value = it.id } }
         minimized.value = false
     }
@@ -178,18 +184,26 @@ internal object VisualMixOrderProcesses {
 
 @Composable
 internal fun VisualMixOrderDocumentStack(session: VisualMixOrderSession) {
-    androidx.compose.foundation.lazy.LazyRow(
+    androidx.compose.foundation.lazy.LazyColumn(
+        modifier = Modifier.fillMaxWidth().heightIn(max = 160.dp),
         contentPadding = PaddingValues(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         items(VisualMixOrderProcesses.sessions.size, key = { VisualMixOrderProcesses.sessions[it].id }) { index ->
             val document = VisualMixOrderProcesses.sessions[index]
             FilterChip(
+                modifier = Modifier.fillMaxWidth(),
                 selected = document.id == session.id,
                 onClick = { VisualMixOrderProcesses.select(document) },
                 label = {
-                    Text(document.analysis.value?.name ?: document.name.value,
-                        maxLines = 1, modifier = Modifier.widthIn(max = 180.dp))
+                    Column {
+                        Text(document.analysis.value?.name ?: document.name.value, maxLines = 1)
+                        Text(if (document.batchBusy.value || document.savingValidity.value) "Confirmando produtos…"
+                            else if (document.busy.value) "Verificando ofertas…"
+                            else if (document.failed.value) "Revisar pendências"
+                            else if (document.completed.value) "Processo Concluído"
+                            else "Pronto para importar", style = MaterialTheme.typography.labelSmall)
+                    }
                 },
                 trailingIcon = {
                     if (document.running) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
@@ -203,8 +217,14 @@ internal fun VisualMixOrderDocumentStack(session: VisualMixOrderSession) {
 @Composable
 internal fun VisualMixOrderProcessOverlay() {
     val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
-    val master = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
-        ?.equals("mestre@nrdlojas.com", ignoreCase = true) == true
+    val auth = remember { com.google.firebase.auth.FirebaseAuth.getInstance() }
+    val master by produceState(initialValue = auth.currentUser?.email?.equals("mestre@nrdlojas.com", true) == true) {
+        val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener {
+            value = it.currentUser?.email?.equals("mestre@nrdlojas.com", true) == true
+        }
+        auth.addAuthStateListener(listener)
+        awaitDispose { auth.removeAuthStateListener(listener) }
+    }
     if (!master) {
         LaunchedEffect(Unit) { if (VisualMixOrderProcesses.sessions.isNotEmpty()) VisualMixOrderProcesses.stopAll(context) }
         return

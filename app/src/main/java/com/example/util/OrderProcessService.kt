@@ -51,7 +51,7 @@ class OrderProcessService : Service() {
         if (running) startForeground(NOTIFICATION_ID, notification)
         else {
             stopForeground(STOP_FOREGROUND_REMOVE)
-            manager.notify(NOTIFICATION_ID, notification)
+            if (completedId == null) manager.notify(NOTIFICATION_ID, notification)
             stopSelf()
         }
         return START_NOT_STICKY
