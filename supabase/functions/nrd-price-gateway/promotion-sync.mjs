@@ -61,15 +61,24 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
         }
         if(products.length!==expected) throw Error('INCOMPLETE_SNAPSHOT');
         console.info('PROMOTION_SNAPSHOT_STAGE',JSON.stringify({stage:'read',count:products.length}));
-        const enriched=enrichItems ? await enrichItems(products) : products;
-        if(!Array.isArray(enriched) || enriched.length!==products.length)throw Error('INVALID_ENRICHMENT');
+        // All ACP fields are synced together; optional catalog/classification work rotates in bounded batches.
+        const enriched=[...products];
+        const cursor=products.length ? (claim.payload.enrichCursor ?? 0)%products.length : 0;
+        const batchSize=enrichItems ? Math.min(250,products.length) : 0;
+        if(batchSize) {
+          const positions=Array.from({length:batchSize},(_,i)=>(cursor+i)%products.length);
+          const batch=await enrichItems(positions.map(i=>products[i]));
+          if(!Array.isArray(batch) || batch.length!==batchSize)throw Error('INVALID_ENRICHMENT');
+          positions.forEach((position,i)=>enriched[position]=batch[i]);
+        }
+        const enrichCursor=products.length ? (cursor+batchSize)%products.length : 0;
         const previousKeys=Array.from({length:claim.payload.pages ?? 0},(_,i)=>`snapshot_${claim.payload.generation}_${i}`);
         const previousPages=await cache.many(previousKeys);
         const previousItems=new Map(previousKeys.flatMap(key=>previousPages.get(key)?.payload.rows ?? []).map(row=>[row.id,row.item]));
         const stable=enriched.map(item=>retainCatalogMetadata(item,previousItems.get(String(item.id ?? `${item.code}|${item.barCode}|${item.description}`))));
         const next=await snapshot(stable);
         if(next.revision===claim.payload.revision) {
-          return (await cache.finish('promotion_snapshot_v3',claim,{...claim.payload,checkedAt:now()}))?.payload;
+          return (await cache.finish('promotion_snapshot_v3',claim,{...claim.payload,enrichCursor,checkedAt:now()}))?.payload;
         }
         const generation=crypto.randomUUID().replaceAll('-',''); const pages=[]; let chunk=[]; let bytes=0;
         for(const row of next.rows) {
@@ -91,7 +100,7 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
           }
         }
         if(claim.payload.generation) retired.push({generation:claim.payload.generation,pages:claim.payload.pages,deleteAfter:now()+30*60_000});
-        const pointer={retired,revision:next.revision,generation,pages:pages.length,count:next.rows.length,checkedAt:now()};
+        const pointer={retired,enrichCursor,revision:next.revision,generation,pages:pages.length,count:next.rows.length,checkedAt:now()};
         return (await cache.finish('promotion_snapshot_v3',claim,pointer))?.payload;
       } catch(error) {
         await cache.finish('promotion_snapshot_v3',claim,{...claim.payload,retryAt:now()+60000}).catch(()=>{});

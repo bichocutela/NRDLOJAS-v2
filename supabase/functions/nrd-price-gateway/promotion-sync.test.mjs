@@ -89,3 +89,12 @@ test('stale status returns immediately while one background refresh owns the wor
  assert.equal(status.revision,before.revision);assert.equal(calls,1);
  resolveRead({items:[{id:1,value:2}],pageIndex:0,totalCount:1,totalPages:1});await Promise.all(jobs);
 });
+
+test('large snapshots keep all ACP products and rotate bounded enrichment batches',async()=>{
+ const docs=new Map();let version=0;const seen=new Set();const products=Array.from({length:503},(_,id)=>({id,value:2}));
+ const cache={get:async k=>docs.get(k),many:async keys=>new Map(keys.map(k=>[k,docs.get(k)])),write:async(k,payload)=>{const row={payload,version:++version};docs.set(k,row);return row;},claim:async k=>cache.write(k,docs.get(k)?.payload ?? {}),finish:async(k,c,p)=>cache.write(k,p),remove:async k=>docs.delete(k)};
+ const sync=createPromotionSync({cache});
+ const args={readPage:async page=>({items:products.slice(page*250,(page+1)*250),pageIndex:page,totalPages:3,totalCount:503}),enrichItems:async batch=>{assert.equal(batch.length,250);batch.forEach(item=>seen.add(item.id));return batch;}};
+ for(let i=0;i<3;i++){const result=await sync({...args,input:{operation:'promotion_refresh',manifest:[]}});assert.equal(result.count,503);assert.equal(result.items.length,503);}
+ assert.equal(seen.size,503);
+});
