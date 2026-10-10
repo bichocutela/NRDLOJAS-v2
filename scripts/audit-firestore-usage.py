@@ -30,7 +30,7 @@ def timeseries(suffix, gauge=False):
                 body = json.load(response)
         except urllib.error.HTTPError as error:
             body = json.load(error)
-            return {'error': {'http': error.code, 'status': body.get('error', {}).get('status', 'UNKNOWN')}, 'series': []}
+            return {'error': {'http': error.code, 'status': body.get('error', {}).get('status', 'UNKNOWN'), 'message': body.get('error', {}).get('message', ''), 'reasons': [detail.get('reason') for detail in body.get('error', {}).get('details', []) if detail.get('reason')]}, 'series': []}
         series.extend(body.get('timeSeries', []))
         if not body.get('nextPageToken'):
             break
@@ -68,6 +68,8 @@ pathlib.Path('firestore-usage.json').write_text(json.dumps(report, indent=2))
 lines = ['## Firestore usage (last 7 days)', '', f'Project: `{PROJECT}`. UTC interval: {start.isoformat()} to {end.isoformat()}.', '', '| Metric | Observed value |', '|---|---:|']
 for name, metric in metrics.items():
     lines.append(f'| {name} | {metric.get("total", metric.get("peak_hour", "unavailable"))} |')
+    if metric.get('unavailable'):
+        print(name + ': ' + json.dumps(metric['attempts']))
 reads = metrics['reads'].get('hourly', {})
 if reads:
     lines += ['', '### Largest hourly read totals', '']
