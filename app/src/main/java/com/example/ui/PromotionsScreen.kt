@@ -130,7 +130,7 @@ private const val MAX_SEARCH_LENGTH = 80
 private const val ALL_STORES_LABEL = "Todas"
 private const val UNKNOWN_STORE_LABEL = "Loja não informada"
 
-private enum class OfferSortOption(val label: String) {
+internal enum class OfferSortOption(val label: String) {
     NAME("Nome"),
     VALID_UNTIL("Data de validade"),
     ADDED("Ordem de adição"),
@@ -421,9 +421,12 @@ fun PromotionsScreen(
         selectedOffer = null
         model.storesChanged()
     }
+    val scopedOffers = remember(offerGroups, selectedStore, enabledStores) {
+        scopeOfferGroups(offerGroups, selectedStore, enabledStores)
+    }
     val normalizedQuery = searchQuery.trim().lowercase()
-    val visibleOffers = remember(offerGroups, selectedStore, normalizedQuery, selectedCategory, sortOption, enabledStores, showNewOffers, ui.latestAddedIds) {
-        val filtered = offerGroups.filter { offer ->
+    val visibleOffers = remember(scopedOffers, selectedFamily, selectedStore, normalizedQuery, selectedCategory, sortOption, enabledStores, showNewOffers, ui.latestAddedIds) {
+        val filtered = scopedOffers.filter { offer ->
             val matchesCategory = selectedCategory == null || offer.category == selectedCategory
             val matchesStore = selectedStore == ALL_STORES_LABEL || offer.stores.any { it.storeCode == selectedStore }
             val matchesSearch = normalizedQuery.isBlank() ||
@@ -438,8 +441,8 @@ fun PromotionsScreen(
         }
         sortOfferGroups(filtered, sortOption)
     }
-    val categoryGroups = remember(offerGroups, selectedStore, normalizedQuery, enabledStores, showNewOffers, ui.latestAddedIds) {
-        offerGroups
+    val categoryGroups = remember(scopedOffers, selectedFamily, selectedStore, normalizedQuery, sortOption, enabledStores, showNewOffers, ui.latestAddedIds) {
+        sortOfferGroups(scopedOffers, sortOption)
             .asSequence()
             .filter { offer ->
                 val matchesStore = selectedStore == ALL_STORES_LABEL || offer.stores.any { it.storeCode == selectedStore }
@@ -458,7 +461,7 @@ fun PromotionsScreen(
             .sortedBy { it.first.lowercase() }
     }
 
-    LaunchedEffect(selectedCategory, selectedStore, normalizedQuery, sortOptionName, showNewOffers, ui.latestAddedIds) {
+    LaunchedEffect(selectedFamily, selectedCategory, selectedStore, normalizedQuery, sortOptionName, showNewOffers, ui.latestAddedIds) {
         visibleOfferCount = INITIAL_OFFER_PAGE
     }
 
@@ -1835,7 +1838,7 @@ private fun StoreOfferDetailCard(
     }
 }
 
-private data class OfferGroup(
+internal data class OfferGroup(
     val id: String,
     val category: String,
     val code: String,
@@ -1843,21 +1846,22 @@ private data class OfferGroup(
     val imageUrl: String?,
     val validFrom: String?,
     val validTo: String?,
-    val stores: List<StoreOffer>
+    val stores: List<StoreOffer>,
+    val addedAt: Long = 0L
 ) {
     val barcode: String get() = stores.firstOrNull { !it.barcode.isNullOrBlank() }?.barcode.orEmpty()
     val bestOffer: StoreOffer?
         get() = stores.minByOrNull { it.offerNumeric ?: Double.MAX_VALUE }
 
     val bestDiscount: String?
-        get() = stores.firstOrNull { !it.discount.isNullOrBlank() }?.discount
+        get() = bestOffer?.discount
 
     val validity: String
         get() = listOfNotNull(validFrom.toDisplayDate(), validTo.toDisplayDate())
             .joinToString(" até ")
 }
 
-private data class StoreOffer(
+internal data class StoreOffer(
     val storeCode: String,
     val offerPrice: String?,
     val regularPrice: String?,
@@ -1915,7 +1919,8 @@ private fun buildOfferGroups(promotions: List<Promotion>): List<OfferGroup> {
                     name = name,
                     imageUrl = product.imageUrl ?: promotion.imageUrl,
                     validFrom = promotion.validFrom,
-                    validTo = promotion.validTo
+                    validTo = promotion.validTo,
+                    addedAt = promotion.addedAt
                 )
             }
             val store = product.storeCode?.trim().orEmpty().ifBlank { UNKNOWN_STORE_LABEL }
@@ -1945,6 +1950,7 @@ private fun buildOfferGroups(promotions: List<Promotion>): List<OfferGroup> {
             imageUrl = group.imageUrl,
             validFrom = group.validFrom,
             validTo = group.validTo,
+            addedAt = group.addedAt,
             stores = group.stores
                 .map { store ->
                     StoreOffer(
@@ -1964,14 +1970,21 @@ private fun buildOfferGroups(promotions: List<Promotion>): List<OfferGroup> {
     }
 }
 
-private fun sortOfferGroups(offers: List<OfferGroup>, option: OfferSortOption): List<OfferGroup> = when (option) {
+internal fun scopeOfferGroups(offers: List<OfferGroup>, selectedStore: String, enabled: Set<String>): List<OfferGroup> =
+    offers.mapNotNull { offer ->
+        val stores = offer.stores.filter { it.storeCode in enabled &&
+            (selectedStore == ALL_STORES_LABEL || it.storeCode == selectedStore) }
+        if (stores.isEmpty()) null else offer.copy(stores = stores)
+    }
+
+internal fun sortOfferGroups(offers: List<OfferGroup>, option: OfferSortOption): List<OfferGroup> = when (option) {
     OfferSortOption.NAME -> offers.sortedWith(compareBy<OfferGroup> { it.name.lowercase() }.thenBy { it.id })
     OfferSortOption.VALID_UNTIL -> offers.sortedWith(
         compareBy<OfferGroup> { it.validTo.isNullOrBlank() }
             .thenBy { it.validTo.orEmpty() }
             .thenBy { it.name.lowercase() }
     )
-    OfferSortOption.ADDED -> offers
+    OfferSortOption.ADDED -> offers.sortedWith(compareByDescending<OfferGroup> { it.addedAt }.thenBy { it.id })
     OfferSortOption.DISCOUNT_DESC -> offers.sortedWith(
         compareByDescending<OfferGroup> { it.maxDiscountPercent() ?: -1.0 }
             .thenBy { it.name.lowercase() }
@@ -1991,14 +2004,8 @@ private fun sortOfferGroups(offers: List<OfferGroup>, option: OfferSortOption): 
 }
 
 private fun OfferGroup.maxDiscountPercent(): Double? = stores
-    .mapNotNull { it.discount.toNumericPercent() }
+    .mapNotNull { com.example.data.promotions.promotionDiscountPercent(it.regularPrice, it.offerPrice, it.discount) }
     .maxOrNull()
-
-private fun String?.toNumericPercent(): Double? = this
-    ?.replace("%", "")
-    ?.replace(",", ".")
-    ?.trim()
-    ?.toDoubleOrNull()
 
 private fun String?.toExpiryLabel(): String? {
     val raw = this?.trim().orEmpty()
@@ -2032,6 +2039,7 @@ private data class MutableOfferGroup(
     val imageUrl: String?,
     val validFrom: String?,
     val validTo: String?,
+    val addedAt: Long = 0L,
     val stores: MutableList<MutableStoreOffer> = mutableListOf()
 )
 
@@ -2048,13 +2056,8 @@ private data class MutableStoreOffer(
     val detailsJson: String? = null
 )
 
-private fun String?.toNumericPrice(): Double? = this
-    ?.replace("R$", "", ignoreCase = true)
-    ?.trim()
-    ?.let { raw ->
-        if (raw.contains(",")) raw.replace(".", "").replace(",", ".") else raw.replace(",", "")
-    }
-    ?.toDoubleOrNull()
+private fun String?.toNumericPrice(): Double? =
+    com.example.data.promotions.promotionNumericPrice(this)
 
 @Composable
 private fun NewOffersButton(

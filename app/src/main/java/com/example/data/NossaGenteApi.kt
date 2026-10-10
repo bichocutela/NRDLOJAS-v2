@@ -1353,7 +1353,8 @@ data class Promotion(
     val imageUrl: String?,
     val validFrom: String?,
     val validTo: String?,
-    val products: List<PromotionProduct>
+    val products: List<PromotionProduct>,
+    val addedAt: Long = 0L
 )
 
     @kotlinx.serialization.Serializable
