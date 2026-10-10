@@ -68,5 +68,6 @@ class OrderImportRecoveryTest {
         assertEquals(analysis, resumed)
         assertEquals(listOf("Conferindo produtos"), phases)
         directory.deleteRecursively()
+        Unit
     }
 }
