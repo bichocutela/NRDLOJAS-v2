@@ -125,7 +125,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
         let parameters = input.parameters;
         if (path === 'Promotion/all') {
           if (!dePorCategory || Date.now() - dePorCategoryAt > 60_000) {
-            let found = null;
+            const found = [];
             for (let page = 0; page < 20; page++) {
               const categoryUrl = new URL(base + 'ProductCategory/all');
               categoryUrl.searchParams.set('pageSize','250'); categoryUrl.searchParams.set('pageIndex',String(page));
@@ -136,15 +136,17 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
               const categoryPayload = await boundedJson(categoryResponse);
               const items = Array.isArray(categoryPayload) ? categoryPayload : categoryPayload.items;
               if (!Array.isArray(items)) throw Error('INVALID_PAYLOAD');
-              const category = items.find(item => String(item.description).toLowerCase().replace(/[^a-z0-9]/g,'') === 'depor');
-              if (category) { found = String(category.id); break; }
+              for (const item of items) {
+                const label=String(item.description).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+                if (['depor','clubedevantagens','clubvantagens','levepague','leveepague'].includes(label)) found.push(String(item.id));
+              }
               if (page + 1 >= (categoryPayload.totalPages ?? 1)) break;
             }
-            if (!found) throw Error('DEPOR_UNAVAILABLE');
-            dePorCategory = found; dePorCategoryAt = Date.now();
+            if (!found.length) throw Error('DEPOR_UNAVAILABLE');
+            dePorCategory = [...new Set(found)]; dePorCategoryAt = Date.now();
           }
           path = 'Product/all';
-          parameters = [...input.parameters,['productCategoryIds',dePorCategory]];
+          parameters = [...input.parameters,...dePorCategory.map(id=>['productCategoryIds',id])];
         }
         const url = new URL(base + path);
         for (const [key,value] of parameters) url.searchParams.append(key,value);

@@ -8,7 +8,7 @@ export class ReadCache {
     if (key.startsWith('snapshot_') && value) return 30 * 60_000; // Immutable generation.
     if (key.startsWith('category_') && value?.payload.category) return 24 * 60 * 60_000;
     if (key.startsWith('category_')) return 60_000; // Missing/retry results must eventually be rechecked.
-    if (key === 'promotion_snapshot' && value?.payload.revision) return 10_000;
+    if (['promotion_snapshot','promotion_snapshot_v2'].includes(key) && value?.payload.revision) return 10_000;
     return 0; // Never retain budget/lease documents.
   }
   forget(key) {
@@ -82,3 +82,4 @@ export class ReadCache {
     this.forget(key); return this.store.remove(key);
   }
 }
+

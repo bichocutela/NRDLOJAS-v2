@@ -362,6 +362,7 @@ fun PromotionsScreen(
     val model: PromotionsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val ui by model.state.collectAsStateWithLifecycle()
     var offerGroups by remember { mutableStateOf<List<OfferGroup>>(emptyList()) }
+    var selectedFamily by rememberSaveable { mutableStateOf("De/Por") }
     var showNewOffers by rememberSaveable { mutableStateOf(false) }
     val isLoading = ui.loading
     val isChecking = ui.sync.visibleNetwork && ui.initialized
@@ -410,8 +411,8 @@ fun PromotionsScreen(
         model.screenOpened()
         favoriteStoreCode = userPreferences.favoriteStoreCode.first()
     }
-    LaunchedEffect(ui.offers) {
-        offerGroups = withContext(Dispatchers.Default) { buildOfferGroups(ui.offers) }
+    LaunchedEffect(ui.offers, selectedFamily) {
+        offerGroups = withContext(Dispatchers.Default) { buildOfferGroups(ui.offers.filter { it.title == selectedFamily }) }
         if (selectedCategory != null && offerGroups.none { it.category == selectedCategory }) selectedCategory = null
     }
     val storeOptions = if (enabledStores.size > 1) listOf(ALL_STORES_LABEL) + StoreCatalog.codes else StoreCatalog.codes
@@ -431,7 +432,7 @@ fun PromotionsScreen(
                 offer.barcode.contains(normalizedQuery)
             val matchesNew = !showNewOffers || offer.stores.any {
                 (selectedStore == ALL_STORES_LABEL || it.storeCode == selectedStore) &&
-                    com.example.data.promotions.offerIdentity(it.storeCode, offer.code) in ui.latestAddedIds
+                    com.example.data.promotions.offerIdentity(it.storeCode, offer.code, selectedFamily) in ui.latestAddedIds
             }
             matchesCategory && matchesStore && matchesSearch && matchesNew && offer.stores.any { it.storeCode in enabledStores }
         }
@@ -448,7 +449,7 @@ fun PromotionsScreen(
                 offer.barcode.contains(normalizedQuery)
                 val matchesNew = !showNewOffers || offer.stores.any {
                     (selectedStore == ALL_STORES_LABEL || it.storeCode == selectedStore) &&
-                        com.example.data.promotions.offerIdentity(it.storeCode, offer.code) in ui.latestAddedIds
+                        com.example.data.promotions.offerIdentity(it.storeCode, offer.code, selectedFamily) in ui.latestAddedIds
                 }
                 matchesStore && matchesSearch && matchesNew && offer.stores.any { it.storeCode in enabledStores }
             }
@@ -469,7 +470,7 @@ fun PromotionsScreen(
     val newOffersCount = offerGroups.count { offer ->
         offer.stores.any { store -> store.storeCode in enabledStores &&
             (selectedStore == ALL_STORES_LABEL || store.storeCode == selectedStore) &&
-            com.example.data.promotions.offerIdentity(store.storeCode, offer.code) in ui.latestAddedIds }
+            com.example.data.promotions.offerIdentity(store.storeCode, offer.code, selectedFamily) in ui.latestAddedIds }
     }
 
     selectedOffer?.let { offer ->
@@ -497,6 +498,17 @@ fun PromotionsScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = if (glassStyle.enabled || expressive) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
+          Column {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("De/Por", "Leve e pague", "Clube").forEach { family ->
+                    androidx.compose.material3.FilterChip(
+                        selected = selectedFamily == family,
+                        onClick = { selectedFamily = family; selectedCategory = null; selectedOffer = null; showNewOffers = false },
+                        label = { Text(family, maxLines = 1) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -647,6 +659,7 @@ fun PromotionsScreen(
                     containerColor = if (expressive || glassStyle.enabled) Color.Transparent else MaterialTheme.colorScheme.surface
                 )
             )
+          }
         }
     ) { innerPadding ->
         when {

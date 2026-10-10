@@ -229,3 +229,11 @@ test('catalog readiness is restricted to CI and verifies the fixed code and imag
   assert.equal(validate({operation:'health_catalog',code:'another-code'}),false);
 });
 
+
+test('promotions include the three authoritative ACP family categories across pages',async()=>{
+ const server=upstream();const handler=createHandler({authorize:allow,credentials:secret,fetcher:async(url,options)=>{
+  const u=new URL(url);if(u.pathname.endsWith('/ProductCategory/all'))return Response.json({items:u.searchParams.get('pageIndex')==='0'?[{id:77,description:'De-Por'},{id:78,description:'Clube de Vantagens'}]:[{id:79,description:'Leve e Pague'}],totalPages:2});return server.fetcher(url,options);
+ }});
+ assert.equal((await handler(req({path:'Promotion/all',parameters:[['pageIndex','0'],['pageSize','250']]}))).status,200);
+ assert.deepEqual(new URL(server.calls.at(-1).url).searchParams.getAll('productCategoryIds'),['77','78','79']);
+});

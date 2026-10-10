@@ -46,7 +46,7 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
   async function refresh(readPage,enrichItems) {
     if (inFlight) return inFlight;
     inFlight=(async()=>{
-      const claim=await cache.claim('promotion_snapshot',120);
+      const claim=await cache.claim('promotion_snapshot_v2',180);
       if (!claim) return null;
       try {
         const products=[]; let expected=null;
@@ -69,7 +69,7 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
         const stable=enriched.map(item=>retainCatalogMetadata(item,previousItems.get(String(item.id ?? `${item.code}|${item.barCode}|${item.description}`))));
         const next=await snapshot(stable);
         if(next.revision===claim.payload.revision) {
-          return (await cache.finish('promotion_snapshot',claim,{...claim.payload,checkedAt:now()}))?.payload;
+          return (await cache.finish('promotion_snapshot_v2',claim,{...claim.payload,checkedAt:now()}))?.payload;
         }
         const generation=crypto.randomUUID().replaceAll('-',''); const pages=[]; let chunk=[]; let bytes=0;
         for(const row of next.rows) {
@@ -92,20 +92,20 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
         }
         if(claim.payload.generation) retired.push({generation:claim.payload.generation,pages:claim.payload.pages,deleteAfter:now()+30*60_000});
         const pointer={retired,revision:next.revision,generation,pages:pages.length,count:next.rows.length,checkedAt:now()};
-        return (await cache.finish('promotion_snapshot',claim,pointer))?.payload;
+        return (await cache.finish('promotion_snapshot_v2',claim,pointer))?.payload;
       } catch(error) {
-        await cache.finish('promotion_snapshot',claim,{...claim.payload,retryAt:now()+60000}).catch(()=>{});
+        await cache.finish('promotion_snapshot_v2',claim,{...claim.payload,retryAt:now()+60000}).catch(()=>{});
         throw error;
       }
     })();
     try {return await inFlight;} finally {inFlight=null;}
   }
   return async ({input,readPage,enrichItems})=>{
-    let pointer=(await cache.get('promotion_snapshot'))?.payload;
+    let pointer=(await cache.get('promotion_snapshot_v2'))?.payload;
     if(!pointer?.revision) {
       pointer=await refresh(readPage,enrichItems);
       if(!pointer?.revision) {
-        pointer=(await cache.get('promotion_snapshot'))?.payload;
+        pointer=(await cache.get('promotion_snapshot_v2'))?.payload;
         if(!pointer?.revision) throw Error('INITIAL_SYNC_BUSY');
       }
     } else if(input.operation==='promotion_refresh') {
@@ -118,7 +118,7 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
         let published=false;
         for(const delay of [500,1000,2000,4000,8000,8000,6500]) {
           await sleep(delay);
-          const candidate=(await (cache.getFresh ? cache.getFresh('promotion_snapshot') : cache.get('promotion_snapshot')))?.payload;
+          const candidate=(await (cache.getFresh ? cache.getFresh('promotion_snapshot_v2') : cache.get('promotion_snapshot_v2')))?.payload;
           if(candidate?.revision && candidate.checkedAt>=startedAt && candidate.checkedAt>previousCheck) {
             pointer=candidate; published=true; break;
           }
@@ -126,13 +126,11 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
         if(!published) throw Error('REFRESH_BUSY');
       }
     } else if(now()-pointer.checkedAt>=60000 && (pointer.retryAt ?? 0)<=now()) {
-      // Silent checks keep the same one-minute cadence, but wait for the shared refresh
-      // so the current cycle can observe new ACP products instead of one cycle later.
-      try {
-        pointer=await refresh(readPage,enrichItems) ?? (await cache.get('promotion_snapshot'))?.payload ?? pointer;
-      } catch {
-        pointer=(await cache.get('promotion_snapshot'))?.payload ?? pointer;
-      }
+      // Return the saved status immediately; the next poll observes the shared refresh.
+      // A closed/slow client does not own the server refresh lifetime.
+      const job=refresh(readPage,enrichItems).catch(()=>null);
+      if(background) background(job);
+      else pointer=await job ?? pointer;
     }
     const status={revision:pointer.revision,checkedAt:pointer.checkedAt,count:pointer.count};
     if(input.operation==='promotion_status') return status;

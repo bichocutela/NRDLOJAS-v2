@@ -59,7 +59,10 @@ internal class AcpGatewayClient(
                     if (!deviceToken.isNullOrBlank()) header("x-device-session", deviceToken)
                     if (!token.isNullOrBlank()) header("x-firebase-token", token)
                 }.build()
-            client.newCall(request).execute().use { response ->
+            val requestClient = if (promotionsOnly && payload.optString("operation").startsWith("promotion_"))
+                client.newBuilder().readTimeout(120, TimeUnit.SECONDS).callTimeout(150, TimeUnit.SECONDS).build()
+            else client
+            requestClient.newCall(request).execute().use { response ->
                 when (response.code) {
                     401 -> throw AcpUnauthorized()
                     403 -> throw AcpFailure(if (promotionsOnly) "Peça ao Mestre para liberar seu acesso às promoções." else "Peça ao Mestre para liberar seu acesso à consulta de preços.")

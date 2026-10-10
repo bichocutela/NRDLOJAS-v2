@@ -95,24 +95,23 @@ internal class AcpPromotionsRepository(context: Context) {
                 val uniqueProducts = AcpProductParser.page(JSONObject().put("items",
                     JSONArray().apply { cityProducts.forEach { put(JSONObject(it.payload)) } }), 0).items
                 uniqueProducts.forEach { product ->
-                    val offer = product.offers().firstOrNull { it.family == AcpOfferFamily.DE_POR } ?: return@forEach
+                  product.offers().filter { it.family in promotionFamilies }.forEach { offer ->
                     val document = imported.firstOrNull { record ->
-                        BigDecimal.valueOf(record.price).setScale(2, RoundingMode.HALF_UP) == offer.price!!.setScale(2, RoundingMode.HALF_UP) &&
-                        BigDecimal.valueOf(record.previous).setScale(2, RoundingMode.HALF_UP) == offer.referencePrice!!.setScale(2, RoundingMode.HALF_UP) &&
+                        offer.family == AcpOfferFamily.DE_POR && offer.price != null && offer.referencePrice != null &&
+                        BigDecimal.valueOf(record.price).setScale(2, RoundingMode.HALF_UP) == offer.price.setScale(2, RoundingMode.HALF_UP) &&
+                        BigDecimal.valueOf(record.previous).setScale(2, RoundingMode.HALF_UP) == offer.referencePrice.setScale(2, RoundingMode.HALF_UP) &&
                         ((record.code.isNotBlank() && record.code == product.code) ||
                             (record.barcode.isNotBlank() && record.barcode == product.barcode))
                     }
-                    val raw = validity[AcpOfferValidityStore.keyFor(product.description, AcpOfferFamily.DE_POR)] as? Map<*, *>
+                    val raw = validity[AcpOfferValidityStore.keyFor(product.description, offer.family)] as? Map<*, *>
                     val fallback = AcpOfferValidity(document?.from ?: raw?.get("startDate") as? String ?: "",
                         document?.to ?: raw?.get("endDate") as? String ?: "")
                     val effective = product.offerValidityOr(fallback)
                     if (active(effective?.startDate, effective?.endDate)) {
-                        promotions += promotion(store.code, product.code.ifBlank { product.barcode }, product.description,
-                            offer.price!!, offer.referencePrice!!, effective?.startDate,
-                            effective?.endDate, product.imageUrl, product.barcode, product.detailsJson,
-                            product.detailsJson?.let { org.json.JSONObject(it).optString("nrdCategory") },
-                            cachedOffers[offerIdentity(store.code, product.code.ifBlank { product.barcode })]?.description)
+                        val id = offerIdentity(store.code, product.code.ifBlank { product.barcode }, offer.family.promotionLabel())
+                        promotions += acpPromotion(store.code, product, offer, effective, cachedOffers[id]?.description)
                     }
+                  }
                 }
             } else {
                 imported.forEach { record ->
@@ -165,7 +164,7 @@ internal class AcpPromotionsRepository(context: Context) {
        } catch (cancelled: CancellationException) {
         throw cancelled
        } catch (failure: Exception) {
-        NossaGentePromotionsResult.Error(failure.message ?: "Não foi possível atualizar as ofertas do ACP.")
+        NossaGentePromotionsResult.Error(if (failure is java.io.InterruptedIOException) "A sincronização demorou mais que o esperado. A lista salva foi mantida; uma nova tentativa será feita automaticamente." else failure.message ?: "Não foi possível atualizar as ofertas do ACP.")
        } finally { onNetwork(false) }
       }
     }

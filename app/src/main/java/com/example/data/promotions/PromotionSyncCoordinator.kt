@@ -46,10 +46,11 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
         monitoring = true
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
+                com.example.util.PromotionNotificationWorker.enqueueNow(context)
                 monitorJob?.cancel()
                 monitorJob = scope.launch {
                     while (isActive) {
-                        if (repository.isInitialized()) requestSync()
+                        requestSync()
                         delay(60_000)
                     }
                 }

@@ -16,7 +16,7 @@ internal data class PromotionsUiState(
     val sync: PromotionSyncState = PromotionSyncState(),
     val opening: Boolean = false
 ) {
-    val loading: Boolean get() = opening || (!initialized && (sync.running || !sync.attempted))
+    val loading: Boolean get() = !initialized && (opening || sync.running || !sync.attempted)
     /** Falhas do gateway não geram mensagem, toast, snackbar nem estado de erro para não-Mestre. */
     fun visibleSyncError(showDiagnostics: Boolean): String? =
         sync.error?.takeIf { showDiagnostics && !initialized }
@@ -43,7 +43,7 @@ internal class PromotionsViewModel(application: Application) : AndroidViewModel(
     fun screenOpened() {
         if (openingJob?.isActive == true) return
         opening.value = true
-        val refresh = coordinator.requestSync(interactive = true)
+        val refresh = coordinator.requestSync()
         openingJob = viewModelScope.launch {
             try { refresh.join() }
             finally { opening.value = false }
