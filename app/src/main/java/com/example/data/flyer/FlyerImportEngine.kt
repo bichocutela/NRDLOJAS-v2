@@ -14,6 +14,9 @@ import com.example.data.acp.searchProducts
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -54,10 +57,25 @@ internal object FlyerImportEngine {
         .callTimeout(55, TimeUnit.SECONDS)
         .build()
 
-    suspend fun analyzeUri(context: Context, uri: Uri): FlyerAnalysisResult = withContext(Dispatchers.IO) {
+    suspend fun analyzeUri(
+        context: Context,
+        uri: Uri,
+        checkpoint: OrderImportCheckpoint? = null,
+        onProgress: suspend (String, Int) -> Unit = { _, _ -> }
+    ): FlyerAnalysisResult = withContext(Dispatchers.IO) {
         val label = sourceLabel(context, uri)
-        val blocks = extractBlocks(context, uri)
-        analyzeBlocks(context, label, "gallery", label, blocks)
+        val saved = checkpoint?.analysis()
+        val draft = saved ?: run {
+            val blocks = extractBlocks(context, uri, checkpoint, onProgress)
+            onProgress("Interpretando ofertas", 45)
+            analyzeBlocks(context, label, "gallery", label, blocks, enrich = false).also {
+                checkpoint?.saveAnalysis(it)
+            }
+        }
+        val warnings = draft.warnings.toMutableList()
+        onProgress("Conferindo produtos", 50)
+        val offers = enrichWithAcp(context, draft.offers, warnings, checkpoint, onProgress)
+        draft.copy(offers = offers, warnings = warnings.distinct())
     }
 
     /** Same PDF/text extraction and Visual Mix parser as Consultar Preços; no inferred prices. */
@@ -90,7 +108,8 @@ internal object FlyerImportEngine {
         sourceName: String,
         sourceType: String,
         sourceLabel: String,
-        blocks: List<FlyerTextBlock>
+        blocks: List<FlyerTextBlock>,
+        enrich: Boolean = true
     ): FlyerAnalysisResult {
         if (blocks.isEmpty()) throw IllegalArgumentException("Não foi possível ler texto no encarte.")
 
@@ -112,7 +131,7 @@ internal object FlyerImportEngine {
                 val ocrText = blocksToGeminiText(blocks)
                 val payload = GeminiMasterService.analyzeFlyer(sourceName, ocrText).getOrThrow()
                 parseGeminiDraft(sourceName, payload)
-            }.onFailure { geminiFailure = it }.getOrNull()
+            }.onFailure { if (it is CancellationException) throw it; geminiFailure = it }.getOrNull()
 
             usedGemini = geminiParsed != null && (
                 geminiParsed.offers.isNotEmpty() ||
@@ -126,7 +145,7 @@ internal object FlyerImportEngine {
         if (visualMixParsed == null && !usedGemini && geminiFailure != null) {
             warnings += "A Inteligência NRD não respondeu; a leitura local do encarte foi usada normalmente."
         }
-        val enriched = enrichWithAcp(context, parsed.offers, warnings)
+        val enriched = if (enrich) enrichWithAcp(context, parsed.offers, warnings) else parsed.offers
 
         return FlyerAnalysisResult(
             name = parsed.name,
@@ -258,7 +277,9 @@ internal object FlyerImportEngine {
     private suspend fun enrichWithAcp(
         context: Context,
         offers: List<FlyerOffer>,
-        warnings: MutableList<String>
+        warnings: MutableList<String>,
+        checkpoint: OrderImportCheckpoint? = null,
+        onProgress: suspend (String, Int) -> Unit = { _, _ -> }
     ): List<FlyerOffer> {
         val candidatesForAcp = offers.filter {
             it.scope == FlyerOfferScope.PRODUCT &&
@@ -272,35 +293,41 @@ internal object FlyerImportEngine {
             if (!api.restoreSession()) api.confirmAccess()
             true
         }.getOrElse {
+            if (it is CancellationException) throw it
             warnings += "As ofertas foram lidas, mas a ACP não pôde ser usada para confirmar os produtos agora."
             false
         }
         if (!authenticated) return offers
 
         val resolved = mutableMapOf<String, FlyerOffer>()
-        for (offer in candidatesForAcp) {
-            val match = runCatching { resolveProduct(api, offer) }.getOrNull()
-            if (match == null) {
-                resolved[offer.id] = offer.copy(matchStatus = FlyerMatchStatus.REVIEW)
-                continue
+        for ((index, offer) in candidatesForAcp.withIndex()) {
+            currentCoroutineContext().ensureActive()
+            val cached = checkpoint?.resolved(offer.id)
+            if (cached != null) {
+                resolved[offer.id] = cached
+            } else {
+                val match = runCatching { resolveProduct(api, offer) }
+                    .onFailure { if (it is CancellationException) throw it }.getOrNull()
+                val updated = if (match == null) {
+                    offer.copy(matchStatus = FlyerMatchStatus.REVIEW)
+                } else {
+                    val (product, score, runnerUp) = match
+                    val safe = score >= 0.72 && (runnerUp == null || score - runnerUp >= 0.08)
+                    if (!safe) offer.copy(confidence = max(offer.confidence, score), matchStatus = FlyerMatchStatus.REVIEW)
+                    else offer.copy(
+                        confidence = max(offer.confidence, score),
+                        matchStatus = FlyerMatchStatus.CONFIRMED,
+                        productCodes = listOfNotNull(product.code.takeIf { it.isNotBlank() }),
+                        barcodes = listOfNotNull(product.barcode.takeIf { it.isNotBlank() }),
+                        matchedProductName = product.description
+                    )
+                }
+                currentCoroutineContext().ensureActive()
+                checkpoint?.saveResolved(updated)
+                resolved[offer.id] = updated
             }
-            val (product, score, runnerUp) = match
-            val safe = score >= 0.72 && (runnerUp == null || score - runnerUp >= 0.08)
-            if (!safe) {
-                resolved[offer.id] = offer.copy(
-                    confidence = max(offer.confidence, score),
-                    matchStatus = FlyerMatchStatus.REVIEW
-                )
-                continue
-            }
-
-            resolved[offer.id] = offer.copy(
-                confidence = max(offer.confidence, score),
-                matchStatus = FlyerMatchStatus.CONFIRMED,
-                productCodes = listOfNotNull(product.code.takeIf { it.isNotBlank() }),
-                barcodes = listOfNotNull(product.barcode.takeIf { it.isNotBlank() }),
-                matchedProductName = product.description
-            )
+            onProgress("Conferindo produto ${index + 1} de ${candidatesForAcp.size}",
+                50 + (index + 1) * 49 / candidatesForAcp.size)
         }
         return offers.map { resolved[it.id] ?: it }
     }
@@ -369,30 +396,43 @@ internal object FlyerImportEngine {
         return (coverage * 0.62 + jaccard * 0.28 + numeric * 0.10).coerceIn(0.0, 1.0)
     }
 
-    private suspend fun extractBlocks(context: Context, uri: Uri): List<FlyerTextBlock> {
+    private suspend fun extractBlocks(
+        context: Context, uri: Uri, checkpoint: OrderImportCheckpoint? = null,
+        onProgress: suspend (String, Int) -> Unit = { _, _ -> }
+    ): List<FlyerTextBlock> {
         val mime = context.contentResolver.getType(uri).orEmpty().lowercase()
         val name = sourceLabel(context, uri).lowercase()
         return if (mime.contains("pdf") || name.endsWith(".pdf") || isPdf(context, uri)) {
-            extractPdfBlocks(context, uri)
+            extractPdfBlocks(context, uri, checkpoint, onProgress)
         } else {
+            checkpoint?.page(0)?.let { return it }
+            onProgress("Lendo imagem", 10)
             val bitmap = decodeImage(context, uri)
                 ?: throw IllegalArgumentException("A imagem do encarte não pôde ser aberta.")
-            try { recognizeBitmap(bitmap, 1) } finally { bitmap.recycle() }
+            try { recognizeBitmap(bitmap, 1).also { checkpoint?.savePage(0, it) } } finally { bitmap.recycle() }
         }
     }
 
-    private suspend fun extractPdfBlocks(context: Context, uri: Uri): List<FlyerTextBlock> {
+    private suspend fun extractPdfBlocks(
+        context: Context, uri: Uri, checkpoint: OrderImportCheckpoint?,
+        onProgress: suspend (String, Int) -> Unit
+    ): List<FlyerTextBlock> {
         val descriptor = context.contentResolver.openFileDescriptor(uri, "r")
             ?: throw IllegalArgumentException("O PDF não pôde ser aberto.")
         descriptor.use { pfd ->
             PdfRenderer(pfd).use { renderer ->
                 if (renderer.pageCount <= 0) throw IllegalArgumentException("O PDF está vazio.")
 
-                val native = runCatching { extractNativePdfText(renderer) }.getOrNull()
+                val native = runCatching { extractNativePdfText(renderer, onProgress) }
+                    .onFailure { if (it is CancellationException) throw it }.getOrNull()
                 if (!native.isNullOrEmpty()) return native
 
                 val result = mutableListOf<FlyerTextBlock>()
                 for (index in 0 until renderer.pageCount) {
+                    currentCoroutineContext().ensureActive()
+                    onProgress("Lendo página ${index + 1} de ${renderer.pageCount}", 5 + index * 35 / renderer.pageCount)
+                    val cached = checkpoint?.page(index)
+                    if (cached != null) { result += cached; continue }
                     renderer.openPage(index).use { page ->
                         val scale = (TARGET_PDF_WIDTH.toFloat() / page.width.coerceAtLeast(1)).coerceIn(1f, 2.5f)
                         val width = (page.width * scale).toInt().coerceAtLeast(1)
@@ -401,7 +441,10 @@ internal object FlyerImportEngine {
                         try {
                             val matrix = android.graphics.Matrix().apply { postScale(scale, scale) }
                             page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                            result += recognizeBitmap(bitmap, index + 1)
+                            val blocks = recognizeBitmap(bitmap, index + 1)
+                            currentCoroutineContext().ensureActive()
+                            checkpoint?.savePage(index, blocks)
+                            result += blocks
                         } finally {
                             bitmap.recycle()
                         }
@@ -412,11 +455,15 @@ internal object FlyerImportEngine {
         }
     }
 
-    private fun extractNativePdfText(renderer: PdfRenderer): List<FlyerTextBlock>? {
+    private suspend fun extractNativePdfText(
+        renderer: PdfRenderer, onProgress: suspend (String, Int) -> Unit
+    ): List<FlyerTextBlock>? {
         if (Build.VERSION.SDK_INT < 35) return null
         val blocks = mutableListOf<FlyerTextBlock>()
         var totalChars = 0
         for (index in 0 until renderer.pageCount) {
+            currentCoroutineContext().ensureActive()
+            onProgress("Lendo página ${index + 1} de ${renderer.pageCount}", 5 + index * 35 / renderer.pageCount)
             renderer.openPage(index).use { page ->
                 val method = page.javaClass.methods.firstOrNull {
                     it.name == "getTextContents" && it.parameterTypes.isEmpty()

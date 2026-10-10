@@ -28,8 +28,56 @@ internal class VisualMixOrderSession(val id: String = java.util.UUID.randomUUID(
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     var api: AcpApi? = null
     var processingJob: Job? = null
+    var taskContext: Context? = null
+    val backgroundImport = mutableStateOf(false)
+    val readingPhase = mutableStateOf("Preparando documento")
+    val readingProgress = mutableIntStateOf(0)
+    private var trackingImport = false
+
+    fun trackImport(context: Context) {
+        taskContext = context.applicationContext
+        if (trackingImport) return
+        trackingImport = true
+        backgroundImport.value = true
+        scope.launch {
+            androidx.work.WorkManager.getInstance(context)
+                .getWorkInfosForUniqueWorkFlow(OrderImportTasks.workName(id)).collect {
+                    val task = OrderImportTasks.get(context, id) ?: return@collect
+                    readingPhase.value = task.phase
+                    readingProgress.intValue = task.progress
+                    busy.value = task.pending
+                    failed.value = task.state == "failed" || task.state == "cancelled"
+                    error.value = task.error
+                    completed.value = !task.pending
+                    if (task.state == "succeeded" && analysis.value == null) {
+                        analysis.value = VisualMixReviewStore.loadSessions(context).firstOrNull { it.first == id }?.second
+                        confirmedKeys.value = VisualMixReviewStore.confirmedKeys(context)
+                        draftMessage.value = "Documento lido. Continue a revisão."
+                    }
+                }
+        }
+    }
+
+    fun startImport(context: Context, uri: Uri) {
+        busy.value = true
+        backgroundImport.value = true
+        error.value = null
+        try {
+            name.value = runCatching {
+                context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                    ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+            }.getOrNull() ?: name.value
+            OrderImportTasks.start(context, id, uri, name.value)
+            trackImport(context)
+        } catch (failure: Exception) {
+            busy.value = false
+            error.value = failure.message ?: "Não foi possível iniciar a leitura."
+        }
+    }
+
     fun cancel() {
         error.value = "Processo cancelado. Os produtos já confirmados foram preservados."
+        if (busy.value && backgroundImport.value) taskContext?.let { OrderImportTasks.cancel(it, id) }
         processingJob?.cancel()
     }
     val active = mutableStateOf(false)
@@ -64,7 +112,8 @@ internal class VisualMixOrderSession(val id: String = java.util.UUID.randomUUID(
             snapshotFlow { Triple(running, error.value ?: compareError.value, selectedKeys.value) }
                 .collect { (running, failure, selected) ->
                     if (analysis.value != null) VisualMixReviewStore.saveSessionSelection(context, id, selected)
-                    updateProcess(context, running, "", failure)
+                    // Reading has its own persistent worker notification.
+                    updateProcess(context, if (backgroundImport.value) batchBusy.value || savingValidity.value || compareBusy.value else running, "", failure)
                 }
         }
     }
@@ -103,6 +152,8 @@ internal object VisualMixOrderProcesses {
     private var resumeDocument: String? = null
     fun stopAll(context: Context) {
         val manager = context.getSystemService(android.app.NotificationManager::class.java)
+        androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag("order-import")
+        OrderImportTasks.all(context).filter { it.pending }.forEach { OrderImportTasks.cancel(context, it.id) }
         sessions.forEach {
             it.scope.cancel()
             manager.cancel(it.id, it.id.hashCode())
@@ -118,8 +169,8 @@ internal object VisualMixOrderProcesses {
     fun restore(context: Context) {
         if (restored) return
         restored = true
-        if (sessions.isNotEmpty()) return
         VisualMixReviewStore.loadSessions(context).forEach { (id, result, selection) ->
+            if (sessions.any { it.id == id }) return@forEach
             val session = VisualMixOrderSession(id)
             session.api = AcpApi(context)
             session.analysis.value = result
@@ -130,6 +181,21 @@ internal object VisualMixOrderProcesses {
             session.failed.value = true
             session.draftMessage.value = "Rascunho recuperado. Confira os produtos pendentes antes de continuar."
             sessions += session
+        }
+        OrderImportTasks.all(context).forEach { task ->
+            val session = sessions.firstOrNull { it.id == task.id }
+                ?: if (task.state == "succeeded") return@forEach
+                else VisualMixOrderSession(task.id).also {
+                    it.api = AcpApi(context)
+                    it.name.value = task.name
+                    sessions += it
+                }
+            session.busy.value = task.pending
+            session.readingPhase.value = task.phase
+            session.readingProgress.intValue = task.progress
+            session.error.value = task.error
+            session.trackImport(context)
+            if (task.pending) OrderImportTasks.enqueue(context, task)
         }
         selected.value = sessions.firstOrNull()?.id
         minimized.value = sessions.isNotEmpty() && !resumeRequested
@@ -157,6 +223,7 @@ internal object VisualMixOrderProcesses {
     fun finalize(context: Context, session: VisualMixOrderSession): Boolean {
         val result = session.analysis.value ?: return false
         if (session.running || !VisualMixReviewStore.finalizeSession(context, session.id, result)) return false
+        if (session.backgroundImport.value) OrderImportTasks.remove(context, session.id)
         session.scope.cancel()
         context.getSystemService(android.app.NotificationManager::class.java).cancel(session.id, session.id.hashCode())
         sessions.remove(session)
@@ -194,7 +261,7 @@ internal object VisualMixOrderProcesses {
         minimized.value = false
     }
     fun notify(context: Context, finished: VisualMixOrderSession? = null) {
-        val running = sessions.count { it.running }
+        val running = sessions.count { it.running && (!it.backgroundImport.value || it.batchBusy.value || it.savingValidity.value || it.compareBusy.value) }
         val failures = sessions.count { it.failed.value }
         val result = if (failures > 0) "$failures documento(s) precisam de revisão. Toque para acompanhar."
             else "Toque para continuar na tela Importar Ordem."
@@ -229,7 +296,7 @@ internal fun VisualMixOrderDocumentStack(session: VisualMixOrderSession) {
                     Column {
                         Text(document.analysis.value?.name ?: document.name.value, maxLines = 1)
                         Text(if (document.batchBusy.value || document.savingValidity.value) "Confirmando produtos…"
-                            else if (document.busy.value) "Verificando ofertas…"
+                            else if (document.busy.value) if (document.backgroundImport.value) document.readingPhase.value + " • " + document.readingProgress.intValue + "%" else "Verificando ofertas…"
                             else if (document.failed.value) "Revisar pendências"
                             else if (document.completed.value) "Processo Concluído"
                             else "Pronto para importar", style = MaterialTheme.typography.labelSmall)

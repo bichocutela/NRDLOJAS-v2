@@ -78,12 +78,12 @@ internal object VisualMixReviewStore {
         val ids = prefs.getStringSet("session_ids", emptySet()).orEmpty() + id
         prefs.edit().putStringSet("session_ids", ids)
             .putString("session_" + id, result.toJson().toString())
-            .putStringSet("selection_" + id, selected).apply()
+            .putStringSet("selection_" + id, selected).commit()
     }
 
     fun saveSessionSelection(context: Context, id: String, selected: Set<String>) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putStringSet("selection_" + id, selected).apply()
+            .putStringSet("selection_" + id, selected).commit()
     }
 
     fun loadSessions(context: Context): List<Triple<String, FlyerAnalysisResult, Set<String>>> {
@@ -121,6 +121,9 @@ internal object VisualMixReviewStore {
             .putStringSet("session_ids", prefs.getStringSet("session_ids", emptySet()).orEmpty() + id)
             .putString("session_" + id, result.toJson().toString()).commit()
     }
+
+    fun encodeAnalysis(result: FlyerAnalysisResult): String = result.toJson().toString()
+    fun decodeAnalysis(raw: String): FlyerAnalysisResult = JSONObject(raw).toAnalysisResult()
 
     private fun FlyerAnalysisResult.toJson(): JSONObject = JSONObject().apply {
         put("name", name)
