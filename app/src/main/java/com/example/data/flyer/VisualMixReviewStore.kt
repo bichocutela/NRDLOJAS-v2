@@ -78,12 +78,12 @@ internal object VisualMixReviewStore {
         val ids = prefs.getStringSet("session_ids", emptySet()).orEmpty() + id
         prefs.edit().putStringSet("session_ids", ids)
             .putString("session_" + id, result.toJson().toString())
-            .putStringSet("selection_" + id, selected).apply()
+            .putStringSet("selection_" + id, selected).commit()
     }
 
     fun saveSessionSelection(context: Context, id: String, selected: Set<String>) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putStringSet("selection_" + id, selected).apply()
+            .putStringSet("selection_" + id, selected).commit()
     }
 
     fun loadSessions(context: Context): List<Triple<String, FlyerAnalysisResult, Set<String>>> {
@@ -122,6 +122,9 @@ internal object VisualMixReviewStore {
             .putString("session_" + id, result.toJson().toString()).commit()
     }
 
+    fun encodeAnalysis(result: FlyerAnalysisResult): String = result.toJson().toString()
+    fun decodeAnalysis(raw: String): FlyerAnalysisResult = JSONObject(raw).toAnalysisResult()
+
     private fun FlyerAnalysisResult.toJson(): JSONObject = JSONObject().apply {
         put("name", name)
         put("validFrom", validFrom)
@@ -158,6 +161,8 @@ internal object VisualMixReviewStore {
         put("cashbackValue", cashbackValue)
         put("sourceText", sourceText)
         put("reviewed", reviewed)
+        put("validFrom", validFrom)
+        put("validTo", validTo)
         put("clubCondition", clubCondition.name)
     }
 
@@ -206,7 +211,9 @@ internal object VisualMixReviewStore {
             cashbackValue = optNullableDouble("cashbackValue"),
             sourceText = optString("sourceText"),
             reviewed = optBoolean("reviewed", false),
-            clubCondition = FlyerClubCondition.valueOf(optString("clubCondition", FlyerClubCondition.NOT_INFORMED.name))
+            clubCondition = FlyerClubCondition.valueOf(optString("clubCondition", FlyerClubCondition.NOT_INFORMED.name)),
+            validFrom = optString("validFrom").takeIf { it.isNotBlank() && it != "null" },
+            validTo = optString("validTo").takeIf { it.isNotBlank() && it != "null" }
         )
     }.getOrNull()
 

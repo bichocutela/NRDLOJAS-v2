@@ -27,7 +27,6 @@ import com.example.data.acp.*
 import com.example.data.flyer.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withPermit
 
 @Composable
 internal fun VisualMixOrderImportButton(onClick: () -> Unit) {
@@ -145,30 +144,10 @@ internal fun VisualMixOrderImportDialog(
         val uri = initialPdfUri ?: return@LaunchedEffect
         if (busy) return@LaunchedEffect
         onInitialPdfConsumed()
-        session.processingJob = scope.launch {
-
-        busy = true
-        error = null
         analysis = null
         selectionMode = false
         selectedKeys = emptySet()
-        draftMessage = "PDF recebido pelo compartilhamento. Importando automaticamente…"
-        try {
-            analysis = VisualMixOrderProcesses.importGate.withPermit { FlyerImportEngine.analyzeUri(context, uri) }
-            analysis?.let { VisualMixReviewStore.saveDraft(context, it) }
-            draftAvailable = true
-            analysis?.let { VisualMixReviewStore.saveSession(context, session.id, it, selectedKeys) }
-            confirmedKeys = VisualMixReviewStore.confirmedKeys(context)
-            draftMessage = "PDF recebido e carregado automaticamente."
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (failure: Exception) {
-            error = failure.message ?: "Não foi possível ler a ordem compartilhada."
-            draftMessage = null
-        } finally {
-            busy = false
-        }
-        }
+        session.startImport(context, uri)
     }
 
 
@@ -278,9 +257,13 @@ internal fun VisualMixOrderImportDialog(
                     if (busy || batchBusy) {
                         item {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                LinearProgressIndicator(Modifier.fillMaxWidth())
+                                if (busy && session.backgroundImport.value)
+                                    LinearProgressIndicator(progress = { session.readingProgress.intValue / 100f }, modifier = Modifier.fillMaxWidth())
+                                else LinearProgressIndicator(Modifier.fillMaxWidth())
                                 Text(
-                                    if (batchBusy) "Confirmando os produtos selecionados…" else "Lendo o PDF e conferindo os produtos no sistema…",
+                                    if (batchBusy) "Confirmando os produtos selecionados…"
+                                    else if (session.backgroundImport.value) session.readingPhase.value + " • " + session.readingProgress.intValue + "%"
+                                    else "Lendo o PDF e conferindo os produtos no sistema…",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -291,7 +274,16 @@ internal fun VisualMixOrderImportDialog(
                         }
                     }
                     draftMessage?.let { item { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) } }
-                    error?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
+                    error?.let { item {
+                        Text(it, color = MaterialTheme.colorScheme.error)
+                        if (session.backgroundImport.value && !busy && analysis == null) {
+                            TextButton(onClick = {
+                                OrderImportTasks.retry(context, session.id)
+                                error = null
+                                busy = true
+                            }) { Text("Retomar leitura") }
+                        }
+                    } }
 
                     analysis?.let { result ->
                         item {

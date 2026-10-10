@@ -62,6 +62,9 @@
             <intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
         </receiver>
 
+        <service android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync" tools:node="merge" />
+
         <service android:name=".util.OrderProcessService" android:exported="false"
             android:foregroundServiceType="dataSync" />
 
