@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: '22'
       - name: Verify server authorization and commercial contract
-        run: node --test supabase/functions/nrd-price-gateway/*.test.mjs
+        run: node --test supabase/functions/nrd-price-gateway/*.test.mjs supabase/functions/nordestao-catalog-resolver/*.test.mjs
       - name: Verify deployed gateway and server-side ACP credentials
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -56,6 +56,9 @@ jobs:
           assert status == 200 and body == {'ok':True}, f'Gateway readiness failed: HTTP {status}, {body.get("error", "invalid result")}'
           status, body = post({'operation':'health_promotions'}, {'x-github-oidc-token':token})
           assert status == 200 and body == {'ok':True}, f'De/Por readiness failed: HTTP {status}, {body.get("error", "invalid result")}'
+          status, body = post({'operation':'health_catalog'}, {'x-github-oidc-token':token})
+          assert status == 200 and body == {'ok':True}, f'Catalog image readiness failed for code 2021000: HTTP {status}, {body.get("error", "invalid result")}'
+          print('Catalog code 2021000: exact internal-code match and official image HEAD passed.')
           status, body = post({'operation':'health_sync'}, {'x-github-oidc-token':token})
           if status == 429 and body == {'error':'SYNC_RATE_LIMITED'}:
               pending.append('Differential sync')
@@ -85,3 +88,4 @@ jobs:
                   summary.write('All live checks passed.\n')
           print('Gateway rejected invalid identity and completed authenticated ACP read using server secrets.')
           PY
+

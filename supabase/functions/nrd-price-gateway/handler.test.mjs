@@ -200,3 +200,31 @@ test('expired session during De/Por category discovery signs in once again',asyn
   assert.equal(response.status,200);
   assert.equal(categoryCalls,2);
 });
+
+
+test('configured snapshot takes priority over live lookup',async()=>{
+  const server=upstream();let liveCalls=0;
+  const handler=createHandler({authorize:allow,credentials:secret,fetcher:server.fetcher,
+    catalogLoader:async()=>[{produto_id:'9',codigo_interno:'1',descricao:'Café',imagem:'https://cdn.example.test/cafe.jpg'}],
+    catalogLookup:async()=>{liveCalls++;return [];}});
+  const body=await (await handler(req(input))).json();
+  assert.equal(body.items[0].imageUrl,'https://cdn.example.test/cafe.jpg');assert.equal(liveCalls,0);
+});
+
+test('catalog readiness is restricted to CI and verifies the fixed code and image',async()=>{
+  const server=upstream();
+  const fetcher=async (url,options)=>{
+    if(options?.method==='HEAD')return new Response(null,{headers:{'Content-Type':'image/jpeg'}});
+    if(new URL(url).pathname.endsWith('/Product/all')){
+      assert.equal(new URL(url).searchParams.get('code'),'2021000');
+      return Response.json({items:[{code:'2021000',description:'Beats G&T Lata 269ml'}]});
+    }
+    return server.fetcher(url,options);
+  };
+  const options={credentials:secret,fetcher,catalogLookup:async()=>[
+    {produto_id:'3653',codigo_interno:'2021000',descricao:'Beats G&T Lata 269ml',imagem:'https://cdn.example.test/beats.jpg'}]};
+  const handler=createHandler({...options,authorize:async()=>({allowed:true,probe:true})});
+  assert.deepEqual(await (await handler(req({operation:'health_catalog'}))).json(),{ok:true});
+  assert.equal((await createHandler({...options,authorize:allow})(req({operation:'health_catalog'}))).status,403);
+  assert.equal(validate({operation:'health_catalog',code:'another-code'}),false);
+});

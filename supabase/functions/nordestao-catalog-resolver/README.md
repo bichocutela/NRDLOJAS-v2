@@ -93,12 +93,14 @@ O enriquecimento é tolerante a falhas: se o snapshot estiver indisponível, a r
 
 ## Consulta live descoberta na loja pública
 
-Também é possível consultar o catálogo diretamente pela API pública usada pelo frontend VipCommerce, sem manter um snapshot manual. A integração live usa somente a autenticação pública de leitura do próprio site, consulta primeiro `codproduto` e depois `desc_prod`, e converte o filename retornado em uma URL de imagem oficial. Ela é ativada na Edge Function com:
+Também é possível consultar o catálogo diretamente pela API pública usada pelo frontend VipCommerce, sem manter um snapshot manual. A integração live usa somente a autenticação pública de leitura do próprio site, consulta primeiro `codproduto` e depois `desc_prod`, e converte o filename retornado em uma URL de imagem oficial. Ela está habilitada por padrão na Edge Function publicada. Pode ser configurada com:
 
 ```text
 NORDESTAO_LIVE_LOOKUP=true
 NORDESTAO_LIVE_MAX_ITEMS=80
 ```
+
+Para desativar a consulta direta, configure `NORDESTAO_LIVE_LOOKUP=false`. As pesquisas aceitam os campos atuais `code`/`description` e os aliases legados; usam até quatro consultas em paralelo, cache por termo de 15 minutos e orçamento de 12 segundos por lote. Falhas individuais preservam os resultados já encontrados.
 
 `NORDESTAO_LIVE_MAX_ITEMS` limita o número de promoções consultadas por resposta para proteger latência e rate limit. A configuração descoberta no site é mantida no backend: organização VipCommerce `52`, filial interna `1`, centro padrão `2`, domain key `nordestaomaisvoce.com.br` e bucket público de imagens `produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com`. Esses valores não são enviados ao APK.
 
@@ -141,3 +143,4 @@ Antes de ativar em produção:
 5. configure a URL estável na Edge Function;
 6. execute os testes do gateway;
 7. valide que produtos ambíguos permanecem sem imagem.
+

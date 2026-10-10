@@ -11,7 +11,7 @@ const reply = (status, body) => new Response(JSON.stringify(body), {status, head
 async function enrichCatalog(payload, catalogLoader, minScore, catalogLookup) {
   if ((!catalogLoader && !catalogLookup) || !Array.isArray(payload?.items) || payload.items.length === 0) return payload;
   let catalog;
-  try { catalog = catalogLookup ? await catalogLookup(payload.items) : await catalogLoader(); } catch { return payload; }
+  try { catalog = catalogLoader ? await catalogLoader() : await catalogLookup(payload.items); } catch { return payload; }
   if (!Array.isArray(catalog) || catalog.length === 0) return payload;
   const resolved = resolvePromotions(payload.items, catalog, {minScore});
   return {...payload, items: resolved.map(({promotion}) => ({
@@ -51,7 +51,7 @@ export function clean(value, depth = 0) {
 export function validate(input) {
   if (!input || Array.isArray(input) || typeof input !== 'object') return false;
   if (validSync(input)) return true;
-  if (['access','health','health_promotions','health_sync','health_categories'].includes(input.operation)) return Object.keys(input).length === 1;
+  if (['access','health','health_promotions','health_sync','health_categories','health_catalog'].includes(input.operation)) return Object.keys(input).length === 1;
   if (Object.keys(input).some(k => !['path','parameters'].includes(k)) || !routes.has(input.path) || !Array.isArray(input.parameters) || input.parameters.length > 24) return false;
   if (input.path === "Promotion/all" && input.parameters.some(pair => !["pageSize","pageIndex"].includes(pair?.[0]))) return false;
   const seen = new Set();
@@ -175,12 +175,23 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     if (!validate(input)) return reply(400,{error:'INVALID_REQUEST'});
     if (identity.promotionsOnly && !['access','promotion_status','promotion_sync','promotion_refresh'].includes(input.operation) && input.path !== 'Promotion/all') return reply(403,{error:'ACCESS_DENIED'});
     // CI may exercise exactly one fixed read to validate migration readiness, never arbitrary queries.
-    if (identity.probe && !['health','health_promotions','health_sync','health_categories'].includes(input.operation)) return reply(403,{error:'ACCESS_DENIED'});
-    if (['health','health_promotions','health_sync','health_categories'].includes(input.operation) && !identity.probe) return reply(403,{error:'ACCESS_DENIED'});
+    if (identity.probe && !['health','health_promotions','health_sync','health_categories','health_catalog'].includes(input.operation)) return reply(403,{error:'ACCESS_DENIED'});
+    if (['health','health_promotions','health_sync','health_categories','health_catalog'].includes(input.operation) && !identity.probe) return reply(403,{error:'ACCESS_DENIED'});
     if (masterRoutes.has(input.path) && !identity.master) return reply(403,{error:'ACCESS_DENIED'});
     const secret = credentials();
     if (!secret.login || !secret.password) return reply(503,{error:'SERVICE_NOT_READY'});
     if (input.operation === 'access') return reply(200,{ok:true});
+    if (input.operation === 'health_catalog') {
+      // Fixed read-only CI fixture; never accepts caller-selected products or returns commercial data.
+      try {
+        const page = await consult({path:'Product/all',parameters:[['code','2021000'],['pageSize','10'],['pageIndex','0']]});
+        const product = page.items?.find(item => String(item.code ?? item.codproduto ?? item.internalCode) === '2021000');
+        if (!product?.imageUrl || product.catalog_match_type !== 'internal_code') throw Error('CATALOG_NOT_READY');
+        const image = await fetcher(product.imageUrl,{method:'HEAD',signal:AbortSignal.timeout(10000)});
+        if (!image.ok || !image.headers.get('content-type')?.startsWith('image/')) throw Error('CATALOG_NOT_READY');
+        return reply(200,{ok:true});
+      } catch { return reply(503,{error:'CATALOG_NOT_READY'}); }
+    }
     if (input.operation === 'health_categories') {
       try {
         const page = await consult({path:'Promotion/all',parameters:[['pageIndex','0'],['pageSize','1']]});
@@ -229,3 +240,4 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     return reply(502,{error:'CONSULTATION_UNAVAILABLE'});
   };
 }
+

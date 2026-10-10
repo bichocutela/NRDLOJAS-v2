@@ -5,6 +5,7 @@ import { ServerCache } from './server-cache.mjs';
 import { ReadCache } from './read-cache.mjs';
 import { createCategorizer } from './categories.mjs';
 import { createAuthorizer } from './access.mjs';
+import { createLiveCatalogLookup } from './catalog-live.mjs';
 const project = 'appcodigo-7f245';
 const jwks = createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
 let serviceToken = '', serviceExpires = 0;
@@ -49,56 +50,10 @@ const catalogLoader = catalogSnapshotUrl ? async () => {
   if (Array.isArray(body.items)) return body.items;
   throw Error('INVALID_CATALOG');
 } : null;
-const vipBase = 'https://services.vipcommerce.com.br/api-admin/v1';
-const vipOrganizationId = '52';
-const vipFilialId = '1';
-const vipCentroDistribuicaoId = '2';
-const vipDomainKey = 'nordestaomaisvoce.com.br';
-const vipPublicKey = 'df072f85df9bf7dd71b6811c34bdbaa4f219d98775b56cff9dfa5f8ca1bf8469';
-const vipImageBase = 'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com';
-let vipToken = '', vipTokenAt = 0, vipSigningIn: Promise<string> | null = null;
-async function getVipToken() {
-  if (vipToken && Date.now() - vipTokenAt < 20 * 60_000) return vipToken;
-  if (vipSigningIn) return vipSigningIn;
-  vipSigningIn = (async () => {
-    const response = await fetch(`${vipBase}/org/${vipOrganizationId}/auth/loja/login`, {method:'POST', signal:AbortSignal.timeout(10000),
-      headers:{'Content-Type':'application/json',Accept:'application/json',DomainKey:vipDomainKey,OrganizationId:vipOrganizationId},
-      body:JSON.stringify({domain:vipDomainKey,username:'loja',key:vipPublicKey})});
-    const body = await boundedJson(response, 100_000);
-    const token = typeof body?.data === 'string' ? body.data : Array.isArray(body?.data) ? body.data.join('') : body?.data?.token;
-    if (!response.ok || typeof token !== 'string' || token.length < 40) throw Error('VIP_AUTH_UNAVAILABLE');
-    vipToken = token; vipTokenAt = Date.now(); return token;
-  })();
-  try { return await vipSigningIn; } finally { vipSigningIn = null; }
-}
-function vipQuery(value: string) { return value.trim().replace(/[\\/\s%?=]/g, '+'); }
-function vipRecord(product: any) {
-  const id = String(product?.produto_id ?? '').trim(), description = String(product?.descricao ?? '').trim(), filename = String(product?.imagem ?? '').trim();
-  if (!id || !description || !filename) return null;
-  const slug = String(product?.link ?? '').replace(/^\/+/, '');
-  return {produto_id:id, codigo_interno:String(product?.codigo_erp ?? product?.sku ?? '').trim() || null,
-    descricao:description, imagem:`${vipImageBase}/250x250/${filename}`, slug,
-    productUrl:`https://www.lojaonline.nordestao.com.br/produto/${encodeURIComponent(id)}/${slug}`};
-}
-async function vipSearch(term: string, token: string) {
-  const url = `${vipBase}/org/${vipOrganizationId}/filial/${vipFilialId}/centro_distribuicao/${vipCentroDistribuicaoId}/loja/buscas/produtos/termo/${vipQuery(term)}/rapida?session=nrd-${crypto.randomUUID()}`;
-  const response = await fetch(url, {signal:AbortSignal.timeout(10000),headers:{Accept:'application/json',DomainKey:vipDomainKey,OrganizationId:vipOrganizationId,Authorization:'Bearer '+token}});
-  if (!response.ok) throw Error('VIP_SEARCH_UNAVAILABLE');
-  const body = await boundedJson(response, 1_000_000);
-  const products = body?.data?.produtos ?? [];
-  return Array.isArray(products) ? products.map(vipRecord).filter(Boolean) : [];
-}
-const catalogLookup = Deno.env.get('NORDESTAO_LIVE_LOOKUP') === 'true' ? async (items: any[]) => {
-  const token = await getVipToken(), results: any[] = [], seen = new Set<string>();
-  const maxItems = Math.max(1, Number(Deno.env.get('NORDESTAO_LIVE_MAX_ITEMS') ?? '80'));
-  for (const item of items.slice(0, maxItems)) {
-    const code = String(item?.codproduto ?? '').trim(), description = String(item?.desc_prod ?? '').trim();
-    let found = code ? await vipSearch(code, token) : [];
-    if (!found.length && description) found = await vipSearch(description, token);
-    for (const product of found) if (!seen.has(product.produto_id)) { seen.add(product.produto_id); results.push(product); }
-  }
-  return results;
-} : null;
+// Enabled for the deployed integration; an explicit false remains an emergency off switch.
+const catalogLookup = Deno.env.get('NORDESTAO_LIVE_LOOKUP') !== 'false'
+  ? createLiveCatalogLookup({boundedJson, maxItems:Number(Deno.env.get('NORDESTAO_LIVE_MAX_ITEMS') ?? '80')})
+  : null;
 // No cached grant: revocation and "liberar para todos" are checked against the server each call.
 const appAuthorize = createAuthorizer({document,
   hash: async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))).map(v=>v.toString(16).padStart(2,'0')).join(''),
@@ -131,3 +86,4 @@ Deno.serve(createHandler({
   promotionSync: createPromotionSync({cache:serverCache, background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)}),
   credentials: () => ({login:Deno.env.get('NRD_PRICE_LOGIN'),password:Deno.env.get('NRD_PRICE_PASSWORD')})
 }));
+
