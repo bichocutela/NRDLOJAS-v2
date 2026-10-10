@@ -94,6 +94,34 @@ internal object VisualMixReviewStore {
         }
     }
 
+    fun finalizedSessions(context: Context): List<Pair<String, FlyerAnalysisResult>> {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return prefs.getStringSet("finalized_ids", emptySet()).orEmpty().mapNotNull { id ->
+            runCatching { JSONObject(prefs.getString("finalized_" + id, "")!!).toAnalysisResult() }
+                .getOrNull()?.let { id to it }
+        }
+    }
+
+    fun finalizeSession(context: Context, id: String, result: FlyerAnalysisResult): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val editor = prefs.edit()
+            .putStringSet("session_ids", prefs.getStringSet("session_ids", emptySet()).orEmpty() - id)
+            .remove("session_" + id).remove("selection_" + id)
+            .putStringSet("finalized_ids", prefs.getStringSet("finalized_ids", emptySet()).orEmpty() + id)
+            .putString("finalized_" + id, result.toJson().toString())
+        if (loadDraft(context)?.toJson()?.toString() == result.toJson().toString()) editor.remove(KEY_DRAFT)
+        return editor.commit()
+    }
+
+    fun reopenSession(context: Context, id: String, result: FlyerAnalysisResult): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return prefs.edit()
+            .putStringSet("finalized_ids", prefs.getStringSet("finalized_ids", emptySet()).orEmpty() - id)
+            .remove("finalized_" + id)
+            .putStringSet("session_ids", prefs.getStringSet("session_ids", emptySet()).orEmpty() + id)
+            .putString("session_" + id, result.toJson().toString()).commit()
+    }
+
     private fun FlyerAnalysisResult.toJson(): JSONObject = JSONObject().apply {
         put("name", name)
         put("validFrom", validFrom)

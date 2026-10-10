@@ -101,6 +101,9 @@ internal fun VisualMixOrderImportDialog(
     var batchBusy by session.batchBusy
     var expandedApproved by session.expandedApproved
 
+    var finalizeOpen by remember(session.id) { mutableStateOf(false) }
+    var historyOpen by remember(session.id) { mutableStateOf(false) }
+
     fun stableKey(offer: FlyerOffer) = VisualMixReviewStore.stableKey(offer)
     fun isVerified(offer: FlyerOffer) = stableKey(offer) in confirmedKeys
 
@@ -169,6 +172,49 @@ internal fun VisualMixOrderImportDialog(
     }
 
 
+    if (finalizeOpen) {
+        val pending = analysis?.offers?.count { !isVerified(it) } ?: 0
+        AlertDialog(
+            onDismissRequest = { finalizeOpen = false },
+            title = { Text("Finalizar documento?") },
+            text = { Text(if (pending > 0)
+                "Ainda há $pending oferta(s) sem conferência. Deseja finalizar mesmo assim? O documento sairá das pendências e ficará no histórico. As ofertas já aplicadas serão preservadas."
+                else "Tudo conferido. O documento sairá das pendências e ficará no histórico. As ofertas já aplicadas serão preservadas.") },
+            dismissButton = { TextButton(onClick = { finalizeOpen = false }) { Text("Continuar revisão") } },
+            confirmButton = {
+                TextButton(enabled = !session.running, onClick = {
+                    if (VisualMixOrderProcesses.finalize(context, session)) finalizeOpen = false
+                    else error = "Não foi possível finalizar. Tente novamente."
+                }) { Text("Tudo Pronto") }
+            }
+        )
+    }
+    if (historyOpen) {
+        val history = VisualMixReviewStore.finalizedSessions(context)
+        AlertDialog(
+            onDismissRequest = { historyOpen = false },
+            title = { Text("Histórico de documentos") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (history.isEmpty()) Text("Nenhum documento finalizado.")
+                    history.forEach { (id, result) ->
+                        OutlinedCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(result.name, fontWeight = FontWeight.Bold)
+                                Text("Finalizado • ${result.offers.size} oferta(s)")
+                                TextButton(onClick = {
+                                    if (VisualMixOrderProcesses.reopen(context, api, id, result)) historyOpen = false
+                                    else error = "Não foi possível reabrir. Tente novamente."
+                                }) { Text("Reabrir revisão") }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { historyOpen = false }) { Text("Fechar") } }
+        )
+    }
+
     if (!session.minimized.value && VisualMixOrderProcesses.selected.value == session.id) Dialog(
         onDismissRequest = { if (!busy && !savingValidity && !batchBusy) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -224,6 +270,11 @@ internal fun VisualMixOrderImportDialog(
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Rascunho") }
                     }
+                    item {
+                        OutlinedButton(onClick = { historyOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Histórico de documentos")
+                        }
+                    }
                     if (busy || batchBusy) {
                         item {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -257,6 +308,13 @@ internal fun VisualMixOrderImportDialog(
                                     if (done > 0) Text("$done já conferida(s)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
+                        }
+                        item {
+                            Button(
+                                onClick = { finalizeOpen = true },
+                                enabled = !session.running,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Tudo Pronto — Finalizar documento") }
                         }
                         result.warnings.forEach { warning ->
                             item { Text("⚠ $warning", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary) }
