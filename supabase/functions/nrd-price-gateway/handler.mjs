@@ -1,4 +1,5 @@
 import { validSync } from './promotion-sync.mjs';
+import { resolvePromotions } from '../nordestao-catalog-resolver/handler.mjs';
 // Fixed read-only routes; credentials, upstream tokens and cookies never leave the server.
 export const TENANT = 'https://nordestao12.acp.app.br';
 const API = 'https://api.acp.app.br';
@@ -7,6 +8,18 @@ const masterRoutes = new Set(['TemplatePrintLog/all', 'ProductGroup/all']);
 const keys = new Set(['pageSize', 'pageIndex', 'code', 'barCode', 'description', 'productCategoryIds', 'orderByDescending', 'profileIdToBeDesconsidered']);
 const headers = {'Content-Type':'application/json', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff'};
 const reply = (status, body) => new Response(JSON.stringify(body), {status, headers});
+async function enrichCatalog(payload, catalogLoader, minScore) {
+  if (!catalogLoader || !Array.isArray(payload?.items) || payload.items.length === 0) return payload;
+  let catalog;
+  try { catalog = await catalogLoader(); } catch { return payload; }
+  if (!Array.isArray(catalog) || catalog.length === 0) return payload;
+  const resolved = resolvePromotions(payload.items, catalog, {minScore});
+  return {...payload, items: resolved.map(({promotion}) => ({
+    ...promotion,
+    productUrl: promotion.linkloja ?? promotion.productUrl ?? null,
+    imageUrl: promotion.imagem ?? promotion.imageUrl ?? null
+  }))};
+}
 export async function boundedJson(response, limit = 8_000_000) {
   const reader = response.body?.getReader();
   if (!reader) throw Error('EMPTY_BODY');
@@ -55,10 +68,21 @@ export function validate(input) {
     return true;
   });
 }
-export function createHandler({authorize, credentials, fetcher = fetch, enrichPromotions = async items => items, promotionSync = null}) {
+export function createHandler({authorize, credentials, fetcher = fetch, enrichPromotions = async items => items,
+  promotionSync = null, catalogLoader = null, catalogMinScore = 0.86, catalogCacheTtlMs = 15 * 60_000}) {
   // ACP session shared only inside this server instance. Login is serialized, not per product.
   let session = null, sessionAt = 0, signingIn = null;
   let dePorCategory = null, dePorCategoryAt = 0;
+  let catalogCache = null, catalogCachedAt = 0, catalogLoading = null;
+  const loadCatalog = catalogLoader ? async () => {
+    if (catalogCache && Date.now() - catalogCachedAt < catalogCacheTtlMs) return catalogCache;
+    if (catalogLoading) return catalogLoading;
+    catalogLoading = Promise.resolve(catalogLoader()).then(value => {
+      if (!Array.isArray(value)) throw Error('INVALID_CATALOG');
+      catalogCache = value; catalogCachedAt = Date.now(); return value;
+    }).finally(() => { catalogLoading = null; });
+    return catalogLoading;
+  } : null;
   async function signIn() {
     if (session && Date.now() - sessionAt < 10 * 60_000) return session;
     if (signingIn) return signingIn;
@@ -133,7 +157,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
           // Classification errors never prevent commercial consultations.
           try { sanitized.items = await enrichPromotions(sanitized.items); } catch { /* fallback on client */ }
         }
-        return sanitized;
+        return enrichCatalog(sanitized, loadCatalog, catalogMinScore);
       }
     throw Error('UPSTREAM_FAILURE');
   }

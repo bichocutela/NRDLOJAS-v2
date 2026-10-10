@@ -1,0 +1,64 @@
+name: Atualizar catálogo Nordestão
+
+on:
+  schedule:
+    # 03:00 BRT (06:00 UTC), todos os dias.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nordestao-catalog-update
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NORDESTAO_CATALOG_SOURCE_URL: ${{ secrets.NORDESTAO_CATALOG_SOURCE_URL }}
+      NORDESTAO_CATALOG_MIN_ITEMS: ${{ vars.NORDESTAO_CATALOG_MIN_ITEMS || '1' }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_CATALOG_BUCKET: nrdlojas-images
+      SUPABASE_CATALOG_OBJECT: catalog/nordestao.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validar configuração
+        run: |
+          set -euo pipefail
+          test -n "$NORDESTAO_CATALOG_SOURCE_URL"
+          test -n "$SUPABASE_URL"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+      - name: Baixar e validar snapshot
+        run: node scripts/update-nordestao-catalog.mjs
+        env:
+          NORDESTAO_CATALOG_OUTPUT: nordestao-catalog.json
+      - name: Publicar snapshot validado
+        run: |
+          set -euo pipefail
+          test -s nordestao-catalog.json
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --url "${SUPABASE_URL%/}/storage/v1/object/${SUPABASE_CATALOG_BUCKET}/${SUPABASE_CATALOG_OBJECT}" \
+            --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            --header "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            --header 'Content-Type: application/json' \
+            --header 'x-upsert: true' \
+            --data-binary @nordestao-catalog.json
+      - name: Verificar snapshot publicado
+        run: |
+          set -euo pipefail
+          PUBLIC_URL="${SUPABASE_URL%/}/storage/v1/object/public/${SUPABASE_CATALOG_BUCKET}/${SUPABASE_CATALOG_OBJECT}"
+          curl --fail --silent --show-error --max-time 30 "$PUBLIC_URL" | node -e '
+            let data=""; process.stdin.on("data", c => data += c); process.stdin.on("end", () => {
+              const value = JSON.parse(data);
+              if (value.schemaVersion !== 1 || !Array.isArray(value.items) || value.items.length < 1) process.exit(1);
+              console.log(`Published catalog verified: ${value.items.length} items`);
+            });
+          '

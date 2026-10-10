@@ -108,6 +108,30 @@ test('preserves prices/offers, encodes repeated filters, isolates cookies and re
     await handler(req(input));assert.equal(server.calls.filter(x=>x.url.endsWith('/credentials')).length,1);
   }
 });
+test('optionally enriches ACP items from the Nordestão catalog and caches the snapshot',async()=>{
+  const server=upstream();let catalogLoads=0;
+  const handler=createHandler({authorize:allow,credentials:secret,fetcher:server.fetcher,catalogLoader:async()=>{
+    catalogLoads++;
+    return [{produto_id:'54487',codigo_interno:'1',descricao:'Café',imagem:'https://cdn.example.test/cafe.jpg',slug:'cafe'}];
+  }});
+  const first=await handler(req(input));
+  const second=await handler(req(input));
+  assert.equal(first.status,200);assert.equal(second.status,200);assert.equal(catalogLoads,1);
+  const body=await first.json();
+  assert.equal(body.items[0].imageUrl,'https://cdn.example.test/cafe.jpg');
+  assert.match(body.items[0].productUrl,/produto\/54487\/cafe$/);
+  assert.equal(body.items[0].catalog_match_type,'internal_code');
+  assert.equal(body.items[0].accessToken,undefined);
+});
+test('catalog failure does not break the ACP response',async()=>{
+  const server=upstream();
+  const handler=createHandler({authorize:allow,credentials:secret,fetcher:server.fetcher,catalogLoader:async()=>{throw Error('offline');}});
+  const response=await handler(req(input));
+  assert.equal(response.status,200);
+  const body=await response.json();
+  assert.equal(body.items[0].imageUrl,undefined);
+  assert.equal(body.items[0].clubValue,39.99);
+});
 test('session expiry renews exactly once; upstream error bodies are never disclosed',async()=>{
   const server=upstream(false,true);const handler=createHandler({authorize:allow,credentials:secret,fetcher:server.fetcher});
   assert.equal((await handler(req(input))).status,200);

@@ -36,6 +36,19 @@ async function document(path: string) {
   }
   return (await boundedJson(response)).fields ?? {};
 }
+const catalogSnapshotUrl = Deno.env.get('NORDESTAO_CATALOG_SNAPSHOT_URL')?.trim() ?? '';
+const catalogLoader = catalogSnapshotUrl ? async () => {
+  if (!catalogSnapshotUrl.startsWith('https://')) throw Error('INVALID_CATALOG_URL');
+  const response = await fetch(catalogSnapshotUrl, {
+    signal: AbortSignal.timeout(10000),
+    headers: {Accept: 'application/json', 'Cache-Control': 'no-cache'}
+  });
+  if (!response.ok) throw Error('CATALOG_HTTP_FAILURE');
+  const body = await boundedJson(response, 8_000_000);
+  if (Array.isArray(body)) return body;
+  if (Array.isArray(body.items)) return body.items;
+  throw Error('INVALID_CATALOG');
+} : null;
 // No cached grant: revocation and "liberar para todos" are checked against the server each call.
 const appAuthorize = createAuthorizer({document,
   hash: async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))).map(v=>v.toString(16).padStart(2,'0')).join(''),
@@ -45,6 +58,16 @@ const appAuthorize = createAuthorizer({document,
   return {uid:payload.sub,email:payload.email,authTime:payload.auth_time,token};
 }});
 const serverCache = new ReadCache(new ServerCache({project, token:firestoreToken}));
+const catalogSnapshotUrl = Deno.env.get('NORDESTAO_CATALOG_SNAPSHOT_URL')?.trim() ?? '';
+const catalogLoader = catalogSnapshotUrl ? async () => {
+  if (!catalogSnapshotUrl.startsWith('https://')) throw Error('INVALID_CATALOG_URL');
+  const response = await fetch(catalogSnapshotUrl, {signal:AbortSignal.timeout(10000), headers:{Accept:'application/json','Cache-Control':'no-cache'}});
+  if (!response.ok) throw Error('CATALOG_HTTP_FAILURE');
+  const body = await boundedJson(response, 8_000_000);
+  if (Array.isArray(body)) return body;
+  if (Array.isArray(body.items)) return body.items;
+  throw Error('INVALID_CATALOG');
+} : null;
 const categorizer = createCategorizer({cache:serverCache, apiKey:Deno.env.get('GEMINI_API_KEY'),
   model:Deno.env.get('PROMOTION_GEMINI_MODEL') ?? 'gemini-3.5-flash-lite',
   background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)});
@@ -62,6 +85,10 @@ Deno.serve(createHandler({
     return {allowed:true,master:false,probe:true};
   },
   enrichPromotions: categorizer,
+  catalogLoader,
+  catalogMinScore: Number(Deno.env.get('NORDESTAO_CATALOG_MIN_SCORE') ?? '0.86'),
   promotionSync: createPromotionSync({cache:serverCache, background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)}),
   credentials: () => ({login:Deno.env.get('NRD_PRICE_LOGIN'),password:Deno.env.get('NRD_PRICE_PASSWORD')}),
+  catalogLoader,
+  catalogMinScore: Number(Deno.env.get('NORDESTAO_CATALOG_MIN_SCORE') ?? '0.86')
 }));
