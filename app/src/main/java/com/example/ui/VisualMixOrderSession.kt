@@ -211,7 +211,7 @@ internal object VisualMixOrderProcesses {
         return session
     }
     fun add(api: AcpApi, uri: Uri): VisualMixOrderSession {
-        sessions.removeAll { it.analysis.value == null && it.pdfUri.value == null && !it.running }
+        sessions.removeAll { it.analysis.value == null && it.pdfUri.value == null && !it.running && !it.backgroundImport.value }
         val session = VisualMixOrderSession()
         session.open(api)
         session.pdfUri.value = uri

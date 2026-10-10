@@ -74,31 +74,31 @@ class OrderImportWorker(context: Context, parameters: WorkerParameters) : Corout
             update("Aguardando leitura", initial.progress)
             currentCoroutineContext().ensureActive()
             val directory = OrderImportTasks.directory(context, documentId)
-                val source = File(directory, "documento.pdf")
-                // Atomic copy preserves even share intents with a temporary URI permission.
-                val atomic = AtomicFile(source)
-                val existing = runCatching { atomic.openRead().use { it.available() > 0 } }.getOrDefault(false)
-                if (!existing) {
-                    update("Salvando documento", 1)
-                    val out = atomic.startWrite()
-                    try {
-                        val input = context.contentResolver.openInputStream(Uri.parse(initial.uri))
-                            ?: throw IllegalArgumentException("Não foi possível abrir o documento. Importe-o novamente.")
-                        input.use {
-                            val buffer = ByteArray(8192)
-                            var total = 0L
-                            while (true) {
-                                currentCoroutineContext().ensureActive()
-                                val count = it.read(buffer)
-                                if (count < 0) break
-                                total += count
-                                require(total <= 25L * 1024 * 1024) { "O documento excede 25 MB." }
-                                out.write(buffer, 0, count)
-                            }
+            val source = File(directory, "documento.pdf")
+            // Atomic copy preserves even share intents with a temporary URI permission.
+            val atomic = AtomicFile(source)
+            val existing = runCatching { atomic.openRead().use { it.available() > 0 } }.getOrDefault(false)
+            if (!existing) {
+                update("Salvando documento", 1)
+                val out = atomic.startWrite()
+                try {
+                    val input = context.contentResolver.openInputStream(Uri.parse(initial.uri))
+                        ?: throw IllegalArgumentException("Não foi possível abrir o documento. Importe-o novamente.")
+                    input.use {
+                        val buffer = ByteArray(8192)
+                        var total = 0L
+                        while (true) {
+                            currentCoroutineContext().ensureActive()
+                            val count = it.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            require(total <= 25L * 1024 * 1024) { "O documento excede 25 MB." }
+                            out.write(buffer, 0, count)
                         }
-                        atomic.finishWrite(out)
-                    } catch (failure: Throwable) { atomic.failWrite(out); throw failure }
-                }
+                    }
+                    atomic.finishWrite(out)
+                } catch (failure: Throwable) { atomic.failWrite(out); throw failure }
+            }
             gate.withPermit {
                 currentCoroutineContext().ensureActive()
                 val result = FlyerImportEngine.analyzeUri(context, Uri.fromFile(source),
