@@ -71,3 +71,11 @@ test('refresh preserves verified catalog metadata while updating price and rejec
  assert.equal(result.value,4);assert.equal(result.imageUrl,previous.imageUrl);assert.equal(result.nrdCategory,'Bebidas alcoólicas');
  assert.equal(retainCatalogMetadata({...fresh,barCode:'other'},previous).imageUrl,undefined);
 });
+
+test('snapshot enriches once after all ACP pages have been read',async()=>{
+ const docs=new Map();let version=0,pages=0,enrichments=0;
+ const cache={get:async k=>docs.get(k),many:async keys=>new Map(keys.map(k=>[k,docs.get(k)])),write:async(k,payload)=>{const row={payload,version:++version};docs.set(k,row);return row;},claim:async k=>cache.write(k,{}),finish:async(k,c,p)=>cache.write(k,p)};
+ const sync=createPromotionSync({cache});
+ const result=await sync({input:{operation:'promotion_sync',manifest:[]},readPage:async page=>{pages++;return {items:[{id:page}],pageIndex:page,totalPages:3,totalCount:3};},enrichItems:async items=>{assert.equal(pages,3);enrichments++;return items.map(item=>({...item,nrdCategory:'Alimentos'}));}});
+ assert.equal(enrichments,1);assert.equal(result.items.length,3);assert.ok(result.items.every(row=>row.item.nrdCategory==='Alimentos'));
+});

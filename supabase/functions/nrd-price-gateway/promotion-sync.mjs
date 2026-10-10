@@ -43,7 +43,7 @@ export function retainCatalogMetadata(item,previous) {
 /** Shared ACP snapshot, immutable pages and one atomic pointer; stale data survives failed refresh. */
 export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms))}) {
   let inFlight=null;
-  async function refresh(readPage) {
+  async function refresh(readPage,enrichItems) {
     if (inFlight) return inFlight;
     inFlight=(async()=>{
       const claim=await cache.claim('promotion_snapshot',120);
@@ -60,10 +60,13 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
           if(!result.items.length) throw Error('INCOMPLETE_SNAPSHOT');
         }
         if(products.length!==expected) throw Error('INCOMPLETE_SNAPSHOT');
+        console.info('PROMOTION_SNAPSHOT_STAGE',JSON.stringify({stage:'read',count:products.length}));
+        const enriched=enrichItems ? await enrichItems(products) : products;
+        if(!Array.isArray(enriched) || enriched.length!==products.length)throw Error('INVALID_ENRICHMENT');
         const previousKeys=Array.from({length:claim.payload.pages ?? 0},(_,i)=>`snapshot_${claim.payload.generation}_${i}`);
         const previousPages=await cache.many(previousKeys);
         const previousItems=new Map(previousKeys.flatMap(key=>previousPages.get(key)?.payload.rows ?? []).map(row=>[row.id,row.item]));
-        const stable=products.map(item=>retainCatalogMetadata(item,previousItems.get(String(item.id ?? `${item.code}|${item.barCode}|${item.description}`))));
+        const stable=enriched.map(item=>retainCatalogMetadata(item,previousItems.get(String(item.id ?? `${item.code}|${item.barCode}|${item.description}`))));
         const next=await snapshot(stable);
         if(next.revision===claim.payload.revision) {
           return (await cache.finish('promotion_snapshot',claim,{...claim.payload,checkedAt:now()}))?.payload;
@@ -97,10 +100,10 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
     })();
     try {return await inFlight;} finally {inFlight=null;}
   }
-  return async ({input,readPage})=>{
+  return async ({input,readPage,enrichItems})=>{
     let pointer=(await cache.get('promotion_snapshot'))?.payload;
     if(!pointer?.revision) {
-      pointer=await refresh(readPage);
+      pointer=await refresh(readPage,enrichItems);
       if(!pointer?.revision) {
         pointer=(await cache.get('promotion_snapshot'))?.payload;
         if(!pointer?.revision) throw Error('INITIAL_SYNC_BUSY');
@@ -109,7 +112,7 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
       // Another Edge instance may own the lease. Never report the previous page as a successful fresh scan.
       const startedAt=now();
       const previousCheck=pointer.checkedAt;
-      const fresh=await refresh(readPage);
+      const fresh=await refresh(readPage,enrichItems);
       if(fresh) pointer=fresh;
       else {
         let published=false;
@@ -126,7 +129,7 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
       // Silent checks keep the same one-minute cadence, but wait for the shared refresh
       // so the current cycle can observe new ACP products instead of one cycle later.
       try {
-        pointer=await refresh(readPage) ?? (await cache.get('promotion_snapshot'))?.payload ?? pointer;
+        pointer=await refresh(readPage,enrichItems) ?? (await cache.get('promotion_snapshot'))?.payload ?? pointer;
       } catch {
         pointer=(await cache.get('promotion_snapshot'))?.payload ?? pointer;
       }

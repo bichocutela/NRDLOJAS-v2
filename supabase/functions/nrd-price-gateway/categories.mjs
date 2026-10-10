@@ -68,7 +68,7 @@ export function createCategorizer({cache, apiKey, model = 'gemini-3.5-flash-lite
   const enrich = async items => {
     const entries = await Promise.all(items.map(async item=>({item,key:await categoryKey(item)})));
     if (!entries.length) return [];
-    // A persistent page summary costs one Firestore read instead of one per product,
+    // A persistent page summary costs one shared cache read instead of one per product,
     // including cold Edge starts. Individual records remain the source of truth.
     const keys = [...new Set(entries.map(e=>e.key))].sort();
     const hash = new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(keys))));
@@ -108,3 +108,4 @@ export function createCategorizer({cache, apiKey, model = 'gemini-3.5-flash-lite
   };
   return enrich;
 }
+
