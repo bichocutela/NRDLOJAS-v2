@@ -44,7 +44,7 @@ class OrderImportRecoveryTest {
         checkpoint.savePage(0, listOf(block))
         checkpoint.savePage(1, emptyList())
         val offer = FlyerOffer(type = FlyerOfferType.DE_POR, sourceDescription = "Produto")
-            .copy(matchStatus = FlyerMatchStatus.CONFIRMED)
+            .copy(matchStatus = FlyerMatchStatus.CONFIRMED, validFrom = "2026-10-10", validTo = "2026-10-31")
         checkpoint.saveResolved(offer)
         val reloaded = OrderImportCheckpoint(File(directory, "checkpoint"))
         assertEquals(listOf(block), reloaded.page(0))

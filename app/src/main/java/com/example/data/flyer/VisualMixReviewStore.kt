@@ -161,6 +161,8 @@ internal object VisualMixReviewStore {
         put("cashbackValue", cashbackValue)
         put("sourceText", sourceText)
         put("reviewed", reviewed)
+        put("validFrom", validFrom)
+        put("validTo", validTo)
         put("clubCondition", clubCondition.name)
     }
 
@@ -209,7 +211,9 @@ internal object VisualMixReviewStore {
             cashbackValue = optNullableDouble("cashbackValue"),
             sourceText = optString("sourceText"),
             reviewed = optBoolean("reviewed", false),
-            clubCondition = FlyerClubCondition.valueOf(optString("clubCondition", FlyerClubCondition.NOT_INFORMED.name))
+            clubCondition = FlyerClubCondition.valueOf(optString("clubCondition", FlyerClubCondition.NOT_INFORMED.name)),
+            validFrom = optString("validFrom").takeIf { it.isNotBlank() && it != "null" },
+            validTo = optString("validTo").takeIf { it.isNotBlank() && it != "null" }
         )
     }.getOrNull()
 
