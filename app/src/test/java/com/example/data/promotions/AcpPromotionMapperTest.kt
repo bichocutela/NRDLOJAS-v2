@@ -4,7 +4,13 @@ import com.example.data.acp.*
 import java.math.BigDecimal
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import android.app.Application
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28], application = Application::class)
 class AcpPromotionMapperTest {
     private fun product() = AcpProduct(id = "1", code = "2021000", barcode = "7891149840878",
         description = "Produto 500ml", value = BigDecimal(12), previousValue = BigDecimal(15),
