@@ -14,5 +14,32 @@ class PromotionCategoryTest {
         assertEquals("Higiene e beleza", PromotionCategory.forDescription("LEITE DE ROSAS 100ML"))
         assertEquals("Frios e laticínios", PromotionCategory.forDescription("LEITE INTEGRAL 1L"))
     }
+    @Test fun separatesPackagedPotatoesFromFreshAndFrozenVegetables() {
+        listOf("BATATA RUFFLES ELMA CHIPS PC 70G HOT DOG", "BATATA PALHA YOKI 105G",
+            "BATATA ONDULADA 115G", "BATATA FRITA LAYS 80G", "BANANA CHIPS 100G", "SALGADINHO CHEETOS 90G").forEach {
+            assertEquals(it, "Snacks", PromotionCategory.resolve(it, null, "Hortifruti"))
+        }
+        assertEquals("Hortifruti", PromotionCategory.resolve("BATATA INGLESA KG", null))
+        assertEquals("Hortifruti", PromotionCategory.resolve("BATATA DOCE KG", null))
+        assertEquals("Congelados", PromotionCategory.resolve("BATATA FRITA CONGELADA 1KG", null, "Hortifruti"))
+        assertEquals("Snacks", PromotionCategory.resolve("BATATA PALHA YOKI 105G", "Snacks", "Hortifruti"))
+        assertEquals("Alimentos", PromotionCategory.resolve("BATATA PALHA 105G", "Alimentos"))
+    }
+    @Test fun processedIngredientsAlcoholBabyAndHouseholdHaveDistinctDepartments() {
+        assertEquals("Alimentos", PromotionCategory.resolve("TOMATE PELADO LATA 400G", null, "Hortifruti"))
+        assertEquals("Hortifruti", PromotionCategory.resolve("TOMATE CEREJA 250G", null))
+        assertEquals("Alimentos", PromotionCategory.resolve("LEITE CONDENSADO 395G", null))
+        assertEquals("Leites e laticínios", PromotionCategory.resolve("LEITE INTEGRAL 1L", null))
+        assertEquals("Bebidas alcoólicas", PromotionCategory.resolve("CERVEJA 350ML", null, "Bebidas"))
+        assertEquals("Bebês e crianças", PromotionCategory.resolve("FRALDA INFANTIL 20UN", null))
+        assertEquals("Bazar", PromotionCategory.resolve("PAPEL ALUMINIO 7 5M", null))
+    }
+    @Test fun allOfficialDepartmentsWinOverGuessesAndLegacyHistory() {
+        PromotionCategory.categories.filter { it != "Outras ofertas" }.forEach { category ->
+            assertEquals(category, PromotionCategory.resolve("BATATA RUFFLES 68G", category, "Hortifruti"))
+        }
+        assertEquals("Snacks", PromotionCategory.resolve("BATATA RUFFLES 68G", "Hortifruti", "Hortifruti", authoritative = false))
+        assertEquals("Higiene e beleza", PromotionCategory.resolve("FRALDA GERIATRICA 20UN", null))
+    }
 }
 

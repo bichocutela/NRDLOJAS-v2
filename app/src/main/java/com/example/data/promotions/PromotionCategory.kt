@@ -22,7 +22,7 @@ internal object PromotionCategory {
         "Bebidas alcoólicas", "Congelados", "Frios e embutidos", "Higiene e beleza", "Hortifruti",
         "Leites e laticínios", "Limpeza", "Padaria e confeitaria", "Pet shop", "Saudáveis", "Snacks", "Outras ofertas")
 
-    fun resolve(description: String, officialOrFallback: String?, previous: String? = null): String {
+    fun resolve(description: String, officialOrFallback: String?, previous: String? = null, authoritative: Boolean = true): String {
         fun convert(value: String?): String? = when (value) {
             "Açougue e peixaria" -> "Açougue"
             "Frios e laticínios" -> if (Regex("(?i)presunto|mortadela|salame|bacon|linguiça|linguica|salsicha").containsMatchIn(description)) "Frios e embutidos" else "Leites e laticínios"
@@ -31,7 +31,11 @@ internal object PromotionCategory {
             "Mercearia" -> "Alimentos"
             else -> value?.takeIf { it in categories && it != "Outras ofertas" }
         }
-        return convert(officialOrFallback) ?: convert(previous) ?: convert(forDescription(description)) ?: "Outras ofertas"
+        // The official department is authoritative. A recognized noun corrects old
+        // heuristic categories; retain history only when the description is unknown.
+        val recognized = convert(forDescription(description))
+        return (if (authoritative) convert(officialOrFallback) ?: recognized else recognized ?: convert(officialOrFallback))
+            ?: convert(previous) ?: "Outras ofertas"
     }
 
     fun forDescription(description: String): String {
@@ -40,6 +44,12 @@ internal object PromotionCategory {
             .replace(Regex("[^a-z0-9]+"), " ").trim()
         if (Regex("\\b(agua micelar|agua oxigenada|agua de colonia|demaquilante|dermocosmetico|protetor solar|leite de rosas|leite de colonia|locao corporal|tonico facial|serum facial|creme facial)\\b").containsMatchIn(normalized)) return "Higiene e beleza"
         if (Regex("\\b(agua sanitaria|alvejante|detergente|lava roupas|lava loucas|amaciante|desinfetante|limpador|inseticida|sabao)\\b").containsMatchIn(normalized)) return "Limpeza"
+        if (Regex("^(?:batata|mandioca|macaxeira|legumes|vegetais|fruta|frutas)\\b.*\\bcongelad[ao]s?\\b").containsMatchIn(normalized)) return "Congelados"
+        if (Regex("^(?:batata\\b.*\\b(?:palha|frita|ondulada|chips|ruffles|pringles|lays|stax)\\b|banana\\b.*\\bchips\\b|salgadinho\\b|snack\\b|snacks\\b|tortilha\\b|doritos\\b|cheetos\\b)").containsMatchIn(normalized)) return "Snacks"
+        if (Regex("^(?:tomate\\b.*\\bpelad[ao]s?\\b|alho\\b.*\\b(?:frito|granulado|po)\\b|leite condensado\\b|creme de leite\\b|coco ralado\\b|uva passa\\b)").containsMatchIn(normalized)) return "Mercearia"
+        if (Regex("^(?:cerveja|vinho|whisky|uisque|vodka|cachaca|rum|gin|licor|espumante|champagne|conhaque|tequila|saque|beats)\\b").containsMatchIn(normalized)) return "Bebidas alcoólicas"
+        if (Regex("^(?:fralda(?!.*\\b(?:geriatrica|adulto)\\b)|lenco umedecido|formula infantil|composto lacteo infantil|papinha|mamadeira|chupeta)\\b").containsMatchIn(normalized)) return "Bebês e crianças"
+        if (Regex("^(?:panela|frigideira|copo|taca|prato|talher|garfo|faca|colher|pote|assadeira|lampada|pilha|bateria|papel aluminio|filme pvc)\\b").containsMatchIn(normalized)) return "Bazar"
         return rules.firstOrNull { it.second.containsMatchIn(normalized) }?.first ?: "Outras ofertas"
     }
 }

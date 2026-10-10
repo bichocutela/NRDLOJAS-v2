@@ -77,3 +77,15 @@ test('EAN verifies identity when the code search returns the wrong product',asyn
   const rows=await createLiveCatalogLookup({boundedJson,fetcher})([{code:'outdated',barCode:'7891149840878'}]);
   assert.equal(rows.length,1);assert.equal(rows[0].codigo_interno,'2021000');
 });
+
+test('official department tree maps every nested section in all sixteen departments',async()=>{
+  const {OFFICIAL_DEPARTMENTS}=await import('../nordestao-catalog-resolver/handler.mjs');
+  const {buildDepartmentMap,vipRecord}=await import('./catalog-live.mjs');
+  const roots=OFFICIAL_DEPARTMENTS.map((descricao,i)=>({descricao,classificacao_mercadologica_id:i*10,
+    children:[{classificacao_mercadologica_id:i*10+1,children:[{classificacao_mercadologica_id:i*10+2}]}]}));
+  const map=buildDepartmentMap(roots);
+  for(let i=0;i<OFFICIAL_DEPARTMENTS.length;i++) {
+    for(const id of [i*10,i*10+1,i*10+2]) assert.equal(map[id],OFFICIAL_DEPARTMENTS[i]);
+    assert.equal(vipRecord({produto_id:String(i),descricao:'Produto',classificacao_mercadologica_id:i*10+2},map).department,OFFICIAL_DEPARTMENTS[i]);
+  }
+});

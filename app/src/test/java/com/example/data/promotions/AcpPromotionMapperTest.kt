@@ -4,7 +4,13 @@ import com.example.data.acp.*
 import java.math.BigDecimal
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import android.app.Application
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28], application = Application::class)
 class AcpPromotionMapperTest {
     private fun product() = AcpProduct(id = "1", code = "2021000", barcode = "7891149840878",
         description = "Produto 500ml", value = BigDecimal(12), previousValue = BigDecimal(15),
@@ -23,5 +29,23 @@ class AcpPromotionMapperTest {
         assertEquals("LEVE 3 • PAGUE 2", take.discount)
         assertTrue(take.offerPrice!!.endsWith("/un"))
         assertEquals("Clube", rows.single { it.title == "Clube" }.products.single().discount)
+    }
+    @Test fun allFamiliesUseOfficialDepartmentAndRepairOldFallbackCategories() {
+        val official = product().copy(description = "BATATA RUFFLES 68G",
+            detailsJson = "{\"nrdCategory\":\"Snacks\",\"catalog_category_source\":\"official\"}")
+        official.offers().filter { it.family in promotionFamilies }.forEach { offer ->
+            assertEquals("Snacks", acpPromotion("0012", official, offer, null, "Hortifruti").description)
+        }
+        val pending = official.copy(detailsJson = null)
+        pending.offers().filter { it.family in promotionFamilies }.forEach { offer ->
+            assertEquals("Snacks", acpPromotion("0012", pending, offer, null, "Hortifruti").description)
+        }
+    }
+    @Test fun allFamiliesCorrectLegacyInferredDepartmentsWithoutChangingOfficialOnes() {
+        val inferred = product().copy(description = "BATATA RUFFLES 68G",
+            detailsJson = "{\"nrdCategory\":\"Hortifruti\",\"catalog_category_source\":\"inferred\"}")
+        inferred.offers().filter { it.family in promotionFamilies }.forEach { offer ->
+            assertEquals("Snacks", acpPromotion("0012", inferred, offer, null, "Hortifruti").description)
+        }
     }
 }
