@@ -1,0 +1,31 @@
+name: Firestore usage audit
+on:
+  push:
+    branches: [codex/firestore-usage-audit]
+    paths: ['scripts/audit-firestore-usage.py', '.github/workflows/firestore-usage-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  metrics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read Cloud Monitoring metrics
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          ACCOUNT_FILE="$RUNNER_TEMP/firestore-audit-account.json"
+          trap 'rm -f "$ACCOUNT_FILE"' EXIT
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$ACCOUNT_FILE"
+          chmod 600 "$ACCOUNT_FILE"
+          gcloud auth activate-service-account --key-file="$ACCOUNT_FILE" --quiet
+          python scripts/audit-firestore-usage.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firestore-usage
+          path: |
+            firestore-usage.json
+            firestore-usage.md
