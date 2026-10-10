@@ -154,6 +154,36 @@ internal object VisualMixOrderProcesses {
         select(session)
         return session
     }
+    fun finalize(context: Context, session: VisualMixOrderSession): Boolean {
+        val result = session.analysis.value ?: return false
+        if (session.running || !VisualMixReviewStore.finalizeSession(context, session.id, result)) return false
+        session.scope.cancel()
+        context.getSystemService(android.app.NotificationManager::class.java).cancel(session.id, session.id.hashCode())
+        sessions.remove(session)
+        selected.value = sessions.firstOrNull()?.id
+        sessions.forEach { it.draftAvailable.value = VisualMixReviewStore.hasDraft(context) }
+        notify(context)
+        if (sessions.isEmpty()) {
+            minimized.value = true
+            context.stopService(Intent(context, OrderProcessService::class.java))
+            context.getSystemService(android.app.NotificationManager::class.java).cancel(OrderProcessService.NOTIFICATION_ID)
+            serviceRunning = false
+        }
+        return true
+    }
+
+    fun reopen(context: Context, api: AcpApi, id: String, result: FlyerAnalysisResult): Boolean {
+        if (!VisualMixReviewStore.reopenSession(context, id, result)) return false
+        val session = VisualMixOrderSession(id)
+        session.analysis.value = result
+        session.name.value = result.name
+        session.completed.value = true
+        session.open(api)
+        sessions += session
+        select(session)
+        return true
+    }
+
     fun select(session: VisualMixOrderSession) {
         selected.value = session.id
         minimized.value = false
