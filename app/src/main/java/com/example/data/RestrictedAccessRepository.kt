@@ -169,6 +169,7 @@ object RestrictedAccessRepository {
         val auth = FirebaseAuth.getInstance()
         var job: kotlinx.coroutines.Job? = null
         val listener = FirebaseAuth.AuthStateListener {
+            if (it.currentUser == null) verifiedSessionUid = null
             job?.cancel()
             job = launch {
                 while (true) {
