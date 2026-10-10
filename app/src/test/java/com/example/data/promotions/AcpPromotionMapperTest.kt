@@ -1,12 +1,16 @@
 package com.example.data.promotions
 
 import com.example.data.acp.*
-import org.json.JSONObject
+import java.math.BigDecimal
 import org.junit.Assert.*
 import org.junit.Test
 
 class AcpPromotionMapperTest {
-    private fun product() = AcpProductParser.page(JSONObject("""{"items":[{"id":"1","code":"2021000","barCode":"7891149840878","description":"Produto 500ml","value":12,"previousValue":15,"clubValue":10,"quantityTake":3,"quantityPay":2,"productCategories":[{"description":"De-Por"}]}]}"""), 0).items.single()
+    private fun product() = AcpProduct(id = "1", code = "2021000", barcode = "7891149840878",
+        description = "Produto 500ml", value = BigDecimal(12), previousValue = BigDecimal(15),
+        clubValue = BigDecimal(10), wholesaleValue = null, wholesaleQuantity = null,
+        quantityTake = BigDecimal(3), quantityPay = BigDecimal(2), cashback = null, cashbackValue = null,
+        secondUnitDiscount = null, unitLimitPerCPF = null, unit = null, categories = listOf("De-Por"))
 
     @Test fun familiesHaveSeparateIdentitiesAndAuthoritativeConditions() {
         val product = product()

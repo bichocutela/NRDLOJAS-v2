@@ -230,10 +230,27 @@ test('catalog readiness is restricted to CI and verifies the fixed code and imag
 });
 
 
-test('promotions include the three authoritative ACP family categories across pages',async()=>{
+test('direct promotion reads retain De/Por while discovering all three ACP family categories',async()=>{
  const server=upstream();const handler=createHandler({authorize:allow,credentials:secret,fetcher:async(url,options)=>{
   const u=new URL(url);if(u.pathname.endsWith('/ProductCategory/all'))return Response.json({items:u.searchParams.get('pageIndex')==='0'?[{id:77,description:'De-Por'},{id:78,description:'Clube de Vantagens'}]:[{id:79,description:'Leve e Pague'}],totalPages:2});return server.fetcher(url,options);
  }});
  assert.equal((await handler(req({path:'Promotion/all',parameters:[['pageIndex','0'],['pageSize','250']]}))).status,200);
- assert.deepEqual(new URL(server.calls.at(-1).url).searchParams.getAll('productCategoryIds'),['77','78','79']);
+ assert.deepEqual(new URL(server.calls.at(-1).url).searchParams.getAll('productCategoryIds'),['77']);
+});
+
+test('snapshot queries each ACP family separately and deduplicates products',async()=>{
+ const server=upstream();const queried=[];const handler=createHandler({authorize:allow,credentials:secret,
+  promotionSync:async({readPage})=>readPage(0),
+  fetcher:async(url,options)=>{
+   const u=new URL(url);
+   if(u.pathname.endsWith('/ProductCategory/all'))return Response.json({items:[{id:77,description:'De-Por'},{id:78,description:'Clube de Vantagens'},{id:79,description:'Leve/Pague'}],totalPages:1});
+   if(u.pathname.endsWith('/Product/all')){
+    const ids=u.searchParams.getAll('productCategoryIds');assert.equal(ids.length,1);queried.push(ids[0]);
+    const id=ids[0]==='77'?'depor':ids[0]==='78'?'club':'takepay';
+    return Response.json({items:[{id:'shared',code:'1'},{id,code:id}],pageIndex:0,totalPages:1,totalCount:2});
+   }
+   return server.fetcher(url,options);
+  }});
+ const result=await (await handler(req({operation:'promotion_status'}))).json();
+ assert.deepEqual(queried,['77','79','78']);assert.equal(result.totalCount,4);assert.equal(result.items.length,4);
 });

@@ -117,7 +117,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     try { items = await enrichPromotions(items); } catch { /* client fallback */ }
     return (await enrichCatalog({items}, loadCatalog, catalogMinScore, catalogLookup)).items;
   }
-  async function consult(input, enrich = true) {
+  async function consult(input, enrich = true, family = "depor") {
       attempts: for (let attempt = 0; attempt < 2; attempt++) {
         const auth = await signIn();
         const base = auth.proxy ? TENANT+'/api/proxy/api/v1/' : API+'/api/v1/';
@@ -138,15 +138,18 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
               if (!Array.isArray(items)) throw Error('INVALID_PAYLOAD');
               for (const item of items) {
                 const label=String(item.description).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
-                if (['depor','clubedevantagens','clubvantagens','levepague','leveepague'].includes(label)) found.push(String(item.id));
+                if (['depor','clubedevantagens','clubvantagens','levepague','leveepague'].includes(label)) found.push({id:String(item.id),label});
               }
               if (page + 1 >= (categoryPayload.totalPages ?? 1)) break;
             }
             if (!found.length) throw Error('DEPOR_UNAVAILABLE');
-            dePorCategory = [...new Set(found)]; dePorCategoryAt = Date.now();
+            dePorCategory = [...new Map(found.map(item=>[item.id,item])).values()]; dePorCategoryAt = Date.now();
           }
           path = 'Product/all';
-          parameters = [...input.parameters,...dePorCategory.map(id=>['productCategoryIds',id])];
+          const names=family==='club'?['clubedevantagens','clubvantagens']:family==='takepay'?['levepague','leveepague']:['depor'];
+          const category=dePorCategory.find(item=>names.includes(item.label));
+          if(!category) { if(family==='depor') throw Error('DEPOR_UNAVAILABLE'); return {items:[],pageIndex:Number(input.parameters.find(p=>p[0]==='pageIndex')?.[1] ?? 0),totalCount:0,totalPages:0}; }
+          parameters = [...input.parameters,['productCategoryIds',category.id]];
         }
         const url = new URL(base + path);
         for (const [key,value] of parameters) url.searchParams.append(key,value);
@@ -168,6 +171,36 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
           ? enrichCatalog(sanitized, loadCatalog, catalogMinScore, catalogLookup) : sanitized;
       }
     throw Error('UPSTREAM_FAILURE');
+  }
+  function snapshotReader() {
+    let loading;
+    return async page => {
+      if (!loading) loading = (async()=>{
+        const products=new Map();
+        for(const family of ['depor','takepay','club']) {
+          let expected=null,count=0;
+          for(let index=0;index<100;index++) {
+            const result=await consult({path:'Promotion/all',parameters:[['pageIndex',String(index)],['pageSize','250']]},false,family);
+            if(!Array.isArray(result.items) || result.pageIndex!==index || !Number.isInteger(result.totalCount) || result.totalCount<0 || result.totalCount>10000 || !Number.isInteger(result.totalPages) || result.totalPages<0 || result.totalPages>100)throw Error('INVALID_SNAPSHOT');
+            if(expected===null)expected=result.totalCount;
+            if(expected!==result.totalCount)throw Error('UNSTABLE_SNAPSHOT');
+            count+=result.items.length;
+            for(const item of result.items) {
+              const id=String(item.id ?? `${item.code}|${item.barCode}|${item.description}`);
+              if(!products.has(id))products.set(id,item);
+            }
+            if(index+1>=result.totalPages)break;
+            if(!result.items.length)throw Error('INCOMPLETE_SNAPSHOT');
+          }
+          if(count!==expected)throw Error('INCOMPLETE_SNAPSHOT');
+          console.info('PROMOTION_FAMILY_COUNT',JSON.stringify({family,count}));
+        }
+        if(products.size>10000)throw Error('INVALID_SNAPSHOT');
+        return [...products.values()];
+      })();
+      const items=await loading;
+      return {items:items.slice(page*250,(page+1)*250),pageIndex:page,totalCount:items.length,totalPages:Math.ceil(items.length/250)};
+    };
   }
   return async req => {
     if (req.method !== 'POST') return reply(405,{error:'METHOD_NOT_ALLOWED'});
@@ -213,7 +246,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     }
     if (input.operation === 'health_sync') {
       try {
-        const readPage = page=>consult({path:'Promotion/all',parameters:[['pageIndex',String(page)],['pageSize','250']]},false);
+        const readPage = snapshotReader();
         const status = await promotionSync({input:{operation:'promotion_sync',revision:'',manifest:[]},readPage,enrichItems});
         if (!/^[a-f0-9]{64}$/.test(status.revision) || status.items.length !== status.count || status.removedIds.length) throw Error('INVALID_SNAPSHOT');
         const manifest = status.items.map(({id,hash})=>({id,hash}));
@@ -230,7 +263,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     try {
       if (['promotion_status','promotion_sync','promotion_refresh'].includes(input.operation)) {
         if (!promotionSync) return reply(503,{error:'SYNC_UNAVAILABLE'});
-        const result = await promotionSync({input,enrichItems, readPage: page => consult({path:'Promotion/all',parameters:[['pageIndex',String(page)],['pageSize','250']]},false)});
+        const result = await promotionSync({input,enrichItems, readPage: snapshotReader()});
         return reply(200,result);
       }
       const payload = await consult(input);

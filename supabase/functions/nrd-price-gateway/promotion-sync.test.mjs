@@ -82,8 +82,8 @@ test('snapshot enriches once after all ACP pages have been read',async()=>{
 });
 
 test('stale status returns immediately while one background refresh owns the work',async()=>{
- const before=await snapshot([{id:1,value:2}]);const docs=new Map([['promotion_snapshot_v2',{payload:{revision:before.revision,checkedAt:1,count:1,pages:1,generation:'old'}}]]);let resolveRead;let calls=0;const jobs=[];
- const cache={get:async key=>docs.get(key),claim:async()=>({payload:docs.get('promotion_snapshot_v2').payload,version:1}),many:async keys=>new Map(keys.map(k=>[k,{payload:{rows:before.rows}}])),write:async()=>({}),finish:async(key,claim,payload)=>({payload})};
+ const before=await snapshot([{id:1,value:2}]);const docs=new Map([['promotion_snapshot_v3',{payload:{revision:before.revision,checkedAt:1,count:1,pages:1,generation:'old'}}]]);let resolveRead;let calls=0;const jobs=[];
+ const cache={get:async key=>docs.get(key),claim:async()=>({payload:docs.get('promotion_snapshot_v3').payload,version:1}),many:async keys=>new Map(keys.map(k=>[k,{payload:{rows:before.rows}}])),write:async()=>({}),finish:async(key,claim,payload)=>({payload})};
  const sync=createPromotionSync({cache,now:()=>100000,background:job=>jobs.push(job)});
  const status=await sync({input:{operation:'promotion_status'},readPage:async()=>{calls++;return new Promise(resolve=>resolveRead=resolve);}});
  assert.equal(status.revision,before.revision);assert.equal(calls,1);
