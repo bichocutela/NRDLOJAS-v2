@@ -24,4 +24,15 @@ class AcpPromotionMapperTest {
         assertTrue(take.offerPrice!!.endsWith("/un"))
         assertEquals("Clube", rows.single { it.title == "Clube" }.products.single().discount)
     }
+    @Test fun allFamiliesUseOfficialDepartmentAndRepairOldFallbackCategories() {
+        val official = product().copy(description = "BATATA RUFFLES 68G",
+            detailsJson = "{\"nrdCategory\":\"Snacks\",\"catalog_category_source\":\"official\"}")
+        official.offers().filter { it.family in promotionFamilies }.forEach { offer ->
+            assertEquals("Snacks", acpPromotion("0012", official, offer, null, "Hortifruti").description)
+        }
+        val pending = official.copy(detailsJson = null)
+        pending.offers().filter { it.family in promotionFamilies }.forEach { offer ->
+            assertEquals("Snacks", acpPromotion("0012", pending, offer, null, "Hortifruti").description)
+        }
+    }
 }
