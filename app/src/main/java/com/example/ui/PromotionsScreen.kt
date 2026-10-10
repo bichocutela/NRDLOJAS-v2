@@ -610,7 +610,7 @@ fun PromotionsScreen(
                                     profileActionsExpanded = false
                                     favoriteStoreCode?.let { code ->
                                         favoriteStoreCode = null
-                                        selectedStore = enabledStores.firstOrNull() ?: "0012"
+                                        selectedStore = if (ALL_STORES_LABEL in selectableStores) ALL_STORES_LABEL else enabledStores.firstOrNull() ?: "0012"
                                         scope.launch { userPreferences.setFavoriteStoreCode(null) }
                                     } ?: storeOptions.firstOrNull { it in enabledStores }?.let { store ->
                                         favoriteStoreCode = store
@@ -639,7 +639,8 @@ fun PromotionsScreen(
                             favoriteStoreCode = favoriteStoreCode,
                             onFavoriteStoreChange = { code ->
                                 favoriteStoreCode = code
-                                selectedStore = code?.takeIf { it in enabledStores } ?: enabledStores.firstOrNull() ?: "0012"
+                                selectedStore = code?.takeIf { it in enabledStores }
+                                    ?: if (ALL_STORES_LABEL in selectableStores) ALL_STORES_LABEL else enabledStores.firstOrNull() ?: "0012"
                                 scope.launch { userPreferences.setFavoriteStoreCode(code) }
                             }
                         )
@@ -1986,11 +1987,11 @@ internal fun sortOfferGroups(offers: List<OfferGroup>, option: OfferSortOption):
     )
     OfferSortOption.ADDED -> offers.sortedWith(compareByDescending<OfferGroup> { it.addedAt }.thenBy { it.id })
     OfferSortOption.DISCOUNT_DESC -> offers.sortedWith(
-        compareByDescending<OfferGroup> { it.maxDiscountPercent() ?: -1.0 }
+        compareByDescending<OfferGroup> { it.effectiveDiscountPercent() ?: -1.0 }
             .thenBy { it.name.lowercase() }
     )
     OfferSortOption.DISCOUNT_ASC -> offers.sortedWith(
-        compareBy<OfferGroup> { it.maxDiscountPercent() ?: Double.MAX_VALUE }
+        compareBy<OfferGroup> { it.effectiveDiscountPercent() ?: Double.MAX_VALUE }
             .thenBy { it.name.lowercase() }
     )
     OfferSortOption.PRICE_ASC -> offers.sortedWith(
@@ -2003,9 +2004,9 @@ internal fun sortOfferGroups(offers: List<OfferGroup>, option: OfferSortOption):
     )
 }
 
-private fun OfferGroup.maxDiscountPercent(): Double? = stores
-    .mapNotNull { com.example.data.promotions.promotionDiscountPercent(it.regularPrice, it.offerPrice, it.discount) }
-    .maxOrNull()
+private fun OfferGroup.effectiveDiscountPercent(): Double? = bestOffer?.let {
+    com.example.data.promotions.promotionDiscountPercent(it.regularPrice, it.offerPrice, it.discount)
+}
 
 private fun String?.toExpiryLabel(): String? {
     val raw = this?.trim().orEmpty()
