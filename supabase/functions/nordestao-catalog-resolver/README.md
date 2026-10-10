@@ -91,6 +91,19 @@ NORDESTAO_CATALOG_MIN_SCORE=0.86
 
 O enriquecimento é tolerante a falhas: se o snapshot estiver indisponível, a resposta ACP original continua sendo entregue. O gateway acrescenta apenas metadados de catálogo aos itens, como `imageUrl`, `productUrl`, `catalog_match_type`, `catalog_match_score` e `catalog_product_id`; credenciais, cookies e tokens ACP continuam fora da resposta.
 
+## Consulta live descoberta na loja pública
+
+Também é possível consultar o catálogo diretamente pela API pública usada pelo frontend VipCommerce, sem manter um snapshot manual. A integração live usa somente a autenticação pública de leitura do próprio site, consulta primeiro `codproduto` e depois `desc_prod`, e converte o filename retornado em uma URL de imagem oficial. Ela é ativada na Edge Function com:
+
+```text
+NORDESTAO_LIVE_LOOKUP=true
+NORDESTAO_LIVE_MAX_ITEMS=80
+```
+
+`NORDESTAO_LIVE_MAX_ITEMS` limita o número de promoções consultadas por resposta para proteger latência e rate limit. A configuração descoberta no site é mantida no backend: organização VipCommerce `52`, filial interna `1`, centro padrão `2`, domain key `nordestaomaisvoce.com.br` e bucket público de imagens `produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com`. Esses valores não são enviados ao APK.
+
+O snapshot continua sendo suportado e tem prioridade operacional quando `NORDESTAO_CATALOG_SNAPSHOT_URL` estiver configurado. Se a consulta live falhar, o gateway devolve a promoção ACP original, preservando o fallback existente.
+
 ## Atualização diária automática
 
 O workflow `.github/workflows/update-nordestao-catalog.yml` executa todos os dias às **03:00 no horário de Brasília** (`06:00 UTC`) e também pode ser iniciado manualmente. Ele:

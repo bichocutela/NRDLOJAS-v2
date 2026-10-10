@@ -8,10 +8,10 @@ const masterRoutes = new Set(['TemplatePrintLog/all', 'ProductGroup/all']);
 const keys = new Set(['pageSize', 'pageIndex', 'code', 'barCode', 'description', 'productCategoryIds', 'orderByDescending', 'profileIdToBeDesconsidered']);
 const headers = {'Content-Type':'application/json', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff'};
 const reply = (status, body) => new Response(JSON.stringify(body), {status, headers});
-async function enrichCatalog(payload, catalogLoader, minScore) {
-  if (!catalogLoader || !Array.isArray(payload?.items) || payload.items.length === 0) return payload;
+async function enrichCatalog(payload, catalogLoader, minScore, catalogLookup) {
+  if ((!catalogLoader && !catalogLookup) || !Array.isArray(payload?.items) || payload.items.length === 0) return payload;
   let catalog;
-  try { catalog = await catalogLoader(); } catch { return payload; }
+  try { catalog = catalogLookup ? await catalogLookup(payload.items) : await catalogLoader(); } catch { return payload; }
   if (!Array.isArray(catalog) || catalog.length === 0) return payload;
   const resolved = resolvePromotions(payload.items, catalog, {minScore});
   return {...payload, items: resolved.map(({promotion}) => ({
@@ -69,7 +69,7 @@ export function validate(input) {
   });
 }
 export function createHandler({authorize, credentials, fetcher = fetch, enrichPromotions = async items => items,
-  promotionSync = null, catalogLoader = null, catalogMinScore = 0.86, catalogCacheTtlMs = 15 * 60_000}) {
+  promotionSync = null, catalogLoader = null, catalogLookup = null, catalogMinScore = 0.86, catalogCacheTtlMs = 15 * 60_000}) {
   // ACP session shared only inside this server instance. Login is serialized, not per product.
   let session = null, sessionAt = 0, signingIn = null;
   let dePorCategory = null, dePorCategoryAt = 0;
@@ -157,7 +157,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
           // Classification errors never prevent commercial consultations.
           try { sanitized.items = await enrichPromotions(sanitized.items); } catch { /* fallback on client */ }
         }
-        return enrichCatalog(sanitized, loadCatalog, catalogMinScore);
+        return enrichCatalog(sanitized, loadCatalog, catalogMinScore, catalogLookup);
       }
     throw Error('UPSTREAM_FAILURE');
   }
