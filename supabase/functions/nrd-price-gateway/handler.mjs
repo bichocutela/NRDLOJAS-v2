@@ -51,7 +51,7 @@ export function clean(value, depth = 0) {
 export function validate(input) {
   if (!input || Array.isArray(input) || typeof input !== 'object') return false;
   if (validSync(input)) return true;
-  if (['access','health','health_promotions','health_sync','health_categories','health_catalog'].includes(input.operation)) return Object.keys(input).length === 1;
+  if (['access','health','health_promotions','health_sync','health_categories','health_catalog','promotion_tick'].includes(input.operation)) return Object.keys(input).length === 1;
   if (Object.keys(input).some(k => !['path','parameters'].includes(k)) || !routes.has(input.path) || !Array.isArray(input.parameters) || input.parameters.length > 24) return false;
   if (input.path === "Promotion/all" && input.parameters.some(pair => !["pageSize","pageIndex"].includes(pair?.[0]))) return false;
   const seen = new Set();
@@ -215,6 +215,8 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     try { input = await boundedJson(req,2_000_000); } catch { return reply(400,{error:'INVALID_REQUEST'}); }
     if (!validate(input)) return reply(400,{error:'INVALID_REQUEST'});
     if (identity.promotionsOnly && !['access','promotion_status','promotion_sync','promotion_refresh'].includes(input.operation) && input.path !== 'Promotion/all') return reply(403,{error:'ACCESS_DENIED'});
+    if (identity.scheduler && input.operation !== 'promotion_tick') return reply(403,{error:'ACCESS_DENIED'});
+    if (input.operation === 'promotion_tick' && !identity.scheduler) return reply(403,{error:'ACCESS_DENIED'});
     // CI may exercise exactly one fixed read to validate migration readiness, never arbitrary queries.
     if (identity.probe && !['health','health_promotions','health_sync','health_categories','health_catalog'].includes(input.operation)) return reply(403,{error:'ACCESS_DENIED'});
     if (['health','health_promotions','health_sync','health_categories','health_catalog'].includes(input.operation) && !identity.probe) return reply(403,{error:'ACCESS_DENIED'});
@@ -261,6 +263,10 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     const health = ['health','health_promotions'].includes(input.operation);
     if (health) input = {path:input.operation === 'health_promotions' ? 'Promotion/all' : 'ProductCategory/all',parameters:[['pageSize','1'],['pageIndex','0']]};
     try {
+      if (input.operation === 'promotion_tick') {
+        await promotionSync({input:{operation:'promotion_status'},enrichItems,readPage:snapshotReader()});
+        return reply(202,{ok:true});
+      }
       if (['promotion_status','promotion_sync','promotion_refresh'].includes(input.operation)) {
         if (!promotionSync) return reply(503,{error:'SYNC_UNAVAILABLE'});
         const result = await promotionSync({input,enrichItems, readPage: snapshotReader()});

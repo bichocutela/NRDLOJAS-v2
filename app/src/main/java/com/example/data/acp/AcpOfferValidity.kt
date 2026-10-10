@@ -1,11 +1,9 @@
 package com.example.data.acp
 
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.channels.awaitClose
+import com.example.data.PromotionControlClient
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.tasks.await
 import java.security.MessageDigest
 
 /** Validade comercial confirmada manualmente pelo Mestre. */
@@ -27,21 +25,11 @@ internal object AcpOfferValidityStore {
     }
 
     /** One subscription for all offer dates shown in the consultation results. */
-    fun observeAll(): Flow<Map<String, AcpOfferValidity>> = callbackFlow {
-        val registration = FirebaseFirestore.getInstance()
-            .collection(COLLECTION)
-            .document(DOCUMENT)
-            .addSnapshotListener { snapshot, _ ->
-                val values = snapshot?.data.orEmpty().mapNotNull { (field, value) ->
-                    val raw = value as? Map<*, *> ?: return@mapNotNull null
-                    field to AcpOfferValidity(
-                        startDate = raw["startDate"] as? String ?: "",
-                        endDate = raw["endDate"] as? String ?: ""
-                    )
-                }.toMap()
-                trySend(values)
-            }
-        awaitClose { registration.remove() }
+    fun observeAll(): Flow<Map<String, AcpOfferValidity>> = PromotionControlClient.observe("config/$DOCUMENT").map { values ->
+        values.mapNotNull { (field, value) ->
+            val raw = value as? Map<*, *> ?: return@mapNotNull null
+            field to AcpOfferValidity(raw["startDate"] as? String ?: "", raw["endDate"] as? String ?: "")
+        }.toMap()
     }
 
     private fun requireMaster() {
@@ -49,35 +37,12 @@ internal object AcpOfferValidityStore {
         if (email != MASTER_EMAIL) throw SecurityException("Somente o Mestre pode alterar a validade das ofertas.")
     }
 
-    fun observe(productName: String, family: AcpOfferFamily): Flow<AcpOfferValidity?> = callbackFlow {
-        val field = keyFor(productName, family)
-        val registration = FirebaseFirestore.getInstance()
-            .collection(COLLECTION)
-            .document(DOCUMENT)
-            .addSnapshotListener { snapshot, _ ->
-                val raw = snapshot?.get(field) as? Map<*, *>
-                trySend(
-                    raw?.let {
-                        AcpOfferValidity(
-                            startDate = it["startDate"] as? String ?: "",
-                            endDate = it["endDate"] as? String ?: ""
-                        )
-                    }
-                )
-            }
-        awaitClose { registration.remove() }
-    }
+    fun observe(productName: String, family: AcpOfferFamily): Flow<AcpOfferValidity?> =
+        observeAll().map { it[keyFor(productName, family)] }
 
     suspend fun save(productName: String, family: AcpOfferFamily, startDate: String, endDate: String) {
         requireMaster()
         val field = keyFor(productName, family)
-        FirebaseFirestore.getInstance()
-            .collection(COLLECTION)
-            .document(DOCUMENT)
-            .set(
-                mapOf(field to mapOf("startDate" to startDate, "endDate" to endDate)),
-                com.google.firebase.firestore.SetOptions.merge()
-            )
-            .await()
+        PromotionControlClient.write("config/$DOCUMENT", mapOf(field to mapOf("startDate" to startDate, "endDate" to endDate)), merge = true)
     }
 }

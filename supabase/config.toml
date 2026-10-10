@@ -9,3 +9,7 @@ verify_jwt = false
 [functions.nrd-installation-event]
 # SHA-256 capability authenticates an immutable Firestore event. No arbitrary FCM payloads accepted.
 verify_jwt = false
+
+[functions.nrd-promotion-control]
+# Firebase JWT and device session are verified in the function.
+verify_jwt = false

@@ -4,11 +4,8 @@ import com.example.data.StoreCatalog
 import com.example.data.flyer.FlyerAnalysisResult
 import com.example.data.flyer.FlyerOfferType
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.SetOptions
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.tasks.await
+import com.example.data.PromotionControlClient
+import kotlinx.coroutines.flow.map
 import java.util.UUID
 
 internal data class PromotionStore(
@@ -34,8 +31,7 @@ internal data class StorePromotionRecord(
 
 /** Publish immutable pages first, then one pointer. Readers never see half an import. */
 internal object PromotionStores {
-    private val db get() = FirebaseFirestore.getInstance()
-    private val config get() = db.collection("config").document("promotion_stores")
+    private const val config = "config/promotion_stores"
     val defaults get() = StoreCatalog.codes.map { PromotionStore(it) }
 
     private fun parse(data: Map<String, Any>?): List<PromotionStore> = StoreCatalog.codes.map { code ->
@@ -46,18 +42,9 @@ internal object PromotionStores {
             (raw?.get("updatedAt") as? Number)?.toLong() ?: 0)
     }
 
-    fun observe() = callbackFlow {
-        val listener = config.addSnapshotListener { snapshot, error ->
-            if (error == null && snapshot != null) {
-                if (!snapshot.metadata.isFromCache) PromotionConfigCache.remember(config, snapshot.data.orEmpty())
-                trySend(parse(snapshot.data))
-            }
-            // Keep the last known configuration on a transient listener error.
-        }
-        awaitClose { listener.remove() }
-    }
+    fun observe() = PromotionControlClient.observe(config).map { parse(it) }
 
-    suspend fun read(forceRefresh: Boolean = false): List<PromotionStore> = parse(PromotionConfigCache.read(config, forceRefresh))
+    suspend fun read(forceRefresh: Boolean = false): List<PromotionStore> = parse(PromotionControlClient.read(config))
 
     private fun requireMaster(code: String) {
         check(FirebaseAuth.getInstance().currentUser?.email?.lowercase() == "mestre@nrdlojas.com") {
@@ -68,14 +55,11 @@ internal object PromotionStores {
 
     suspend fun setEnabled(code: String, enabled: Boolean) {
         requireMaster(code)
-        db.runTransaction { transaction ->
-            val snapshot = transaction.get(config)
-            val store = parse(snapshot.data).first { it.code == code }
-            require(!enabled || code == "0012" || store.count > 0) {
-                "Envie e publique o documento Visual Mix desta loja antes de habilitar."
-            }
-            transaction.set(config, mapOf(code to mapOf("enabled" to enabled)), SetOptions.merge())
-        }.await()
+        val store = read(true).first { it.code == code }
+        require(!enabled || code == "0012" || store.count > 0) {
+            "Envie e publique o documento Visual Mix desta loja antes de habilitar."
+        }
+        PromotionControlClient.write(config, mapOf(code to mapOf("enabled" to enabled)), merge = true)
     }
 
     fun records(analysis: FlyerAnalysisResult): List<StorePromotionRecord> = analysis.offers
@@ -101,15 +85,15 @@ internal object PromotionStores {
         val pages = records.chunked(200)
         // Immutable page IDs prevent a late reader from mixing two revisions.
         pages.forEachIndexed { index, page ->
-            db.collection("config").document("promotion_${code}_${revision}_$index").set(mapOf(
+            PromotionControlClient.write("config/promotion_${code}_${revision}_$index", mapOf(
                 "items" to page.map { mapOf("code" to it.code, "barcode" to it.barcode,
                     "name" to it.name, "price" to it.price, "previous" to it.previous,
                     "from" to it.from, "to" to it.to) }
-            )).await()
+            ))
         }
-        config.set(mapOf(code to mapOf("enabled" to true, "revision" to revision,
+        PromotionControlClient.write(config, mapOf(code to mapOf("enabled" to true, "revision" to revision,
             "pages" to pages.size, "count" to records.size, "source" to analysis.sourceLabel,
-            "updatedAt" to System.currentTimeMillis())), SetOptions.merge()).await()
+            "updatedAt" to System.currentTimeMillis())), merge = true)
     }
 
     suspend fun readRecords(store: PromotionStore): List<StorePromotionRecord> {
@@ -117,8 +101,7 @@ internal object PromotionStores {
         require(store.pages in 1..50)
         return buildList {
             repeat(store.pages) { index ->
-                val snapshot = db.collection("config")
-                    .document("promotion_${store.code}_${store.revision}_$index").get().await()
+                val snapshot = PromotionControlClient.read("config/promotion_${store.code}_${store.revision}_$index")
                 val items = snapshot.get("items") as? List<*> ?: error("Documento de promoções incompleto.")
                 items.forEach { value ->
                     val raw = value as? Map<*, *> ?: error("Oferta inválida.")

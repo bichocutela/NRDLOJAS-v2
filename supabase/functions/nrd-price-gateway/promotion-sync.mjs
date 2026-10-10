@@ -64,7 +64,7 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
         // All ACP fields are synced together; optional catalog/classification work rotates in bounded batches.
         const enriched=[...products];
         const cursor=products.length ? (claim.payload.enrichCursor ?? 0)%products.length : 0;
-        const batchSize=enrichItems ? Math.min(250,products.length) : 0;
+        const batchSize=enrichItems ? Math.min(80,products.length) : 0;
         if(batchSize) {
           const positions=Array.from({length:batchSize},(_,i)=>(cursor+i)%products.length);
           const batch=await enrichItems(positions.map(i=>products[i]));

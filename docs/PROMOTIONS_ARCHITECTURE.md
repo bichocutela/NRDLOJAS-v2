@@ -57,3 +57,16 @@ Testes Node cobrem autorização, contratos ACP, sanitização, JSON/categorias 
 Os cinco blocos estão presentes na main. A PR #176 adicionou o gesto de puxar e a varredura manual que aguarda o snapshot do servidor. Esta revisão impede enfileirar múltiplas varreduras por toques repetidos e informa falhas por snackbar mantendo a lista local disponível. O spinner acompanha a sincronização em execução; esperar uma tarefa na fila não o mantém girando.
 
 Validação de concorrência: `PromotionSyncRequestsTest.kt` simula uma checagem silenciosa bloqueada seguida de dez gestos manuais; apenas uma varredura manual deve ocorrer ao liberar a checagem. Os testes Android exigem o Gradle e o SDK do ambiente de CI.
+
+
+## Supabase como fonte principal (10/10/2026)
+
+`nrd_control_documents` guarda permissões, sessões, lojas, validade e páginas de documentos. A tabela tem RLS e privilégios exclusivos de `service_role`; o app acessa somente `nrd-promotion-control`, que verifica JWT Firebase e sessão do aparelho. `RestrictedAccessRepository`, `PromotionStores` e `AcpOfferValidityStore` usam esta API. Credenciais privadas não entram no APK.
+
+A importação é única e preserva os campos atuais: `nrd-control-bootstrap` lê o conjunto inteiro antes de copiar, publica `promotion_control_migration.ready` somente após conclusão e reconcilia cópias parciais antes de publicar o marcador. Se o Firestore estiver sem cota, a importação não publica o marcador. O gateway e o serviço de sessão mantêm a implementação anterior até o marcador ficar pronto; a nova API retorna `MIGRATION_PENDING`. Não se presume liberação pública.
+
+Um cron no Supabase chama `promotion_tick` a cada minuto, autenticado por capacidade aleatória de 256 bits no Vault. A função verifica o digest com a chave exclusiva do servidor e só permite esta operação ao scheduler. O job atualiza o snapshot compartilhado mesmo sem aparelhos conectados; não depende do ciclo de vida do Android. Não é um webhook ACP: mudanças ficam disponíveis após o próximo ciclo concluído, sujeito ao tempo de leitura e falhas do ACP.
+
+De/Por, Clube e Leve e Pague entram na mesma união de produtos e no mesmo pipeline de imagens oficiais. Código interno/EAN e correspondência validada identificam a foto; o snapshot preserva associações em mudanças de preço e invalida-as quando a identidade muda. A resolução ocorre progressivamente em lotes de até 80 produtos, alinhados ao orçamento do catálogo para não saltar 170 produtos a cada lote de 250, com orçamento de tempo; não há garantia de foto para produtos ausentes no catálogo oficial.
+
+Depois da migração, o Mestre precisa usar o APK novo para editar acessos e publicar ofertas nesta fonte. Aplicativos antigos ainda leem/escrevem a configuração antiga no Firestore. Outros módulos do app ainda usam Firestore; esta mudança não migra seu conteúdo.
