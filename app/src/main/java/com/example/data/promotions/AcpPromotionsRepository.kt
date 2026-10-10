@@ -122,6 +122,11 @@ internal class AcpPromotionsRepository(context: Context) {
                 }
             }
         }
+        val observedAt = System.currentTimeMillis()
+        promotions.indices.forEach { index ->
+            val offer = promotions[index]
+            promotions[index] = offer.copy(addedAt = cachedOffers[offer.id]?.addedAt ?: observedAt)
+        }
         val fingerprint = MessageDigest.getInstance("SHA-256").digest(promotions.sortedBy { it.id }.toString().toByteArray())
             .joinToString("") { "%02x".format(it.toInt() and 255) }
         val previousOffers = dao.offers().associateBy { it.id }
