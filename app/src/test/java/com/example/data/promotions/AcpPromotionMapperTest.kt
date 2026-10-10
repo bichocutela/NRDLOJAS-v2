@@ -41,4 +41,11 @@ class AcpPromotionMapperTest {
             assertEquals("Snacks", acpPromotion("0012", pending, offer, null, "Hortifruti").description)
         }
     }
+    @Test fun allFamiliesCorrectLegacyInferredDepartmentsWithoutChangingOfficialOnes() {
+        val inferred = product().copy(description = "BATATA RUFFLES 68G",
+            detailsJson = "{\"nrdCategory\":\"Hortifruti\",\"catalog_category_source\":\"inferred\"}")
+        inferred.offers().filter { it.family in promotionFamilies }.forEach { offer ->
+            assertEquals("Snacks", acpPromotion("0012", inferred, offer, null, "Hortifruti").description)
+        }
+    }
 }

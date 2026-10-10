@@ -18,8 +18,9 @@ internal fun acpPromotion(store: String, product: AcpProduct, offer: AcpOffer,
     require(offer.family in promotionFamilies)
     val label = offer.family.promotionLabel()
     val code = product.code.ifBlank { product.barcode }
-    val category = PromotionCategory.resolve(product.description,
-        product.detailsJson?.let { org.json.JSONObject(it).optString("nrdCategory") }, previousCategory)
+    val metadata = product.detailsJson?.let { org.json.JSONObject(it) }
+    val category = PromotionCategory.resolve(product.description, metadata?.optString("nrdCategory"), previousCategory,
+        authoritative = metadata?.optString("catalog_category_source") == "official")
     val previous = offer.referencePrice
     val current = offer.price
     val condition = when (offer.family) {

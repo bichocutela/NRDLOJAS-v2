@@ -34,5 +34,12 @@ class PromotionCategoryTest {
         assertEquals("Bebês e crianças", PromotionCategory.resolve("FRALDA INFANTIL 20UN", null))
         assertEquals("Bazar", PromotionCategory.resolve("PAPEL ALUMINIO 7 5M", null))
     }
+    @Test fun allOfficialDepartmentsWinOverGuessesAndLegacyHistory() {
+        PromotionCategory.categories.filter { it != "Outras ofertas" }.forEach { category ->
+            assertEquals(category, PromotionCategory.resolve("BATATA RUFFLES 68G", category, "Hortifruti"))
+        }
+        assertEquals("Snacks", PromotionCategory.resolve("BATATA RUFFLES 68G", "Hortifruti", "Hortifruti", authoritative = false))
+        assertEquals("Higiene e beleza", PromotionCategory.resolve("FRALDA GERIATRICA 20UN", null))
+    }
 }
 

@@ -114,8 +114,8 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     try { return await signingIn; } finally { signingIn = null; }
   }
   async function enrichItems(items) {
-    try { items = await enrichPromotions(items); } catch { /* client fallback */ }
-    return (await enrichCatalog({items}, loadCatalog, catalogMinScore, catalogLookup)).items;
+    items = (await enrichCatalog({items}, loadCatalog, catalogMinScore, catalogLookup)).items;
+    try { return await enrichPromotions(items); } catch { return items; }
   }
   async function consult(input, enrich = true, family = "depor") {
       attempts: for (let attempt = 0; attempt < 2; attempt++) {
