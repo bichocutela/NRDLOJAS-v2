@@ -62,6 +62,7 @@ internal class AcpPromotionsRepository(context: Context) {
       syncMutex.withLock {
        try {
         val previousRows = dao.rows()
+        val cachedOffers = dao.offers().associate { it.id to PromotionCodec.decode(it.payload) }
         var delta: PromotionDelta? = null
         var cityProducts = previousRows
         if (!isInitialized()) onNetwork(true)
@@ -109,7 +110,8 @@ internal class AcpPromotionsRepository(context: Context) {
                         promotions += promotion(store.code, product.code.ifBlank { product.barcode }, product.description,
                             offer.price!!, offer.referencePrice!!, effective?.startDate,
                             effective?.endDate, product.imageUrl, product.barcode, product.detailsJson,
-                            product.detailsJson?.let { org.json.JSONObject(it).optString("nrdCategory") })
+                            product.detailsJson?.let { org.json.JSONObject(it).optString("nrdCategory") },
+                            cachedOffers[offerIdentity(store.code, product.code.ifBlank { product.barcode })]?.description)
                     }
                 }
             } else {
@@ -169,8 +171,8 @@ internal class AcpPromotionsRepository(context: Context) {
     }
 
     private fun promotion(store: String, code: String, name: String, price: BigDecimal, previous: BigDecimal,
-        from: String?, to: String?, image: String?, barcode: String?, detailsJson: String?, categoryOverride: String? = null): Promotion {
-        val category = categoryOverride?.takeIf { it in PromotionCategory.categories } ?: PromotionCategory.forDescription(name)
+        from: String?, to: String?, image: String?, barcode: String?, detailsJson: String?, categoryOverride: String? = null, previousCategory: String? = null): Promotion {
+        val category = PromotionCategory.resolve(name, categoryOverride, previousCategory)
         val discount = previous.subtract(price).multiply(BigDecimal(100)).divide(previous, 0, RoundingMode.HALF_UP)
         return Promotion(offerIdentity(store, code), "De/Por", category, image, isoDate(from), isoDate(to),
             listOf(PromotionProduct(code, name, price.brl(), previous.brl(), "$discount%", store, image, barcode = barcode, detailsJson = detailsJson)))
@@ -203,3 +205,4 @@ internal class AcpPromotionsRepository(context: Context) {
         }
     }
 }
+

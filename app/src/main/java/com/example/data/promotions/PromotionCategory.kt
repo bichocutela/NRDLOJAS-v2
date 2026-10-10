@@ -18,7 +18,21 @@ internal object PromotionCategory {
         "Mercearia" to "arroz|feijao|acucar|cafe|farinha|fuba|flocao|macarrao|massa|biscoito|bolacha|azeite|oleo|molho|extrato|sal|tempero|vinagre|maionese|ketchup|mostarda|chocolate|bombom|doce|geleia|cereal|aveia|granola|milho|ervilha|atum|sardinha|ovo|tapioca|pipoca|amendoim|castanha"
     ).map { (label, nouns) -> label to Regex("^(?:$nouns)(?:\\b|\\s)") }
 
-    val categories = rules.map { it.first } + "Outras ofertas"
+    val categories = listOf("Alimentos", "Açougue", "Bazar", "Bebês e crianças", "Bebidas",
+        "Bebidas alcoólicas", "Congelados", "Frios e embutidos", "Higiene e beleza", "Hortifruti",
+        "Leites e laticínios", "Limpeza", "Padaria e confeitaria", "Pet shop", "Saudáveis", "Snacks", "Outras ofertas")
+
+    fun resolve(description: String, officialOrFallback: String?, previous: String? = null): String {
+        fun convert(value: String?): String? = when (value) {
+            "Açougue e peixaria" -> "Açougue"
+            "Frios e laticínios" -> if (Regex("(?i)presunto|mortadela|salame|bacon|linguiça|linguica|salsicha").containsMatchIn(description)) "Frios e embutidos" else "Leites e laticínios"
+            "Padaria" -> "Padaria e confeitaria"
+            "Pet" -> "Pet shop"
+            "Mercearia" -> "Alimentos"
+            else -> value?.takeIf { it in categories && it != "Outras ofertas" }
+        }
+        return convert(officialOrFallback) ?: convert(previous) ?: convert(forDescription(description)) ?: "Outras ofertas"
+    }
 
     fun forDescription(description: String): String {
         val normalized = Normalizer.normalize(description, Normalizer.Form.NFD)
@@ -29,3 +43,4 @@ internal object PromotionCategory {
         return rules.firstOrNull { it.second.containsMatchIn(normalized) }?.first ?: "Outras ofertas"
     }
 }
+

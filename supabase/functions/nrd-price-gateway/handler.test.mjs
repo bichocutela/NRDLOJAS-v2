@@ -222,9 +222,10 @@ test('catalog readiness is restricted to CI and verifies the fixed code and imag
     return server.fetcher(url,options);
   };
   const options={credentials:secret,fetcher,catalogLookup:async()=>[
-    {produto_id:'3653',codigo_interno:'2021000',descricao:'Beats G&T Lata 269ml',imagem:'https://cdn.example.test/beats.jpg'}]};
+    {produto_id:'3653',codigo_interno:'2021000',department:'Bebidas alcoólicas',descricao:'Beats G&T Lata 269ml',imagem:'https://cdn.example.test/beats.jpg'}]};
   const handler=createHandler({...options,authorize:async()=>({allowed:true,probe:true})});
   assert.deepEqual(await (await handler(req({operation:'health_catalog'}))).json(),{ok:true});
   assert.equal((await createHandler({...options,authorize:allow})(req({operation:'health_catalog'}))).status,403);
   assert.equal(validate({operation:'health_catalog',code:'another-code'}),false);
 });
+

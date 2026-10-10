@@ -23,8 +23,8 @@ internal enum class FactsFamily(val domain: String, val credit: String) {
     companion object {
         fun forCategory(category: String): FactsFamily = when (category) {
             "Higiene e beleza" -> BEAUTY
-            "Pet" -> PET
-            "Limpeza", "Outras ofertas" -> PRODUCTS
+            "Pet", "Pet shop" -> PET
+            "Limpeza", "Bazar", "Outras ofertas" -> PRODUCTS
             else -> FOOD
         }
     }
@@ -112,3 +112,4 @@ internal class ProductImageRepository internal constructor(context: Context) {
         }
     }
 }
+

@@ -29,6 +29,17 @@ export function validSync(input) {
     seen.add(row.id); return true;
   });
 }
+export function retainCatalogMetadata(item,previous) {
+  if(!previous || item.catalog_match_type || String(item.code ?? '')!==String(previous.code ?? '') ||
+    String(item.barCode ?? '')!==String(previous.barCode ?? ''))return item;
+  const result={...item};
+  for(const key of ['imagem','imageUrl','linkloja','productUrl','catalog_match_type','catalog_match_score','catalog_product_id'])
+    if(previous.catalog_match_type && previous[key]!=null)result[key]=previous[key];
+  if(previous.catalog_category_source==='official')
+    for(const key of ['nrdCategory','catalog_department','catalog_category_source','catalog_section_id'])
+      if(previous[key]!=null)result[key]=previous[key];
+  return result;
+}
 /** Shared ACP snapshot, immutable pages and one atomic pointer; stale data survives failed refresh. */
 export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms))}) {
   let inFlight=null;
@@ -49,7 +60,11 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
           if(!result.items.length) throw Error('INCOMPLETE_SNAPSHOT');
         }
         if(products.length!==expected) throw Error('INCOMPLETE_SNAPSHOT');
-        const next=await snapshot(products);
+        const previousKeys=Array.from({length:claim.payload.pages ?? 0},(_,i)=>`snapshot_${claim.payload.generation}_${i}`);
+        const previousPages=await cache.many(previousKeys);
+        const previousItems=new Map(previousKeys.flatMap(key=>previousPages.get(key)?.payload.rows ?? []).map(row=>[row.id,row.item]));
+        const stable=products.map(item=>retainCatalogMetadata(item,previousItems.get(String(item.id ?? `${item.code}|${item.barCode}|${item.description}`))));
+        const next=await snapshot(stable);
         if(next.revision===claim.payload.revision) {
           return (await cache.finish('promotion_snapshot',claim,{...claim.payload,checkedAt:now()}))?.payload;
         }
@@ -125,3 +140,4 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
     return {...status,...diff(rows,input.manifest)};
   };
 }
+

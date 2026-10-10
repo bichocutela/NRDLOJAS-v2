@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {snapshot,diff,validSync,createPromotionSync} from './promotion-sync.mjs';
+import {snapshot,diff,validSync,createPromotionSync,retainCatalogMetadata} from './promotion-sync.mjs';
 test('stable hashes ignore key order but detect price and same-count replacements',async()=>{
   const before=await snapshot([{id:1,description:'A',value:2},{id:2,description:'B',value:3}]);
   const reordered=await snapshot([{value:3,description:'B',id:2},{value:2,id:1,description:'A'}]);
@@ -61,4 +61,13 @@ test('manual refresh with a stalled remote lease fails rather than claiming a fr
  const sync=createPromotionSync({cache,now:()=>2000,sleep:async()=>{waits++;}});
  await assert.rejects(()=>sync({input:{operation:'promotion_refresh',revision:before.revision,manifest:[]},readPage:async()=>{throw Error('duplicate');}}),/REFRESH_BUSY/);
  assert.equal(waits,7);
+});
+
+
+test('refresh preserves verified catalog metadata while updating price and rejects changed EAN',()=>{
+ const previous={code:'2021000',barCode:'7891149840878',value:5,imageUrl:'https://official.test/image.jpg',catalog_match_type:'internal_code',nrdCategory:'Bebidas alcoólicas',catalog_category_source:'official'};
+ const fresh={code:previous.code,barCode:previous.barCode,value:4,nrdCategory:'Bebidas'};
+ const result=retainCatalogMetadata(fresh,previous);
+ assert.equal(result.value,4);assert.equal(result.imageUrl,previous.imageUrl);assert.equal(result.nrdCategory,'Bebidas alcoólicas');
+ assert.equal(retainCatalogMetadata({...fresh,barCode:'other'},previous).imageUrl,undefined);
 });

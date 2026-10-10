@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {buildCatalogIndex, createHandler, normalizeText, resolveCatalogItem, resolvePromotions} from './handler.mjs';
+import {buildCatalogIndex, enrichPromotion, createHandler, normalizeText, resolveCatalogItem, resolvePromotions} from './handler.mjs';
 
 const catalog = [
   {produto_id: 54487, codigo_interno: 'ACP-1001', descricao: 'Chocolate Nestlé Recheados Prestígio 90g', slug: 'chocolate-nestle-recheados-prestigio-90g', imagens: [{src: 'https://cdn.example.test/54487.jpg'}]},
@@ -58,4 +58,20 @@ test('handler loads catalog once per request and returns match diagnostics', asy
   assert.equal(loads, 1);
   assert.equal(body.items[0].catalog_product_id, '60001');
   assert.equal(body.matches[0].matchType, 'internal_code');
+});
+
+
+test('EAN exact match carries the official department and rejects conflicting barcodes',()=>{
+  const index=buildCatalogIndex([{produto_id:'3653',codigo_interno:'2021000',codigo_barras:'7891149840878',descricao:'Beats G&T 269ml',department:'Bebidas alcoólicas',sectionId:'337',imagem:'https://cdn.example.test/beats.jpg'}]);
+  const matched=resolveCatalogItem({code:'unknown',barCode:'7891149840878'},index);
+  assert.equal(matched.matchType,'ean');
+  const promotion=enrichPromotion({code:'unknown',nrdCategory:'Mercearia'},matched);
+  assert.equal(promotion.nrdCategory,'Bebidas alcoólicas');assert.equal(promotion.catalog_category_source,'official');
+  assert.equal(resolveCatalogItem({code:'2021000',barCode:'7891149840000',description:'Beats G&T 269ml'},index).matched,false);
+});
+test('description matching rejects incompatible sizes and identical ambiguous candidates',()=>{
+  const products=[{produto_id:'1',descricao:'Chocolate Marca Especial 90g',imagem:'https://cdn.example.test/1.jpg'},
+    {produto_id:'2',descricao:'Chocolate Marca Especial 90g',imagem:'https://cdn.example.test/2.jpg'}];
+  assert.equal(resolveCatalogItem({description:'Chocolate Marca Especial 90g'},buildCatalogIndex(products)).matched,false);
+  assert.equal(resolveCatalogItem({description:'Chocolate Marca Especial 100g'},buildCatalogIndex([products[0]])).matched,false);
 });

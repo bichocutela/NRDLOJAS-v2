@@ -1,7 +1,7 @@
 import { createRemoteJWKSet, jwtVerify, importPKCS8, SignJWT } from 'npm:jose@5.9.6';
 import { createHandler, boundedJson } from './handler.mjs';
 import { createPromotionSync } from './promotion-sync.mjs';
-import { ServerCache } from './server-cache.mjs';
+import { SupabaseCache } from './supabase-cache.mjs';
 import { ReadCache } from './read-cache.mjs';
 import { createCategorizer } from './categories.mjs';
 import { createAuthorizer } from './access.mjs';
@@ -29,6 +29,7 @@ async function document(path: string) {
   const token = await firestoreToken();
   const response = await fetch(`https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents/${path}`,{
     signal:AbortSignal.timeout(10000),headers:{Authorization:'Bearer '+token}});
+  console.info('GATEWAY_FIRESTORE_READ', JSON.stringify({collection:path.split('/')[0],status:response.status}));
   if (response.status === 404) return {};
   if (!response.ok) {
     const failure = await boundedJson(response).catch(() => ({}));
@@ -50,10 +51,6 @@ const catalogLoader = catalogSnapshotUrl ? async () => {
   if (Array.isArray(body.items)) return body.items;
   throw Error('INVALID_CATALOG');
 } : null;
-// Enabled for the deployed integration; an explicit false remains an emergency off switch.
-const catalogLookup = Deno.env.get('NORDESTAO_LIVE_LOOKUP') !== 'false'
-  ? createLiveCatalogLookup({boundedJson, maxItems:Number(Deno.env.get('NORDESTAO_LIVE_MAX_ITEMS') ?? '80')})
-  : null;
 // No cached grant: revocation and "liberar para todos" are checked against the server each call.
 const appAuthorize = createAuthorizer({document,
   hash: async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))).map(v=>v.toString(16).padStart(2,'0')).join(''),
@@ -62,7 +59,12 @@ const appAuthorize = createAuthorizer({document,
   if (!payload.sub || payload.sub.length > 128) throw Error('INVALID_IDENTITY');
   return {uid:payload.sub,email:payload.email,authTime:payload.auth_time,token};
 }});
-const serverCache = new ReadCache(new ServerCache({project, token:firestoreToken}));
+const serverCache = new ReadCache(new SupabaseCache({url:Deno.env.get('SUPABASE_URL'),key:Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}));
+// Enabled for the deployed integration; an explicit false remains an emergency off switch.
+const catalogLookup = Deno.env.get('NORDESTAO_LIVE_LOOKUP') !== 'false'
+  ? createLiveCatalogLookup({boundedJson, store:serverCache, maxItems:Number(Deno.env.get('NORDESTAO_LIVE_MAX_ITEMS') ?? '80')})
+  : null;
+
 const categorizer = createCategorizer({cache:serverCache, apiKey:Deno.env.get('GEMINI_API_KEY'),
   model:Deno.env.get('PROMOTION_GEMINI_MODEL') ?? 'gemini-3.5-flash-lite',
   background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)});
@@ -86,4 +88,5 @@ Deno.serve(createHandler({
   promotionSync: createPromotionSync({cache:serverCache, background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)}),
   credentials: () => ({login:Deno.env.get('NRD_PRICE_LOGIN'),password:Deno.env.get('NRD_PRICE_PASSWORD')})
 }));
+
 

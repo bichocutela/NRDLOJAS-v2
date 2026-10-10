@@ -11,6 +11,14 @@ const WEIGHT = Object.freeze({
 });
 
 const DEFAULT_MIN_SCORE = 0.86;
+export const OFFICIAL_DEPARTMENTS = ['Alimentos','Açougue','Bazar','Bebês e crianças','Bebidas','Bebidas alcoólicas',
+  'Congelados','Frios e embutidos','Higiene e beleza','Hortifruti','Leites e laticínios','Limpeza',
+  'Padaria e confeitaria','Pet shop','Saudáveis','Snacks'];
+export function normalizeEan(value) {
+  const raw=String(value ?? '').trim();
+  return /^\d{8,14}$/.test(raw) ? raw.replace(/^0+(?=\d)/,'') : null;
+}
+
 
 export function normalizeText(value) {
   return String(value ?? '')
@@ -31,6 +39,18 @@ export function normalizeCode(value) {
 
 export function tokens(value) {
   return new Set(normalizeText(value).split(' ').filter(token => token && !STOP_WORDS.has(token)));
+}
+
+function canonicalSizes(value) {
+  const text=String(value ?? '').toLowerCase().replace(/(\d),(\d)/g,'$1.$2');
+  return [...text.matchAll(/(\d+(?:\.\d+)?)\s*(kg|mg|ml|cl|g|l)\b/g)].map(([,amount,unit])=>{
+    const factor={kg:1000,mg:0.001,g:1,l:1000,cl:10,ml:1}[unit];
+    return `${/^(kg|mg|g)$/.test(unit)?'mass':'volume'}:${Number(amount)*factor}`;
+  });
+}
+function compatibleSizes(left,right) {
+  const a=canonicalSizes(left),b=canonicalSizes(right);
+  return !a.length || !b.length || a.every(size=>b.includes(size));
 }
 
 function numericAttributes(value) {
@@ -93,6 +113,9 @@ function toCatalogRecord(record) {
     description,
     normalizedDescription: normalizeText(description),
     internalCode,
+    ean:normalizeEan(record.codigo_barras ?? record.barCode ?? record.barcode ?? record.ean),
+    department:OFFICIAL_DEPARTMENTS.includes(record.department) ? record.department : null,
+    sectionId:record.sectionId ?? null,
     imageUrl,
     productUrl,
     raw: record
@@ -100,15 +123,15 @@ function toCatalogRecord(record) {
 }
 
 export function buildCatalogIndex(records) {
-  const byCode = new Map();
+  const byCode = new Map(), byEan=new Map();
   const catalog = [];
   for (const raw of records ?? []) {
     const record = toCatalogRecord(raw);
     if (!record) continue;
     catalog.push(record);
-    if (record.internalCode && !byCode.has(record.internalCode)) byCode.set(record.internalCode, record);
+    for(const [map,key] of [[byCode,record.internalCode],[byEan,record.ean]]) if(key) map.set(key,[...(map.get(key) ?? []),record]);
   }
-  return {catalog, byCode};
+  return {catalog, byCode, byEan};
 }
 
 function scoreDescription(query, candidate) {
@@ -126,15 +149,12 @@ export function resolveCatalogItem(item, index, options = {}) {
   const description = String(item?.desc_prod ?? item?.descricao ?? item?.description ?? item?.name ?? '').trim();
   const minScore = Number.isFinite(options.minScore) ? options.minScore : DEFAULT_MIN_SCORE;
 
-  if (code && index.byCode.has(code)) {
-    const exact = index.byCode.get(code);
-    return {
-      input: item,
-      matched: true,
-      matchType: 'internal_code',
-      score: 1,
-      product: exact
-    };
+  const ean=normalizeEan(item?.barCode ?? item?.barcode ?? item?.codigo_barras ?? item?.ean);
+  for(const [map,key,type] of [[index.byCode,code,'internal_code'],[index.byEan,ean,'ean']]) {
+    const candidates=key ? (map?.get(key) ?? []).filter(record=>!ean || !record.ean || record.ean===ean) : [];
+    const unique=[...new Map(candidates.map(record=>[record.productId,record])).values()];
+    if(unique.length===1)return {input:item,matched:true,matchType:type,score:1,product:unique[0]};
+    if(unique.length>1)return {input:item,matched:false,matchType:'ambiguous',score:1,product:null};
   }
 
   if (!description) {
@@ -142,13 +162,15 @@ export function resolveCatalogItem(item, index, options = {}) {
   }
 
   const candidates = index.catalog
+    .filter(product=>!ean || !product.ean || product.ean===ean)
+    .filter(product=>compatibleSizes(description,product.description))
     .map(product => ({product, score: scoreDescription(description, product)}))
     .sort((left, right) => right.score - left.score || left.product.productId.localeCompare(right.product.productId));
   const best = candidates[0];
   const second = candidates[1];
   // The margin prevents choosing between near-identical package sizes or flavours.
   const margin = best && second ? best.score - second.score : best?.score ?? 0;
-  const accepted = Boolean(best && best.score >= minScore && (best.score === 1 || margin >= 0.08));
+  const accepted = Boolean(best && best.score >= minScore && margin >= 0.08);
   return {
     input: item,
     matched: accepted,
@@ -176,7 +198,9 @@ export function enrichPromotion(item, resolution) {
     linkloja: resolution.product.productUrl || item.linkloja,
     catalog_match_type: resolution.matchType,
     catalog_match_score: Number(resolution.score.toFixed(4)),
-    catalog_product_id: resolution.product.productId
+    catalog_product_id: resolution.product.productId,
+    ...(resolution.product.department ? {nrdCategory:resolution.product.department,catalog_department:resolution.product.department,
+      catalog_category_source:'official',catalog_section_id:resolution.product.sectionId} : {})
   };
 }
 
@@ -212,3 +236,4 @@ export function createHandler({loadCatalog, minScore = DEFAULT_MIN_SCORE} = {}) 
     }
   };
 }
+

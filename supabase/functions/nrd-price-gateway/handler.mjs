@@ -186,7 +186,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
       try {
         const page = await consult({path:'Product/all',parameters:[['code','2021000'],['pageSize','10'],['pageIndex','0']]});
         const product = page.items?.find(item => String(item.code ?? item.codproduto ?? item.internalCode) === '2021000');
-        if (!product?.imageUrl || product.catalog_match_type !== 'internal_code') throw Error('CATALOG_NOT_READY');
+        if (!product?.imageUrl || product.catalog_match_type !== 'internal_code' || product.catalog_department !== 'Bebidas alcoólicas') throw Error('CATALOG_NOT_READY');
         const image = await fetcher(product.imageUrl,{method:'HEAD',signal:AbortSignal.timeout(10000)});
         if (!image.ok || !image.headers.get('content-type')?.startsWith('image/')) throw Error('CATALOG_NOT_READY');
         return reply(200,{ok:true});
@@ -240,4 +240,5 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     return reply(502,{error:'CONSULTATION_UNAVAILABLE'});
   };
 }
+
 
