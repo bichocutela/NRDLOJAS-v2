@@ -14,7 +14,7 @@ import com.example.data.NossaGentePromotionsResult
 import com.example.data.Promotion
 import com.example.data.PromotionProduct
 import com.example.data.acp.*
-import com.google.firebase.firestore.FirebaseFirestore
+import com.example.data.PromotionControlClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 import java.math.BigDecimal
@@ -71,8 +71,7 @@ internal class AcpPromotionsRepository(context: Context) {
         for (store in stores) {
             val imported = importedRecords(store)
             if (store.code == "0012") {
-                val validity = PromotionConfigCache.read(FirebaseFirestore.getInstance().collection("config")
-                    .document("acpOfferValidity"), forceRefresh)
+                val validity = PromotionControlClient.read("config/acpOfferValidity")
                 val currentRevision = dao.metadata("acp_revision").orEmpty()
                 val manifest = JSONArray().apply {
                     previousRows.forEach { put(JSONObject().put("id", it.id).put("hash", it.hash)) }

@@ -2,6 +2,7 @@ import { createRemoteJWKSet, jwtVerify, importPKCS8, SignJWT } from 'npm:jose@5.
 import { createHandler, boundedJson } from './handler.mjs';
 import { createPromotionSync } from './promotion-sync.mjs';
 import { SupabaseCache } from './supabase-cache.mjs';
+import { ControlDocuments } from '../nrd-promotion-control/documents.mjs';
 import { ReadCache } from './read-cache.mjs';
 import { createCategorizer } from './categories.mjs';
 import { createAuthorizer } from './access.mjs';
@@ -23,7 +24,7 @@ async function firestoreToken() {
   if (!response.ok || typeof data.access_token !== 'string') { console.warn('GATEWAY_FIREBASE_OAUTH_HTTP',response.status); throw Error('FIREBASE_UNAVAILABLE'); }
   serviceToken = data.access_token; serviceExpires = Date.now()+50*60_000; return serviceToken;
 }
-async function document(path: string) {
+async function legacyDocument(path: string) {
   // Existing server-side Firebase service account supplies project quota credentials.
   // User identity and explicit grants are still checked before any ACP consultation.
   const token = await firestoreToken();
@@ -37,6 +38,11 @@ async function document(path: string) {
     throw Error(response.status === 429 ? 'PERMISSIONS_RATE_LIMITED' : 'PERMISSIONS_UNAVAILABLE');
   }
   return (await boundedJson(response)).fields ?? {};
+}
+const controlDocuments = new ControlDocuments({url:Deno.env.get('SUPABASE_URL'),key:Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')});
+async function document(path: string) {
+  if ((await serverCache.get('promotion_control_migration'))?.payload.ready) return controlDocuments.fields(path);
+  return legacyDocument(path);
 }
 const catalogSnapshotUrl = Deno.env.get('NORDESTAO_CATALOG_SNAPSHOT_URL')?.trim() ?? '';
 const catalogLoader = catalogSnapshotUrl ? async () => {
@@ -59,7 +65,8 @@ const appAuthorize = createAuthorizer({document,
   if (!payload.sub || payload.sub.length > 128) throw Error('INVALID_IDENTITY');
   return {uid:payload.sub,email:payload.email,authTime:payload.auth_time,token};
 }});
-const serverCache = new ReadCache(new SupabaseCache({url:Deno.env.get('SUPABASE_URL'),key:Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}));
+const serverCache = new ReadCache(new SupabaseCache({url:Deno.env.get('SUPABASE_URL'),key:Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')});
+Deno.serve(handler);
 // Enabled for the deployed integration; an explicit false remains an emergency off switch.
 const catalogLookup = Deno.env.get('NORDESTAO_LIVE_LOOKUP') !== 'false'
   ? createLiveCatalogLookup({boundedJson, store:serverCache, maxItems:Number(Deno.env.get('NORDESTAO_LIVE_MAX_ITEMS') ?? '80')})
@@ -69,8 +76,16 @@ const categorizer = createCategorizer({cache:serverCache, apiKey:Deno.env.get('G
   model:Deno.env.get('PROMOTION_GEMINI_MODEL') ?? 'gemini-3.5-flash-lite',
   background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)});
 const githubKeys = createRemoteJWKSet(new URL('https://token.actions.githubusercontent.com/.well-known/jwks'));
-Deno.serve(createHandler({
+const handler = createHandler({
   authorize: async (req: Request) => {
+    const schedulerToken = req.headers.get('x-nrd-scheduler-token');
+    if (schedulerToken) {
+      if (!/^[a-f0-9]{64}$/.test(schedulerToken)) throw Error('INVALID_SCHEDULER');
+      const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(schedulerToken)))).map(v=>v.toString(16).padStart(2,'0')).join('');
+      const expected=(await serverCache.get('promotion_scheduler'))?.payload.hash;
+      if (!expected || hash!==expected) throw Error('INVALID_SCHEDULER');
+      return {allowed:true,master:false,scheduler:true};
+    }
     const ciToken = req.headers.get('x-github-oidc-token');
     if (!ciToken) return appAuthorize(req);
     const {payload} = await jwtVerify(ciToken,githubKeys,{algorithms:['RS256'],issuer:'https://token.actions.githubusercontent.com',audience:'nrd-acp-security-check'});
@@ -87,6 +102,7 @@ Deno.serve(createHandler({
   catalogMinScore: Number(Deno.env.get('NORDESTAO_CATALOG_MIN_SCORE') ?? '0.86'),
   promotionSync: createPromotionSync({cache:serverCache, background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)}),
   credentials: () => ({login:Deno.env.get('NRD_PRICE_LOGIN'),password:Deno.env.get('NRD_PRICE_PASSWORD')})
-}));
+});
+Deno.serve(handler);
 
 

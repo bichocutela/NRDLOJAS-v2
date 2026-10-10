@@ -98,3 +98,11 @@ test('large snapshots keep all ACP products and rotate bounded enrichment batche
  for(let i=0;i<3;i++){const result=await sync({...args,input:{operation:'promotion_refresh',manifest:[]}});assert.equal(result.count,503);assert.equal(result.items.length,503);}
  assert.equal(seen.size,503);
 });
+
+test('official images survive refresh for De/Por, Clube and Leve e Pague products',()=>{
+ for(const family of ['depor','club','takepay']){
+  const old={code:family,barCode:'7891149840878',imageUrl:'https://produto-assets-vipcommerce-com-br.br-se1.magaluobjects.com/250x250/photo.jpg',catalog_match_type:'internal_code'};
+  const next=retainCatalogMetadata({code:family,barCode:old.barCode,value:9},old);
+  assert.equal(next.imageUrl,old.imageUrl);
+ }
+});
