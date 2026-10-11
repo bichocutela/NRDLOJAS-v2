@@ -211,10 +211,12 @@ fun MyPointScreen(
 
     LaunchedEffect(Unit) {
         benefitNotifications = credentialStore.isBenefitNotificationsEnabled()
-        hoursNotifications = credentialStore.isHoursNotificationsEnabled()
+        credentialStore.setHoursNotificationsEnabled(false)
+        credentialStore.setPointNotificationsEnabled(false)
+        com.example.util.HoursNotificationWorker.cancel(context)
+        com.example.util.PointNotificationWorker.cancel(context)
         dayOffNotifications = credentialStore.isDayOffNotificationsEnabled()
         scheduleNotifications = credentialStore.isScheduleNotificationsEnabled()
-        pointNotifications = credentialStore.isPointNotificationsEnabled()
         loading = false
         load()
     }
@@ -378,14 +380,7 @@ fun MyPointScreen(
             Card(shape = RoundedCornerShape(24.dp)) {
                 Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Notificações do Meu Perfil", style = MaterialTheme.typography.titleLarge)
-                    ProfileNotificationSwitch("Banco de horas", hoursNotifications) { enabled ->
-                        hoursNotifications = enabled; credentialStore.setHoursNotificationsEnabled(enabled)
-                        if (enabled) com.example.util.HoursNotificationWorker.schedule(context, resetSnapshot = true) else com.example.util.HoursNotificationWorker.cancel(context)
-                    }
-                    ProfileNotificationSwitch("Atualizações de ponto", pointNotifications) { enabled ->
-                        pointNotifications = enabled; credentialStore.setPointNotificationsEnabled(enabled)
-                        if (enabled) com.example.util.PointNotificationWorker.schedule(context, resetSnapshot = true) else com.example.util.PointNotificationWorker.cancel(context)
-                    }
+                    Text("Ponto e banco de horas usam os registros manuais deste aparelho.", style = MaterialTheme.typography.bodySmall)
                     if (cardAppearance.benefitCardEnabled) ProfileNotificationSwitch("Convênio", benefitNotifications) { enabled ->
                         benefitNotifications = enabled; credentialStore.setBenefitNotificationsEnabled(enabled)
                         if (enabled) com.example.util.BenefitNotificationWorker.schedule(context, resetSnapshot = true) else com.example.util.BenefitNotificationWorker.cancel(context)

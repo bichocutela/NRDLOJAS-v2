@@ -33,7 +33,7 @@ class TimeClockTest {
         assertEquals(465, day("13:45", "17:00", "18:10", "22:40").copy(dayOff = true).balanceMinutes)
     }
     @Test fun overnightWorkDeductsOnlyActualLunch() {
-        val row = day("22:00", "02:00", "03:00", "07:00").copy(expectedMinutes = 480)
+        val row = day("22:00", "02:00", "03:00", "07:00").copy(expectedMinutes = 480, scheduledStart = 1320, scheduledBreak = 60)
         assertEquals(listOf(1320, 1560, 1620, 1860), row.punches)
         assertEquals(480, row.workedMinutes); assertEquals(0, row.balanceMinutes)
         assertEquals(480, WorkHours(1320, 420, 60).expectedMinutes)
@@ -85,6 +85,13 @@ class TimeClockTest {
     @Test fun occurrencesIdentifyIncompleteAndEarlyExit() {
         assertTrue(day("13:45", "17:00", "18:10", "22:20").occurrences().any { it.startsWith("Saída antecipada") })
         assertTrue(Workday("2026-10-11", listOf(825, null, null, null)).occurrences().any { it.contains("incompleta") })
+    }
+
+    @Test fun automaticallySeparatesEarlyWorkAndEarlyExitFromFourPunches() {
+        val row = day("12:22", "17:36", "18:46", "22:27")
+        assertEquals(83, row.automaticExtraMinutes)
+        assertEquals(83, row.creditMinutes); assertEquals(13, row.debitMinutes)
+        assertEquals(70, row.balanceMinutes)
     }
 
 }

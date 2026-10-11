@@ -11,13 +11,18 @@ data class Workday(val date: String, val punches: List<Int?> = List(4) { null },
     val note: String = "", val edited: Boolean = false,
     val scheduledStart: Int = 825, val scheduledBreak: Int = 70, val extras: List<Int> = emptyList(), val holiday: Boolean = false) {
     val complete get() = punches.size == 4 && punches.all { it != null }
-    val regularWorked: Int? get() = if (complete) punches[1]!! - punches[0]!! + punches[3]!! - punches[2]!! else if (absent) 0 else null
+    val actualWorked: Int? get() = if (complete) punches[1]!! - punches[0]!! + punches[3]!! - punches[2]!! else if (absent) 0 else null
+    private fun overlap(start: Int, end: Int): Int = (minOf(end, scheduledStart + expectedMinutes + scheduledBreak) - maxOf(start, scheduledStart)).coerceAtLeast(0)
+    val regularWorked: Int? get() = if (complete) {
+        if (dayOff || holiday) actualWorked else overlap(punches[0]!!, punches[1]!!) + overlap(punches[2]!!, punches[3]!!)
+    } else if (absent) 0 else null
+    val automaticExtraMinutes: Int get() = if (complete && !dayOff && !holiday) actualWorked!! - regularWorked!! else 0
     val extraMinutes get() = extras.chunked(2).sumOf { it[1] - it[0] }
-    val workedMinutes: Int? get() = regularWorked?.plus(extraMinutes)
+    val workedMinutes: Int? get() = actualWorked?.plus(extraMinutes)
     val regularBalance: Int? get() = regularWorked?.minus(if (dayOff || holiday) 0 else expectedMinutes)
-    val creditMinutes get() = (regularBalance ?: 0).coerceAtLeast(0) + if (complete) extraMinutes else 0
+    val creditMinutes get() = (regularBalance ?: 0).coerceAtLeast(0) + if (complete) extraMinutes + automaticExtraMinutes else 0
     val debitMinutes get() = -(regularBalance ?: 0).coerceAtMost(0)
-    val balanceMinutes: Int? get() = regularBalance?.plus(extraMinutes)
+    val balanceMinutes: Int? get() = regularBalance?.plus(extraMinutes + automaticExtraMinutes)
     fun occurrences(): List<String> = buildList {
         if (dayOff) add("Folga")
         if (holiday) add("Feriado")
@@ -30,6 +35,7 @@ data class Workday(val date: String, val punches: List<Int?> = List(4) { null },
             val interval = punches[2]!! - punches[1]!!
             if (interval != scheduledBreak) add("Intervalo ${if (interval < scheduledBreak) "menor" else "maior"}: ${TimeClock.duration(kotlin.math.abs(interval - scheduledBreak))}")
         }
+        if (automaticExtraMinutes > 0) add("Trabalho fora da jornada: ${TimeClock.duration(automaticExtraMinutes)}")
         if (creditMinutes > 0) add("Crédito banco de horas: ${TimeClock.duration(creditMinutes)}")
         if (debitMinutes > 0) add("Débito banco de horas: ${TimeClock.duration(debitMinutes)}")
     }
