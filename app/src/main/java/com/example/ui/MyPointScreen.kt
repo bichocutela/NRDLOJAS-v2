@@ -105,6 +105,7 @@ import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.expressiveLiquidGlass
 import com.example.ui.theme.glassSoftShadow
 import com.example.ui.theme.expressiveShadow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import java.io.File
@@ -459,7 +460,7 @@ fun MyPointScreen(
                         pointNotifications = enabled; credentialStore.setPointNotificationsEnabled(enabled)
                         if (enabled) com.example.util.PointNotificationWorker.schedule(context, resetSnapshot = true) else com.example.util.PointNotificationWorker.cancel(context)
                     }
-                    ProfileNotificationSwitch("Convênio", benefitNotifications) { enabled ->
+                    if (cardAppearance.benefitCardEnabled) ProfileNotificationSwitch("Convênio", benefitNotifications) { enabled ->
                         benefitNotifications = enabled; credentialStore.setBenefitNotificationsEnabled(enabled)
                         if (enabled) com.example.util.BenefitNotificationWorker.schedule(context, resetSnapshot = true) else com.example.util.BenefitNotificationWorker.cancel(context)
                     }
