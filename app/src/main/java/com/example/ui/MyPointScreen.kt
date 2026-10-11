@@ -188,16 +188,6 @@ fun MyPointScreen(
                 }
                 is NossaGenteProfileResult.Error -> if (error == null) error = result.message
             }
-            when (val result = api.fetchHours()) {
-                is NossaGenteHoursResult.Success -> hours = result.hours
-                NossaGenteHoursResult.Unauthorized -> error = "Os dados pessoais estão indisponíveis no momento."
-                is NossaGenteHoursResult.Error -> error = result.message
-            }
-            when (val result = api.fetchPoint()) {
-                is NossaGentePointResult.Success -> point = result.point
-                NossaGentePointResult.Unauthorized -> error = "Os dados pessoais estão indisponíveis no momento."
-                is NossaGentePointResult.Error -> error = result.message
-            }
             when (val result = api.fetchBenefit()) {
                 is NossaGenteBenefitResult.Success -> benefit = result.benefit
                 NossaGenteBenefitResult.Unauthorized -> error = "Os dados pessoais estão indisponíveis no momento."
@@ -240,7 +230,7 @@ fun MyPointScreen(
             com.example.util.ProfileNotificationRouting.SECTION_PROFILE -> profileListState.animateScrollToItem(0)
             com.example.util.ProfileNotificationRouting.SECTION_DAYS_OFF -> daysOffRequester.bringIntoView()
             com.example.util.ProfileNotificationRouting.SECTION_HOURS -> hoursRequester.bringIntoView()
-            com.example.util.ProfileNotificationRouting.SECTION_POINT -> pointRequester.bringIntoView()
+            com.example.util.ProfileNotificationRouting.SECTION_POINT -> hoursRequester.bringIntoView()
             com.example.util.ProfileNotificationRouting.SECTION_BENEFIT -> benefitRequester.bringIntoView()
         }
     }
@@ -294,9 +284,6 @@ fun MyPointScreen(
             )
         )
     }) { padding ->
-        if (loading && hours == null && point == null) {
-            Column(Modifier.fillMaxSize().padding(padding), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator() }
-        } else {
             LazyColumn(state = profileListState, modifier = Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(contentPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item {
                     employeeProfile?.let { profile ->
@@ -319,66 +306,6 @@ fun MyPointScreen(
                         onToggle = { daysOffExpanded = !daysOffExpanded },
                         onSelectMonth = { selectedScheduleKey = it }
                     )
-                    hours?.let { summary ->
-                        val hoursShape = if (isExpressive) RoundedCornerShape(30.dp) else MaterialTheme.shapes.medium
-                        Card(
-                            modifier = Modifier
-                                .bringIntoViewRequester(hoursRequester)
-                                .fillMaxWidth()
-                                .glassSoftShadow(hoursShape, if (isExpressive) 4.dp else 0.dp)
-                                .expressiveShadow(hoursShape, 7.dp),
-                            shape = hoursShape,
-                            colors = CardDefaults.cardColors(
-                                containerColor = profilePalette?.section ?: if (glassStyle.enabled) MaterialTheme.colorScheme.surface
-                                else MaterialTheme.colorScheme.secondaryContainer
-                            )
-                        ) {
-                            Column(Modifier.fillMaxWidth().padding(if (isExpressive) 18.dp else 16.dp)) {
-                                Text(
-                                    "Banco de horas",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = if (isExpressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal,
-                                    color = profilePalette?.text ?: MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(Modifier.height(8.dp)); Text("Saldo atual: ${summary.total}", style = MaterialTheme.typography.titleMedium, color = profilePalette?.text ?: MaterialTheme.colorScheme.onSurface)
-                                Spacer(Modifier.height(10.dp)); Text("Saldos a vencer", style = MaterialTheme.typography.titleMedium, color = profilePalette?.text ?: MaterialTheme.colorScheme.onSurface)
-                                summary.months.forEach { month ->
-                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Text("${month.month}/${month.year}", modifier = Modifier.weight(1f), color = profilePalette?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text(month.balance, color = profilePalette?.text ?: MaterialTheme.colorScheme.onSurface)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    point?.takeIf { summary ->
-                        !summary.period.isNullOrBlank() || !summary.status.isNullOrBlank() ||
-                            !summary.worked.isNullOrBlank() || !summary.balance.isNullOrBlank() || summary.records.isNotEmpty()
-                    }?.let { summary ->
-                        val pointShape = if (isExpressive) RoundedCornerShape(28.dp) else MaterialTheme.shapes.medium
-                        Card(
-                            modifier = Modifier
-                                .bringIntoViewRequester(pointRequester)
-                                .fillMaxWidth()
-                                .glassSoftShadow(pointShape, if (isExpressive) 3.dp else 0.dp)
-                                .expressiveShadow(pointShape, 6.dp),
-                            shape = pointShape,
-                            colors = CardDefaults.cardColors(
-                                containerColor = profilePalette?.section ?: if (glassStyle.enabled) MaterialTheme.colorScheme.surface
-                                else MaterialTheme.colorScheme.primaryContainer
-                            )
-                        ) {
-                            Column(Modifier.fillMaxWidth().padding(if (isExpressive) 18.dp else 16.dp)) {
-                                Text(
-                                    summary.period ?: "Período atual",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = if (isExpressive) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.Normal,
-                                    color = profilePalette?.text ?: MaterialTheme.colorScheme.onSurface
-                                )
-                                summary.status?.let { Text("Status: $it", color = profilePalette?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant) }; summary.worked?.let { Text("Horas trabalhadas: $it", color = profilePalette?.text ?: MaterialTheme.colorScheme.onSurface) }; summary.balance?.let { Text("Saldo: $it", color = profilePalette?.text ?: MaterialTheme.colorScheme.onSurface) }
-                            }
-                        }
-                    }
                     benefit?.takeIf { cardAppearance.benefitCardEnabled }?.let { summary ->
                         BenefitCardSurface(
                             modifier = Modifier
@@ -394,12 +321,11 @@ fun MyPointScreen(
                             onClick = { showBenefitDetails = true }
                         )
                     }
+                    ManualTimeClockCard(profilePalette, workSchedules, Modifier.bringIntoViewRequester(hoursRequester))
                     if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
                 }
-                if (point?.records.isNullOrEmpty()) item { Text("Nenhum registro de ponto disponível para o período informado.") }
-                else items(point!!.records) { PointEntryCard(it, profilePalette) }
+
             }
-        }
     }
     if (showBenefitDetails && cardAppearance.benefitCardEnabled) {
         Dialog(
@@ -746,7 +672,7 @@ private fun MyDaysOffCalendar(year: Int, month: Int, selected: Set<Int>, palette
     }
 }
 
-private data class ProfileThemePalette(
+internal data class ProfileThemePalette(
     val hero: Color,
     val heroText: Color,
     val heroSecondaryText: Color,
