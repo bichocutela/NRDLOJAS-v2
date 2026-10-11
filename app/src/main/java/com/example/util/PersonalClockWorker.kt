@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 class PersonalClockWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val repo = TimeClockRepository(applicationContext)
-        val synced = runCatching { repo.sync() }.isSuccess
+        val synced = runCatching { kotlinx.coroutines.withTimeout(20_000) { repo.sync() } }.isSuccess
         if (repo.reminders()) {
             val today = TimeClock.today()
             val off = ManualDaysOffRepository(applicationContext).schedules().any { s -> s.monthKey == today.take(7) && s.employees.any { e -> today.takeLast(2).toInt() in e.daysOff } }

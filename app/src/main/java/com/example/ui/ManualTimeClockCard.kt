@@ -93,7 +93,7 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
                 TextButton(onClick = { selectDate() }) { Text(TimeClock.displayDate(selectedDate), color = accent) }
                 TextButton(onClick = { showHours = true }) { Text("Minha jornada", color = accent) }
             }
-            Text("${TimeClock.time(hours.start)} → ${TimeClock.time(hours.end)} · almoço ${TimeClock.duration(hours.breakMinutes)} · jornada ${TimeClock.duration(hours.expectedMinutes)}", style = MaterialTheme.typography.bodySmall, color = secondary)
+            Text("${TimeClock.time(current.scheduledStart)} → ${TimeClock.time(current.scheduledStart + current.expectedMinutes + current.scheduledBreak)} · almoço ${TimeClock.duration(current.scheduledBreak)} · jornada ${TimeClock.duration(current.expectedMinutes)}", style = MaterialTheme.typography.bodySmall, color = secondary)
             if (selectedDate == TimeClock.today()) {
                 val nextLabel = current.punches.indexOfFirst { it == null }.let { if (it < 0) "Dia concluído" else "Próxima batida: ${TimeClock.labels[it]}" }
                 val elapsed = ClockJourney.workedSoFar(current, nowMinute + if ((current.punches[0] ?: 0) > nowMinute && current.punches.any { (it ?: 0) >= 1440 }) 1440 else 0)
@@ -288,6 +288,7 @@ private fun TimeClockReport(initialMonth: String, closingDay: Int, days: List<Wo
                 Text("${TimeClock.displayDate(period.first())} a ${TimeClock.displayDate(period.last())}", style = MaterialTheme.typography.bodySmall, color = secondary)
                 Text("Trabalhadas ${TimeClock.duration(totals.worked)} · previstas ${TimeClock.duration(totals.expected)}", style = MaterialTheme.typography.bodySmall, color = secondary)
                 Text("Créditos ${TimeClock.duration(totals.credit, true)} · débitos ${TimeClock.duration(-totals.debit)} · saldo ${TimeClock.duration(totals.balance + ledger.sumOf { it.minutes }, true)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = text)
+                Text("Compensações no período: ${TimeClock.duration(ledger.sumOf { it.minutes }, true)}", color = secondary, style = MaterialTheme.typography.bodySmall)
                 Text("${totals.pending} dia(s) pendente(s). Sem batidas não gera débito; registre ausência para descontar. Controle em minutos reais, sem tolerância automática, conversão noturna ou pagamento de adicionais.", style = MaterialTheme.typography.bodySmall, color = secondary, modifier = Modifier.padding(vertical = 8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(true to "Exportar PDF", false to "Planilha CSV").forEach { (pdf, label) ->

@@ -6,7 +6,7 @@ import kotlinx.coroutines.tasks.await
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Personal control stays on the device and is separated between signed-in accounts. */
+/** Device-first personal control with private, account-isolated backup. */
 class TimeClockRepository(context: Context) {
     private val appContext = context.applicationContext
     private val prefs = context.getSharedPreferences("personal_time_clock", Context.MODE_PRIVATE)
@@ -87,6 +87,7 @@ class TimeClockRepository(context: Context) {
     suspend fun sync() {
         val uid = FirebaseAuth.getInstance().currentUser?.takeUnless { it.isAnonymous }?.uid ?: return
         val local = data()
+        if (!local.optBoolean("pending") && System.currentTimeMillis() - local.optLong("lastSync") < 6 * 60 * 60 * 1000L) return
         val ref = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("personal_time_clock").document(uid)
         val merged = ref.firestore.runTransaction { transaction ->
             val remote = transaction.get(ref).getString("payload")?.let { runCatching { JSONObject(it) }.getOrNull() } ?: JSONObject()
@@ -106,7 +107,7 @@ class TimeClockRepository(context: Context) {
             merged
         }.await()
         val stamp = local.optLong("updatedAt")
-        if (key() == uid && data().optLong("updatedAt") == stamp) prefs.edit().putString(uid, merged.toString()).commit()
+        if (key() == uid && data().optLong("updatedAt") == stamp) prefs.edit().putString(uid, merged.put("lastSync", System.currentTimeMillis()).toString()).commit()
     }
     fun observeChanges(onChange: () -> Unit): () -> Unit {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> onChange() }
