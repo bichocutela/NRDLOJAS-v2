@@ -48,6 +48,19 @@ class TimeClockRepository(context: Context) {
         check(prefs.edit().putString(account, root.toString()).commit()) { "Não foi possível salvar no aparelho." }
         com.example.util.PersonalClockWorker.schedule(appContext)
     }
+    private val viewPrefs = appContext.getSharedPreferences("personal_clock_view", Context.MODE_PRIVATE)
+    fun consumeFocus(request: Long): Boolean {
+        val field = key() + ":focus"
+        if (viewPrefs.getLong(field, 0L) == request) return false
+        viewPrefs.edit().putLong(field, request).apply()
+        return true
+    }
+    fun expanded() = viewPrefs.getBoolean(key() + ":expanded", false)
+    fun setExpanded(value: Boolean) { viewPrefs.edit().putBoolean(key() + ":expanded", value).apply() }
+    fun pendingReminders() = data().optBoolean("pendingReminders")
+    fun setPendingReminders(value: Boolean) { write(data().put("pendingReminders", value)) }
+    fun dayOffReminders() = data().optBoolean("dayOffReminders")
+    fun setDayOffReminders(value: Boolean) { write(data().put("dayOffReminders", value)) }
     fun lunchAt() = data().optInt("lunchAt", 1020)
     fun saveLunchAt(minute: Int) { require(minute in 0..1439); write(data().put("lunchAt", minute)) }
     fun reminders() = data().optBoolean("reminders")

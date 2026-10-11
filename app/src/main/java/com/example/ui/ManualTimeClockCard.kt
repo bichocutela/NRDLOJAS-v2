@@ -2,6 +2,8 @@ package com.example.ui
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,9 +29,11 @@ import java.util.Calendar
 import java.util.Locale
 
 @Composable
-internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<WorkSchedule>, modifier: Modifier = Modifier) {
+internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<WorkSchedule>, modifier: Modifier = Modifier, focusRequestKey: Long = 0L, focusSection: String? = null) {
     val context = LocalContext.current
     val repository = remember(context) { TimeClockRepository(context.applicationContext) }
+    var expanded by remember { mutableStateOf(repository.expanded()) }
+    var accountRevision by remember { mutableIntStateOf(0) }
     var revision by remember { mutableIntStateOf(0) }
     var selectedDate by remember { mutableStateOf(TimeClock.today()) }
     var showTools by remember { mutableStateOf(false) }
@@ -46,10 +50,11 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
     DisposableEffect(repository) {
         val auth = FirebaseAuth.getInstance()
         val listener = FirebaseAuth.AuthStateListener {
-            revision++
+            revision++; accountRevision++
+            expanded = repository.expanded()
             com.example.util.PersonalClockWorker.schedule(context)
             val yesterday = Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -1) }.let { java.text.SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(it.time) }
-            val unfinished = repository.days().firstOrNull { it.date == yesterday && !it.complete && it.punches[0] != null }
+            val unfinished = repository.days().firstOrNull { it.date == yesterday && ClockJourney.isOvernight(it) && !it.complete && it.punches[0] != null }
             val now = Calendar.getInstance()
             val minute = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
             selectedDate = if (unfinished != null && minute <= unfinished.punches[0]!!) yesterday else TimeClock.today()
@@ -59,6 +64,11 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
         com.example.util.PersonalClockWorker.schedule(context)
         auth.addAuthStateListener(listener)
         onDispose { auth.removeAuthStateListener(listener); stopChanges() }
+    }
+    LaunchedEffect(focusRequestKey, focusSection, accountRevision) {
+        if (focusRequestKey > 0 && focusSection in listOf(com.example.util.ProfileNotificationRouting.SECTION_POINT, com.example.util.ProfileNotificationRouting.SECTION_HOURS) && repository.consumeFocus(focusRequestKey)) {
+            expanded = true; repository.setExpanded(true)
+        }
     }
     val savedDays = remember(revision) { repository.days() }
     val days = remember(savedDays, manualFolgas) { savedDays.map { if (it.date in manualFolgas) it.copy(dayOff = true, absent = false) else it } }
@@ -83,12 +93,15 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
     }
     Card(modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = palette?.section ?: MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().clickable { expanded = !expanded; repository.setExpanded(expanded) }, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Meu ponto · Banco de horas", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = text)
-                    Text(repository.backupStatus(), style = MaterialTheme.typography.bodySmall, color = secondary)
+                    Text(if (expanded) repository.backupStatus() else "Toque para abrir · saldo ${TimeClock.duration(adjustedBalance, true)}", style = MaterialTheme.typography.bodySmall, color = secondary)
                 }
+                Icon(if (expanded) androidx.compose.material.icons.Icons.Default.ExpandLess else androidx.compose.material.icons.Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Recolher meu ponto" else "Expandir meu ponto", tint = accent)
             }
+            if (expanded) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { selectDate() }) { Text(TimeClock.displayDate(selectedDate), color = accent) }
                 TextButton(onClick = { showHours = true }) { Text("Minha jornada", color = accent) }
@@ -151,6 +164,7 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
             }
             TextButton(onClick = { showTools = true }, modifier = Modifier.fillMaxWidth()) { Text("Escalas, lembretes e compensações", color = accent) }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
         }
     }
     confirmation?.let { (index, minute) ->

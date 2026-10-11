@@ -68,12 +68,15 @@ object NotificationHelper {
                 description = "Notificações de alterações no banco de horas"
             }
             notificationManager.createNotificationChannel(channelHoursUpdates)
+            notificationManager.createNotificationChannel(NotificationChannel("personal_clock_reminders", "Lembretes do meu ponto", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Batidas de ponto e registros pendentes da sua jornada manual"
+            })
             notificationManager.createNotificationChannel(NotificationChannel("point_updates", "Atualizações de ponto", NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = "Notificações de novos dados no espelho de ponto"
             })
 
-            notificationManager.createNotificationChannel(NotificationChannel("schedule_reminders", "Escala e folgas", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Avisos pessoais de folgas e publicação de escalas"
+            notificationManager.createNotificationChannel(NotificationChannel("schedule_reminders", "Minhas folgas", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Avisos das folgas cadastradas manualmente no perfil ou no ponto"
             })
 
             val channelInstallations = NotificationChannel("installation_updates", "Instalações e atualizações", NotificationManager.IMPORTANCE_DEFAULT).apply {
@@ -136,7 +139,8 @@ object NotificationHelper {
         "BENEFIT_RELEASED", "BENEFIT_PURCHASE" -> "benefit_updates"
         "HOURS_UPDATED" -> "hours_updates"
         "POINT_UPDATED" -> "point_updates"
-        "TODAY_OFF", "TOMORROW_OFF", "SCHEDULE_INSERTED", "SCHEDULE_CHANGED" -> "schedule_reminders"
+        "CLOCK_REMINDER", "CLOCK_PENDING" -> "personal_clock_reminders"
+        "TODAY_OFF", "TOMORROW_OFF", "SCHEDULE_INSERTED", "SCHEDULE_CHANGED", "CLOCK_TODAY_OFF", "CLOCK_TOMORROW_OFF" -> "schedule_reminders"
         "NEW_INSTALLATION" -> "installation_updates"
         else -> null
     }

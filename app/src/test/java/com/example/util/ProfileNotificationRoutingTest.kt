@@ -10,6 +10,9 @@ class ProfileNotificationRoutingTest {
         assertEquals(ProfileNotificationRouting.SECTION_PROFILE, ProfileNotificationRouting.profileSection("PROFILE_UPDATED"))
         assertEquals(ProfileNotificationRouting.SECTION_HOURS, ProfileNotificationRouting.profileSection("HOURS_UPDATED"))
         assertEquals(ProfileNotificationRouting.SECTION_POINT, ProfileNotificationRouting.profileSection("POINT_UPDATED"))
+        listOf("CLOCK_REMINDER", "CLOCK_PENDING", "CLOCK_TODAY_OFF", "CLOCK_TOMORROW_OFF").forEach {
+            assertEquals(ProfileNotificationRouting.SECTION_POINT, ProfileNotificationRouting.profileSection(it))
+        }
         assertEquals(ProfileNotificationRouting.SECTION_BENEFIT, ProfileNotificationRouting.profileSection("BENEFIT_RELEASED"))
         assertEquals(ProfileNotificationRouting.SECTION_BENEFIT, ProfileNotificationRouting.profileSection("BENEFIT_PURCHASE"))
         assertEquals(ProfileNotificationRouting.SECTION_DAYS_OFF, ProfileNotificationRouting.profileSection("TODAY_OFF"))

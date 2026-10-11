@@ -124,4 +124,37 @@ class TimeClockTest {
         assertEquals(0, row.balanceMinutes)
         assertEquals(-60, (row.balanceMinutes ?: 0) + adjustment.minutes)
     }
+
+    private fun reminders(minute: Int, rows: List<Workday> = emptyList(), folgas: Set<String> = emptySet(), punches: Boolean = true, pending: Boolean = false, off: Boolean = false) =
+        ClockReminderPlan.events("2026-10-11", minute, WorkHours(), 1020, rows, folgas, punches, pending, off)
+    @Test fun punchReminderUsesOnlyTheNextMissingStamp() {
+        val row = Workday("2026-10-11", listOf(825, 1020, null, null))
+        assertTrue(reminders(1089, listOf(row)).isEmpty())
+        assertEquals("2026-10-11:2", reminders(1090, listOf(row)).single().key)
+    }
+    @Test fun manualDayOffDisablesPunchReminder() {
+        assertTrue(reminders(825, folgas = setOf("2026-10-11")).isEmpty())
+        assertTrue(reminders(825, rows = listOf(Workday("2026-10-11", dayOff = true))).isEmpty())
+    }
+    @Test fun dayOffReminderIncludesFallbackDatesAndRespectsEveningWindow() {
+        val rows = listOf(Workday("2026-10-12", dayOff = true))
+        assertTrue(reminders(1079, rows, punches = false, off = true).isEmpty())
+        assertEquals("CLOCK_TOMORROW_OFF", reminders(1080, rows, punches = false, off = true).single().type)
+    }
+    @Test fun pendingReminderDoesNotTreatOvernightShiftAsForgotten() {
+        val row = Workday("2026-10-10", listOf(1320, null, null, null), scheduledStart = 1320)
+        assertTrue(reminders(600, listOf(row), punches = false, pending = true).isEmpty())
+        assertEquals("CLOCK_PENDING", reminders(1400, listOf(row), punches = false, pending = true).single().type)
+    }
+    @Test fun overnightReturnReminderUsesPreviousWorkDate() {
+        val row = Workday("2026-10-10", listOf(1320, 1440, null, null), scheduledStart = 1320, scheduledBreak = 60)
+        assertEquals("2026-10-10:2", reminders(60, listOf(row)).single().key)
+    }
+    @Test fun disabledReminderOptionsProduceNoEvents() {
+        assertTrue(reminders(1080, listOf(Workday("2026-10-10", listOf(825, null, null, null))), setOf("2026-10-12"), punches = false, pending = false, off = false).isEmpty())
+    }
+    @Test fun forgottenDaytimeShiftIsPendingTheNextMorning() {
+        val row = Workday("2026-10-10", listOf(825, null, null, null))
+        assertEquals("CLOCK_PENDING", reminders(480, listOf(row), punches = false, pending = true).single().type)
+    }
 }

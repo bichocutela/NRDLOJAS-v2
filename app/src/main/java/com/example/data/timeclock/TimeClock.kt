@@ -136,6 +136,7 @@ data class ClockAdjustment(val id: String, val date: String, val minutes: Int, v
     }
 }
 object ClockJourney {
+    fun isOvernight(day: Workday) = day.scheduledStart + day.expectedMinutes + day.scheduledBreak >= 1440 || day.punches.any { (it ?: 0) >= 1440 }
     fun workedSoFar(day: Workday, minute: Int): Int {
         val p = day.punches
         return if (p[0] == null) 0 else ((p[1] ?: minute) - p[0]!!).coerceAtLeast(0) +
@@ -148,4 +149,32 @@ object ClockJourney {
         else -> null
     }
     fun pending(days: List<Workday>, today: String) = days.filter { it.date < today && !it.complete && !it.absent && it.punches.any { p -> p != null } }.sortedByDescending { it.date }
+}
+
+/** Notification decisions share the same manual records and midnight rules as the profile. */
+data class ClockReminder(val type: String, val key: String, val title: String, val body: String)
+object ClockReminderPlan {
+    fun events(today: String, minute: Int, hours: WorkHours, lunchAt: Int, days: List<Workday>, folgas: Set<String>, punches: Boolean, pending: Boolean, dayOff: Boolean): List<ClockReminder> {
+        val yesterday = TimeClock.calendar(today).apply { add(Calendar.DAY_OF_MONTH, -1) }.let { SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(it.time) }
+        val tomorrow = TimeClock.calendar(today).apply { add(Calendar.DAY_OF_MONTH, 1) }.let { SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(it.time) }
+        val ongoing = days.firstOrNull { it.date == yesterday && ClockJourney.isOvernight(it) && !it.complete && !it.absent && it.punches[0] != null && minute + 1440 - it.punches[0]!! <= 1440 }
+        val day = ongoing ?: days.firstOrNull { it.date == today } ?: Workday(today, expectedMinutes = hours.expectedMinutes, scheduledStart = hours.start, scheduledBreak = hours.breakMinutes)
+        fun off(date: String) = date in folgas || days.any { it.date == date && it.dayOff }
+        return buildList {
+            if (punches && !off(day.date) && !day.absent && !day.complete) {
+                val next = day.punches.indexOfFirst { it == null }
+                val due = when (next) { 0 -> day.scheduledStart; 1 -> lunchAt + if (lunchAt < day.scheduledStart) 1440 else 0; 2 -> day.punches[1]!! + day.scheduledBreak; else -> ClockJourney.predictedExit(day) ?: 2880 }
+                val now = minute + if (day.date == yesterday) 1440 else 0
+                if (now in due..(due + 90)) add(ClockReminder("CLOCK_REMINDER", "${day.date}:$next", "Hora de registrar ${TimeClock.labels[next].lowercase()}", "Jornada de ${TimeClock.displayDate(day.date)}. Abra Meu ponto e registre o horário real da batida."))
+            }
+            if (pending && minute >= 8 * 60) {
+                val missing = ClockJourney.pending(days, today).filter { it.date != ongoing?.date }
+                if (missing.isNotEmpty()) add(ClockReminder("CLOCK_PENDING", "$today:pending", "Você tem ${missing.size} dia(s) com batidas pendentes", "Última pendência: ${TimeClock.displayDate(missing.first().date)}. Abra Meu ponto para completar ou corrigir os horários."))
+            }
+            if (dayOff) {
+                if (minute >= 8 * 60 && off(today)) add(ClockReminder("CLOCK_TODAY_OFF", "$today:off", "Hoje é sua folga!", "${TimeClock.displayDate(today)} está marcado como folga no seu controle manual."))
+                if (minute >= 18 * 60 && off(tomorrow)) add(ClockReminder("CLOCK_TOMORROW_OFF", "$tomorrow:off", "Amanhã você estará de folga", "${TimeClock.displayDate(tomorrow)} está marcado como folga no seu controle manual."))
+            }
+        }
+    }
 }

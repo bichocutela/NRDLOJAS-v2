@@ -63,6 +63,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -144,21 +146,34 @@ fun MyPointScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var showBenefitDetails by remember { mutableStateOf(false) }
     var benefitNotifications by remember { mutableStateOf(false) }
-    var hoursNotifications by remember { mutableStateOf(false) }
-    var dayOffNotifications by remember { mutableStateOf(false) }
-    var scheduleNotifications by remember { mutableStateOf(false) }
-    var pointNotifications by remember { mutableStateOf(false) }
     var showProfileNotificationSettings by remember { mutableStateOf(false) }
     var workSchedules by remember { mutableStateOf<List<WorkSchedule>>(emptyList()) }
     var selectedScheduleKey by remember { mutableStateOf(currentMonthKey()) }
     var daysOffExpanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    fun requestNotificationPermission(enabled: Boolean) {
+        if (enabled && android.os.Build.VERSION.SDK_INT >= 33 && androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+            notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+    }
     val profileListState = rememberLazyListState()
     val daysOffRequester = remember { BringIntoViewRequester() }
     val hoursRequester = remember { BringIntoViewRequester() }
     val pointRequester = remember { BringIntoViewRequester() }
     val benefitRequester = remember { BringIntoViewRequester() }
+    val clockRepository = remember(context) { com.example.data.timeclock.TimeClockRepository(context.applicationContext) }
+    var clockSettingsRevision by remember { mutableIntStateOf(0) }
+    DisposableEffect(clockRepository) {
+        val stop = clockRepository.observeChanges { clockSettingsRevision++ }
+        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+        val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { clockSettingsRevision++ }
+        auth.addAuthStateListener(listener)
+        onDispose { stop(); auth.removeAuthStateListener(listener) }
+    }
+    val clockReminders = remember(clockSettingsRevision) { clockRepository.reminders() }
+    val pendingClockReminders = remember(clockSettingsRevision) { clockRepository.pendingReminders() }
+    val manualDayOffReminders = remember(clockSettingsRevision) { clockRepository.dayOffReminders() }
     val manualDaysOff = remember(context) { com.example.data.ManualDaysOffRepository(context.applicationContext) }
     LaunchedEffect(manualDaysOff) {
         manualDaysOff.observe().collect { workSchedules = it }
@@ -203,8 +218,7 @@ fun MyPointScreen(
                 today.get(java.util.Calendar.MONTH) + 1, today.get(java.util.Calendar.DAY_OF_MONTH), changedPreviousMonth
             )
             com.example.util.ScheduleReminderWorker.cacheSchedules(context, workSchedules, profileRegistration)
-            if (credentialStore.isDayOffNotificationsEnabled() || credentialStore.isScheduleNotificationsEnabled())
-                com.example.util.ScheduleReminderWorker.schedule(context)
+            com.example.util.PersonalClockWorker.schedule(context)
             loading = false
         }
     }
@@ -215,8 +229,10 @@ fun MyPointScreen(
         credentialStore.setPointNotificationsEnabled(false)
         com.example.util.HoursNotificationWorker.cancel(context)
         com.example.util.PointNotificationWorker.cancel(context)
-        dayOffNotifications = credentialStore.isDayOffNotificationsEnabled()
-        scheduleNotifications = credentialStore.isScheduleNotificationsEnabled()
+        if (credentialStore.isDayOffNotificationsEnabled()) clockRepository.setDayOffReminders(true)
+        credentialStore.setScheduleNotificationsEnabled(false)
+        credentialStore.setDayOffNotificationsEnabled(false)
+        com.example.util.ScheduleReminderWorker.cancel(context)
         loading = false
         load()
     }
@@ -323,7 +339,7 @@ fun MyPointScreen(
                             onClick = { showBenefitDetails = true }
                         )
                     }
-                    ManualTimeClockCard(profilePalette, workSchedules, Modifier.bringIntoViewRequester(hoursRequester))
+                    ManualTimeClockCard(profilePalette, workSchedules, Modifier.bringIntoViewRequester(hoursRequester), focusRequestKey, focusSection)
                     if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
                 }
 
@@ -378,23 +394,20 @@ fun MyPointScreen(
     if (showProfileNotificationSettings) {
         Dialog(onDismissRequest = { showProfileNotificationSettings = false }) {
             Card(shape = RoundedCornerShape(24.dp)) {
-                Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.fillMaxWidth().heightIn(max = (configuration.screenHeightDp * 0.8f).dp).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Notificações do Meu Perfil", style = MaterialTheme.typography.titleLarge)
                     Text("Ponto e banco de horas usam os registros manuais deste aparelho.", style = MaterialTheme.typography.bodySmall)
                     if (cardAppearance.benefitCardEnabled) ProfileNotificationSwitch("Convênio", benefitNotifications) { enabled ->
+                        requestNotificationPermission(enabled)
                         benefitNotifications = enabled; credentialStore.setBenefitNotificationsEnabled(enabled)
                         if (enabled) com.example.util.BenefitNotificationWorker.schedule(context, resetSnapshot = true) else com.example.util.BenefitNotificationWorker.cancel(context)
                     }
-                    ProfileNotificationSwitch("Lembretes de folga (véspera e no dia)", dayOffNotifications) { enabled ->
-                        dayOffNotifications = enabled; credentialStore.setDayOffNotificationsEnabled(enabled)
-                        if (enabled) com.example.util.ScheduleReminderWorker.schedule(context) else if (!scheduleNotifications) com.example.util.ScheduleReminderWorker.cancel(context)
-                    }
-                    ProfileNotificationSwitch("Escala inserida ou alterada", scheduleNotifications) { enabled ->
-                        scheduleNotifications = enabled; credentialStore.setScheduleNotificationsEnabled(enabled)
-                        if (enabled) com.example.util.ScheduleReminderWorker.schedule(context)
-                        else if (!dayOffNotifications) com.example.util.ScheduleReminderWorker.cancel(context)
-                    }
-                    Text("Os lembretes usam as folgas cadastradas manualmente neste aparelho.", style = MaterialTheme.typography.bodySmall)
+                    ProfileNotificationSwitch("Lembrar entrada, almoço, retorno e saída", clockReminders) { requestNotificationPermission(it); clockRepository.setReminders(it) }
+                    ProfileNotificationSwitch("Avisar batidas incompletas de dias anteriores", pendingClockReminders) { requestNotificationPermission(it); clockRepository.setPendingReminders(it) }
+                    ProfileNotificationSwitch("Folgas manuais: véspera e no dia", manualDayOffReminders) { requestNotificationPermission(it); clockRepository.setDayOffReminders(it) }
+                    Text("Os avisos usam sua jornada e as folgas do perfil ou marcadas no ponto. Ao tocar, o ponto abre automaticamente. Horário do almoço: configure em Meu ponto → Escalas, lembretes e compensações.", style = MaterialTheme.typography.bodySmall)
+                    Text("Os lembretes precisam da permissão de notificações e podem atrasar com economia de bateria.", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)) }) { Text("Permissões e canais do Android") }
                     TextButton(onClick = { showProfileNotificationSettings = false }) { Text("Concluir") }
                 }
             }

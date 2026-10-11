@@ -52,7 +52,7 @@ class ManualDaysOffRepository(private val context: Context) {
     }
     private fun cacheReminders() {
         com.example.util.ScheduleReminderWorker.cacheSchedules(context, schedules(), "1")
-        com.example.util.ScheduleReminderWorker.schedule(context)
+        com.example.util.PersonalClockWorker.schedule(context)
     }
     fun observe() = callbackFlow<List<WorkSchedule>> {
         var remote: com.google.firebase.firestore.ListenerRegistration? = null

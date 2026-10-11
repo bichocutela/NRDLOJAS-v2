@@ -56,16 +56,19 @@ class MyApplication : Application() {
             Log.w("MyApplication", "Benefit notification check not scheduled in this process", e)
         }
         try {
-            val hoursNotificationsEnabled = com.example.data.NossaGenteCredentialStore(this)
-                .isHoursNotificationsEnabled()
-            if (hoursNotificationsEnabled) {
-                com.example.util.HoursNotificationWorker.schedule(this)
-                Log.d("MyApplication", "Hours notification check scheduled")
-            } else {
-                com.example.util.HoursNotificationWorker.cancel(this)
+            val credentials = com.example.data.NossaGenteCredentialStore(this)
+            credentials.setHoursNotificationsEnabled(false)
+            credentials.setPointNotificationsEnabled(false)
+            credentials.setScheduleNotificationsEnabled(false)
+            if (credentials.isDayOffNotificationsEnabled()) {
+                com.example.data.timeclock.TimeClockRepository(this).setDayOffReminders(true)
+                credentials.setDayOffNotificationsEnabled(false)
             }
+            com.example.util.HoursNotificationWorker.cancel(this)
+            com.example.util.PointNotificationWorker.cancel(this)
+            com.example.util.ScheduleReminderWorker.cancel(this)
         } catch (e: IllegalStateException) {
-            Log.w("MyApplication", "Hours notification check not scheduled in this process", e)
+            Log.w("MyApplication", "Legacy profile notification cleanup unavailable in this process", e)
         }
         // Cancel the old polling job; installation events now arrive through FCM.
         runCatching { com.example.util.InstallationNotificationWorker.cancel(this) }

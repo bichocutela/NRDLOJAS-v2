@@ -15,7 +15,7 @@ object ProfileNotificationRouting {
     fun profileSection(type: String): String? = when (type) {
         "PROFILE_UPDATED" -> SECTION_PROFILE
         "HOURS_UPDATED" -> SECTION_HOURS
-        "POINT_UPDATED" -> SECTION_POINT
+        "POINT_UPDATED", "CLOCK_REMINDER", "CLOCK_PENDING", "CLOCK_TODAY_OFF", "CLOCK_TOMORROW_OFF" -> SECTION_POINT
         "BENEFIT_RELEASED", "BENEFIT_PURCHASE" -> SECTION_BENEFIT
         "TODAY_OFF", "TOMORROW_OFF", "SCHEDULE_INSERTED", "SCHEDULE_CHANGED" -> SECTION_DAYS_OFF
         else -> null
@@ -29,11 +29,12 @@ object ProfileNotificationRouting {
         "APP_UPDATE" -> R.drawable.ic_notification_app_update
         "PROFILE_UPDATED" -> R.drawable.ic_notification_profile
         "HOURS_UPDATED" -> R.drawable.ic_notification_hours
-        "POINT_UPDATED" -> R.drawable.ic_notification_point_updated
+        "POINT_UPDATED", "CLOCK_PENDING" -> R.drawable.ic_notification_point_updated
+        "CLOCK_REMINDER" -> R.drawable.ic_notification_hours
         "BENEFIT_RELEASED" -> R.drawable.ic_notification_benefit_released
         "BENEFIT_PURCHASE" -> R.drawable.ic_notification_benefit_purchase
-        "TODAY_OFF" -> R.drawable.ic_notification_today_off
-        "TOMORROW_OFF" -> R.drawable.ic_notification_tomorrow_off
+        "TODAY_OFF", "CLOCK_TODAY_OFF" -> R.drawable.ic_notification_today_off
+        "TOMORROW_OFF", "CLOCK_TOMORROW_OFF" -> R.drawable.ic_notification_tomorrow_off
         "SCHEDULE_INSERTED" -> R.drawable.ic_notification_schedule_inserted
         "SCHEDULE_CHANGED" -> R.drawable.ic_notification_schedule_changed
         "NEW_INSTALLATION" -> R.drawable.ic_notification_new_installation
