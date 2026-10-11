@@ -204,7 +204,7 @@ fun AppNavGraph(
     fun openProfileSection(section: String) {
         if (!access.profile) return
         requestedProfileSection = section
-        profileFocusRequestKey += 1L
+        profileFocusRequestKey = maxOf(System.currentTimeMillis(), profileFocusRequestKey + 1L)
         val destination = "my_profile"
         navController.navigate(destination) {
             popUpTo(navController.graph.findStartDestination().id) { inclusive = false }
