@@ -111,7 +111,7 @@ class MainActivity : ComponentActivity() {
         openPromotionsFromNotification = shouldOpenPromotions(intent)
         if (openPromotionsFromNotification) promotionNotificationNavigationKey = 1L
         profileSectionFromNotification = extractProfileSection(intent)
-        if (profileSectionFromNotification != null) profileNotificationNavigationKey = 1L
+        if (profileSectionFromNotification != null) profileNotificationNavigationKey = System.currentTimeMillis()
         productCodeFromNotification = extractProductCode(intent)
         if (productCodeFromNotification != null) {
             productNotificationNavigationKey = 1L
@@ -350,7 +350,7 @@ class MainActivity : ComponentActivity() {
         }
         extractProfileSection(intent)?.let { section ->
             profileSectionFromNotification = section
-            profileNotificationNavigationKey += 1L
+            profileNotificationNavigationKey = maxOf(System.currentTimeMillis(), profileNotificationNavigationKey + 1L)
         }
         extractProductCode(intent)?.let { code ->
             productCodeFromNotification = code
@@ -401,6 +401,7 @@ class MainActivity : ComponentActivity() {
 
     private fun extractProfileSection(intent: Intent?): String? {
         val section = intent?.getStringExtra(EXTRA_OPEN_PROFILE_SECTION) ?: return null
+        intent.removeExtra(EXTRA_OPEN_PROFILE_SECTION)
         return section.takeIf {
             it in setOf(
                 com.example.util.ProfileNotificationRouting.SECTION_PROFILE,

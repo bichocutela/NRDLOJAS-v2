@@ -14,7 +14,7 @@ class PersonalClockWorker(context: Context, params: WorkerParameters) : Coroutin
     override suspend fun doWork(): Result {
         val repo = TimeClockRepository(applicationContext)
         NotificationHelper.createNotificationChannel(applicationContext)
-        if (com.example.data.RestrictedAccessRepository.current().profile && com.example.data.UserPreferences(applicationContext).notificationsEnabled.first()) {
+        if (com.example.data.UserPreferences(applicationContext).notificationsEnabled.first()) {
             val folgas = ManualDaysOffRepository(applicationContext).schedules().flatMap { s -> s.employees.flatMap { e -> e.daysOff.map { day -> "${s.monthKey}-${day.toString().padStart(2, '0')}" } } }.toSet()
             val minute = Calendar.getInstance().let { it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }
             val events = ClockReminderPlan.events(TimeClock.today(), minute, repo.hours(), repo.lunchAt(), repo.days(), folgas, repo.reminders(), repo.pendingReminders(), repo.dayOffReminders())

@@ -237,6 +237,14 @@ fun MyPointScreen(
         load()
     }
 
+    LaunchedEffect(cardAppearance.benefitCardEnabled) {
+        if (!cardAppearance.benefitCardEnabled) {
+            benefitNotifications = false
+            credentialStore.setBenefitNotificationsEnabled(false)
+            com.example.util.BenefitNotificationWorker.cancel(context)
+        }
+    }
+
     LaunchedEffect(focusRequestKey, loading, focusSection) {
         if (focusRequestKey <= 0L || loading || focusSection == null) return@LaunchedEffect
         if (focusSection == com.example.util.ProfileNotificationRouting.SECTION_DAYS_OFF) {
