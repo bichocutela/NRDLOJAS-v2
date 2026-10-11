@@ -68,9 +68,9 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
     val accent = palette?.accent ?: MaterialTheme.colorScheme.primary
     val onAccent = palette?.onAccent ?: MaterialTheme.colorScheme.onPrimary
     val tile = palette?.tile ?: MaterialTheme.colorScheme.surfaceContainer
-    fun selectDate() {
+    fun selectDate(edit: Boolean = false) {
         val cal = TimeClock.calendar(selectedDate)
-        DatePickerDialog(context, { _, y, m, d -> selectedDate = "%04d-%02d-%02d".format(y, m + 1, d); error = null },
+        DatePickerDialog(context, { _, y, m, d -> selectedDate = "%04d-%02d-%02d".format(y, m + 1, d); if (edit) editingDate = selectedDate; error = null },
             cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).apply { datePicker.maxDate = System.currentTimeMillis(); show() }
     }
     Card(modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = palette?.section ?: MaterialTheme.colorScheme.surface)) {
@@ -82,7 +82,7 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = ::selectDate) { Text(TimeClock.displayDate(selectedDate), color = accent) }
+                TextButton(onClick = { selectDate() }) { Text(TimeClock.displayDate(selectedDate), color = accent) }
                 TextButton(onClick = { showHours = true }) { Text("Minha jornada", color = accent) }
             }
             Text("${TimeClock.time(hours.start)} → ${TimeClock.time(hours.end)} · almoço ${TimeClock.duration(hours.breakMinutes)} · jornada ${TimeClock.duration(hours.expectedMinutes)}", style = MaterialTheme.typography.bodySmall, color = secondary)
@@ -122,6 +122,9 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { editingDate = selectedDate }, modifier = Modifier.weight(1f)) { Text("Corrigir dia", color = accent) }
                 Button(onClick = { showReport = true }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = onAccent)) { Text("Relatório") }
+            }
+            OutlinedButton(onClick = { selectDate(edit = true) }, modifier = Modifier.fillMaxWidth()) {
+                Text("Adicionar ponto anterior / esquecido", color = accent)
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
@@ -270,7 +273,7 @@ private fun TimeClockReport(initialMonth: String, closingDay: Int, days: List<Wo
                             Text("Entrada  /  Almoço ida  /  Volta  /  Saída", style = MaterialTheme.typography.labelSmall, color = secondary)
                             Text(day?.punches?.joinToString("  ·  ") { TimeClock.time(it) } ?: "—  ·  —  ·  —  ·  —", style = MaterialTheme.typography.bodyMedium, color = text)
                             if (day != null) {
-                                Text(if (day.absent) "Ausência · débito ${TimeClock.duration(day.expectedMinutes)}" else "Trabalhadas ${day.workedMinutes?.let { TimeClock.duration(it) } ?: "pendente"} · previstas ${TimeClock.duration(if (day.dayOff || day.holiday) 0 else day.expectedMinutes)}${if (day.edited) " · corrigido" else ""}", style = MaterialTheme.typography.bodySmall, color = secondary)
+                                Text(if (day.absent) "Ausência · débito ${TimeClock.duration(day.expectedMinutes)}" else "Trabalhadas ${day.workedMinutes?.let { TimeClock.duration(it) } ?: "pendente"} · previstas ${TimeClock.duration(if (day.dayOff || day.holiday) 0 else day.expectedMinutes)}${if (day.edited) " · registro manual" else ""}", style = MaterialTheme.typography.bodySmall, color = secondary)
                                 if (day.extras.isNotEmpty()) Text("Extras: " + day.extras.chunked(2).joinToString(" · ") { "${TimeClock.time(it[0])} → ${TimeClock.time(it[1])}" }, style = MaterialTheme.typography.bodySmall, color = text)
                                 day.occurrences().forEach { occurrence -> Text(occurrence, style = MaterialTheme.typography.bodySmall, color = secondary) }
                                 if (day.note.isNotBlank()) Text(day.note, style = MaterialTheme.typography.bodySmall, color = text)
