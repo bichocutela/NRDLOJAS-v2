@@ -76,7 +76,11 @@ class MyApplication : Application() {
         } catch (e: IllegalStateException) {
             Log.w("MyApplication", "ACP catalog sync not scheduled in this process", e)
         }
-        com.example.util.PersonalClockWorker.schedule(this)
+        try {
+            com.example.util.PersonalClockWorker.schedule(this)
+        } catch (e: IllegalStateException) {
+            Log.w("MyApplication", "Personal point scheduling unavailable in this process", e)
+        }
         Log.d("MyApplication", "Application started and CrashReporter setup")
     }
 
