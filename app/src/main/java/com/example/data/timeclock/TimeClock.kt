@@ -126,3 +126,26 @@ object TimeClock {
     }
     fun shiftMonth(month: String, delta: Int): String = calendar("$month-01").apply { add(Calendar.MONTH, delta) }.let { SimpleDateFormat("yyyy-MM", Locale.ROOT).format(it.time) }
 }
+
+/** Separate ledger entries never change the original punches. Negative consumes earned time. */
+data class ClockAdjustment(val id: String, val date: String, val minutes: Int, val reason: String) {
+    fun validate() {
+        TimeClock.calendar(date)
+        require(date <= TimeClock.today() && minutes != 0 && kotlin.math.abs(minutes) <= 1440)
+        require(reason.trim().length in 3..200) { "Informe o motivo da compensação." }
+    }
+}
+object ClockJourney {
+    fun workedSoFar(day: Workday, minute: Int): Int {
+        val p = day.punches
+        return if (p[0] == null) 0 else ((p[1] ?: minute) - p[0]!!).coerceAtLeast(0) +
+            if (p[2] != null) ((p[3] ?: minute) - p[2]!!).coerceAtLeast(0) else 0
+    }
+    fun predictedExit(day: Workday): Int? = when {
+        day.complete -> day.punches[3]
+        day.punches[2] != null -> day.punches[2]!! + (day.expectedMinutes - (day.punches[1]!! - day.punches[0]!!)).coerceAtLeast(0)
+        day.punches[0] != null -> day.punches[0]!! + day.expectedMinutes + day.scheduledBreak
+        else -> null
+    }
+    fun pending(days: List<Workday>, today: String) = days.filter { it.date < today && !it.complete && !it.absent && it.punches.any { p -> p != null } }.sortedByDescending { it.date }
+}

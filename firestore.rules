@@ -224,6 +224,14 @@ service cloud.firestore {
         request.resource.data.updatedAt is int;
     }
 
+    match /personal_time_clock/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid &&
+        request.resource.data.keys().hasOnly(['payload', 'updatedAt']) &&
+        request.resource.data.payload is string && request.resource.data.payload.size() <= 900000 &&
+        request.resource.data.updatedAt is int;
+    }
+
     // Qualquer coleção não declarada acima permanece bloqueada por padrão.
     match /{document=**} {
       allow read, write: if false;

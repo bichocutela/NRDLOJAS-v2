@@ -32,6 +32,9 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
     val repository = remember(context) { TimeClockRepository(context.applicationContext) }
     var revision by remember { mutableIntStateOf(0) }
     var selectedDate by remember { mutableStateOf(TimeClock.today()) }
+    var showTools by remember { mutableStateOf(false) }
+    var nowMinute by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { while (true) { nowMinute = Calendar.getInstance().let { it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }; kotlinx.coroutines.delay(30_000) } }
     var showHours by remember { mutableStateOf(false) }
     var showReport by remember { mutableStateOf(false) }
     var editingDate by remember { mutableStateOf<String?>(null) }
@@ -44,6 +47,7 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
         val auth = FirebaseAuth.getInstance()
         val listener = FirebaseAuth.AuthStateListener {
             revision++
+            com.example.util.PersonalClockWorker.schedule(context)
             val yesterday = Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -1) }.let { java.text.SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(it.time) }
             val unfinished = repository.days().firstOrNull { it.date == yesterday && !it.complete && it.punches[0] != null }
             val now = Calendar.getInstance()
@@ -51,8 +55,10 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
             selectedDate = if (unfinished != null && minute <= unfinished.punches[0]!!) yesterday else TimeClock.today()
             editingDate = null; confirmation = null
         }
+        val stopChanges = repository.observeChanges { revision++ }
+        com.example.util.PersonalClockWorker.schedule(context)
         auth.addAuthStateListener(listener)
-        onDispose { auth.removeAuthStateListener(listener) }
+        onDispose { auth.removeAuthStateListener(listener); stopChanges() }
     }
     val savedDays = remember(revision) { repository.days() }
     val days = remember(savedDays, manualFolgas) { savedDays.map { if (it.date in manualFolgas) it.copy(dayOff = true, absent = false) else it } }
@@ -63,6 +69,8 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
     val month = TimeClock.competence(selectedDate, closingDay)
     val periodDates = TimeClock.periodDates(month, closingDay).toSet()
     val totals = TimeClock.totals(days.filter { it.date in periodDates })
+    val adjustments = remember(revision) { repository.adjustments() }
+    val adjustedBalance = totals.balance + adjustments.filter { it.date in periodDates }.sumOf { it.minutes }
     val text = palette?.text ?: MaterialTheme.colorScheme.onSurface
     val secondary = palette?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant
     val accent = palette?.accent ?: MaterialTheme.colorScheme.primary
@@ -78,7 +86,7 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Meu ponto · Banco de horas", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = text)
-                    Text("Controle pessoal • salvo no aparelho", style = MaterialTheme.typography.bodySmall, color = secondary)
+                    Text(repository.backupStatus(), style = MaterialTheme.typography.bodySmall, color = secondary)
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -86,6 +94,21 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
                 TextButton(onClick = { showHours = true }) { Text("Minha jornada", color = accent) }
             }
             Text("${TimeClock.time(hours.start)} → ${TimeClock.time(hours.end)} · almoço ${TimeClock.duration(hours.breakMinutes)} · jornada ${TimeClock.duration(hours.expectedMinutes)}", style = MaterialTheme.typography.bodySmall, color = secondary)
+            if (selectedDate == TimeClock.today()) {
+                val nextLabel = current.punches.indexOfFirst { it == null }.let { if (it < 0) "Dia concluído" else "Próxima batida: ${TimeClock.labels[it]}" }
+                val elapsed = ClockJourney.workedSoFar(current, nowMinute + if ((current.punches[0] ?: 0) > nowMinute && current.punches.any { (it ?: 0) >= 1440 }) 1440 else 0)
+                Column(Modifier.fillMaxWidth().background(tile, RoundedCornerShape(14.dp)).padding(12.dp)) {
+                    Text("Resumo de hoje", fontWeight = FontWeight.Bold, color = text)
+                    Text(if (current.dayOff) "Hoje é folga" else nextLabel, color = text)
+                    Text("Trabalhadas: ${TimeClock.duration(elapsed)}", color = secondary)
+                    if (!current.dayOff && !current.complete) ClockJourney.predictedExit(current)?.let { Text("Previsão para completar a jornada: ${TimeClock.time(it)}", color = secondary) }
+                }
+            }
+            ClockJourney.pending(days, TimeClock.today()).take(3).forEach { pending ->
+                TextButton(onClick = { selectedDate = pending.date; editingDate = pending.date }) {
+                    Text("Pendente ${TimeClock.displayDate(pending.date)} · completar batidas", color = accent)
+                }
+            }
             for (row in 0..1) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (col in 0..1) {
                     val index = row * 2 + col
@@ -117,7 +140,7 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ClockMetric("Créditos", TimeClock.duration(totals.credit, true), text, secondary, tile, Modifier.weight(1f))
                 ClockMetric("Débitos", TimeClock.duration(-totals.debit), text, secondary, tile, Modifier.weight(1f))
-                ClockMetric("Saldo", TimeClock.duration(totals.balance, true), text, secondary, tile, Modifier.weight(1f))
+                ClockMetric("Saldo", TimeClock.duration(adjustedBalance, true), text, secondary, tile, Modifier.weight(1f))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { editingDate = selectedDate }, modifier = Modifier.weight(1f)) { Text("Corrigir dia", color = accent) }
@@ -126,6 +149,7 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
             OutlinedButton(onClick = { selectDate(edit = true) }, modifier = Modifier.fillMaxWidth()) {
                 Text("Adicionar ponto anterior / esquecido", color = accent)
             }
+            TextButton(onClick = { showTools = true }, modifier = Modifier.fillMaxWidth()) { Text("Escalas, lembretes e compensações", color = accent) }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }
@@ -145,7 +169,8 @@ internal fun ManualTimeClockCard(palette: ProfileThemePalette?, schedules: List<
         val day = days.firstOrNull { it.date == date } ?: Workday(date, expectedMinutes = hours.expectedMinutes, dayOff = date in manualFolgas, scheduledStart = hours.start, scheduledBreak = hours.breakMinutes)
         WorkdayEditor(day, onDismiss = { editingDate = null }) { value -> repository.save(value); revision++; editingDate = null }
     }
-    if (showReport) TimeClockReport(month, closingDay, days, manualFolgas, palette, onDismiss = { showReport = false }, onEdit = { showReport = false; selectedDate = it; editingDate = it })
+    if (showTools) ClockToolsDialog(repository, selectedDate, onDismiss = { showTools = false }) { revision++ }
+    if (showReport) TimeClockReport(month, closingDay, days, manualFolgas, adjustments, palette, onDismiss = { showReport = false }, onEdit = { showReport = false; selectedDate = it; editingDate = it })
 }
 
 @Composable
@@ -235,9 +260,12 @@ private fun WorkdayEditor(initial: Workday, onDismiss: () -> Unit, onSave: (Work
 }
 
 @Composable
-private fun TimeClockReport(initialMonth: String, closingDay: Int, days: List<Workday>, folgas: Set<String>, palette: ProfileThemePalette?, onDismiss: () -> Unit, onEdit: (String) -> Unit) {
+private fun TimeClockReport(initialMonth: String, closingDay: Int, days: List<Workday>, folgas: Set<String>, adjustments: List<ClockAdjustment>, palette: ProfileThemePalette?, onDismiss: () -> Unit, onEdit: (String) -> Unit) {
+    val context = LocalContext.current
+    var exportError by remember { mutableStateOf<String?>(null) }
     var month by remember { mutableStateOf(initialMonth) }
     val period = TimeClock.periodDates(month, closingDay)
+    val ledger = adjustments.filter { it.date in period }
     val records = days.filter { it.date in period }.associateBy { it.date }
     val totals = TimeClock.totals(records.values.toList())
     val text = palette?.text ?: MaterialTheme.colorScheme.onSurface
@@ -259,9 +287,18 @@ private fun TimeClockReport(initialMonth: String, closingDay: Int, days: List<Wo
                 }
                 Text("${TimeClock.displayDate(period.first())} a ${TimeClock.displayDate(period.last())}", style = MaterialTheme.typography.bodySmall, color = secondary)
                 Text("Trabalhadas ${TimeClock.duration(totals.worked)} · previstas ${TimeClock.duration(totals.expected)}", style = MaterialTheme.typography.bodySmall, color = secondary)
-                Text("Créditos ${TimeClock.duration(totals.credit, true)} · débitos ${TimeClock.duration(-totals.debit)} · saldo ${TimeClock.duration(totals.balance, true)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = text)
+                Text("Créditos ${TimeClock.duration(totals.credit, true)} · débitos ${TimeClock.duration(-totals.debit)} · saldo ${TimeClock.duration(totals.balance + ledger.sumOf { it.minutes }, true)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = text)
                 Text("${totals.pending} dia(s) pendente(s). Sem batidas não gera débito; registre ausência para descontar. Controle em minutos reais, sem tolerância automática, conversão noturna ou pagamento de adicionais.", style = MaterialTheme.typography.bodySmall, color = secondary, modifier = Modifier.padding(vertical = 8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(true to "Exportar PDF", false to "Planilha CSV").forEach { (pdf, label) ->
+                        OutlinedButton(onClick = { runCatching { ClockExport.share(context, month, closingDay, days, folgas, adjustments, pdf) }.onFailure { exportError = "Não foi possível exportar. Tente novamente." } }) { Text(label, color = accent) }
+                    }
+                }
+                exportError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(ledger, key = { "adjustment:" + it.id }) { entry ->
+                        Text("${TimeClock.displayDate(entry.date)} · compensação ${TimeClock.duration(entry.minutes, true)} · ${entry.reason}", color = text, modifier = Modifier.padding(8.dp))
+                    }
                     items(period, key = { it }) { date ->
                         val day = records[date]
                         val future = date > TimeClock.today()
@@ -284,4 +321,51 @@ private fun TimeClockReport(initialMonth: String, closingDay: Int, days: List<Wo
             }
         }
     }
+}
+
+@Composable
+private fun ClockToolsDialog(repository: TimeClockRepository, date: String, onDismiss: () -> Unit, onChanged: () -> Unit) {
+    var enabled by remember { mutableStateOf(repository.reminders()) }
+    var name by remember { mutableStateOf("") }
+    var start by remember { mutableIntStateOf(repository.hours().start) }
+    var end by remember { mutableIntStateOf(repository.hours().end) }
+    var lunch by remember { mutableIntStateOf(repository.hours().breakMinutes) }
+    var lunchAt by remember { mutableIntStateOf(repository.lunchAt()) }
+    var amount by remember { mutableStateOf("") }
+    var reason by remember { mutableStateOf("") }
+    var debit by remember { mutableStateOf(true) }
+    var revision by remember { mutableIntStateOf(0) }
+    var error by remember { mutableStateOf<String?>(null) }
+    fun action(block: () -> Unit) { runCatching(block).onSuccess { revision++; onChanged(); error = null }.onFailure { error = it.message } }
+    val templates = remember(revision) { repository.templates() }
+    val adjustments = remember(revision) { repository.adjustments() }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Organizar minha jornada") }, text = {
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Lembretes", fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) { Text("Lembrar das batidas", Modifier.weight(1f)); Switch(enabled, onCheckedChange = { value -> action { repository.setReminders(value); enabled = value } }) }
+            ClockTimeField("Horário do lembrete de almoço", lunchAt) { value -> action { repository.saveLunchAt(value); lunchAt = value } }
+            Text("Entrada e saída seguem a jornada do dia. Retorno segue a batida de almoço. Avisos podem atrasar com economia de bateria; precisam da permissão de notificações. Folgas não recebem lembrete.", style = MaterialTheme.typography.bodySmall)
+            Text("Escalas diferentes", fontWeight = FontWeight.Bold)
+            Text("Aplicar em ${TimeClock.displayDate(date)}. As outras datas permanecem com sua jornada.", style = MaterialTheme.typography.bodySmall)
+            templates.forEach { (label, hours) -> OutlinedButton(onClick = { action { repository.applyTemplate(date, hours) } }, modifier = Modifier.fillMaxWidth()) { Text("$label · ${TimeClock.time(hours.start)}–${TimeClock.time(hours.end)}") } }
+            OutlinedTextField(name, onValueChange = { name = it.take(40) }, label = { Text("Nome (ex.: Domingo)") })
+            ClockTimeField("Entrada", start) { start = it }; ClockTimeField("Saída", end) { end = it }; ClockTimeField("Almoço", lunch) { lunch = it }
+            OutlinedButton(onClick = { action { repository.saveTemplate(name, WorkHours(start, end, lunch)); name = "" } }) { Text("Salvar modelo de jornada") }
+            Text("Compensação de horas", fontWeight = FontWeight.Bold)
+            Text("Movimentação separada em ${TimeClock.displayDate(date)}. Registre horas utilizadas ou ajuste de saldo sem alterar as batidas.", style = MaterialTheme.typography.bodySmall)
+            Row(verticalAlignment = Alignment.CenterVertically) { Text(if (debit) "Utilizar horas (descontar saldo)" else "Adicionar crédito", Modifier.weight(1f)); Switch(debit, onCheckedChange = { debit = it }) }
+            OutlinedTextField(amount, onValueChange = { amount = it.take(5) }, label = { Text("Quantidade HH:mm") }, singleLine = true)
+            OutlinedTextField(reason, onValueChange = { reason = it.take(200) }, label = { Text("Motivo") })
+            OutlinedButton(onClick = { action {
+                val minutes = requireNotNull(TimeClock.parseTime(amount)) { "Informe a duração HH:mm." }
+                repository.addAdjustment(ClockAdjustment(java.util.UUID.randomUUID().toString(), date, if (debit) -minutes else minutes, reason.trim())); amount = ""; reason = ""
+            } }) { Text("Registrar compensação") }
+            adjustments.filter { it.date == date }.forEach { entry ->
+                Text("${TimeClock.duration(entry.minutes, true)} · ${entry.reason}")
+                TextButton(onClick = { action { repository.removeAdjustment(entry.id) } }) { Text("Remover movimentação") }
+            }
+            Text("Se a saída antecipada já gerou débito no ponto, não registre o mesmo desconto novamente.", style = MaterialTheme.typography.bodySmall)
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        }
+    }, confirmButton = { TextButton(onClick = onDismiss) { Text("Concluir") } })
 }

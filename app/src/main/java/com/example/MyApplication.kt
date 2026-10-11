@@ -76,6 +76,7 @@ class MyApplication : Application() {
         } catch (e: IllegalStateException) {
             Log.w("MyApplication", "ACP catalog sync not scheduled in this process", e)
         }
+        com.example.util.PersonalClockWorker.schedule(this)
         Log.d("MyApplication", "Application started and CrashReporter setup")
     }
 

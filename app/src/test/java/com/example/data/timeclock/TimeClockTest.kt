@@ -103,4 +103,25 @@ class TimeClockTest {
         assertEquals(-11, row.balanceMinutes)
     }
 
+
+    @Test fun liveSummaryStopsDuringLunch() {
+        val row = Workday("2026-10-01", listOf(825, 1020, null, null))
+        assertEquals(195, ClockJourney.workedSoFar(row, 1050))
+    }
+    @Test fun liveSummaryAddsSecondWorkInterval() {
+        val row = Workday("2026-10-01", listOf(825, 1020, 1090, null))
+        assertEquals(305, ClockJourney.workedSoFar(row, 1200))
+        assertEquals(1360, ClockJourney.predictedExit(row))
+    }
+    @Test fun pendingIncludesOnlyPastIncompletePunches() {
+        val rows = listOf(Workday("2026-10-01", listOf(825, null, null, null)), Workday("2026-10-02"), Workday("2026-10-03", listOf(825, null, null, null)))
+        assertEquals(listOf("2026-10-01"), ClockJourney.pending(rows, "2026-10-03").map { it.date })
+    }
+    @Test fun compensationDoesNotChangePunchBalance() {
+        val row = day("13:45", "17:00", "18:10", "22:40")
+        val adjustment = ClockAdjustment("test", "2026-10-01", -60, "Compensação de folga")
+        adjustment.validate()
+        assertEquals(0, row.balanceMinutes)
+        assertEquals(-60, (row.balanceMinutes ?: 0) + adjustment.minutes)
+    }
 }
