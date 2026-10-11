@@ -94,4 +94,13 @@ class TimeClockTest {
         assertEquals(70, row.balanceMinutes)
     }
 
+    @Test fun suppliedJulyReportKeepsShorterLunchCreditSeparateFromLateEntryDebit() {
+        // 14/07, schedule 00710: 09:45–19:20, 01:50 meal.
+        val row = day("10:00", "13:30", "15:06", "19:10")
+            .copy(scheduledStart = 585, scheduledBreak = 110)
+        assertEquals(14, row.intervalCreditMinutes)
+        assertEquals(14, row.creditMinutes); assertEquals(25, row.debitMinutes)
+        assertEquals(-11, row.balanceMinutes)
+    }
+
 }
