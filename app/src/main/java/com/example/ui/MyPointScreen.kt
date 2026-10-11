@@ -143,7 +143,6 @@ fun MyPointScreen(
     // compras, para o usuário sempre ter acesso à área de convênio.
     var benefit by remember { mutableStateOf<BenefitSummary?>(BenefitSummary()) }
     var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
     var showBenefitDetails by remember { mutableStateOf(false) }
     var benefitNotifications by remember { mutableStateOf(false) }
     var showProfileNotificationSettings by remember { mutableStateOf(false) }
@@ -182,9 +181,8 @@ fun MyPointScreen(
 
     fun load() {
         if (loading) return
-        if (!api.hasSession()) { error = "Os dados pessoais estão indisponíveis no momento."; return }
+        if (!api.hasSession()) return
         loading = true
-        error = null
         scope.launch {
             when (val result = api.fetchEmployeeProfile()) {
                 is NossaGenteProfileResult.Success -> {
@@ -197,16 +195,15 @@ fun MyPointScreen(
                     }
                 }
                 NossaGenteProfileResult.Unauthorized -> {
-                    error = "Os dados pessoais estão indisponíveis no momento."
                     loading = false
                     return@launch
                 }
-                is NossaGenteProfileResult.Error -> if (error == null) error = result.message
+                is NossaGenteProfileResult.Error -> Unit
             }
             when (val result = api.fetchBenefit()) {
                 is NossaGenteBenefitResult.Success -> benefit = result.benefit
-                NossaGenteBenefitResult.Unauthorized -> error = "Os dados pessoais estão indisponíveis no momento."
-                is NossaGenteBenefitResult.Error -> if (error == null) error = result.message
+                NossaGenteBenefitResult.Unauthorized -> Unit
+                is NossaGenteBenefitResult.Error -> Unit
             }
             val profileRegistration = "1"
             val today = java.util.Calendar.getInstance()
@@ -246,7 +243,8 @@ fun MyPointScreen(
     }
 
     LaunchedEffect(focusRequestKey, loading, focusSection) {
-        if (focusRequestKey <= 0L || loading || focusSection == null) return@LaunchedEffect
+        if (focusRequestKey <= 0L || focusSection == null) return@LaunchedEffect
+        if (loading && focusSection == com.example.util.ProfileNotificationRouting.SECTION_BENEFIT) return@LaunchedEffect
         if (focusSection == com.example.util.ProfileNotificationRouting.SECTION_DAYS_OFF) {
             daysOffExpanded = true
         }
@@ -348,7 +346,6 @@ fun MyPointScreen(
                         )
                     }
                     ManualTimeClockCard(profilePalette, workSchedules, Modifier.bringIntoViewRequester(hoursRequester), focusRequestKey, focusSection)
-                    if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
                 }
 
             }
@@ -415,7 +412,9 @@ fun MyPointScreen(
                     ProfileNotificationSwitch("Folgas manuais: véspera e no dia", manualDayOffReminders) { requestNotificationPermission(it); clockRepository.setDayOffReminders(it) }
                     Text("Os avisos usam sua jornada e as folgas do perfil ou marcadas no ponto. Ao tocar, o ponto abre automaticamente. Horário do almoço: configure em Meu ponto → Escalas, lembretes e compensações.", style = MaterialTheme.typography.bodySmall)
                     Text("Os lembretes precisam da permissão de notificações e podem atrasar com economia de bateria.", style = MaterialTheme.typography.bodySmall)
-                    TextButton(onClick = { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)) }) { Text("Permissões e canais do Android") }
+                    TextButton(onClick = { val intent = if (android.os.Build.VERSION.SDK_INT >= 26) android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        else android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+                        context.startActivity(intent) }) { Text("Permissões e canais do Android") }
                     TextButton(onClick = { showProfileNotificationSettings = false }) { Text("Concluir") }
                 }
             }
