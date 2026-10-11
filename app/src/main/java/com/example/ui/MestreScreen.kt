@@ -185,6 +185,7 @@ fun MestreScreen(
     var draftThemeBackgrounds by remember(appearanceSettings.themeBackgrounds) {
         mutableStateOf(appearanceSettings.themeBackgrounds)
     }
+    var draftBenefitCardEnabled by remember(appearanceSettings.benefitCardEnabled) { mutableStateOf(appearanceSettings.benefitCardEnabled) }
     var cardAppearanceThemeKey by rememberSaveable { mutableStateOf("red") }
     var draftCardBackgrounds by remember(appearanceSettings.cardBackgrounds) {
         mutableStateOf(appearanceSettings.cardBackgrounds)
@@ -443,7 +444,7 @@ fun MestreScreen(
         draftCardScheduleStarts[themeKey].orEmpty() != appearanceSettings.cardBackgroundSchedules[themeKey]?.startDate.orEmpty() ||
             draftCardScheduleEnds[themeKey].orEmpty() != appearanceSettings.cardBackgroundSchedules[themeKey]?.endDate.orEmpty()
     }
-    val cardAppearanceHasChanges = draftCardBackgrounds != appearanceSettings.cardBackgrounds ||
+    val cardAppearanceHasChanges = draftBenefitCardEnabled != appearanceSettings.benefitCardEnabled || draftCardBackgrounds != appearanceSettings.cardBackgrounds ||
         draftCardBackgroundSchedules != appearanceSettings.cardBackgroundSchedules || cardScheduleDatesHaveChanges
     val consultationAppearanceHasChanges =
         draftConsultationBackgrounds != appearanceSettings.consultationBackgrounds ||
@@ -1564,6 +1565,13 @@ fun MestreScreen(
                     "green" to "Verde", "blue" to "Azul", "orange" to "Laranja",
                     "glass" to "Glass Soft", "expressive" to "Glass Expressivo"
                 )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Exibir convênio para todos", style = MaterialTheme.typography.titleMedium)
+                        Text("Desative para ocultar o cartão e os detalhes no Meu Perfil.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = draftBenefitCardEnabled, onCheckedChange = { draftBenefitCardEnabled = it })
+                }
                 val selectedCardUrl = draftCardBackgrounds[cardAppearanceThemeKey].orEmpty()
                     .ifBlank { draftCardBackgroundSchedules[cardAppearanceThemeKey]?.url.orEmpty() }
                 val selectedStartDate = draftCardScheduleStarts[cardAppearanceThemeKey].orEmpty()
@@ -1723,6 +1731,7 @@ fun MestreScreen(
                                 val imagesToSave = immediateImages.toMap()
                                 val schedulesToSave = schedules.toMap()
                                 val settingsToSave = appearanceSettings.copy(
+                                    benefitCardEnabled = draftBenefitCardEnabled,
                                     cardBackgrounds = imagesToSave,
                                     cardBackgroundSchedules = schedulesToSave
                                 )
@@ -1747,7 +1756,7 @@ fun MestreScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     if (isSavingCardAppearance) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    else Text("Salvar imagem e período")
+                    else Text("Salvar aparência do cartão")
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }

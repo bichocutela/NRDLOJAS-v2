@@ -158,6 +158,10 @@ fun MyPointScreen(
     val hoursRequester = remember { BringIntoViewRequester() }
     val pointRequester = remember { BringIntoViewRequester() }
     val benefitRequester = remember { BringIntoViewRequester() }
+    val manualDaysOff = remember(context) { com.example.data.ManualDaysOffRepository(context.applicationContext) }
+    LaunchedEffect(manualDaysOff) {
+        manualDaysOff.observe().collect { workSchedules = it }
+    }
     val credentialStore = remember(context) { com.example.data.NossaGenteCredentialStore(context.applicationContext) }
 
     fun load() {
@@ -198,10 +202,7 @@ fun MyPointScreen(
                 NossaGenteBenefitResult.Unauthorized -> error = "Os dados pessoais estão indisponíveis no momento."
                 is NossaGenteBenefitResult.Error -> if (error == null) error = result.message
             }
-            api.fetchMyWorkSchedules()
-                .onSuccess { workSchedules = it }
-                .onFailure { error = it.message ?: "Não foi possível recuperar suas folgas. Atualize o perfil para tentar novamente." }
-            val profileRegistration = employeeProfile?.registration.orEmpty().filter(Char::isDigit)
+            val profileRegistration = "1"
             val today = java.util.Calendar.getInstance()
             val changedPreviousMonth = com.example.util.ScheduleReminderWorker.changedPreviousMonthKey(
                 context, workSchedules, profileRegistration, today.get(java.util.Calendar.YEAR), today.get(java.util.Calendar.MONTH) + 1
@@ -313,48 +314,9 @@ fun MyPointScreen(
                         schedules = workSchedules,
                         selectedKey = selectedScheduleKey,
                         expanded = daysOffExpanded,
-                        registration = employeeProfile?.registration,
                         palette = profilePalette,
                         onToggle = { daysOffExpanded = !daysOffExpanded },
-                        onSelectMonth = { selectedScheduleKey = it },
-                        onDaysOffSaved = { monthKey, days ->
-                            val (year, month) = monthKey.split("-").map(String::toInt)
-                            val profile = employeeProfile
-                            val registration = profile?.registration.orEmpty().filter(Char::isDigit)
-                            val existing = workSchedules.firstOrNull { it.monthKey == monthKey }
-                            val rows = existing?.employees.orEmpty().toMutableList()
-                            val rowIndex = rows.indexOfFirst { it.registration.filter(Char::isDigit) == registration }
-                            if (rowIndex >= 0) rows[rowIndex] = rows[rowIndex].copy(daysOff = days)
-                            else if (registration.isNotBlank()) rows += WorkScheduleEmployee(
-                                registration = registration,
-                                name = profile?.name.orEmpty(),
-                                daysOff = days,
-                                verified = true
-                            )
-                            val updated = WorkSchedule(monthKey, year, month, rows,
-                                System.currentTimeMillis(), (existing?.revision ?: 0) + 1)
-                            workSchedules = (workSchedules.filterNot { it.monthKey == monthKey } + updated)
-                                .sortedByDescending { it.monthKey }
-                            employeeProfile?.registration?.let { com.example.util.ScheduleReminderWorker.cacheSchedules(context, workSchedules, it) }
-                            com.example.util.ScheduleReminderWorker.markScheduleChanged(context, registration, monthKey)
-                        },
-                        onRosterPhotoSaved = { monthKey, url ->
-                            val (year, month) = monthKey.split("-").map(String::toInt)
-                            val profile = employeeProfile
-                            val registration = profile?.registration.orEmpty().filter(Char::isDigit)
-                            val existing = workSchedules.firstOrNull { it.monthKey == monthKey }
-                            val rows = existing?.employees.orEmpty().toMutableList()
-                            val rowIndex = rows.indexOfFirst { it.registration.filter(Char::isDigit) == registration }
-                            if (rowIndex >= 0) rows[rowIndex] = rows[rowIndex].copy(rosterPhotoUrl = url)
-                            else if (registration.isNotBlank()) rows += WorkScheduleEmployee(
-                                registration = registration, name = profile?.name.orEmpty(), verified = true, rosterPhotoUrl = url
-                            )
-                            val updated = WorkSchedule(monthKey, year, month, rows,
-                                existing?.updatedAt ?: 0L, existing?.revision ?: 1)
-                            workSchedules = (workSchedules.filterNot { it.monthKey == monthKey } + updated)
-                                .sortedByDescending { it.monthKey }
-                            employeeProfile?.registration?.let { com.example.util.ScheduleReminderWorker.cacheSchedules(context, workSchedules, it) }
-                        }
+                        onSelectMonth = { selectedScheduleKey = it }
                     )
                     hours?.let { summary ->
                         val hoursShape = if (isExpressive) RoundedCornerShape(30.dp) else MaterialTheme.shapes.medium
@@ -416,7 +378,7 @@ fun MyPointScreen(
                             }
                         }
                     }
-                    benefit?.let { summary ->
+                    benefit?.takeIf { cardAppearance.benefitCardEnabled }?.let { summary ->
                         BenefitCardSurface(
                             modifier = Modifier
                                 .bringIntoViewRequester(benefitRequester)
@@ -438,7 +400,7 @@ fun MyPointScreen(
             }
         }
     }
-    if (showBenefitDetails) {
+    if (showBenefitDetails && cardAppearance.benefitCardEnabled) {
         Dialog(
             onDismissRequest = { showBenefitDetails = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -510,7 +472,7 @@ fun MyPointScreen(
                         if (enabled) com.example.util.ScheduleReminderWorker.schedule(context)
                         else if (!dayOffNotifications) com.example.util.ScheduleReminderWorker.cancel(context)
                     }
-                    Text("Os lembretes de folga usam a escala publicada e a matrícula do perfil Nossa Gente.", style = MaterialTheme.typography.bodySmall)
+                    Text("Os lembretes usam as folgas cadastradas manualmente neste aparelho.", style = MaterialTheme.typography.bodySmall)
                     TextButton(onClick = { showProfileNotificationSettings = false }) { Text("Concluir") }
                 }
             }
@@ -529,11 +491,9 @@ private fun ProfileNotificationSwitch(label: String, checked: Boolean, onChecked
 @Composable
 private fun MyDaysOffCard(
     modifier: Modifier = Modifier,
-    schedules: List<WorkSchedule>, selectedKey: String, expanded: Boolean, registration: String?,
+    schedules: List<WorkSchedule>, selectedKey: String, expanded: Boolean,
     palette: ProfileThemePalette? = null,
-    onToggle: () -> Unit, onSelectMonth: (String) -> Unit,
-    onDaysOffSaved: (String, List<Int>) -> Unit,
-    onRosterPhotoSaved: (String, String) -> Unit
+    onToggle: () -> Unit, onSelectMonth: (String) -> Unit
 ) {
     var selectorExpanded by remember { mutableStateOf(false) }
     val selected = schedules.firstOrNull { it.monthKey == selectedKey }
@@ -541,7 +501,7 @@ private fun MyDaysOffCard(
     val selectedYear = period.getOrNull(0) ?: java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
     val selectedMonth = period.getOrNull(1)?.takeIf { it in 1..12 }
         ?: (java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1)
-    val digits = registration.orEmpty().filter(Char::isDigit)
+    val digits = "1"
     val employee = selected?.employees?.firstOrNull { it.registration.filter(Char::isDigit) == digits }
     var editing by remember(selectedKey, digits) { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
@@ -549,53 +509,8 @@ private fun MyDaysOffCard(
     var selectedDays by remember(selectedKey, digits, employee?.daysOff) { mutableStateOf(employee?.daysOff.orEmpty().toSet()) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var photoDialogUrl by remember(selectedKey, digits) { mutableStateOf<String?>(null) }
-    var calendarDay by remember(selectedKey, digits) { mutableStateOf<Int?>(null) }
-    var photoUploadBusy by remember { mutableStateOf(false) }
-    var photoMessage by remember { mutableStateOf<String?>(null) }
-    var captureUri by remember { mutableStateOf<Uri?>(null) }
-    var captureFile by remember { mutableStateOf<File?>(null) }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
-        val uri = captureUri
-        if (captured && uri != null) {
-            photoUploadBusy = true
-            photoMessage = null
-            scope.launch {
-                NossaGenteApi(context.applicationContext).saveMyRosterPhoto(uri, digits, selectedYear, selectedMonth)
-                    .onSuccess { url ->
-                        onRosterPhotoSaved(selectedKey, url)
-                        photoMessage = "Foto salva no perfil para ${monthName(selectedMonth)}/$selectedYear."
-                    }
-                    .onFailure { photoMessage = it.message ?: "Não foi possível salvar a foto." }
-                photoUploadBusy = false
-                captureFile?.delete()
-                captureFile = null
-            }
-        } else if (!captured) {
-            photoMessage = "A captura foi cancelada."
-            captureFile?.delete()
-            captureFile = null
-        }
-    }
-
-    fun captureRosterPhoto() {
-        runCatching {
-            val directory = File(context.cacheDir, "roster_photos").apply { mkdirs() }
-            val file = File.createTempFile("roster_${selectedKey}_", ".jpg", directory)
-            captureFile = file
-            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        }.onSuccess { uri ->
-            captureUri = uri
-            runCatching { cameraLauncher.launch(uri) }.onFailure {
-                captureFile?.delete()
-                captureFile = null
-                photoMessage = "Não foi possível abrir a câmera. Verifique se há um aplicativo de câmera disponível."
-            }
-        }.onFailure {
-            photoMessage = "Não foi possível abrir a câmera. Verifique se há um aplicativo de câmera disponível."
-        }
-    }
-
+    var calendarDay by remember(selectedKey) { mutableStateOf<Int?>(null) }
+    val repository = remember(context) { com.example.data.ManualDaysOffRepository(context.applicationContext) }
     Card(modifier.fillMaxWidth(), shape = if (LocalExpressiveStyle.current.enabled) RoundedCornerShape(28.dp) else MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = palette?.section ?: MaterialTheme.colorScheme.surface)) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
@@ -627,36 +542,18 @@ private fun MyDaysOffCard(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         androidx.compose.material3.OutlinedButton(
                             onClick = { selectedDays = employee?.daysOff.orEmpty().toSet(); editing = !editing; saveMessage = null },
-                            enabled = !saving && !photoUploadBusy,
+                            enabled = !saving,
                             modifier = Modifier.weight(1f),
                             colors = palette?.let { androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = it.accent) }
                                 ?: androidx.compose.material3.ButtonDefaults.outlinedButtonColors()
                         ) { Text(if (editing) "Fechar" else "Adicionar folgas", style = MaterialTheme.typography.labelMedium, maxLines = 1) }
-                        val savedPhotoUrl = employee?.rosterPhotoUrl?.takeIf { it.isNotBlank() }
-                        androidx.compose.material3.OutlinedButton(
-                            onClick = { if (savedPhotoUrl != null) photoDialogUrl = savedPhotoUrl else captureRosterPhoto() },
-                            enabled = !photoUploadBusy,
-                            modifier = Modifier.weight(1f),
-                            colors = palette?.let { androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = it.accent) }
-                                ?: androidx.compose.material3.ButtonDefaults.outlinedButtonColors()
-                        ) {
-                            if (photoUploadBusy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                            else if (savedPhotoUrl != null) Text("Foto Registrada", style = MaterialTheme.typography.labelMedium, maxLines = 1)
-                            else {
-                                Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(17.dp))
-                                Spacer(Modifier.width(5.dp))
-                                Text("Registrar Foto", style = MaterialTheme.typography.labelMedium, maxLines = 1)
-                            }
-                        }
                     }
-                    photoMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = if (it.startsWith("Foto salva")) (palette?.accent ?: MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.error) }
                 }
+
                 when {
-                    registration.isNullOrBlank() -> Text("A matrícula do perfil Nossa Gente não está disponível para localizar sua escala.", color = palette?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant)
                     !editing && employee == null -> Text("Nenhuma folga cadastrada para ${monthName(selectedMonth)}/$selectedYear. Toque em Adicionar folgas para escolher as datas.", color = palette?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant)
                     else -> {
                         Spacer(Modifier.height(14.dp))
-                        Text("Matrícula ${employee?.registration ?: registration}", style = MaterialTheme.typography.labelMedium, color = palette?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant)
                         if (!employee?.shift.isNullOrBlank()) Text(employee!!.shift, style = MaterialTheme.typography.bodyMedium, color = palette?.text ?: MaterialTheme.colorScheme.onSurface)
                         Spacer(Modifier.height(12.dp))
                         Text("Folgas", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = palette?.text ?: MaterialTheme.colorScheme.onSurface)
@@ -696,14 +593,12 @@ private fun MyDaysOffCard(
                                     saving = true
                                     saveMessage = null
                                     scope.launch {
-                                        com.example.data.NossaGenteApi(context.applicationContext)
-                                            .saveMyScheduleDaysOff(selectedYear, selectedMonth, selectedDays.toList())
+                                        runCatching { repository.save(selectedYear, selectedMonth, selectedDays.sorted()) }
                                             .onSuccess {
-                                                onDaysOffSaved(selectedKey, selectedDays.sorted())
                                                 editing = false
-                                                saveMessage = "Folgas salvas no seu login Nossa Gente. Disponíveis também em outro aparelho."
+                                                saveMessage = "Folgas salvas no aparelho." + if (repository.hasAccount()) " Sincronização da conta ativada." else ""
                                             }
-                                            .onFailure { saveMessage = it.message ?: "Não foi possível salvar as folgas." }
+                                            .onFailure { saveMessage = "Não foi possível salvar as folgas no aparelho." }
                                         saving = false
                                     }
                                 },
@@ -726,7 +621,6 @@ private fun MyDaysOffCard(
             }
         }
     }
-    photoDialogUrl?.let { url -> RosterPhotoViewerDialog(url, onDismiss = { photoDialogUrl = null }) }
     calendarDay?.let { day ->
         DaysOffCalendarDialog(selectedYear, selectedMonth, day, onDismiss = { calendarDay = null })
     }

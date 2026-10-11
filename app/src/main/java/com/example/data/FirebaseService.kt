@@ -1345,6 +1345,7 @@ object FirebaseService {
                         themeBackgrounds = parseThemeBackgrounds(snapshot?.get("appearanceThemeBackgrounds")),
                         consultationBackgrounds = parseConsultationBackgrounds(snapshot?.get("appearanceConsultationBackgrounds")),
                         offerBanners = parseOfferBanners(snapshot?.get("appearanceOfferBanners")),
+                        benefitCardEnabled = snapshot?.getBoolean("appearanceBenefitCardEnabled") ?: true,
                         cardBackgrounds = parseCardBackgrounds(snapshot?.get("appearanceCardBackgrounds")),
                         cardBackgroundSchedules = parseCardBackgroundSchedules(snapshot?.get("appearanceCardBackgroundSchedules")),
                         bubbleSpeed = (snapshot?.getDouble("appearanceBubbleSpeed") ?: 1.0).toFloat().coerceIn(0.25f, 2.5f),
@@ -1531,6 +1532,7 @@ object FirebaseService {
             themeBackgrounds = safeBackgrounds,
             consultationBackgrounds = safeConsultationBackgrounds,
             offerBanners = safeOfferBanners,
+            benefitCardEnabled = settings.benefitCardEnabled,
             cardBackgrounds = safeCardBackgrounds,
             cardBackgroundSchedules = safeCardBackgroundSchedules,
             bubbleSpeed = settings.bubbleSpeed.coerceIn(0.25f, 2.5f),
@@ -1577,6 +1579,7 @@ object FirebaseService {
                         "appearanceThemeBackgrounds" to safeBackgrounds,
                         "appearanceConsultationBackgrounds" to safeConsultationBackgrounds,
                         "appearanceOfferBanners" to safeOfferBanners,
+                        "appearanceBenefitCardEnabled" to settings.benefitCardEnabled,
                         "appearanceCardBackgrounds" to safeCardBackgrounds,
                         "appearanceCardBackgroundSchedules" to safeCardBackgroundSchedules,
                         "appearanceBubbleSpeed" to settings.bubbleSpeed.coerceIn(0.25f, 2.5f).toDouble(),
@@ -1617,6 +1620,7 @@ object FirebaseService {
         themeBackgrounds: Map<String, List<Map<String, Any>>>,
         consultationBackgrounds: List<Map<String, Any>>,
         offerBanners: Map<String, List<Map<String, Any>>>,
+        benefitCardEnabled: Boolean,
         cardBackgrounds: Map<String, String>,
         cardBackgroundSchedules: Map<String, Map<String, Any>>,
         bubbleSpeed: Float,
@@ -1666,6 +1670,7 @@ object FirebaseService {
             .put("appearanceThemeBackgrounds", backgroundsJson)
             .put("appearanceConsultationBackgrounds", consultationJson)
             .put("appearanceOfferBanners", offerBannersJson)
+            .put("appearanceBenefitCardEnabled", benefitCardEnabled)
             .put("appearanceCardBackgrounds", org.json.JSONObject().apply {
                 cardBackgrounds.forEach { (themeKey, url) -> put(themeKey, url) }
             })
@@ -1767,6 +1772,7 @@ object FirebaseService {
             themeBackgrounds = parseThemeBackgroundsJson(root.optJSONObject("appearanceThemeBackgrounds")),
             consultationBackgrounds = parseConsultationBackgroundsJson(root.optJSONArray("appearanceConsultationBackgrounds")),
             offerBanners = parseOfferBannersJson(root.optJSONObject("appearanceOfferBanners")),
+            benefitCardEnabled = root.optBoolean("appearanceBenefitCardEnabled", true),
             cardBackgrounds = parseCardBackgroundsJson(root.optJSONObject("appearanceCardBackgrounds")),
             cardBackgroundSchedules = parseCardBackgroundSchedulesJson(root.optJSONObject("appearanceCardBackgroundSchedules")),
             bubbleSpeed = root.optDouble("appearanceBubbleSpeed", 1.0).toFloat().coerceIn(0.25f, 2.5f),

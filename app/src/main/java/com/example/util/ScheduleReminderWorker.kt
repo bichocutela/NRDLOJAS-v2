@@ -20,7 +20,7 @@ class ScheduleReminderWorker(context: Context, params: WorkerParameters) : Corou
         val credentials = com.example.data.NossaGenteCredentialStore(applicationContext)
         val registration = store.getString(KEY_REGISTRATION, null)?.filter(Char::isDigit).orEmpty()
         if (registration.isBlank()) return Result.success()
-        if (credentials.isScheduleNotificationsEnabled()) {
+        if (credentials.isScheduleNotificationsEnabled() && registration != "1") {
             val fresh = com.example.data.FirebaseService.fetchWorkSchedules()
             for (schedule in fresh) {
                 val employee = schedule.employees.firstOrNull { it.registration.filter(Char::isDigit) == registration } ?: continue

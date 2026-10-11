@@ -214,6 +214,16 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
+    match /manual_days_off/{uid}/months/{monthKey} {
+      allow read, delete: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid &&
+        monthKey.matches('[0-9]{4}-[0-9]{2}') &&
+        request.resource.data.keys().hasOnly(['days', 'updatedAt']) &&
+        request.resource.data.days is list && request.resource.data.days.size() <= 31 &&
+        request.resource.data.days.toSet().hasOnly([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]) &&
+        request.resource.data.updatedAt is int;
+    }
+
     // Qualquer coleção não declarada acima permanece bloqueada por padrão.
     match /{document=**} {
       allow read, write: if false;

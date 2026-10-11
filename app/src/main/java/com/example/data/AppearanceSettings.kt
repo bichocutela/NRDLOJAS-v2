@@ -13,6 +13,7 @@ class AppearanceSettings(
     val themeBackgrounds: Map<String, List<ThemeBackground>> = emptyMap(),
     val consultationBackgrounds: List<ThemeBackground> = emptyList(),
     val offerBanners: Map<String, List<ThemeBackground>> = emptyMap(),
+    val benefitCardEnabled: Boolean = true,
     val cardBackgrounds: Map<String, String> = emptyMap(),
     val cardBackgroundSchedules: Map<String, ThemeBackground> = emptyMap(),
     val bubbleSpeed: Float = 1f,
@@ -98,6 +99,7 @@ class AppearanceSettings(
         themeBackgrounds: Map<String, List<ThemeBackground>> = this.themeBackgrounds,
         consultationBackgrounds: List<ThemeBackground> = this.consultationBackgrounds,
         offerBanners: Map<String, List<ThemeBackground>> = this.offerBanners,
+        benefitCardEnabled: Boolean = this.benefitCardEnabled,
         cardBackgrounds: Map<String, String> = this.cardBackgrounds,
         cardBackgroundSchedules: Map<String, ThemeBackground> = this.cardBackgroundSchedules,
         bubbleSpeed: Float = this.bubbleSpeed,
@@ -124,6 +126,7 @@ class AppearanceSettings(
         themeBackgrounds = themeBackgrounds,
         consultationBackgrounds = consultationBackgrounds,
         offerBanners = offerBanners,
+        benefitCardEnabled = benefitCardEnabled,
         cardBackgrounds = cardBackgrounds,
         cardBackgroundSchedules = cardBackgroundSchedules,
         bubbleSpeed = bubbleSpeed,
@@ -154,6 +157,7 @@ class AppearanceSettings(
             themeBackgrounds == other.themeBackgrounds &&
             consultationBackgrounds == other.consultationBackgrounds &&
             offerBanners == other.offerBanners &&
+            benefitCardEnabled == other.benefitCardEnabled &&
             cardBackgrounds == other.cardBackgrounds &&
             cardBackgroundSchedules == other.cardBackgroundSchedules &&
             bubbleSpeed == other.bubbleSpeed &&
@@ -182,6 +186,7 @@ class AppearanceSettings(
         result = 31 * result + themeBackgrounds.hashCode()
         result = 31 * result + consultationBackgrounds.hashCode()
         result = 31 * result + offerBanners.hashCode()
+        result = 31 * result + benefitCardEnabled.hashCode()
         result = 31 * result + cardBackgrounds.hashCode()
         result = 31 * result + cardBackgroundSchedules.hashCode()
         result = 31 * result + bubbleSpeed.hashCode()
