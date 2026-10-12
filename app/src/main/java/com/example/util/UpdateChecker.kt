@@ -304,11 +304,8 @@ object UpdateChecker {
         handle: ApkDownloadHandle,
         versionTag: String
     ) {
-        if (!XiaomiSuperIslandUpdateNotifier.isAvailable(context)) return
-
         updateIslandScope.launch {
-            var lastProgress = -1
-            var lastStatus = -1
+            if (!XiaomiSuperIslandUpdateNotifier.isAvailable(context)) return@launch
 
             while (true) {
                 val state = runCatching { queryApkDownload(context, handle) }.getOrNull()
@@ -321,14 +318,12 @@ object UpdateChecker {
                     DownloadManager.STATUS_PENDING,
                     DownloadManager.STATUS_RUNNING,
                     DownloadManager.STATUS_PAUSED -> {
-                        if (state.progressPercent != lastProgress || state.status != lastStatus) {
+                        run {
                             XiaomiSuperIslandUpdateNotifier.showDownload(
                                 context,
                                 versionTag,
                                 state.progressPercent
                             )
-                            lastProgress = state.progressPercent
-                            lastStatus = state.status
                         }
                     }
 
