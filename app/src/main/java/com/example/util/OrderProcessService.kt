@@ -24,7 +24,7 @@ class OrderProcessService : Service() {
         val pending = PendingIntent.getActivity(this, NOTIFICATION_ID, target,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.ic_notification_default)
+            .setSmallIcon(if (running) R.drawable.ic_notification_document_reading else if (failed != null) R.drawable.ic_notification_document_attention else R.drawable.ic_notification_document_done)
             .setContentTitle(if (running) intent?.getStringExtra("phase") ?: "Processando…" else if (failed != null) "Processo interrompido" else "Processo Concluído")
             .setContentText(if (running) "Toque para acompanhar na mesma página." else failed ?: intent?.getStringExtra("result"))
             .setContentIntent(pending)
@@ -42,7 +42,7 @@ class OrderProcessService : Service() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val completedError = intent?.getStringExtra("completedError")
             val completion = NotificationCompat.Builder(this, CHANNEL)
-                .setSmallIcon(R.drawable.ic_notification_default)
+                .setSmallIcon(if (completedError == null) R.drawable.ic_notification_document_done else R.drawable.ic_notification_document_attention)
                 .setContentTitle(if (completedError == null) "Processo Concluído" else "Processo interrompido")
                 .setContentText(intent?.getStringExtra("completedName") + " • " + (completedError ?: "Toque para continuar."))
                 .setContentIntent(completedPending).setAutoCancel(true).build()

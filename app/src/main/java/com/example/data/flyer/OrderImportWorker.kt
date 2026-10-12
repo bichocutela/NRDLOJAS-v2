@@ -36,7 +36,7 @@ class OrderImportWorker(context: Context, parameters: WorkerParameters) : Corout
         val pending = PendingIntent.getActivity(applicationContext, notificationId, target,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(applicationContext, CHANNEL)
-            .setSmallIcon(R.drawable.ic_notification_default)
+            .setSmallIcon(if (!finished) R.drawable.ic_notification_document_reading else if (task.error == null) R.drawable.ic_notification_document_done else R.drawable.ic_notification_document_attention)
             .setContentTitle(if (finished) if (task.error == null) "Leitura concluída" else "Revisar leitura" else task.name)
             .setContentText(if (finished) task.error ?: (task.name + " • Toque para revisar.")
                 else (task.phase + " • " + task.progress + "%"))
