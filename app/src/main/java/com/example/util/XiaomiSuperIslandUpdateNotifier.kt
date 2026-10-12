@@ -10,6 +10,12 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.drawable.Icon
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -33,6 +39,8 @@ object XiaomiSuperIslandUpdateNotifier {
     private var focusAllowed = false
     private var lastProgress = -1
     private var lastVersion = ""
+    private var lastNight = -1
+    private var brandBitmap: Bitmap? = null
     private var lastPostedAt = -5_000L
     private const val BUSINESS = "nrd_app_update"
 
@@ -82,10 +90,11 @@ object XiaomiSuperIslandUpdateNotifier {
         if (!isAvailable(context)) return
         val safeProgress = progress.coerceIn(0, 100)
         val now = SystemClock.elapsedRealtime()
-        if (lastVersion == versionTag && lastProgress >= 0) {
+        val night = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        if (lastVersion == versionTag && lastProgress >= 0 && night == lastNight) {
             if (!XiaomiProgressPolicy.shouldPost(lastProgress, safeProgress, now - lastPostedAt)) return
         }
-        lastVersion = versionTag; lastProgress = safeProgress; lastPostedAt = now
+        lastVersion = versionTag; lastProgress = safeProgress; lastPostedAt = now; lastNight = night
         post(
             context = context,
             title = "NRD · baixando $versionTag",
@@ -140,12 +149,15 @@ object XiaomiSuperIslandUpdateNotifier {
     ) {
         createChannel(context)
 
+        val dark = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        val logo = brandImage(context)
         val statusIcon = if (ongoing) R.drawable.ic_notification_app_update else if (progress == 100) R.drawable.ic_notification_document_done else R.drawable.ic_notification_document_attention
         val pics = Bundle().apply {
             putParcelable(
                 "miui.focus.pic_imageText",
-                Icon.createWithResource(context, statusIcon)
+                Icon.createWithBitmap(logo)
             )
+            putParcelable("miui.focus.pic_status", Icon.createWithResource(context, statusIcon))
         }
 
         val islandJson = JSONObject().apply {
@@ -172,16 +184,16 @@ object XiaomiSuperIslandUpdateNotifier {
                                 put("type", 1)
                                 put("pic", "miui.focus.pic_imageText")
                             })
-                            put("miui.focus.paramtextInfo", JSONObject().apply {
-                                put("frontTitle", "NRD")
+                            put("textInfo", JSONObject().apply {
                                 put("title", detail)
                                 put("content", content)
-                                put("useHighLight", false)
+                                put("showHighlightColor", false)
+                                put("narrowFont", true)
                             })
                         })
                         put("picInfo", JSONObject().apply {
                             put("type", 1)
-                            put("pic", "miui.focus.pic_imageText")
+                            put("pic", "miui.focus.pic_status")
                         })
                     })
                     put("smallIslandArea", JSONObject().apply {
@@ -197,19 +209,34 @@ object XiaomiSuperIslandUpdateNotifier {
                         put("pic", "miui.focus.pic_imageText")
                     })
                 })
+                put("bgInfo", JSONObject().put("type", 1).put("colorBg", if (dark) "#171A21" else "#FAFBFF"))
                 put("baseInfo", JSONObject().apply {
                     put("title", title)
                     put("content", content)
+                    put("colorTitle", "#25324A")
+                    put("colorTitleDark", "#F3F5FC")
+                    put("colorContent", "#43516A")
+                    put("colorContentDark", "#CCD3E1")
                     put("type", 2)
                 })
                 put("hintInfo", JSONObject().apply {
                     put("type", 1)
                     put("title", detail)
+                    if (!ongoing && progress == 100) put("actionInfo", JSONObject().put("action", "miui.focus.action_install"))
                 })
             })
         }.toString()
 
+        val target = Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_OPEN_ABOUT, true)
+            .putExtra(MainActivity.EXTRA_INSTALL_READY_UPDATE, !ongoing && progress == 100)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val pending = PendingIntent.getActivity(context, NOTIFICATION_ID, target, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val extras = Bundle().apply {
+            if (!ongoing && progress == 100 && focusAllowed) {
+                putBundle("miui.focus.actions", Bundle().apply {
+                    putParcelable("miui.focus.action_install", android.app.Notification.Action.Builder(Icon.createWithResource(context, statusIcon), "Instalar", pending).build())
+                })
+            }
             if (focusAllowed) {
                 putString("miui.focus.param", islandJson)
                 putBundle("miui.focus.pics", pics)
@@ -217,11 +244,9 @@ object XiaomiSuperIslandUpdateNotifier {
             if (Build.VERSION.SDK_INT >= 36) putBoolean("android.requestPromotedOngoing", ongoing)
         }
 
-        val target = Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_OPEN_ABOUT, true)
-            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        val pending = PendingIntent.getActivity(context, NOTIFICATION_ID, target, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(statusIcon)
+            .setLargeIcon(logo)
             .setContentTitle(title)
             .setContentText(content)
             .setContentIntent(pending)
@@ -235,11 +260,26 @@ object XiaomiSuperIslandUpdateNotifier {
             .setAutoCancel(!ongoing)
             .addExtras(extras)
 
+        if (!ongoing && progress == 100) builder.addAction(statusIcon, "Instalar", pending)
+
         if (progress != null) {
             builder.setProgress(100, progress.coerceIn(0, 100), false)
         }
 
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
+    }
+
+    /** Keep the original logo lettering and aspect ratio, with a small cached notification bitmap. */
+    private fun brandImage(context: Context): Bitmap {
+        brandBitmap?.let { return it }
+        val decoded = BitmapFactory.decodeResource(context.resources, R.drawable.nrd_logo_multicolor,
+            BitmapFactory.Options().apply { inSampleSize = 8; inScaled = false }) ?: return Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888)
+        val bitmap = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888)
+        val height = 128f * decoded.height / decoded.width
+        Canvas(bitmap).drawBitmap(decoded, null, RectF(0f, (128f - height) / 2f, 128f, (128f + height) / 2f), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        decoded.recycle()
+        brandBitmap = bitmap
+        return bitmap
     }
 
     private fun createChannel(context: Context) {

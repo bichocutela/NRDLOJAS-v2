@@ -40,6 +40,8 @@ object UpdateChecker {
     private const val LATEST_RELEASE_URL = "https://api.github.com/repos/bichocutela/NRDLOJAS-v2/releases/latest"
     private const val LATEST_RELEASE_PAGE_URL = "https://github.com/bichocutela/NRDLOJAS-v2/releases/latest"
     private const val LATEST_RELEASE_APK_URL = "https://github.com/bichocutela/NRDLOJAS-v2/releases/latest/download/app-release.apk"
+    private var lastInstallerPath: String? = null
+    private var lastInstallerAt = -3_000L
     private val updateIslandScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
@@ -264,6 +266,8 @@ object UpdateChecker {
 
             val downloadId = manager.enqueue(request)
             val handle = ApkDownloadHandle(downloadId, file.absolutePath)
+            context.getSharedPreferences("nrd_ready_apk", Context.MODE_PRIVATE).edit()
+                .putLong("downloadId", downloadId).putString("path", file.absolutePath).apply()
             startXiaomiIslandProgressObserver(context.applicationContext, handle, versionTag)
             val onComplete = object : BroadcastReceiver() {
                 override fun onReceive(ctxt: Context, intent: Intent) {
@@ -357,6 +361,21 @@ object UpdateChecker {
             val progress = if (total > 0) ((done * 100L) / total).toInt().coerceIn(0, 100) else 0
             return ApkDownloadProgress(status, progress, handle.filePath, reason)
         }
+    }
+
+    suspend fun installLatestDownloadedApk(context: Context): Boolean {
+        val ready = withContext(Dispatchers.IO) {
+            val prefs = context.getSharedPreferences("nrd_ready_apk", Context.MODE_PRIVATE)
+            val id = prefs.getLong("downloadId", -1L)
+            val path = prefs.getString("path", null) ?: return@withContext null
+            val directory = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.canonicalFile ?: return@withContext null
+            val file = File(path).canonicalFile
+            if (id < 0 || file.parentFile != directory || !file.name.startsWith("update_") || !file.name.endsWith(".apk") || !file.isFile) return@withContext null
+            val state = queryApkDownload(context, ApkDownloadHandle(id, file.absolutePath))
+            file.takeIf { state?.status == DownloadManager.STATUS_SUCCESSFUL }
+        } ?: return false
+        installApk(context, ready)
+        return true
     }
 
     fun installDownloadedApk(context: Context, filePath: String) {
@@ -458,6 +477,7 @@ object UpdateChecker {
         }
     }
 
+    @Synchronized
     private fun installApk(context: Context, file: File) {
         try {
             if (!file.exists()) {
@@ -484,12 +504,15 @@ object UpdateChecker {
                 return
             }
 
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (lastInstallerPath == file.absolutePath && now - lastInstallerAt < 3_000L) return
             val intent = Intent(Intent.ACTION_VIEW)
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
             intent.setDataAndType(uri, "application/vnd.android.package-archive")
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             context.startActivity(intent)
+            lastInstallerPath = file.absolutePath; lastInstallerAt = now
         } catch (e: Exception) {
             e.printStackTrace()
             Toast.makeText(context, "Erro ao instalar APK", Toast.LENGTH_SHORT).show()

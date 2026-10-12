@@ -334,9 +334,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onPostResume() {
+        super.onPostResume()
+        if (intent?.getBooleanExtra(EXTRA_INSTALL_READY_UPDATE, false) == true) {
+            intent.removeExtra(EXTRA_INSTALL_READY_UPDATE)
+            lifecycleScope.launch {
+                runCatching { com.example.util.UpdateChecker.installLatestDownloadedApk(this@MainActivity) }
+            }
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_INSTALL_READY_UPDATE, false)) {
+            intent.removeExtra(EXTRA_INSTALL_READY_UPDATE)
+            lifecycleScope.launch { runCatching { com.example.util.UpdateChecker.installLatestDownloadedApk(this@MainActivity) } }
+        }
         captureSharedOrderPdf(intent)
         if (intent.action == com.example.util.OrderProcessService.ACTION_RESUME) {
             com.example.ui.VisualMixOrderProcesses.resume(intent?.getStringExtra("orderSessionId"))
@@ -420,6 +434,7 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
+        const val EXTRA_INSTALL_READY_UPDATE = "install_ready_update"
         const val EXTRA_OPEN_ABOUT = "open_about"
         const val EXTRA_OPEN_PROMOTIONS = "open_promotions"
         const val EXTRA_OPEN_PROFILE_SECTION = "open_profile_section"
