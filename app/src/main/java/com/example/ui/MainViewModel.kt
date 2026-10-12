@@ -543,6 +543,11 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             return false
         }
         repository.updateProduct(finalProduct)
+        if (oldProduct.name != finalProduct.name || oldProduct.category != finalProduct.category ||
+            oldProduct.unit != finalProduct.unit || oldProduct.imageUrl != finalProduct.imageUrl ||
+            oldProduct.categoryMemberships != finalProduct.categoryMemberships) {
+            FirebaseService.publishProductEvent("INFO_CHANGED", finalProduct.name, oldProduct.name, finalProduct.code)
+        }
         _syncMessage.emit("Produto atualizado na nuvem!")
         return true
     }
@@ -553,6 +558,7 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
             val success = FirebaseService.saveProduct(updatedProduct)
             if (success) {
                 repository.updateProduct(updatedProduct)
+                if (product.imageUrl != null) FirebaseService.publishProductEvent("INFO_CHANGED", product.name, null, product.code)
                 _syncMessage.emit("Foto removida com sucesso.")
                 return true
             }

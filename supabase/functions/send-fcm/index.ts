@@ -133,7 +133,7 @@ async function listProductNames(account: Record<string, string>, accountProject:
 async function sendEvent(
   account: Record<string, string>,
   accountProject: string,
-  title: "Produto adicionado" | "Código alterado" | "Sugestão corrigida" | "Atualização disponível" | "Escala inserida" | "Escala alterada",
+  title: "Produto adicionado" | "Produto alterado" | "Código alterado" | "Sugestão corrigida" | "Atualização disponível" | "Escala inserida" | "Escala alterada",
   messageBody: string,
   uid: string,
   productCode?: string,
@@ -141,9 +141,9 @@ async function sendEvent(
   mirrorToWeb = true,
 ) {
   const fcmToken = await accessToken(account, "https://www.googleapis.com/auth/firebase.messaging");
-  const type = title === "Código alterado" ? "CODE_CHANGED" : title === "Sugestão corrigida" ? "SUGGESTION_FIXED" : title === "Atualização disponível" ? "APP_UPDATE" : title === "Escala inserida" ? "SCHEDULE_INSERTED" : title === "Escala alterada" ? "SCHEDULE_CHANGED" : "NEW_PRODUCT";
+  const type = (title === "Código alterado" || title === "Produto alterado") ? "CODE_CHANGED" : title === "Sugestão corrigida" ? "SUGGESTION_FIXED" : title === "Atualização disponível" ? "APP_UPDATE" : title === "Escala inserida" ? "SCHEDULE_INSERTED" : title === "Escala alterada" ? "SCHEDULE_CHANGED" : "NEW_PRODUCT";
   const webLink = productCode ? "https://bichocutela.github.io/?product=" + encodeURIComponent(productCode) : "https://bichocutela.github.io/";
-  const message = { data: { title, body: messageBody, type, productCode: productCode ?? "", url: webLink } };
+  const message = { data: { title, body: messageBody, type, productCode: productCode ?? "", barcode: productCode ?? "", url: webLink } };
   // Android recebe apenas o payload data-only. A notificação visual é criada pelo app,
   // que já escolhe o canal correto por tipo e valida título/corpo antes de exibir.
   // Não inclua android.notification aqui: em alguns aparelhos isso faz o sistema
@@ -279,7 +279,7 @@ serve(async (request) => {
         const remove = await fetch(`https://firestore.googleapis.com/v1/projects/${accountProject}/databases/(default)/documents/products/${encodeURIComponent(previousCode)}`, { method: "DELETE", headers: { Authorization: `Bearer ${firestoreToken}` } });
         if (!remove.ok) throw new Error(`Produto salvo, mas não foi possível remover o código anterior (HTTP ${remove.status})`);
       }
-      const title = !previousCode ? "Produto adicionado" : previousCode !== code ? "Código alterado" : null;
+      const title = !previousCode ? "Produto adicionado" : previousCode !== code ? "Código alterado" : "Produto alterado";
       const notification = title ? await sendEvent(account, accountProject, title, name, identity.uid, code) : null;
       console.info("[send-fcm] Produto salvo", { uid: identity.uid, role, code, previousCode: previousCode || null });
       return json({ ok: true, role, notification });
@@ -295,19 +295,23 @@ serve(async (request) => {
       return json({ ok: true, role });
     }
     const { title, body: messageBody } = body;
-    const allowed = ["Produto adicionado", "Código alterado", "Sugestão corrigida", "Atualização disponível"];
+    const allowed = ["Produto adicionado", "Produto alterado", "Código alterado", "Sugestão corrigida", "Atualização disponível"];
     if (!allowed.includes(title) || typeof messageBody !== "string" || !messageBody) return json({ ok: false, error: "Unsupported notification payload" }, 400);
     const suggestionTopic = typeof body.topic === "string" ? body.topic.trim() : "";
     if (title === "Sugestão corrigida" && !/^suggestion_[A-Za-z0-9_\-]{8,890}$/.test(suggestionTopic)) {
       return json({ ok: false, error: "Invalid private suggestion topic" }, 400);
     }
+    const productEvent = title === "Produto adicionado" || title === "Produto alterado" || title === "Código alterado";
+    const productCode = typeof body.productCode === "string" ? body.productCode.trim() : "";
+    if (productCode.length > 60 || (productEvent && messageBody.length > 240)) return json({ ok: false, error: "Invalid product notification" }, 400);
+    // Older apps did not send a code: keep accepting those messages without fabricating one.
     const notification = await sendEvent(
       account,
       accountProject,
-      title as "Produto adicionado" | "Código alterado" | "Sugestão corrigida" | "Atualização disponível",
+      title as "Produto adicionado" | "Produto alterado" | "Código alterado" | "Sugestão corrigida" | "Atualização disponível",
       messageBody,
       identity.uid,
-      undefined,
+      productEvent ? productCode || undefined : undefined,
       title === "Sugestão corrigida" ? suggestionTopic : "products",
       title !== "Sugestão corrigida",
     );

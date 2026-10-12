@@ -29,7 +29,7 @@ import org.json.JSONObject
 /**
  * Camada opcional para acompanhar downloads reais de atualização na Super Island.
  *
- * Em aparelhos sem HyperOS/Super Island/permissão Focus, não faz nada.
+ * Usa Focus em Xiaomi e Live Updates em Android 16+ compatível com outras marcas.
  * O DownloadManager e as notificações normais continuam sendo a fonte principal.
  */
 object XiaomiSuperIslandUpdateNotifier {
@@ -39,7 +39,7 @@ object XiaomiSuperIslandUpdateNotifier {
     private var focusAllowed = false
     private var lastProgress = -1
     private var lastVersion = ""
-    private var lastNight = -1
+    private var lastAppearance = ""
     private var brandBitmap: Bitmap? = null
     private var lastPostedAt = -5_000L
     private const val BUSINESS = "nrd_app_update"
@@ -55,8 +55,9 @@ object XiaomiSuperIslandUpdateNotifier {
             return false
         }
 
+        if (!NotificationAppearance.enabled(context) || !NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
         val manufacturer = (Build.MANUFACTURER + " " + Build.BRAND).lowercase(java.util.Locale.ROOT)
-        if (listOf("xiaomi", "redmi", "poco").none { it in manufacturer }) return false
+        if (listOf("xiaomi", "redmi", "poco").none { it in manufacturer }) { focusAllowed = false; return Build.VERSION.SDK_INT >= 36 }
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
         val now = SystemClock.elapsedRealtime()
         if (now - capabilityCheckedAt < 30_000L) return focusAllowed || Build.VERSION.SDK_INT >= 36
@@ -85,16 +86,22 @@ object XiaomiSuperIslandUpdateNotifier {
         return focusAllowed || Build.VERSION.SDK_INT >= 36
     }
 
+    /** Xiaomi-only Focus permission. Do not promote one-off product alerts as Android Live Updates. */
+    @Synchronized
+    internal fun canShowProductFocus(context: Context): Boolean {
+        return isAvailable(context) && focusAllowed
+    }
+
     @Synchronized
     fun showDownload(context: Context, versionTag: String, progress: Int) {
         if (!isAvailable(context)) return
         val safeProgress = progress.coerceIn(0, 100)
         val now = SystemClock.elapsedRealtime()
-        val night = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-        if (lastVersion == versionTag && lastProgress >= 0 && night == lastNight) {
+        val appearance = NotificationAppearance.palette(context).key
+        if (lastVersion == versionTag && lastProgress >= 0 && appearance == lastAppearance) {
             if (!XiaomiProgressPolicy.shouldPost(lastProgress, safeProgress, now - lastPostedAt)) return
         }
-        lastVersion = versionTag; lastProgress = safeProgress; lastPostedAt = now; lastNight = night
+        lastVersion = versionTag; lastProgress = safeProgress; lastPostedAt = now; lastAppearance = appearance
         post(
             context = context,
             title = "NRD · baixando $versionTag",
@@ -225,7 +232,8 @@ object XiaomiSuperIslandUpdateNotifier {
                     if (!ongoing && progress == 100) put("actionInfo", JSONObject().put("action", "miui.focus.action_install"))
                 })
             })
-        }.toString()
+        }
+        NotificationAppearance.applyFocus(context, islandJson.getJSONObject("param_v2"), pics)
 
         val target = Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_OPEN_ABOUT, true)
             .putExtra(MainActivity.EXTRA_INSTALL_READY_UPDATE, !ongoing && progress == 100)
@@ -238,7 +246,7 @@ object XiaomiSuperIslandUpdateNotifier {
                 })
             }
             if (focusAllowed) {
-                putString("miui.focus.param", islandJson)
+                putString("miui.focus.param", islandJson.toString())
                 putBundle("miui.focus.pics", pics)
             }
             if (Build.VERSION.SDK_INT >= 36) putBoolean("android.requestPromotedOngoing", ongoing)
@@ -270,7 +278,8 @@ object XiaomiSuperIslandUpdateNotifier {
     }
 
     /** Keep the original logo lettering and aspect ratio, with a small cached notification bitmap. */
-    private fun brandImage(context: Context): Bitmap {
+    @Synchronized
+    internal fun brandImage(context: Context): Bitmap {
         brandBitmap?.let { return it }
         val decoded = BitmapFactory.decodeResource(context.resources, R.drawable.nrd_logo_multicolor,
             BitmapFactory.Options().apply { inSampleSize = 8; inScaled = false }) ?: return Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888)
@@ -287,10 +296,10 @@ object XiaomiSuperIslandUpdateNotifier {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Atualizações na Super Island",
+            "Download de atualização",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Progresso de atualização do NRD em aparelhos Xiaomi compatíveis."
+            description = "Progresso de atualização do NRD na interface nativa dos aparelhos compatíveis."
         }
         manager.createNotificationChannel(channel)
     }

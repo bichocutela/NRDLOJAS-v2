@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
@@ -2072,6 +2073,12 @@ fun MyApplicationTheme(
         isExpressive -> ExpressiveShapes
         isGlassSoft -> GlassSoftShapes
         else -> MaterialTheme.shapes
+    }
+
+    val notificationContext = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(appearanceMode, colorScheme.primary) {
+        com.example.util.NotificationAppearance.rememberAppTheme(
+            notificationContext, appearanceMode, colorScheme.primary.toArgb())
     }
 
     val drawerIsOpen = remember { MutableStateFlow(false) }

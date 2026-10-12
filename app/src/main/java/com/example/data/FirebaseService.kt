@@ -201,12 +201,12 @@ object FirebaseService {
             }
 
             
-            if (type != "NEW_PRODUCT" && type != "CODE_CHANGED") {
+            if (type != "NEW_PRODUCT" && type != "CODE_CHANGED" && type != "INFO_CHANGED") {
                 Log.d("FirebaseService", "Evento FCM ignorado: tipo não suportado ($type)")
                 return
             }
 
-            val title = if (type == "NEW_PRODUCT") "Produto adicionado" else "Código alterado"
+            val title = when (type) { "NEW_PRODUCT" -> "Produto adicionado"; "CODE_CHANGED" -> "Código alterado"; else -> "Produto alterado" }
             val text = productName
 
             val json = org.json.JSONObject()
@@ -214,6 +214,8 @@ object FirebaseService {
             json.put("title", title)
             json.put("body", text)
             json.put("topic", "products")
+            json.put("productCode", productCode)
+            json.put("barcode", productCode)
 
             val requestBody = okhttp3.RequestBody.create("application/json".toMediaType(), json.toString())
             val firebaseToken = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token

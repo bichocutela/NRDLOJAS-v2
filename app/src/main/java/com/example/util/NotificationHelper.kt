@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
 import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
@@ -39,8 +38,8 @@ object NotificationHelper {
             }
             notificationManager.createNotificationChannel(channelAdded)
 
-            val channelCodeChanged = NotificationChannel("product_code_changed", "Código alterado", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Notificações quando o código de um produto é alterado"
+            val channelCodeChanged = NotificationChannel("product_code_changed", "Produto alterado", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Notificações quando produtos ou seus códigos são alterados"
             }
             notificationManager.createNotificationChannel(channelCodeChanged)
 
@@ -94,7 +93,7 @@ object NotificationHelper {
     private fun smallIconForType(type: String): Int = ProfileNotificationRouting.iconRes(type)
 
     private fun largeIconForNotification(context: Context) =
-        BitmapFactory.decodeResource(context.resources, R.drawable.icon_multicolor_original)
+        XiaomiSuperIslandUpdateNotifier.brandImage(context)
 
     fun showProductEventNotification(context: Context, type: String, productName: String, oldName: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -132,7 +131,7 @@ object NotificationHelper {
     
     fun channelIdForType(type: String): String? = when (type) {
         "NEW_PRODUCT" -> "product_added"
-        "CODE_CHANGED" -> "product_code_changed"
+        "CODE_CHANGED", "INFO_CHANGED", "NAME_CHANGED" -> "product_code_changed"
         "SUGGESTION_FIXED" -> "suggestion_fixed"
         "APP_UPDATE" -> "app_update"
         "PROMOTION_UPDATED" -> "promotion_updates"
@@ -198,6 +197,7 @@ object NotificationHelper {
     private fun productPendingIntent(context: Context, type: String, productCode: String): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            data = android.net.Uri.parse("nrd://product/" + android.net.Uri.encode(productCode) + "/" + type)
             putExtra(MainActivity.EXTRA_OPEN_PRODUCT_CODE, productCode)
             putExtra("type", type)
         }
@@ -230,7 +230,8 @@ object NotificationHelper {
         title: String,
         body: String,
         productCode: String? = null,
-        notificationTag: String? = null
+        notificationTag: String? = null,
+        productBarcode: String? = null
     ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -258,10 +259,10 @@ object NotificationHelper {
         if (notificationTag != null) builder.setOnlyAlertOnce(true)
 
         when (type) {
-            "NEW_PRODUCT", "CODE_CHANGED" -> {
-                productCode?.takeIf { it.isNotBlank() }?.let { code ->
-                    builder.setContentIntent(productPendingIntent(context, type, code))
-                }
+            "NEW_PRODUCT", "CODE_CHANGED", "INFO_CHANGED", "NAME_CHANGED" -> {
+                val content = ProductNotificationContent.from(body, productCode, productBarcode)
+                val pending = content.code.takeIf { it.isNotBlank() }?.let { productPendingIntent(context, type, it) }
+                ProductDynamicNotification.decorate(context, builder, type, title, content, pending)
             }
             "APP_UPDATE" -> builder.setContentIntent(appUpdatePendingIntent(context))
             "PROMOTION_UPDATED" -> builder.setContentIntent(promotionsPendingIntent(context))

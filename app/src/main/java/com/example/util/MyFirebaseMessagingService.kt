@@ -137,7 +137,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 )
             )
             Log.d("MyFirebaseMessaging", "Exibindo notificação local: type=$type, canal=$channelId")
-            NotificationHelper.showNotification(applicationContext, type, title, body, productCode)
+            NotificationHelper.showNotification(applicationContext, type, title, body, productCode, productBarcode = message.data["barcode"])
         }
     }
 
