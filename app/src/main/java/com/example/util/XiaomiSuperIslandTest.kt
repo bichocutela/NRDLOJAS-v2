@@ -303,10 +303,11 @@ object XiaomiSuperIslandTest {
                     put("title", detail)
                 })
             })
-        }.toString()
+        }
+        NotificationAppearance.applyFocus(context, islandJson.getJSONObject("param_v2"))
 
         val extras = Bundle().apply {
-            putString("miui.focus.param", islandJson)
+            putString("miui.focus.param", islandJson.toString())
             putBundle("miui.focus.pics", pics)
         }
 

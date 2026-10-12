@@ -2,15 +2,7 @@ package com.example.util
 
 import android.content.Context
 import android.content.res.Configuration
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.LinearGradient
-import android.graphics.Paint
-import android.graphics.Shader
-import android.graphics.drawable.Icon
-import android.os.Bundle
-import androidx.core.graphics.ColorUtils
 import org.json.JSONObject
 
 /** Device preferences. Native notification surfaces still belong to the operating system. */
@@ -39,52 +31,38 @@ object NotificationAppearance {
     fun palette(context: Context): Palette {
         val p = prefs(context)
         val systemDark = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        val dark = if (source(context) == "system") systemDark else when (p.getString("appMode", "system")) {
-            "dark" -> true
-            "light" -> false
-            else -> systemDark
-        }
+        val dark = NativeNotificationColors.expandedIsDark(isXiaomi(), systemDark)
         val style = style(context)
-        val accent = p.getInt("accent", Color.rgb(25, 118, 210))
-        val base = if (dark) Color.rgb(20, 24, 33) else Color.rgb(250, 251, 255)
-        val background = if (style == "solid") base else ColorUtils.blendARGB(base, accent, if (dark) .14f else .07f)
-        return Palette(dark, style, accent, background, if (dark) Color.WHITE else Color.rgb(25, 32, 44))
+        val accent = if (source(context) == "system" && android.os.Build.VERSION.SDK_INT >= 31) {
+            context.getColor(android.R.color.system_accent1_600)
+        } else p.getInt("accent", Color.rgb(25, 118, 210))
+        val colors = NativeNotificationColors.text(dark)
+        return Palette(dark, style, accent, colors.background, colors.title)
     }
-    private var cachedKey: String? = null
-    private var cachedBackground: Bitmap? = null
-    @Synchronized
-    fun applyFocus(context: Context, parameter: JSONObject, pictures: Bundle) {
+    private fun isXiaomi(): Boolean {
+        val brand = (android.os.Build.MANUFACTURER + " " + android.os.Build.BRAND).lowercase(java.util.Locale.ROOT)
+        return listOf("xiaomi", "redmi", "poco").any { it in brand }
+    }
+    fun applyFocus(context: Context, parameter: JSONObject) {
+        // HyperIsland expanded cards are always dark. Its notification shade can be light.
+        // Never copy the app's foreground into both native modes, or force a background
+        // that the OEM may ignore. Supply a genuine light/dark pair instead.
+        parameter.remove("bgInfo")
         val palette = palette(context)
-        val background = JSONObject().put("type", 1).put("colorBg", palette.backgroundHex)
-        if (palette.style in setOf("gradient", "glass")) {
-            if (cachedKey != palette.key || cachedBackground == null) {
-                val bitmap = Bitmap.createBitmap(320, 160, Bitmap.Config.ARGB_8888)
-                val end = ColorUtils.blendARGB(palette.background, palette.accent, if (palette.dark) .10f else .04f)
-                val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    shader = LinearGradient(0f, 0f, 320f, 160f, palette.background, end, Shader.TileMode.CLAMP)
-                }
-                val canvas = Canvas(bitmap)
-                canvas.drawRect(0f, 0f, 320f, 160f, paint)
-                if (palette.style == "glass") {
-                    paint.shader = null
-                    paint.color = if (palette.dark) 0x0CFFFFFF else 0x30FFFFFF
-                    canvas.drawOval(-50f, -85f, 310f, 45f, paint)
-                }
-                // Small cache; no wallpaper capture, blur loop or background animation.
-                cachedKey = palette.key
-                cachedBackground = bitmap
-            }
-            pictures.putParcelable("miui.focus.pic_bg", Icon.createWithBitmap(cachedBackground!!))
-            background.put("picBg", "miui.focus.pic_bg")
-        }
-        parameter.put("bgInfo", background)
+        val light = NativeNotificationColors.text(false)
+        val dark = NativeNotificationColors.text(true)
         for (component in listOf("baseInfo", "hintInfo")) {
             parameter.optJSONObject(component)?.let { info ->
-                for (field in listOf("colorTitle", "colorContent", "colorSubTitle", "colorSubContent", "colorExtraTitle")) {
-                    // The chosen background is fixed to the user's preference, so both OEM modes
-                    // receive the matching foreground (even when app and phone modes differ).
-                    info.put(field, palette.foregroundHex)
-                    info.put(field + "Dark", palette.foregroundHex)
+                for (field in listOf("colorTitle", "colorSubTitle", "colorExtraTitle")) {
+                    info.put(field, hex(light.title)).put(field + "Dark", hex(dark.title))
+                }
+                for (field in listOf("colorContent", "colorSubContent")) {
+                    info.put(field, hex(light.body)).put(field + "Dark", hex(dark.body))
+                }
+                info.optJSONObject("actionInfo")?.let { action ->
+                    action.put("actionTitleColor", hex(light.title)).put("actionTitleColorDark", hex(dark.title))
+                    action.put("actionBgColor", hex(NativeNotificationColors.button(false, palette.accent, palette.style)))
+                    action.put("actionBgColorDark", hex(NativeNotificationColors.button(true, palette.accent, palette.style)))
                 }
             }
         }

@@ -15,7 +15,6 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
-import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -156,7 +155,6 @@ object XiaomiSuperIslandUpdateNotifier {
     ) {
         createChannel(context)
 
-        val dark = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         val logo = brandImage(context)
         val statusIcon = if (ongoing) R.drawable.ic_notification_app_update else if (progress == 100) R.drawable.ic_notification_document_done else R.drawable.ic_notification_document_attention
         val pics = Bundle().apply {
@@ -216,7 +214,6 @@ object XiaomiSuperIslandUpdateNotifier {
                         put("pic", "miui.focus.pic_imageText")
                     })
                 })
-                put("bgInfo", JSONObject().put("type", 1).put("colorBg", if (dark) "#171A21" else "#FAFBFF"))
                 put("baseInfo", JSONObject().apply {
                     put("title", title)
                     put("content", content)
@@ -233,7 +230,7 @@ object XiaomiSuperIslandUpdateNotifier {
                 })
             })
         }
-        NotificationAppearance.applyFocus(context, islandJson.getJSONObject("param_v2"), pics)
+        NotificationAppearance.applyFocus(context, islandJson.getJSONObject("param_v2"))
 
         val target = Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_OPEN_ABOUT, true)
             .putExtra(MainActivity.EXTRA_INSTALL_READY_UPDATE, !ongoing && progress == 100)

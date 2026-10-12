@@ -19,7 +19,7 @@ object ProductDynamicNotification {
         pending?.let { builder.setContentIntent(it).addAction(ProfileNotificationRouting.iconRes(type), "Ir pro app", it) }
         val barcode = barcode(content.barcode)
         if (barcode != null) builder.setStyle(NotificationCompat.BigPictureStyle().bigPicture(barcode).setSummaryText(content.detail))
-        builder.setColor(NotificationAppearance.palette(context).accent)
+        // Native Android templates choose their own readable text, icons and surfaces.
         if (pending == null || !XiaomiSuperIslandUpdateNotifier.canShowProductFocus(context)) return
         val logo = XiaomiSuperIslandUpdateNotifier.brandImage(context)
         val pictures = Bundle().apply {
@@ -48,9 +48,8 @@ object ProductDynamicNotification {
                     put("picInfo", JSONObject().put("type", 1).put("pic", "miui.focus.pic_product"))
                     put("textInfo", JSONObject().put("title", if (type == "NEW_PRODUCT") "Novo produto" else "Produto alterado").put("content", content.description))
                 }))
-                put("shareData", JSONObject().put("title", title).put("content", content.detail).put("pic", "miui.focus.pic_product"))
             })
-            put("baseInfo", JSONObject().put("type", 2).put("title", content.description).put("content", "Código: ${content.code}").put("extraTitle", title))
+            put("baseInfo", JSONObject().put("type", 2).put("title", content.description).put("content", "Código: ${content.code}"))
             put("hintInfo", JSONObject().apply {
                 put("type", 2)
                 put("title", content.barcode)
@@ -59,7 +58,7 @@ object ProductDynamicNotification {
                 put("actionInfo", JSONObject().put("action", "miui.focus.action_product"))
             })
         }
-        NotificationAppearance.applyFocus(context, parameter, pictures)
+        NotificationAppearance.applyFocus(context, parameter)
         builder.addExtras(Bundle().apply {
             putString("miui.focus.param", JSONObject().put("param_v2", parameter).toString())
             putBundle("miui.focus.pics", pictures)

@@ -191,6 +191,7 @@ jobs:
           --tests 'com.example.ui.DynamicMediaUrlTest' \
           --tests 'com.example.ui.theme.GlassSoftThemeTest' \
           --tests 'com.example.ui.theme.ExpressiveThemeTest' \
+          --tests 'com.example.util.NativeNotificationColorsTest' \
           --tests 'com.example.util.ProductNotificationContentTest' \
           --tests 'com.example.util.XiaomiProgressPolicyTest' \
           --tests 'com.example.util.ProfileNotificationRoutingTest' \
