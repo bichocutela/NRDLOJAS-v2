@@ -73,14 +73,14 @@ object ProductDynamicNotification {
 
     private fun barcode(value: String): Bitmap? = runCatching {
         if (value.isBlank() || value.length > 60 || value.any { it.code !in 32..126 }) return@runCatching null
-        val raw = MultiFormatWriter().encode(value, BarcodeFormat.CODE_128, 1, 96)
+        val raw = MultiFormatWriter().encode(value, BarcodeFormat.CODE_128, 1, 64)
         val quiet = 16
-        val scale = (768 / (raw.width + quiet * 2)).coerceAtLeast(1)
+        val scale = (512 / (raw.width + quiet * 2)).coerceAtLeast(1)
         val width = (raw.width + quiet * 2) * scale
-        val pixels = IntArray(width * 128) { Color.WHITE }
+        val pixels = IntArray(width * 96) { Color.WHITE }
         for (x in 0 until raw.width) if (raw[x, 0]) {
-            for (dx in 0 until scale) for (y in 16 until 112) pixels[y * width + (x + quiet) * scale + dx] = Color.BLACK
+            for (dx in 0 until scale) for (y in 16 until 80) pixels[y * width + (x + quiet) * scale + dx] = Color.BLACK
         }
-        Bitmap.createBitmap(pixels, width, 128, Bitmap.Config.ARGB_8888)
+        Bitmap.createBitmap(pixels, width, 96, Bitmap.Config.ARGB_8888)
     }.getOrNull()
 }

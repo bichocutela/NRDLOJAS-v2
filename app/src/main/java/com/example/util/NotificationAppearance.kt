@@ -58,17 +58,17 @@ object NotificationAppearance {
         val background = JSONObject().put("type", 1).put("colorBg", palette.backgroundHex)
         if (palette.style in setOf("gradient", "glass")) {
             if (cachedKey != palette.key || cachedBackground == null) {
-                val bitmap = Bitmap.createBitmap(480, 240, Bitmap.Config.ARGB_8888)
+                val bitmap = Bitmap.createBitmap(320, 160, Bitmap.Config.ARGB_8888)
                 val end = ColorUtils.blendARGB(palette.background, palette.accent, if (palette.dark) .10f else .04f)
                 val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    shader = LinearGradient(0f, 0f, 480f, 240f, palette.background, end, Shader.TileMode.CLAMP)
+                    shader = LinearGradient(0f, 0f, 320f, 160f, palette.background, end, Shader.TileMode.CLAMP)
                 }
                 val canvas = Canvas(bitmap)
-                canvas.drawRect(0f, 0f, 480f, 240f, paint)
+                canvas.drawRect(0f, 0f, 320f, 160f, paint)
                 if (palette.style == "glass") {
                     paint.shader = null
                     paint.color = if (palette.dark) 0x0CFFFFFF else 0x30FFFFFF
-                    canvas.drawOval(-80f, -130f, 470f, 70f, paint)
+                    canvas.drawOval(-50f, -85f, 310f, 45f, paint)
                 }
                 // Small cache; no wallpaper capture, blur loop or background animation.
                 cachedKey = palette.key
