@@ -82,7 +82,7 @@ object XiaomiSuperIslandUpdateNotifier {
         if (!isAvailable(context)) return
         val safeProgress = progress.coerceIn(0, 100)
         val now = SystemClock.elapsedRealtime()
-        if (lastVersion == versionTag && lastProgress >= 0 && safeProgress < 100) {
+        if (lastVersion == versionTag && lastProgress >= 0) {
             if (!XiaomiProgressPolicy.shouldPost(lastProgress, safeProgress, now - lastPostedAt)) return
         }
         lastVersion = versionTag; lastProgress = safeProgress; lastPostedAt = now
