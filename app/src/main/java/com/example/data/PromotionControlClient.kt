@@ -29,14 +29,25 @@ internal object PromotionControlClient {
                 .apply { if (token != null) header("x-firebase-token", token); if (device != null) header("x-device-session", device) }
                 .post(body.toString().toRequestBody("application/json".toMediaType())).build()
             client.newCall(request).execute().use { response ->
-                check(response.isSuccessful) { "Não foi possível sincronizar. Tente novamente." }
-                JSONObject(response.body?.string().orEmpty())
+                val text = response.body?.string().orEmpty()
+                val payload = runCatching { JSONObject(text) }.getOrNull()
+                check(response.isSuccessful && payload != null) {
+                    when (response.code) {
+                        401 -> "Sua sessão expirou. Entre novamente."
+                        403 -> "Sua conta não tem permissão para esta operação."
+                        409 -> "A loja foi alterada em outro aparelho. Tente novamente."
+                        400 -> "Não foi possível salvar os dados. Confira o documento e tente novamente."
+                        else -> "Não foi possível confirmar o salvamento. Confira a conexão e tente novamente."
+                    }
+                }
+                payload
             }
         }
     }
     suspend fun read(path: String): Map<String, Any> = map(request(JSONObject().put("operation", "read").put("path", path)).getJSONObject("data"))
     suspend fun write(path: String, data: Map<String, Any?>, merge: Boolean = false) {
-        request(JSONObject().put("operation", "write").put("path", path).put("data", JSONObject(data)).put("merge", merge))
+        val result = request(JSONObject().put("operation", "write").put("path", path).put("data", JSONObject(data)).put("merge", merge))
+        check(result.optBoolean("ok", false)) { "O servidor não confirmou o salvamento. Tente novamente." }
     }
     fun observe(path: String) = flow {
         while (true) {

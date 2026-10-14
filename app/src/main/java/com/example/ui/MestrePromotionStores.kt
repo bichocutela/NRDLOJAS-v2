@@ -21,19 +21,28 @@ import kotlinx.coroutines.launch
 internal fun MestrePromotionStores() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val stores by remember { PromotionStores.observe() }.collectAsState(initial = PromotionStores.defaults)
+    var stores by remember { mutableStateOf(PromotionStores.defaults) }
+    var refreshKey by remember { mutableIntStateOf(0) }
+    LaunchedEffect(refreshKey) {
+        val generation = refreshKey
+        PromotionStores.observe().collect { if (generation == refreshKey) stores = it }
+    }
     var selectedStore by remember { mutableStateOf("0012") }
     var analysis by remember { mutableStateOf<FlyerAnalysisResult?>(null) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    var publicationError by remember { mutableStateOf<String?>(null) }
+    var messageIsError by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             busy = true
             message = null
+            publicationError = null
+            messageIsError = false
             try {
                 analysis = FlyerImportEngine.analyzeVisualMixUri(context, uri)
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { message = failure.message ?: "Não foi possível ler o documento." }
+            catch (failure: Exception) { message = failure.message ?: "Não foi possível ler o documento."; messageIsError = true }
             finally { busy = false }
         }
     }
@@ -41,7 +50,7 @@ internal fun MestrePromotionStores() {
     Text("Habilitar lojas", style = MaterialTheme.typography.titleLarge)
     Text("Envie o mesmo Relatório de Produtos Alterados do Visual Mix usado em Consultar Preços. Confira a loja, os preços e as validades antes de publicar.")
     Text("Cidade Jardim atualiza os preços pelo ACP. O documento complementa as validades. Nas outras lojas, as ofertas De/Por vêm do documento publicado.", style = MaterialTheme.typography.bodySmall)
-    message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+    message?.let { Text(it, color = if (messageIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
     stores.forEach { store ->
         Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
@@ -51,9 +60,14 @@ internal fun MestrePromotionStores() {
                     Switch(checked = store.enabled, enabled = !busy && (store.code == "0012" || store.count > 0),
                         onCheckedChange = { enabled -> scope.launch {
                             busy = true
-                            try { PromotionStores.setEnabled(store.code, enabled); message = "Loja atualizada." }
+                            try {
+                                stores = PromotionStores.setEnabled(store.code, enabled)
+                                refreshKey++
+                                messageIsError = false
+                                message = "Loja atualizada."
+                            }
                             catch (cancelled: CancellationException) { throw cancelled }
-                            catch (failure: Exception) { message = failure.message }
+                            catch (failure: Exception) { message = failure.message ?: "Não foi possível atualizar a loja."; messageIsError = true }
                             finally { busy = false }
                         } })
                 }
@@ -62,6 +76,8 @@ internal fun MestrePromotionStores() {
                 OutlinedButton(enabled = !busy, onClick = {
                     selectedStore = store.code
                     analysis = null
+                    publicationError = null
+                    message = null
                     picker.launch(arrayOf("application/pdf", "text/plain", "image/*"))
                 }) { Text("Enviar documento Visual Mix") }
             }
@@ -72,6 +88,13 @@ internal fun MestrePromotionStores() {
         AlertDialog(onDismissRequest = { if (!busy) analysis = null },
             title = { Text("Publicar em ${StoreCatalog.nameFor(selectedStore)}?") },
             text = {
+                Column {
+                publicationError?.let { Text(it, color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(bottom = 8.dp), style = MaterialTheme.typography.bodyMedium) }
+                if (busy) {
+                    Text("Publicando as ofertas e confirmando a loja…", style = MaterialTheme.typography.bodySmall)
+                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 8.dp))
+                }
                 LazyColumn(Modifier.heightIn(max = 420.dp)) {
                     item { Column {
                     Text("${records.size} ofertas De/Por. ${result.offers.size - records.size} linhas de outras regras ou inválidas não serão publicadas.")
@@ -84,17 +107,28 @@ internal fun MestrePromotionStores() {
                         Text("${record.from ?: "Início não informado"} até ${record.to ?: "Fim não informado"}", style = MaterialTheme.typography.bodySmall)
                     } }
                 }
+                }
             },
-            confirmButton = { TextButton(enabled = !busy && records.isNotEmpty(), onClick = { scope.launch {
-                busy = true
-                try {
-                    PromotionStores.publish(selectedStore, result)
-                    analysis = null
-                    message = "Documento publicado e loja habilitada. As ofertas serão atualizadas automaticamente."
-                } catch (cancelled: CancellationException) { throw cancelled }
-                catch (failure: Exception) { message = failure.message ?: "Não foi possível publicar." }
-                finally { busy = false }
-            } }) { Text("Publicar e habilitar") } },
+            confirmButton = { TextButton(enabled = !busy && records.isNotEmpty(), onClick = {
+                if (!busy) {
+                    busy = true
+                    publicationError = null
+                    scope.launch {
+                        try {
+                            stores = PromotionStores.publish(selectedStore, result)
+                            refreshKey++
+                            analysis = null
+                            messageIsError = false
+                            message = "Documento publicado e loja habilitada. As ofertas serão atualizadas automaticamente."
+                        } catch (cancelled: CancellationException) { throw cancelled }
+                        catch (failure: Exception) {
+                            publicationError = failure.message ?: "Não foi possível publicar. Confira a conexão e tente novamente."
+                            message = publicationError
+                            messageIsError = true
+                        } finally { busy = false }
+                    }
+                }
+            }) { Text(if (busy) "Publicando…" else if (publicationError != null) "Tentar novamente" else "Publicar e habilitar") } },
             dismissButton = { TextButton(enabled = !busy, onClick = { analysis = null }) { Text("Cancelar") } })
     }
 }

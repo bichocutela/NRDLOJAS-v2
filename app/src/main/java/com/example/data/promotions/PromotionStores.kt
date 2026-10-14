@@ -53,13 +53,16 @@ internal object PromotionStores {
         require(code in StoreCatalog.codes)
     }
 
-    suspend fun setEnabled(code: String, enabled: Boolean) {
+    suspend fun setEnabled(code: String, enabled: Boolean): List<PromotionStore> {
         requireMaster(code)
         val store = read(true).first { it.code == code }
         require(!enabled || code == "0012" || store.count > 0) {
             "Envie e publique o documento Visual Mix desta loja antes de habilitar."
         }
         PromotionControlClient.write(config, mapOf(code to mapOf("enabled" to enabled)), merge = true)
+        val updated = read(true)
+        check(updated.first { it.code == code }.enabled == enabled) { "Não foi possível confirmar a alteração da loja. Tente novamente." }
+        return updated
     }
 
     fun records(analysis: FlyerAnalysisResult): List<StorePromotionRecord> = analysis.offers
@@ -70,30 +73,24 @@ internal object PromotionStores {
                 offer.validFrom ?: analysis.validFrom, offer.validTo ?: analysis.validTo)
         }.distinctBy { listOf(it.code, it.barcode, it.name, it.price, it.previous, it.from, it.to) }
 
-    suspend fun publish(code: String, analysis: FlyerAnalysisResult) {
+    suspend fun publish(code: String, analysis: FlyerAnalysisResult): List<PromotionStore> {
         requireMaster(code)
         val records = records(analysis)
         require(records.isNotEmpty()) { "O documento não contém ofertas De/Por válidas com código ou EAN." }
-        require(records.all { record ->
-            (record.from.isNullOrBlank() || AcpPromotionsRepository.isoDate(record.from) != null) &&
-                (record.to.isNullOrBlank() || AcpPromotionsRepository.isoDate(record.to) != null) &&
-                (record.from.isNullOrBlank() || record.to.isNullOrBlank() ||
-                    AcpPromotionsRepository.isoDate(record.from)!! <= AcpPromotionsRepository.isoDate(record.to)!!)
-        }) { "Confira as datas do documento: há uma validade inválida." }
-        require(records.size <= 10_000) { "O documento excede o limite de 10.000 ofertas." }
-        val revision = UUID.randomUUID().toString()
-        val pages = records.chunked(200)
-        // Immutable page IDs prevent a late reader from mixing two revisions.
-        pages.forEachIndexed { index, page ->
-            PromotionControlClient.write("config/promotion_${code}_${revision}_$index", mapOf(
-                "items" to page.map { mapOf("code" to it.code, "barcode" to it.barcode,
-                    "name" to it.name, "price" to it.price, "previous" to it.previous,
-                    "from" to it.from, "to" to it.to) }
-            ))
+        records.firstOrNull { record ->
+            (!record.from.isNullOrBlank() && AcpPromotionsRepository.isoDate(record.from) == null) ||
+                (!record.to.isNullOrBlank() && AcpPromotionsRepository.isoDate(record.to) == null) ||
+                (!record.from.isNullOrBlank() && !record.to.isNullOrBlank() &&
+                    (AcpPromotionsRepository.isoDate(record.from) ?: "") > (AcpPromotionsRepository.isoDate(record.to) ?: ""))
+        }?.let { record ->
+            error("Confira a validade de ${record.name}: ${record.from.orEmpty()} até ${record.to.orEmpty()}. Revise essa oferta no documento e envie novamente.")
         }
-        PromotionControlClient.write(config, mapOf(code to mapOf("enabled" to true, "revision" to revision,
-            "pages" to pages.size, "count" to records.size, "source" to analysis.sourceLabel,
-            "updatedAt" to System.currentTimeMillis())), merge = true)
+        require(records.size <= 10_000) { "O documento excede o limite de 10.000 ofertas." }
+        val writer = StorePublicationWriter(
+            write = { path, data, merge -> PromotionControlClient.write(path, data, merge) },
+            read = { path -> PromotionControlClient.read(path) }
+        )
+        return parse(writer.publish(code, UUID.randomUUID().toString(), records, analysis.sourceLabel, System.currentTimeMillis()))
     }
 
     suspend fun readRecords(store: PromotionStore): List<StorePromotionRecord> {
