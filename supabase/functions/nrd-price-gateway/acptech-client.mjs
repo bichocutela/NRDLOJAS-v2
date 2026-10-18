@@ -124,19 +124,23 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       const available = typeof body?.details === 'string' ? body.details.match(/only (\d+) rows/) : null;
       return {rows: [], total: available ? Number(available[1]) : 0};
     }
-    if (!response.ok) throw Error('ACPTECH_UPSTREAM_FAILURE');
+    if (!response.ok) {
+      console.warn('ACPTECH_TABLE_FAILURE', JSON.stringify({table: name, status: response.status,
+        code: /^[A-Z0-9_]+$/.test(String(body?.code ?? '')) ? body.code : null}));
+      throw Error('ACPTECH_UPSTREAM_FAILURE');
+    }
     const range = response.headers?.get?.('content-range') || '';
     const match = range.match(/\/([0-9]+|\*)$/);
     return {rows: Array.isArray(body) ? body : [], hasRange: Boolean(range), total: match && match[1] !== '*' ? Number(match[1]) : null};
   }
 
-  async function tableAll(name, query, token) {
+  async function tableAll(name, query, token, count = 'exact') {
     const rows = [];
     for (let page = 0; page < 100; page++) {
-      const result = await tablePage(name, {...query, limit: '250', offset: String(rows.length)}, token, 'exact');
+      const result = await tablePage(name, {...query, limit: '250', offset: String(rows.length)}, token, count);
       rows.push(...result.rows);
       if (rows.length > 10000) throw Error('ACPTECH_RESULT_TOO_LARGE');
-      if (!result.rows.length || (result.total != null && rows.length >= result.total) ||
+      if (!result.rows.length || (count === 'exact' && result.total != null && rows.length >= result.total) ||
           (!result.hasRange && result.rows.length < 250)) return rows;
     }
     throw Error('ACPTECH_INCOMPLETE_RESULT');
@@ -362,24 +366,25 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     // candidates from both chain prices and store overrides, then evaluate the
     // effective store values (including explicit zeroes that remove an offer).
     const condition = '(previous_price.gt.0,club_price.gt.0,and(leve_quantity.gt.0,pague_quantity.gt.0))';
+    // Read IDs first, as the official portal does for filtered catalogue reads.
+    // Wide rows plus an exact count on these unindexed commercial predicates
+    // can exceed the ACP database statement timeout.
     const candidates = await tableAll('chain_products', {
-      select: '*', chain_id: `eq.${auth.chainId}`, deleted_at: 'is.null',
+      select: 'id', chain_id: `eq.${auth.chainId}`, deleted_at: 'is.null',
       or: condition, order: 'id.asc'
-    }, auth.token);
-    const candidateIds = new Set(candidates.map(item => String(item.id)));
+    }, auth.token, 'planned');
     const localOffers = await tableAll('store_product_price_overrides', {
       select: 'chain_product_id', store_id: `eq.${auth.storeId}`,
       or: '(previous_price.gt.0,club_price.gt.0)', order: 'chain_product_id.asc'
-    }, auth.token);
-    const missing = [...new Set(localOffers.map(item => String(item.chain_product_id)))].filter(id => !candidateIds.has(id));
-    for (let offset = 0; offset < missing.length; offset += 100) {
-      candidates.push(...await tableAll('chain_products', {
+    }, auth.token, 'planned');
+    const ids = [...new Set([...candidates.map(item => item.id),
+      ...localOffers.map(item => item.chain_product_id)].filter(Boolean).map(String))];
+    for (let offset = 0; offset < ids.length; offset += 100) {
+      const rows = await tableAll('chain_products', {
         select: '*', chain_id: `eq.${auth.chainId}`, deleted_at: 'is.null',
-        id: `in.${encodeIn(missing.slice(offset, offset + 100))}`, order: 'id.asc'
-      }, auth.token));
-    }
-    for (let offset = 0; offset < candidates.length; offset += 100) {
-      for (const item of await hydrateProducts(auth, candidates.slice(offset, offset + 100))) {
+        id: `in.${encodeIn(ids.slice(offset, offset + 100))}`, order: 'id.asc'
+      }, auth.token, 'planned');
+      for (const item of await hydrateProducts(auth, rows)) {
         const price = Number(item.value), previous = Number(item.previousValue);
         const hasOffer = (price > 0 && previous > price) || Number(item.clubValue) > 0 ||
           (Number(item.quantityTake) > Number(item.quantityPay) && Number(item.quantityPay) > 0);
@@ -411,6 +416,8 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
           return {items: rows.slice(page * size, (page + 1) * size), pageIndex: page,
             totalCount: rows.length, totalPages: rows.length ? Math.ceil(rows.length / size) : 0};
         } catch (error) {
+          console.warn('ACPTECH_CONSULT_FAILURE', JSON.stringify({path: input.path,
+            error: /^ACPTECH_[A-Z_]+$/.test(String(error?.message)) ? error.message : String(error?.name ?? 'Error')}));
           if (attempt === 0 && /LOGIN|SESSION|UPSTREAM|STORE_NOT_FOUND|CHAIN_NOT_FOUND/.test(String(error?.message))) {
             session = null; campaignsCache = null; promotionsCache = null; continue;
           }
