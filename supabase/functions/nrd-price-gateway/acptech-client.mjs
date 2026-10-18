@@ -286,14 +286,19 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
         if (Number.isFinite(total) && total >= 0) result = {...result, total};
       } catch { /* planned count remains a safe fallback */ }
     }
-    const rows = result.rows;
+    const items = await hydrateProducts(auth, result.rows, enrichCampaigns);
+    const totalCount = result.total ?? (page * size + items.length + (items.length === size ? size : 0));
+    return {items, totalCount, pageIndex: page, pageSize: size};
+  }
+
+  async function hydrateProducts(auth, rows, enrichCampaigns = false) {
     const overrides = await storeOverrides(auth, rows.map(item => item.id).filter(Boolean));
     const campaignRows = enrichCampaigns ? await campaignItems(auth, rows) : [];
     const campaignFor = item => (Array.isArray(campaignRows) ? campaignRows : []).filter(candidate =>
       (item.code != null && candidate.code != null && String(item.code) === String(candidate.code)) ||
       (item.barcode && candidate.barcode && String(item.barcode) === String(candidate.barcode))
     );
-    const items = (Array.isArray(rows) ? rows : []).map(item => {
+    return (Array.isArray(rows) ? rows : []).map(item => {
       const campaigns = campaignFor(item);
       const override = overrides.get(String(item.id));
       const base = {...item};
@@ -326,8 +331,6 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
         imageUrl: merged.image_url ?? null, linkloja: null, productUrl: null
       };
     });
-    const totalCount = result.total ?? (page * size + items.length + (items.length === size ? size : 0));
-    return {items, totalCount, pageIndex: page, pageSize: size};
   }
 
   async function categories(auth) {
@@ -355,6 +358,35 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
         if (page === 99) throw Error('ACPTECH_INCOMPLETE_RESULT');
       }
     }
+    // Promotional fields can exist without a category association. Include
+    // candidates from both chain prices and store overrides, then evaluate the
+    // effective store values (including explicit zeroes that remove an offer).
+    const condition = '(previous_price.gt.0,club_price.gt.0,and(leve_quantity.gt.0,pague_quantity.gt.0))';
+    const candidates = await tableAll('chain_products', {
+      select: '*', chain_id: `eq.${auth.chainId}`, deleted_at: 'is.null',
+      or: condition, order: 'id.asc'
+    }, auth.token);
+    const candidateIds = new Set(candidates.map(item => String(item.id)));
+    const localOffers = await tableAll('store_product_price_overrides', {
+      select: 'chain_product_id', store_id: `eq.${auth.storeId}`,
+      or: '(previous_price.gt.0,club_price.gt.0)', order: 'chain_product_id.asc'
+    }, auth.token);
+    const missing = [...new Set(localOffers.map(item => String(item.chain_product_id)))].filter(id => !candidateIds.has(id));
+    for (let offset = 0; offset < missing.length; offset += 100) {
+      candidates.push(...await tableAll('chain_products', {
+        select: '*', chain_id: `eq.${auth.chainId}`, deleted_at: 'is.null',
+        id: `in.${encodeIn(missing.slice(offset, offset + 100))}`, order: 'id.asc'
+      }, auth.token));
+    }
+    for (let offset = 0; offset < candidates.length; offset += 100) {
+      for (const item of await hydrateProducts(auth, candidates.slice(offset, offset + 100))) {
+        const price = Number(item.value), previous = Number(item.previousValue);
+        const hasOffer = (price > 0 && previous > price) || Number(item.clubValue) > 0 ||
+          (Number(item.quantityTake) > Number(item.quantityPay) && Number(item.quantityPay) > 0);
+        if (hasOffer && withinValidity(item, now())) all.set(String(item.id), item);
+      }
+    }
+    if (all.size > 10000) throw Error('ACPTECH_RESULT_TOO_LARGE');
     promotionsCache = [...all.values()]; promotionsAt = now();
     return promotionsCache;
   }
