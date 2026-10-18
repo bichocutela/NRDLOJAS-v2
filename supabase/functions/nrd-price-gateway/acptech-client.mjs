@@ -121,8 +121,9 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     return {rows: Array.isArray(body) ? body : [], total: match && match[1] !== '*' ? Number(match[1]) : null};
   }
 
-  async function campaignItems(auth) {
-    if (campaignsCache && Date.now() - campaignsAt < 60_000) return campaignsCache;
+  async function campaignItems(auth, productCodes = null) {
+    const scoped = Array.isArray(productCodes);
+    if (!scoped && campaignsCache && Date.now() - campaignsAt < 60_000) return campaignsCache;
     const campaignQuery = {
       select: 'id,name,code,start_date,end_date,active,deleted_at,updated_at,store_id,chain_id',
       active: 'eq.true',
@@ -135,13 +136,19 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     const campaigns = await table('campaigns', campaignQuery, auth.token);
     const ids = (Array.isArray(campaigns) ? campaigns : []).map(c => c.id).filter(Boolean);
     if (!ids.length) return [];
-    const items = await table('campaign_items', {
+    const itemQuery = {
       select: '*',
       campaign_id: `in.${encodeIn(ids)}`,
       order: 'display_order.asc'
-    }, auth.token);
+    };
+    if (scoped) {
+      const codes = [...new Set(productCodes.map(value => String(value)).filter(Boolean))];
+      if (!codes.length) return [];
+      itemQuery.code = `in.${encodeIn(codes)}`;
+    }
+    const items = await table('campaign_items', itemQuery, auth.token);
     const campaignById = new Map(campaigns.map(c => [String(c.id), c]));
-    campaignsCache = (Array.isArray(items) ? items : []).map(item => {
+    const mapped = (Array.isArray(items) ? items : []).map(item => {
       const campaign = campaignById.get(String(item.campaign_id));
       return ({
       ...item,
@@ -167,8 +174,8 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       productUrl: null
       });
     });
-    campaignsAt = Date.now();
-    return campaignsCache;
+    if (!scoped) { campaignsCache = mapped; campaignsAt = Date.now(); }
+    return mapped;
   }
 
   async function products(auth, parameters) {
@@ -184,7 +191,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     }
     const result = await tablePage('chain_products', query, auth.token);
     const rows = result.rows;
-    const campaignRows = await campaignItems(auth).catch(() => []);
+    const campaignRows = await campaignItems(auth, rows.map(item => item.code)).catch(() => []);
     const campaignFor = item => (Array.isArray(campaignRows) ? campaignRows : []).find(candidate =>
       (item.code != null && candidate.code != null && String(item.code) === String(candidate.code)) ||
       (item.barcode && candidate.barcode && String(item.barcode) === String(candidate.barcode)) ||
