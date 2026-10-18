@@ -133,7 +133,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
   }
 
   async function products(auth, parameters) {
-    const query = {select: '*', chain_id: auth.chainId ? `eq.${auth.chainId}` : undefined, limit: '250'};
+    const query = {select: '*', chain_id: auth.chainId ? `eq.${auth.chainId}` : undefined, deleted_at: 'is.null', limit: '250'};
     if (!query.chain_id) delete query.chain_id;
     for (const [key, value] of parameters) {
       if (key === 'pageSize') query.limit = String(Math.min(Number(value) || 250, 250));
@@ -167,7 +167,11 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
           const auth = await signIn();
           const rows = input.path === 'Promotion/all'
             ? await campaignItems(auth)
-            : input.path === 'Product/all' ? await products(auth, input.parameters) : [];
+            : input.path === 'Product/all' ? await products(auth, input.parameters)
+            : input.path === 'ProductCategory/all' ? await table('product_categories', {
+              select: '*', order: 'name.asc', limit: '250'
+            }, auth.token)
+            : [];
           const page = Number(input.parameters.find(([key]) => key === 'pageIndex')?.[1] ?? 0);
           const size = Math.min(Number(input.parameters.find(([key]) => key === 'pageSize')?.[1] ?? 250), 250);
           return {items: rows.slice(page * size, (page + 1) * size), pageIndex: page,
