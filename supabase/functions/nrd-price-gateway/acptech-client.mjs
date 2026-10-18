@@ -1,3 +1,5 @@
+import {mergeCommercial, normalizeCommercial, withinValidity} from './commercial.mjs';
+
 const DEFAULT_URL = 'https://lolnlmlnvspipzxatgvj.supabase.co';
 const DEFAULT_STORE = 'nordestao12';
 // Public browser key exposed by the ACP Tech portal; ACP credentials remain server-only.
@@ -30,7 +32,7 @@ function categoryObjects(item) {
   return categories;
 }
 
-export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, config = {}}) {
+export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, config = {}, now = () => Date.now()}) {
   const supabaseUrl = String(config.url || DEFAULT_URL).replace(/\/$/, '');
   const storeSlug = String(config.storeSlug || DEFAULT_STORE);
   const anonKey = String(config.anonKey || DEFAULT_ANON_KEY);
@@ -39,6 +41,8 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
   let signingIn = null;
   let campaignsCache = null;
   let campaignsAt = 0;
+  let promotionsCache = null;
+  let promotionsAt = 0;
 
   function headers(token) {
     if (!anonKey) throw Error('ACPTECH_ANON_KEY_NOT_CONFIGURED');
@@ -95,6 +99,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       session = {token: auth.access_token, storeId, chainId};
       sessionAt = Date.now();
       campaignsCache = null;
+      promotionsCache = null;
       return session;
     })();
     try { return await signingIn; } finally { signingIn = null; }
@@ -106,13 +111,13 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     return json(url, {token});
   }
 
-  async function tablePage(name, query, token) {
+  async function tablePage(name, query, token, count = 'planned') {
     const url = new URL(`${supabaseUrl}/rest/v1/${name}`);
     for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
     const response = await fetcher(url, {
       redirect: 'error',
       signal: AbortSignal.timeout(20000),
-      headers: {...headers(token), Prefer: 'count=planned'}
+      headers: {...headers(token), Prefer: `count=${count}`}
     });
     const body = await boundedJson(response);
     if (!response.ok && response.status === 416) {
@@ -122,7 +127,19 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     if (!response.ok) throw Error('ACPTECH_UPSTREAM_FAILURE');
     const range = response.headers?.get?.('content-range') || '';
     const match = range.match(/\/([0-9]+|\*)$/);
-    return {rows: Array.isArray(body) ? body : [], total: match && match[1] !== '*' ? Number(match[1]) : null};
+    return {rows: Array.isArray(body) ? body : [], hasRange: Boolean(range), total: match && match[1] !== '*' ? Number(match[1]) : null};
+  }
+
+  async function tableAll(name, query, token) {
+    const rows = [];
+    for (let page = 0; page < 100; page++) {
+      const result = await tablePage(name, {...query, limit: '250', offset: String(rows.length)}, token, 'exact');
+      rows.push(...result.rows);
+      if (rows.length > 10000) throw Error('ACPTECH_RESULT_TOO_LARGE');
+      if (!result.rows.length || (result.total != null && rows.length >= result.total) ||
+          (!result.hasRange && result.rows.length < 250)) return rows;
+    }
+    throw Error('ACPTECH_INCOMPLETE_RESULT');
   }
 
   async function rpcPage(name, body, token) {
@@ -150,8 +167,8 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
   async function storeOverrides(auth, productIds) {
     const ids = [...new Set(productIds.map(value => String(value)).filter(Boolean))];
     if (!ids.length || !auth.storeId) return new Map();
-    const rows = await table('store_product_price_overrides', {
-      select: '*', store_id: `eq.${auth.storeId}`, chain_product_id: `in.${encodeIn(ids)}`
+    const rows = await tableAll('store_product_price_overrides', {
+      select: '*', store_id: `eq.${auth.storeId}`, chain_product_id: `in.${encodeIn(ids)}`, order: 'chain_product_id.asc'
     }, auth.token);
     return new Map((Array.isArray(rows) ? rows : []).map(row => [String(row.chain_product_id), row]));
   }
@@ -163,33 +180,40 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       select: 'id,name,code,start_date,end_date,active,deleted_at,updated_at,store_id,chain_id',
       active: 'eq.true',
       deleted_at: 'is.null',
-      order: 'updated_at.desc'
+      order: 'updated_at.desc,id.asc'
     };
     campaignQuery[auth.chainId ? 'or' : 'store_id'] = auth.chainId
       ? `(store_id.eq.${auth.storeId},and(store_id.is.null,chain_id.eq.${auth.chainId}))`
       : `eq.${auth.storeId}`;
-    const campaigns = await table('campaigns', campaignQuery, auth.token);
+    const campaigns = await tableAll('campaigns', campaignQuery, auth.token);
     const ids = (Array.isArray(campaigns) ? campaigns : []).map(c => c.id).filter(Boolean);
     if (!ids.length) return [];
-    const itemQuery = {
-      select: '*',
-      campaign_id: `in.${encodeIn(ids)}`,
-      order: 'display_order.asc'
-    };
-    if (scoped) {
-      const codes = [...new Set(productCodes.map(value => String(value)).filter(Boolean))];
-      if (!codes.length) return [];
-      itemQuery.code = `in.${encodeIn(codes)}`;
+    const items = [];
+    const codes = scoped ? [...new Set(productCodes.map(value => typeof value === 'object' ? value.code : value).filter(value => value != null && String(value) !== '').map(String))] : [];
+    const barcodes = scoped ? [...new Set(productCodes.map(value => typeof value === 'object' ? value.barcode : null).filter(Boolean).map(String))] : [];
+    if (scoped && !codes.length && !barcodes.length) return [];
+    // Bound URL size and page through the upstream, rather than paginating an
+    // already truncated in-memory array.
+    for (let offset = 0; offset < ids.length; offset += 50) {
+      const itemQuery = {select: '*', campaign_id: `in.${encodeIn(ids.slice(offset, offset + 50))}`, order: 'display_order.asc,id.asc'};
+      if (scoped) {
+        const filters = [];
+        if (codes.length) filters.push(`code.in.${encodeIn(codes)}`);
+        if (barcodes.length) filters.push(`barcode.in.${encodeIn(barcodes)}`);
+        itemQuery.or = `(${filters.join(',')})`;
+      }
+      items.push(...await tableAll('campaign_items', itemQuery, auth.token));
+      if (items.length > 10000) throw Error('ACPTECH_RESULT_TOO_LARGE');
     }
-    const items = await table('campaign_items', itemQuery, auth.token);
     const campaignById = new Map(campaigns.map(c => [String(c.id), c]));
     const mapped = (Array.isArray(items) ? items : []).map(item => {
       const campaign = campaignById.get(String(item.campaign_id));
       return ({
-      ...item,
+      ...normalizeCommercial(item),
       id: item.id ?? `${item.campaign_id}:${item.code ?? item.barcode ?? item.description}`,
       campaignId: item.campaign_id,
       campaignName: campaign?.name ?? null,
+      campaignCode: campaign?.code ?? null,
       barCode: item.barcode ?? null,
       value: item.value ?? item.price ?? null,
       previousValue: item.previousValue ?? item.previous_price ?? null,
@@ -213,7 +237,22 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     return mapped;
   }
 
-  async function products(auth, parameters) {
+  async function legacyCampaigns(auth) {
+    const items = (await promotions(auth)).filter(item => withinValidity(item, now()));
+    const grouped = new Map();
+    for (const item of items) {
+      const id = item.campaignId ?? 'catalog-products';
+      if (!grouped.has(id)) grouped.set(id, {
+        id, code: item.campaignCode ?? null, name: item.campaignName ?? 'Condições do cadastro de produtos',
+        startDate: item.campaignId ? item.startDate : null, endDate: item.campaignId ? item.endDate : null,
+        active: true, products: []
+      });
+      grouped.get(id).products.push(item);
+    }
+    return [...grouped.values()];
+  }
+
+  async function products(auth, parameters, enrichCampaigns = true) {
     const page = Math.max(0, Number(parameters.find(([key]) => key === 'pageIndex')?.[1] ?? 0) || 0);
     const size = Math.min(250, Math.max(1, Number(parameters.find(([key]) => key === 'pageSize')?.[1] ?? 50) || 50));
     const query = {select: '*', chain_id: auth.chainId ? `eq.${auth.chainId}` : undefined, deleted_at: 'is.null', limit: String(size), offset: String(page * size), order: 'description.asc,code.asc'};
@@ -226,7 +265,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       if (key === 'productCategoryIds' && value) { query.category_id = `eq.${value}`; categoryId = String(value); }
     }
     const searched = code != null || barcode != null || Boolean(description);
-    let result = searched
+    let result = searched || categoryId
       ? await rpcPage('search_chain_products', {
         p_chain_id: auth.chainId,
         p_category_id: categoryId,
@@ -248,35 +287,29 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       } catch { /* planned count remains a safe fallback */ }
     }
     const rows = result.rows;
-    const overrides = await storeOverrides(auth, rows.map(item => item.id)).catch(() => new Map());
-    const campaignRows = await campaignItems(auth, rows.map(item => item.code)).catch(() => []);
-    const campaignFor = item => (Array.isArray(campaignRows) ? campaignRows : []).find(candidate =>
+    const overrides = await storeOverrides(auth, rows.map(item => item.id).filter(Boolean));
+    const campaignRows = enrichCampaigns ? await campaignItems(auth, rows) : [];
+    const campaignFor = item => (Array.isArray(campaignRows) ? campaignRows : []).filter(candidate =>
       (item.code != null && candidate.code != null && String(item.code) === String(candidate.code)) ||
-      (item.barcode && candidate.barcode && String(item.barcode) === String(candidate.barcode)) ||
-      (item.description && candidate.description && String(item.description).trim().toLowerCase() === String(candidate.description).trim().toLowerCase())
+      (item.barcode && candidate.barcode && String(item.barcode) === String(candidate.barcode))
     );
     const items = (Array.isArray(rows) ? rows : []).map(item => {
-      const campaign = campaignFor(item);
+      const campaigns = campaignFor(item);
       const override = overrides.get(String(item.id));
       const base = {...item};
       for (const key of ['price', 'previous_price', 'wholesale_price', 'wholesale_quantity', 'club_price', 'valid_until', 'installments', 'promotion_type', 'leve_quantity', 'pague_quantity', 'cashback_percent', 'cashback_value', 'stock', 'unit_limit']) {
         if (override?.[key] !== undefined && override?.[key] !== null) base[key] = override[key];
       }
-      const merged = {
-        ...base,
-        value: Number(base.value ?? base.price) > 0 ? (base.value ?? base.price) : (campaign?.value ?? campaign?.price ?? base.value ?? base.price),
-        price: Number(base.price) > 0 ? base.price : (campaign?.price ?? campaign?.value ?? base.price),
-        previous_price: Number(base.previous_price) > 0 ? base.previous_price : (campaign?.previous_price ?? campaign?.previousValue ?? base.previous_price),
-        club_price: Number(base.club_price) > 0 ? base.club_price : (campaign?.club_price ?? campaign?.clubValue ?? base.club_price),
-        leve_quantity: Number(base.leve_quantity) > 0 ? base.leve_quantity : (campaign?.leve_quantity ?? campaign?.quantityTake ?? base.leve_quantity),
-        pague_quantity: Number(base.pague_quantity) > 0 ? base.pague_quantity : (campaign?.pague_quantity ?? campaign?.quantityPay ?? base.pague_quantity),
-        promotion_type: base.promotion_type || campaign?.promotion_type || campaign?.promotionType || '',
-        valid_until: base.valid_until || campaign?.valid_until || campaign?.endDate || null,
-        start_date: base.start_date || campaign?.startDate || null
-      };
+      const merged = mergeCommercial(base, campaigns, now());
       return {
         ...merged,
-        barCode: merged.barcode ?? null,
+        barCode: merged.barcode ?? merged.barCode ?? null,
+        stockQuantity: merged.stock ?? merged.stockQuantity ?? null,
+        unit: typeof merged.unit === 'string' ? {description: merged.unit} : merged.unit,
+        packageType: typeof merged.package_type === 'string' ? {description: merged.package_type} : merged.packageType,
+        packageQuantity: merged.package_quantity ?? merged.packageQuantity ?? null,
+        contentQuantity: merged.content_quantity ?? merged.contentQuantity ?? null,
+        contentUnit: merged.content_unit ?? merged.contentUnit ?? null,
         value: merged.value ?? null,
         previousValue: merged.previousValue ?? merged.previous_price ?? null,
         clubValue: merged.clubValue ?? merged.club_price ?? null,
@@ -297,17 +330,45 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     return {items, totalCount, pageIndex: page, pageSize: size};
   }
 
+  async function categories(auth) {
+    const items = await tableAll('product_categories', {select: '*', order: 'name.asc,id.asc'}, auth.token);
+    return items.map(item => ({...item, description: item.description ?? item.name}));
+  }
+
+  async function promotions(auth) {
+    if (promotionsCache && now() - promotionsAt < 60_000) return promotionsCache;
+    const all = new Map((await campaignItems(auth)).map(item => [String(item.id), item]));
+    // The legacy feed used these product categories. Campaign items alone do not
+    // include catalogue-only Clube/Leve-Pague offers in ACP Tech.
+    const promotionalCategories = (await categories(auth)).filter(category =>
+      ['depor', 'clubedevantagens', 'clubvantagens', 'levepague', 'leveepague'].includes(
+        String(category.description ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')));
+    for (const category of promotionalCategories) {
+      for (let page = 0; page < 100; page++) {
+        const result = await products(auth, [['productCategoryIds', String(category.id)], ['pageIndex', String(page)], ['pageSize', '250']], false);
+        for (const item of result.items) {
+          if (item.id == null) throw Error('ACPTECH_INVALID_PRODUCT');
+          all.set(String(item.id), {...item, productCategories: categoryObjects(item)});
+        }
+        if (all.size > 10000) throw Error('ACPTECH_RESULT_TOO_LARGE');
+        if (!result.items.length || (page + 1) * 250 >= result.totalCount) break;
+        if (page === 99) throw Error('ACPTECH_INCOMPLETE_RESULT');
+      }
+    }
+    promotionsCache = [...all.values()]; promotionsAt = now();
+    return promotionsCache;
+  }
+
   return {
     async consult(input) {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           const auth = await signIn();
           const rows = input.path === 'Promotion/all'
-            ? await campaignItems(auth)
+            ? await promotions(auth)
             : input.path === 'Product/all' ? await products(auth, input.parameters)
-            : input.path === 'ProductCategory/all' ? await table('product_categories', {
-              select: '*', order: 'name.asc', limit: '250'
-            }, auth.token)
+            : input.path === 'ProductCategory/all' ? await categories(auth)
+            : input.path === 'Campaign/all' ? await legacyCampaigns(auth)
             : [];
           if (input.path === 'Product/all' && rows && !Array.isArray(rows)) {
             const totalPages = rows.totalCount ? Math.ceil(rows.totalCount / rows.pageSize) : 0;
@@ -319,7 +380,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
             totalCount: rows.length, totalPages: rows.length ? Math.ceil(rows.length / size) : 0};
         } catch (error) {
           if (attempt === 0 && /LOGIN|SESSION|UPSTREAM|STORE_NOT_FOUND|CHAIN_NOT_FOUND/.test(String(error?.message))) {
-            session = null; campaignsCache = null; continue;
+            session = null; campaignsCache = null; promotionsCache = null; continue;
           }
           throw error;
         }
