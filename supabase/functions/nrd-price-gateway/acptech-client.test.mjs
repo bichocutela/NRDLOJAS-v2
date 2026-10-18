@@ -194,6 +194,21 @@ test('campaign item inherits the store club override and campaign validity by pr
   assert.ok(requests.some(request => request.url.pathname.endsWith('/chain_product_barcodes') && request.url.searchParams.get('barcode') === 'in.("1137989")'));
 });
 
+test('campaign item retries an unresolved numeric code through ACP exact-code search', async () => {
+  const {client, requests} = fixture({
+    campaignRpcEmpty: true,
+    products:[{id:'p1', code:2000451, barcode:'7896106900053', description:'Açúcar Triturado Dumel', price:4.19}],
+    overrides:[{chain_product_id:'p1', price:4.19, club_price:2.89}],
+    campaigns:[{id:'c1', code:'1476', name:'NORDCARD', start_date:'2026-10-19', end_date:'2026-10-21'}],
+    items:[{id:'i1', campaign_id:'c1', code:2000451, price:0, previous_price:3.79}]
+  });
+  const campaign = (await consult(client, 'Campaign/all', [])).items[0];
+  assert.equal(campaign.products[0].clubValue, 2.89);
+  assert.equal(campaign.products[0].startDate, '2026-10-19');
+  assert.ok(requests.some(request => request.url.pathname.endsWith('/rpc/search_chain_products') &&
+    JSON.parse(request.options.body).p_code === 2000451));
+});
+
 test('same product keeps each ACP campaign and its own validity window', async () => {
   const {client} = fixture({
     campaigns:[
