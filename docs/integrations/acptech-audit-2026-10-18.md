@@ -75,3 +75,9 @@ acesso próprias. Nenhuma escrita foi feita no ACP Tech.
 Alterações permanecem no PR 192. A compilação Android e os testes da revisão
 anterior passaram no GitHub Actions; a correção adicional acima foi validada pela
 suíte Node. Nenhuma publicação de produção ou merge foi feita nesta auditoria.
+
+## Atualização após validação em produção
+
+A descoberta global por campos comerciais foi retirada na versão 47 porque o ACP Tech
+retornou statement timeout (57014). A conclusão automática de ofertas sem categoria
+continua pendente. Consulte `firebase-acp-map-2026-10-18.md` para o estado atual.
