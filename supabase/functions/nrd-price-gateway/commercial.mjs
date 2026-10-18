@@ -26,6 +26,12 @@ export function withinValidity(item, now = Date.now()) {
   return (!start || start <= today) && (!end || end >= today);
 }
 
+export function notExpired(item, now = Date.now()) {
+  const today = new Intl.DateTimeFormat('en-CA', {timeZone: 'America/Fortaleza', year: 'numeric', month: '2-digit', day: '2-digit'}).format(now);
+  const end = item.endDate?.slice(0, 10);
+  return !end || end >= today;
+}
+
 const positive = value => Number.isFinite(Number(value)) && Number(value) > 0;
 const type = row => String(row.promotion_type ?? row.promotionType ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 function unconditional(row) {

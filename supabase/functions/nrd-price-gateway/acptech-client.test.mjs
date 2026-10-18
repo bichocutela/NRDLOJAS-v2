@@ -152,11 +152,30 @@ test('Campaign/all preserves separate club and multi-buy rules using the existin
       {id:'take', campaign_id:'c1', code:123, price:12, leve_quantity:3, pague_quantity:2},
       {id:'future', campaign_id:'future', code:123, price:2}]});
   const result = await consult(client, 'Campaign/all', []);
-  assert.equal(result.items.length, 1);
-  assert.equal(result.items[0].products[0].clubValue, 5);
-  assert.equal(result.items[0].products[1].value, 12);
-  assert.equal(result.items[0].products[1].quantityTake, 3);
-  assert.equal(result.items[0].products[1].quantityPay, 2);
+  assert.equal(result.items.length, 2);
+  const active = result.items.find(campaign => campaign.id === 'c1');
+  assert.equal(active.products[0].clubValue, 5);
+  assert.equal(active.products[1].value, 12);
+  assert.equal(active.products[1].quantityTake, 3);
+  assert.equal(active.products[1].quantityPay, 2);
+});
+
+test('campaign item inherits the store club override and campaign validity by product identity', async () => {
+  const {client} = fixture({
+    products:[{id:'p1', code:2000451, barcode:'7896106900053', description:'Açúcar Triturado Dumel 1kg', price:4.19}],
+    overrides:[{chain_product_id:'p1', price:4.19, club_price:2.89}],
+    campaigns:[{id:'c1', code:'1476', name:'NORDCARD', start_date:'2026-10-19', end_date:'2026-10-21'}],
+    items:[{id:'i1', campaign_id:'c1', code:2000451, barcode:'7896106900053', description:'Açúcar Triturado Dumel',
+      price:0, previous_price:3.79}]
+  });
+  const campaign = (await consult(client, 'Campaign/all', [])).items[0];
+  const product = campaign.products[0];
+  assert.equal(product.value, 4.19);
+  assert.equal(product.clubValue, 2.89);
+  assert.equal(product.previousValue, 3.79);
+  assert.equal(product.startDate, '2026-10-19');
+  assert.equal(product.endDate, '2026-10-21');
+  assert.ok(product.productCategories.some(category => category.description === 'Clube de Vantagens'));
 });
 
 test('promotions include club and take/pay from catalogue categories even without campaigns', async () => {
