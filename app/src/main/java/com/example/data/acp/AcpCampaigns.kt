@@ -211,17 +211,17 @@ internal object AcpCampaignParser {
     }
 }
 
-private suspend fun AcpApi.allCampaigns(): List<AcpCampaign> {
+private suspend fun AcpApi.allCampaigns(): List<AcpCampaign> = campaignRulesForConsultation {
     val all = mutableListOf<AcpCampaign>()
     for (page in 0 until 30) {
-        val root = get("Campaign/all", listOf("pageSize" to "100", "pageIndex" to page.toString()))
+        val root = getFresh("Campaign/all", listOf("pageSize" to "100", "pageIndex" to page.toString()))
         val campaigns = AcpCampaignParser.page(root)
         all += campaigns
         val data = root.optJSONObject("data")
         val total = root.optInt("totalPages", data?.optInt("totalPages", 1) ?: 1)
         if (campaigns.isEmpty() || page + 1 >= total) break
     }
-    return all.distinctBy { it.id }
+    all.distinctBy { it.id }
 }
 
 internal suspend fun AcpApi.campaignsFor(product: AcpProduct): List<AcpCampaign> =

@@ -38,6 +38,9 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         it.clear("session")
     }, gateway = AcpGatewayClient())
     private val sessionLock = Mutex()
+    private val campaignLock = Mutex()
+    private var currentCampaigns: List<AcpCampaign>? = null
+    private var currentCampaignsAt = 0L
     private var accessConfirmed = false
     private var clubCategoryId: String? = null
     private var clubCategoryResolved = false
@@ -245,6 +248,18 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
             withContext(Dispatchers.IO) { writeCachedResponse(path, effectiveParameters, result) }
         }
         return result
+    }
+
+    /** Campaign badges must be available on the first result, not only after opening a product. */
+    internal suspend fun campaignRulesForConsultation(load: suspend () -> List<AcpCampaign>): List<AcpCampaign> = campaignLock.withLock {
+        // A cached commercial rule never bypasses the current access policy.
+        gateway?.checkAccess()
+        val age = System.currentTimeMillis() - currentCampaignsAt
+        currentCampaigns?.takeIf { age in 0 until 60_000L }?.let { return@withLock it }
+        val campaigns = load()
+        currentCampaigns = campaigns
+        currentCampaignsAt = System.currentTimeMillis()
+        campaigns
     }
 
     /** Force a current ACP read for background refreshes of the visible highlights. */
