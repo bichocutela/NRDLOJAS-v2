@@ -7,6 +7,7 @@ import { ReadCache } from './read-cache.mjs';
 import { createCategorizer } from './categories.mjs';
 import { createAuthorizer } from './access.mjs';
 import { createLiveCatalogLookup } from './catalog-live.mjs';
+import { createAcpTechClient } from './acptech-client.mjs';
 const project = 'appcodigo-7f245';
 const jwks = createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
 let serviceToken = '', serviceExpires = 0;
@@ -74,6 +75,19 @@ const catalogLookup = Deno.env.get('NORDESTAO_LIVE_LOOKUP') !== 'false'
 const categorizer = createCategorizer({cache:serverCache, apiKey:Deno.env.get('GEMINI_API_KEY'),
   model:Deno.env.get('PROMOTION_GEMINI_MODEL') ?? 'gemini-3.5-flash-lite',
   background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)});
+const provider = Deno.env.get('ACP_PROVIDER')?.trim().toLowerCase() === 'acptech' ? 'acptech' : 'legacy';
+const providerCredentials = () => provider === 'acptech'
+  ? {login:Deno.env.get('ACPTECH_LOGIN'), password:Deno.env.get('ACPTECH_PASSWORD')}
+  : {login:Deno.env.get('NRD_PRICE_LOGIN'), password:Deno.env.get('NRD_PRICE_PASSWORD')};
+const acpTechClient = provider === 'acptech' ? createAcpTechClient({
+  boundedJson,
+  credentials: providerCredentials,
+  config: {
+    url: Deno.env.get('ACPTECH_SUPABASE_URL'),
+    anonKey: Deno.env.get('ACPTECH_SUPABASE_ANON_KEY'),
+    storeSlug: Deno.env.get('ACPTECH_STORE_SLUG') ?? 'nordestao12'
+  }
+}) : null;
 const githubKeys = createRemoteJWKSet(new URL('https://token.actions.githubusercontent.com/.well-known/jwks'));
 const handler = createHandler({
   authorize: async (req: Request) => {
@@ -100,8 +114,9 @@ const handler = createHandler({
   catalogLookup,
   catalogMinScore: Number(Deno.env.get('NORDESTAO_CATALOG_MIN_SCORE') ?? '0.86'),
   promotionSync: createPromotionSync({cache:serverCache, background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)}),
-  credentials: () => ({login:Deno.env.get('NRD_PRICE_LOGIN'),password:Deno.env.get('NRD_PRICE_PASSWORD')})
+  credentials: providerCredentials,
+  provider,
+  acpTechClient
 });
 Deno.serve(handler);
-
 

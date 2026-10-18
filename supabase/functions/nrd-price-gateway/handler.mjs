@@ -69,7 +69,8 @@ export function validate(input) {
   });
 }
 export function createHandler({authorize, credentials, fetcher = fetch, enrichPromotions = async items => items,
-  promotionSync = null, catalogLoader = null, catalogLookup = null, catalogMinScore = 0.86, catalogCacheTtlMs = 15 * 60_000}) {
+  promotionSync = null, catalogLoader = null, catalogLookup = null, catalogMinScore = 0.86, catalogCacheTtlMs = 15 * 60_000,
+  provider = 'legacy', acpTechClient = null}) {
   // ACP session shared only inside this server instance. Login is serialized, not per product.
   let session = null, sessionAt = 0, signingIn = null;
   let dePorCategory = null, dePorCategoryAt = 0;
@@ -118,6 +119,16 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     try { return await enrichPromotions(items); } catch { return items; }
   }
   async function consult(input, enrich = true, family = "depor") {
+      if (provider === 'acptech') {
+        const payload = await acpTechClient.consult(input);
+        const sanitized = clean(payload);
+        if (!enrich) return sanitized;
+        if (Array.isArray(sanitized.items)) {
+          try { sanitized.items = await enrichPromotions(sanitized.items); } catch { /* enrichment is optional */ }
+        }
+        return ['Product/all','Promotion/all'].includes(input.path)
+          ? enrichCatalog(sanitized, loadCatalog, catalogMinScore, catalogLookup) : sanitized;
+      }
       attempts: for (let attempt = 0; attempt < 2; attempt++) {
         const auth = await signIn();
         const base = auth.proxy ? TENANT+'/api/proxy/api/v1/' : API+'/api/v1/';
@@ -287,5 +298,4 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     return reply(502,{error:'CONSULTATION_UNAVAILABLE'});
   };
 }
-
 

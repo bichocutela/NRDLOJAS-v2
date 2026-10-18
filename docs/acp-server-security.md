@@ -1,8 +1,16 @@
 # Migração ACP para o servidor
 
-A função `nrd-price-gateway` usa os Secrets Supabase existentes `NRD_PRICE_LOGIN` e
-`NRD_PRICE_PASSWORD`. O Android envia somente seu ID token Firebase, quando logado.
-Nenhuma senha ACP, cookie ou token ACP volta para o dispositivo.
+A função `nrd-price-gateway` usa os Secrets Supabase `NRD_PRICE_LOGIN` e
+`NRD_PRICE_PASSWORD` no provedor ACP antigo. O Android envia somente seu ID token
+Firebase, quando logado. Nenhuma senha ACP, cookie ou token ACP volta para o dispositivo.
+
+O novo portal da loja Nordestão 12 é `https://acptech.com.br/lojas/nordestao12/login`.
+Ele usa o projeto Supabase do ACP Tech, resolve o username pela Edge Function
+`store-auth`, autentica por Supabase Auth e lê campanhas/produtos com o JWT da sessão.
+O gateway suporta esse modelo sem alterar o cliente Android. Para ativá-lo no ambiente
+publicado, configure `ACP_PROVIDER=acptech`, `ACPTECH_LOGIN`, `ACPTECH_PASSWORD`,
+`ACPTECH_SUPABASE_ANON_KEY` e, opcionalmente, `ACPTECH_STORE_SLUG=nordestao12` e
+`ACPTECH_SUPABASE_URL`. Sem `ACP_PROVIDER=acptech`, o comportamento antigo continua.
 
 ## Etapas e verificação
 
