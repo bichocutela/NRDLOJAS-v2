@@ -103,17 +103,31 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       order: 'display_order.asc'
     }, auth.token);
     const campaignById = new Map(campaigns.map(c => [String(c.id), c]));
-    campaignsCache = (Array.isArray(items) ? items : []).map(item => ({
+    campaignsCache = (Array.isArray(items) ? items : []).map(item => {
+      const campaign = campaignById.get(String(item.campaign_id));
+      return ({
       ...item,
       id: item.id ?? `${item.campaign_id}:${item.code ?? item.barcode ?? item.description}`,
       campaignId: item.campaign_id,
-      campaignName: campaignById.get(String(item.campaign_id))?.name ?? null,
+      campaignName: campaign?.name ?? null,
       barCode: item.barcode ?? null,
+      value: item.value ?? item.price ?? null,
+      previousValue: item.previousValue ?? item.previous_price ?? null,
+      clubValue: item.clubValue ?? item.club_price ?? null,
+      wholesaleValue: item.wholesaleValue ?? item.wholesale_price ?? null,
+      wholesaleQuantity: item.wholesaleQuantity ?? item.wholesale_quantity ?? null,
+      quantityTake: item.quantityTake ?? item.leve_quantity ?? null,
+      quantityPay: item.quantityPay ?? item.pague_quantity ?? null,
+      secondUnitDiscount: item.secondUnitDiscount ?? item.second_unit_discount ?? null,
+      unitLimitPerCPF: item.unitLimitPerCPF ?? item.unit_limit ?? null,
+      startDate: item.startDate ?? campaign?.start_date ?? null,
+      endDate: item.endDate ?? item.valid_until ?? campaign?.end_date ?? null,
       imagem: item.image_url ?? null,
       imageUrl: item.image_url ?? null,
       linkloja: null,
       productUrl: null
-    }));
+      });
+    });
     campaignsAt = Date.now();
     return campaignsCache;
   }
@@ -129,7 +143,19 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     }
     const rows = await table('chain_products', query, auth.token);
     return (Array.isArray(rows) ? rows : []).map(item => ({
-      ...item, barCode: item.barcode ?? null, imagem: item.image_url ?? null,
+      ...item,
+      barCode: item.barcode ?? null,
+      value: item.value ?? item.price ?? null,
+      previousValue: item.previousValue ?? item.previous_price ?? null,
+      clubValue: item.clubValue ?? item.club_price ?? null,
+      wholesaleValue: item.wholesaleValue ?? item.wholesale_price ?? null,
+      wholesaleQuantity: item.wholesaleQuantity ?? item.wholesale_quantity ?? null,
+      quantityTake: item.quantityTake ?? item.leve_quantity ?? null,
+      quantityPay: item.quantityPay ?? item.pague_quantity ?? null,
+      secondUnitDiscount: item.secondUnitDiscount ?? item.second_unit_discount ?? null,
+      unitLimitPerCPF: item.unitLimitPerCPF ?? item.unit_limit ?? null,
+      endDate: item.endDate ?? item.valid_until ?? null,
+      imagem: item.image_url ?? null,
       imageUrl: item.image_url ?? null, linkloja: null, productUrl: null
     }));
   }

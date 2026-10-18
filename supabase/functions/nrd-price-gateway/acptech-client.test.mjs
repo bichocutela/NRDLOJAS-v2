@@ -9,7 +9,7 @@ test('ACP Tech resolve username, autentica e retorna itens de campanhas', async 
     {ok: true, status: 200, body: {access_token: 'jwt-test'}},
     {ok: true, status: 200, body: {user: {store_id: 'store-12', chain_id: 'chain-1'}}},
     {ok: true, status: 200, body: [{id: 'camp-1', name: 'Ofertas', active: true}]},
-    {ok: true, status: 200, body: [{id: 'item-1', campaign_id: 'camp-1', code: '0012', barcode: '789', description: 'Produto teste', image_url: 'https://cdn.test/item.png', price: 4.99}]}
+    {ok: true, status: 200, body: [{id: 'item-1', campaign_id: 'camp-1', code: '0012', barcode: '789', description: 'Produto teste', image_url: 'https://cdn.test/item.png', price: 4.99, previous_price: 5.99}]}
   ];
   const client = createAcpTechClient({
     boundedJson: async response => response.body,
@@ -24,6 +24,8 @@ test('ACP Tech resolve username, autentica e retorna itens de campanhas', async 
   const result = await client.consult({path: 'Promotion/all', parameters: [['pageIndex', '0'], ['pageSize', '20']]});
   assert.equal(result.totalCount, 1);
   assert.equal(result.items[0].code, '0012');
+  assert.equal(result.items[0].value, 4.99);
+  assert.equal(result.items[0].previousValue, 5.99);
   assert.equal(result.items[0].imageUrl, 'https://cdn.test/item.png');
   assert.match(requests[0].url, /functions\/v1\/store-auth/);
   assert.match(requests[1].url, /auth\/v1\/token\?grant_type=password/);
