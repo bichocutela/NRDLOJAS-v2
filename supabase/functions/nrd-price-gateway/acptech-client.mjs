@@ -301,6 +301,22 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
         }
       }
     }
+    // ACP's multi-code campaign search may omit products that its single-code
+    // lookup can resolve. Retry only unresolved numeric campaign codes; this
+    // stays bounded to products in the campaigns being read.
+    const catalogCodes = new Set(catalog.map(product => String(product.code ?? '')));
+    const unresolvedCodes = codes.filter(code => /^\d+$/.test(code) && !catalogCodes.has(code)).slice(0, 50);
+    for (const code of unresolvedCodes) {
+      const result = await rpcPage('search_chain_products', {
+        p_chain_id: auth.chainId, p_category_id: null, p_code: Number(code),
+        p_barcode_prefix: null, p_description: null, p_ids: null, p_codes: null,
+        p_barcodes: null, p_include_deleted: false, p_limit: 250, p_offset: 0
+      }, auth.token);
+      for (const product of result.rows) {
+        const id = String(product.id ?? '');
+        if (id && !byId.has(id)) { byId.add(id); catalog.push(product); }
+      }
+    }
     if (!catalog.length) return items;
     const storeProducts = await hydrateProducts(auth, catalog, false);
     const productFor = item => {
