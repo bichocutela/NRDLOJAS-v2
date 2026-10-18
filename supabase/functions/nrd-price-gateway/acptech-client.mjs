@@ -147,6 +147,15 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     return payload;
   }
 
+  async function storeOverrides(auth, productIds) {
+    const ids = [...new Set(productIds.map(value => String(value)).filter(Boolean))];
+    if (!ids.length || !auth.storeId) return new Map();
+    const rows = await table('store_product_price_overrides', {
+      select: '*', store_id: `eq.${auth.storeId}`, chain_product_id: `in.${encodeIn(ids)}`
+    }, auth.token);
+    return new Map((Array.isArray(rows) ? rows : []).map(row => [String(row.chain_product_id), row]));
+  }
+
   async function campaignItems(auth, productCodes = null) {
     const scoped = Array.isArray(productCodes);
     if (!scoped && campaignsCache && Date.now() - campaignsAt < 60_000) return campaignsCache;
@@ -239,6 +248,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       } catch { /* planned count remains a safe fallback */ }
     }
     const rows = result.rows;
+    const overrides = await storeOverrides(auth, rows.map(item => item.id)).catch(() => new Map());
     const campaignRows = await campaignItems(auth, rows.map(item => item.code)).catch(() => []);
     const campaignFor = item => (Array.isArray(campaignRows) ? campaignRows : []).find(candidate =>
       (item.code != null && candidate.code != null && String(item.code) === String(candidate.code)) ||
@@ -247,15 +257,22 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     );
     const items = (Array.isArray(rows) ? rows : []).map(item => {
       const campaign = campaignFor(item);
+      const override = overrides.get(String(item.id));
+      const base = {...item};
+      for (const key of ['price', 'previous_price', 'wholesale_price', 'wholesale_quantity', 'club_price', 'valid_until', 'installments', 'promotion_type', 'leve_quantity', 'pague_quantity', 'cashback_percent', 'cashback_value', 'stock', 'unit_limit']) {
+        if (override?.[key] !== undefined && override?.[key] !== null) base[key] = override[key];
+      }
       const merged = {
-        ...item,
-        value: Number(item.value ?? item.price) > 0 ? (item.value ?? item.price) : (campaign?.value ?? campaign?.price ?? item.value ?? item.price),
-        price: Number(item.price) > 0 ? item.price : (campaign?.price ?? campaign?.value ?? item.price),
-        previous_price: Number(item.previous_price) > 0 ? item.previous_price : (campaign?.previous_price ?? campaign?.previousValue ?? item.previous_price),
-        club_price: Number(item.club_price) > 0 ? item.club_price : (campaign?.club_price ?? campaign?.clubValue ?? item.club_price),
-        leve_quantity: Number(item.leve_quantity) > 0 ? item.leve_quantity : (campaign?.leve_quantity ?? campaign?.quantityTake ?? item.leve_quantity),
-        pague_quantity: Number(item.pague_quantity) > 0 ? item.pague_quantity : (campaign?.pague_quantity ?? campaign?.quantityPay ?? item.pague_quantity),
-        promotion_type: item.promotion_type || campaign?.promotion_type || campaign?.promotionType || ''
+        ...base,
+        value: Number(base.value ?? base.price) > 0 ? (base.value ?? base.price) : (campaign?.value ?? campaign?.price ?? base.value ?? base.price),
+        price: Number(base.price) > 0 ? base.price : (campaign?.price ?? campaign?.value ?? base.price),
+        previous_price: Number(base.previous_price) > 0 ? base.previous_price : (campaign?.previous_price ?? campaign?.previousValue ?? base.previous_price),
+        club_price: Number(base.club_price) > 0 ? base.club_price : (campaign?.club_price ?? campaign?.clubValue ?? base.club_price),
+        leve_quantity: Number(base.leve_quantity) > 0 ? base.leve_quantity : (campaign?.leve_quantity ?? campaign?.quantityTake ?? base.leve_quantity),
+        pague_quantity: Number(base.pague_quantity) > 0 ? base.pague_quantity : (campaign?.pague_quantity ?? campaign?.quantityPay ?? base.pague_quantity),
+        promotion_type: base.promotion_type || campaign?.promotion_type || campaign?.promotionType || '',
+        valid_until: base.valid_until || campaign?.valid_until || campaign?.endDate || null,
+        start_date: base.start_date || campaign?.startDate || null
       };
       return {
         ...merged,
@@ -270,6 +287,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
         productCategories: categoryObjects(merged),
         secondUnitDiscount: merged.secondUnitDiscount ?? merged.second_unit_discount ?? null,
         unitLimitPerCPF: merged.unitLimitPerCPF ?? merged.unit_limit ?? null,
+        startDate: merged.startDate ?? merged.start_date ?? null,
         endDate: merged.endDate ?? merged.valid_until ?? null,
         imagem: merged.image_url ?? null,
         imageUrl: merged.image_url ?? null, linkloja: null, productUrl: null
