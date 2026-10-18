@@ -269,7 +269,7 @@ internal fun AcpProductsPanel(
         detailAttempt++
     }
 
-    fun search(index: Int = 0, interactive: Boolean = true, enrichCampaigns: Boolean = interactive) {
+    fun search(index: Int = 0, interactive: Boolean = true, enrichCampaigns: Boolean = true) {
         val searchText = query.trim()
         if (searchText.isBlank()) {
             if (interactive) error = "Digite um código, código de barras ou descrição."
@@ -287,8 +287,11 @@ internal fun AcpProductsPanel(
             lastExplicitQuery = searchText
             keyboard?.hide()
         } else {
-            // Sugestões nunca prendem a interface nem escondem o teclado.
-            busy = false
+            // Live results keep the keyboard open and take priority over background highlights.
+            featuredJob?.cancel()
+            featuredRefreshJob?.cancel()
+            api.stopBackgroundSync()
+            busy = true
         }
         error = null
         closeDetail()
@@ -307,6 +310,7 @@ internal fun AcpProductsPanel(
                 // Product/all é o caminho crítico. Assim que ele responde, o produto já fica
                 // disponível e clicável. Dados complementares não seguram mais a pesquisa.
                 page = result
+                previewCampaignOffers = emptyMap()
                 busy = false
 
                 if (!enrichCampaigns) {
@@ -314,7 +318,7 @@ internal fun AcpProductsPanel(
                     return@launch
                 }
 
-                previewCampaignOffers = try {
+                val campaignOffers = try {
                     api.campaignOffersFor(result.items)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -324,6 +328,7 @@ internal fun AcpProductsPanel(
                 } catch (_: Exception) {
                     emptyMap()
                 }
+                if (ticket == generation) previewCampaignOffers = campaignOffers
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: AcpUnauthorized) {
@@ -404,10 +409,14 @@ internal fun AcpProductsPanel(
             lastExplicitQuery = null
             return@LaunchedEffect
         }
-        if (clean.length < 2 || clean == lastExplicitQuery) return@LaunchedEffect
+        if (clean.length < 2) {
+            busy = false
+            return@LaunchedEffect
+        }
+        if (clean == lastExplicitQuery) return@LaunchedEffect
         delay(180)
         if (query.trim() == clean && clean != lastExplicitQuery) {
-            search(index = 0, interactive = false, enrichCampaigns = false)
+            search(index = 0, interactive = false, enrichCampaigns = true)
         }
     }
 
@@ -532,7 +541,14 @@ internal fun AcpProductsPanel(
             OutlinedTextField(
                 value = query,
                 onValueChange = {
+                    // Invalidate immediately, before the debounce, so an older response
+                    // cannot replace the results for the text now being typed.
+                    searchJob?.cancel()
+                    generation++
                     query = it.take(200)
+                    busy = query.trim().length >= 2
+                    page = null
+                    previewCampaignOffers = emptyMap()
                     lastExplicitQuery = null
                     refreshMessage = null
                     error = null
@@ -593,7 +609,7 @@ internal fun AcpProductsPanel(
             item { Text("Não foi possível atualizar os destaques da ACP: $message", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
 
-        if (featuredVisible && (featuredLoading || featuredOffers.isNotEmpty())) {
+        if (query.isBlank() && featuredVisible && (featuredLoading || featuredOffers.isNotEmpty())) {
             item {
                 AcpFeaturedOffers(
                     offers = featuredOffers,
@@ -612,7 +628,7 @@ internal fun AcpProductsPanel(
                     onOpen = { openProduct(it.product) }
                 )
             }
-        } else if (!featuredVisible) {
+        } else if (query.isBlank() && !featuredVisible) {
             item {
                 OutlinedButton(
                     onClick = { featuredVisible = true },
@@ -774,6 +790,24 @@ internal fun AcpProductsPanel(
                         if (product.barcode.isNotBlank()) append(" • EAN: ${product.barcode}")
                     }
                     Text(identifiers, style = MaterialTheme.typography.bodySmall)
+                    if (previewOffers.isNotEmpty()) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items(previewOffers.distinctBy { it.family }, key = { it.family.name }) { offer ->
+                                Surface(
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        if (offer.family == AcpOfferFamily.CLUB) "Clube" else offer.title,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                     Surface(
                         shape = if (isExpressive) {
                             RoundedCornerShape(if (screenProfile.compact) 14.dp else 18.dp)
