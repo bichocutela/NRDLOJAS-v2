@@ -166,7 +166,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       if (key === 'description') query.description = `ilike.*${String(value).replace(/[*%]/g, '')}*`;
     }
     const rows = await table('chain_products', query, auth.token);
-    const campaignRows = await campaignItems(auth);
+    const campaignRows = await campaignItems(auth).catch(() => []);
     const campaignFor = item => (Array.isArray(campaignRows) ? campaignRows : []).find(candidate =>
       (item.code != null && candidate.code != null && String(item.code) === String(candidate.code)) ||
       (item.barcode && candidate.barcode && String(item.barcode) === String(candidate.barcode)) ||
