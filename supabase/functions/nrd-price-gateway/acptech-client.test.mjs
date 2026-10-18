@@ -100,7 +100,7 @@ test('ACP Tech usa offset e total do PostgREST para páginas de produtos', async
   assert.match(productsRequest.url, /offset=20/);
 });
 
-function fixture({products = [], campaigns = [], items = [], categories = [], overrides = [], categoryProducts = {}, cap = 250, failItems = false, campaignRpcEmpty = false} = {}) {
+function fixture({products = [], campaigns = [], items = [], categories = [], overrides = [], alternativeBarcodes = [], categoryProducts = {}, cap = 250, failItems = false, campaignRpcEmpty = false} = {}) {
   const requests = [];
   const now = () => Date.parse('2026-10-18T19:00:00Z');
   const client = createAcpTechClient({now, boundedJson: async response => response.body,
@@ -119,7 +119,8 @@ function fixture({products = [], campaigns = [], items = [], categories = [], ov
       }
       if (failItems && path.endsWith('/campaign_items')) return {ok:false, status:500, body:{error:'mock'}};
       let all = path.endsWith('/campaigns') ? campaigns : path.endsWith('/campaign_items') ? items :
-        path.endsWith('/product_categories') ? categories : path.endsWith('/store_product_price_overrides') ? overrides : products;
+        path.endsWith('/product_categories') ? categories : path.endsWith('/store_product_price_overrides') ? overrides :
+        path.endsWith('/chain_product_barcodes') ? alternativeBarcodes : products;
       if (request.searchParams.has('or') && path.endsWith('/store_product_price_overrides')) {
         all = all.filter(row => Number(row.previous_price) > 0 || Number(row.club_price) > 0 || (Number(row.leve_quantity) > 0 && Number(row.pague_quantity) > 0));
       }
@@ -171,9 +172,10 @@ test('Campaign/all preserves separate club and multi-buy rules using the existin
 });
 
 test('campaign item inherits the store club override and campaign validity by product identity', async () => {
-  const {client} = fixture({
+  const {client, requests} = fixture({
     campaignRpcEmpty: true,
     products:[{id:'p1', code:2000451, barcode:'7896106900053', description:'Açúcar Triturado Dumel 1kg', price:4.19}],
+    alternativeBarcodes:[{chain_product_id:'p1', barcode:'1137989'}],
     overrides:[{chain_product_id:'p1', price:4.19, club_price:2.89}],
     campaigns:[{id:'c1', code:'1476', name:'NORDCARD', start_date:'2026-10-19', end_date:'2026-10-21'}],
     // ACP's campaign row may expose a different/legacy barcode. A unique ACP
@@ -189,6 +191,32 @@ test('campaign item inherits the store club override and campaign validity by pr
   assert.equal(product.startDate, '2026-10-19');
   assert.equal(product.endDate, '2026-10-21');
   assert.ok(product.productCategories.some(category => category.description === 'Clube de Vantagens'));
+  assert.ok(requests.some(request => request.url.pathname.endsWith('/chain_product_barcodes') && request.url.searchParams.get('barcode') === 'in.("1137989")'));
+});
+
+test('same product keeps each ACP campaign and its own validity window', async () => {
+  const {client} = fixture({
+    campaigns:[
+      {id:'c1', code:'1476', name:'Clube 19 a 21', start_date:'2026-10-19', end_date:'2026-10-21'},
+      {id:'c2', code:'next', name:'De-Por 23 a 25', start_date:'2026-10-23', end_date:'2026-10-25'}
+    ],
+    items:[
+      {id:'i1', campaign_id:'c1', code:2000451, price:4.19, club_price:2.89},
+      {id:'i2', campaign_id:'c2', code:2000451, price:2.89, previous_price:3.79}
+    ]
+  });
+  const result = await consult(client, 'Campaign/all', []);
+  const offers = result.items.flatMap(campaign => campaign.products.map(product => ({campaign, product})));
+  assert.equal(offers.length, 2);
+  const current = offers.find(({campaign}) => campaign.id === 'c1');
+  const next = offers.find(({campaign}) => campaign.id === 'c2');
+  assert.equal(current.product.clubValue, 2.89);
+  assert.equal(current.product.startDate, '2026-10-19');
+  assert.equal(current.product.endDate, '2026-10-21');
+  assert.equal(next.product.value, 2.89);
+  assert.equal(next.product.previousValue, 3.79);
+  assert.equal(next.product.startDate, '2026-10-23');
+  assert.equal(next.product.endDate, '2026-10-25');
 });
 
 test('promotions include club and take/pay from catalogue categories even without campaigns', async () => {
