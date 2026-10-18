@@ -16,7 +16,7 @@ import com.example.data.OFFER_BANNER_WHOLESALE
 internal enum class AcpSearchField(val parameter: String, val label: String) { BARCODE("barCode", "Cód. barras"), CODE("code", "Código"), DESCRIPTION("description", "Descrição") }
 internal data class AcpCategory(val id: String, val description: String)
 internal data class AcpProductPage(val items: List<AcpProduct>, val pageIndex: Int, val totalPages: Int, val totalCount: Int, val queriedAtMillis: Long = System.currentTimeMillis())
-internal data class AcpOffer(val title: String, val detail: String, val price: BigDecimal? = null, val referencePrice: BigDecimal? = null, val headline: String? = null)
+internal data class AcpOffer(val title: String, val detail: String, val price: BigDecimal? = null, val referencePrice: BigDecimal? = null, val headline: String? = null, val startDate: String? = null, val endDate: String? = null)
 internal data class AcpFeaturedOffer(val product: AcpProduct, val offer: AcpOffer)
 internal data class AcpFeaturedPage(val items: List<AcpFeaturedOffer>, val hasMore: Boolean)
 
@@ -115,7 +115,7 @@ internal data class AcpProduct(
         val start = validFrom?.let(::acpDateLabel)
         val end = validTo?.let(::acpDateLabel)
         if (start == null && end == null) offer
-        else offer.copy(detail = "${offer.detail} Vigência: ${start ?: "?"} até ${end ?: "?"}.")
+        else offer.copy(detail = "${offer.detail} Vigência: ${start ?: "?"} até ${end ?: "?"}.", startDate = validFrom, endDate = validTo)
     }
 }
 
@@ -177,6 +177,22 @@ internal fun AcpProduct.offerValidityOr(fallback: AcpOfferValidity?): AcpOfferVa
     val end = normalizeAcpDate(validTo)
     if (start == null && end == null) return fallback
     return AcpOfferValidity(start ?: fallback?.startDate.orEmpty(), end ?: fallback?.endDate.orEmpty())
+}
+
+/** Source dates belong to each offer; saved dates apply only to undated offers. */
+internal fun AcpOffer.validityOr(fallback: AcpOfferValidity?): AcpOfferValidity? {
+    val start = normalizeAcpDate(startDate)
+    val end = normalizeAcpDate(endDate)
+    return if (start == null && end == null) fallback
+    else AcpOfferValidity(start.orEmpty(), end.orEmpty())
+}
+
+internal fun AcpOffer.isWithinValidity(fallback: AcpOfferValidity? = null, nowMillis: Long = System.currentTimeMillis()): Boolean {
+    val dates = validityOr(fallback)
+    val today = Calendar.getInstance().apply { timeInMillis = nowMillis }
+    val start = parseAcpDate(dates?.startDate)
+    val end = parseAcpDate(dates?.endDate)
+    return (start == null || dateKey(start) <= dateKey(today)) && (end == null || dateKey(end) >= dateKey(today))
 }
 
 /** Drops dated offers outside their effective window while retaining offers with no dates. */
