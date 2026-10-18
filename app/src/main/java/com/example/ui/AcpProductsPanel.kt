@@ -848,25 +848,6 @@ internal fun AcpProductsPanel(
                                 )
                             )
                         }
-                    } else {
-                        val standardBanner = appearance.activeOfferBanner(com.example.data.OFFER_BANNER_STANDARD)
-                        if (standardBanner != null) {
-                            AcpOfferPoster(
-                                offer = AcpOffer(
-                                    "Preço cadastrado",
-                                    "Produto sem promoção especial.",
-                                    product.value
-                                ),
-                                compact = true,
-                                productName = product.description,
-                                banner = standardBanner,
-                                validityOverride = product.offerValidityOr(
-                                    offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, AcpOfferFamily.PRICE)]
-                                )
-                            )
-                        } else {
-                            Text("Sem promoção explícita identificada no cadastro do produto.", style = MaterialTheme.typography.labelSmall)
-                        }
                     }
                     Text(
                         "Ver ficha completa",
