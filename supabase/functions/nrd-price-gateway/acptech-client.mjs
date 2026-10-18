@@ -272,6 +272,23 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
         const id = String(product.id ?? '');
         if (id && !byId.has(id)) { byId.add(id); catalog.push(product); }
       }
+      // Some ACP deployments accept p_codes in the search RPC but return no
+      // rows for campaign records. Fall back to exact, bounded PostgREST
+      // filters for only these campaign identities; never scan the catalogue.
+      const identityFilters = [];
+      if (pIds.length) identityFilters.push(`id.in.${encodeIn(pIds)}`);
+      if (pCodes.length) identityFilters.push(`code.in.${encodeIn(pCodes)}`);
+      if (pBarcodes.length) identityFilters.push(`barcode.in.${encodeIn(pBarcodes)}`);
+      if (identityFilters.length) {
+        const matches = await tableAll('chain_products', {
+          select: '*', chain_id: `eq.${auth.chainId}`, deleted_at: 'is.null',
+          or: `(${identityFilters.join(',')})`, order: 'code.asc,id.asc'
+        }, auth.token);
+        for (const product of matches) {
+          const id = String(product.id ?? '');
+          if (id && !byId.has(id)) { byId.add(id); catalog.push(product); }
+        }
+      }
     }
     if (!catalog.length) return items;
     const storeProducts = await hydrateProducts(auth, catalog, false);

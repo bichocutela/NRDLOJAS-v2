@@ -100,7 +100,7 @@ test('ACP Tech usa offset e total do PostgREST para páginas de produtos', async
   assert.match(productsRequest.url, /offset=20/);
 });
 
-function fixture({products = [], campaigns = [], items = [], categories = [], overrides = [], categoryProducts = {}, cap = 250, failItems = false} = {}) {
+function fixture({products = [], campaigns = [], items = [], categories = [], overrides = [], categoryProducts = {}, cap = 250, failItems = false, campaignRpcEmpty = false} = {}) {
   const requests = [];
   const now = () => Date.parse('2026-10-18T19:00:00Z');
   const client = createAcpTechClient({now, boundedJson: async response => response.body,
@@ -114,13 +114,23 @@ function fixture({products = [], campaigns = [], items = [], categories = [], ov
       if (path.endsWith('/rpc/count_chain_products')) return {ok:true, body:(categoryProducts[JSON.parse(options.body).p_category_id] ?? products).length};
       if (path.endsWith('/rpc/search_chain_products')) {
         const body = JSON.parse(options.body);
+        if (campaignRpcEmpty && body.p_codes?.length) return {ok:true, body:[]};
         return {ok:true, body:(categoryProducts[body.p_category_id] ?? products).slice(body.p_offset, body.p_offset + body.p_limit)};
       }
       if (failItems && path.endsWith('/campaign_items')) return {ok:false, status:500, body:{error:'mock'}};
       let all = path.endsWith('/campaigns') ? campaigns : path.endsWith('/campaign_items') ? items :
         path.endsWith('/product_categories') ? categories : path.endsWith('/store_product_price_overrides') ? overrides : products;
-      if (request.searchParams.has('or') && (path.endsWith('/chain_products') || path.endsWith('/store_product_price_overrides'))) {
+      if (request.searchParams.has('or') && path.endsWith('/store_product_price_overrides')) {
         all = all.filter(row => Number(row.previous_price) > 0 || Number(row.club_price) > 0 || (Number(row.leve_quantity) > 0 && Number(row.pague_quantity) > 0));
+      }
+      if (request.searchParams.has('or') && path.endsWith('/chain_products')) {
+        const filters = request.searchParams.get('or');
+        const values = key => {
+          const match = filters.match(new RegExp(`${key}\\.in\\.\\(([^)]*)\\)`));
+          return match ? [...match[1].matchAll(/"([^"]+)"/g)].map(value => value[1]) : [];
+        };
+        const ids = values('id'), codes = values('code'), barcodes = values('barcode');
+        all = all.filter(row => ids.includes(String(row.id)) || codes.includes(String(row.code)) || barcodes.includes(String(row.barcode)));
       }
       if (request.searchParams.has('id')) {
         const ids = JSON.parse('[' + request.searchParams.get('id').slice(4, -1) + ']');
@@ -162,6 +172,7 @@ test('Campaign/all preserves separate club and multi-buy rules using the existin
 
 test('campaign item inherits the store club override and campaign validity by product identity', async () => {
   const {client} = fixture({
+    campaignRpcEmpty: true,
     products:[{id:'p1', code:2000451, barcode:'7896106900053', description:'Açúcar Triturado Dumel 1kg', price:4.19}],
     overrides:[{chain_product_id:'p1', price:4.19, club_price:2.89}],
     campaigns:[{id:'c1', code:'1476', name:'NORDCARD', start_date:'2026-10-19', end_date:'2026-10-21'}],
