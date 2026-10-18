@@ -54,7 +54,8 @@ test('ACP Tech resolve chain_id pela loja antes de consultar produtos', async ()
     {ok: true, status: 200, body: {access_token: 'jwt-test'}},
     {ok: true, status: 200, body: {user: {store_id: 'store-12', chain_id: null}}},
     {ok: true, status: 200, body: [{chain_id: 'chain-1'}]},
-    {ok: true, status: 200, body: [{code: 2021000, description: 'Produto teste', image_url: ''}]}
+    {ok: true, status: 200, body: [{code: 2021000, description: 'Produto teste', image_url: ''}]},
+    {ok: true, status: 200, body: []}
   ];
   const client = createAcpTechClient({
     boundedJson: async response => response.body,
@@ -68,7 +69,8 @@ test('ACP Tech resolve chain_id pela loja antes de consultar produtos', async ()
 
   const result = await client.consult({path: 'Product/all', parameters: [['code', '2021000'], ['pageIndex', '0'], ['pageSize', '10']]});
   assert.equal(result.totalCount, 1);
-  assert.match(requests[3].url, /rest\/v1\/stores\?/);
-  assert.match(requests[4].url, /rest\/v1\/chain_products\?/);
-  assert.match(requests[4].url, /chain_id=eq\.chain-1/);
+  assert.ok(requests.some(request => /rest\/v1\/stores\?/.test(request.url)));
+  const productsRequest = requests.find(request => /rest\/v1\/chain_products\?/.test(request.url));
+  assert.ok(productsRequest);
+  assert.match(productsRequest.url, /chain_id=eq\.chain-1/);
 });

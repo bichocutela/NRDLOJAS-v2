@@ -8,17 +8,25 @@ function encodeIn(values) {
 }
 
 function categoryObjects(item) {
-  if (Array.isArray(item.productCategories) && item.productCategories.length) return item.productCategories;
+  const existing = Array.isArray(item.productCategories) ? item.productCategories : [];
   const price = Number(item.price ?? item.value);
   const previous = Number(item.previous_price ?? item.previousValue);
   const club = Number(item.club_price ?? item.clubValue);
   const take = Number(item.leve_quantity ?? item.quantityTake);
   const pay = Number(item.pague_quantity ?? item.quantityPay);
-  const categories = [];
-  if (Number.isFinite(price) && price > 0 && Number.isFinite(previous) && previous > price) categories.push({description: 'De-Por'});
-  if (Number.isFinite(club) && club > 0) categories.push({description: 'Clube de Vantagens'});
-  if (Number.isFinite(take) && Number.isFinite(pay) && take > pay && pay > 0) categories.push({description: 'Leve/Pague'});
-  if (Number(item.wholesale_price ?? item.wholesaleValue) > 0) categories.push({description: 'Atacado'});
+  const categories = [...existing];
+  const labels = new Set(categories.map(category => String(category?.description ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')));
+  const add = description => {
+    const key = description.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!labels.has(key)) { categories.push({description}); labels.add(key); }
+  };
+  if (Number.isFinite(price) && price > 0 && Number.isFinite(previous) && previous > price) add('De-Por');
+  if (Number.isFinite(club) && club > 0) add('Clube de Vantagens');
+  if (Number.isFinite(take) && Number.isFinite(pay) && take > pay && pay > 0) add('Leve/Pague');
+  if (Number(item.wholesale_price ?? item.wholesaleValue) > 0) add('Atacado');
+  const type = String(item.promotion_type ?? item.promotionType ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (['clube', 'club', 'clubedevantagens', 'clubvantagens'].includes(type)) add('Clube de Vantagens');
+  if (['leveepague', 'levepague', 'takepay', 'buyxpayy'].includes(type)) add('Leve/Pague');
   return categories;
 }
 
@@ -158,23 +166,42 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       if (key === 'description') query.description = `ilike.*${String(value).replace(/[*%]/g, '')}*`;
     }
     const rows = await table('chain_products', query, auth.token);
-    return (Array.isArray(rows) ? rows : []).map(item => ({
-      ...item,
-      barCode: item.barcode ?? null,
-      value: item.value ?? item.price ?? null,
-      previousValue: item.previousValue ?? item.previous_price ?? null,
-      clubValue: item.clubValue ?? item.club_price ?? null,
-      wholesaleValue: item.wholesaleValue ?? item.wholesale_price ?? null,
-      wholesaleQuantity: item.wholesaleQuantity ?? item.wholesale_quantity ?? null,
-      quantityTake: item.quantityTake ?? item.leve_quantity ?? null,
-      quantityPay: item.quantityPay ?? item.pague_quantity ?? null,
-      productCategories: categoryObjects(item),
-      secondUnitDiscount: item.secondUnitDiscount ?? item.second_unit_discount ?? null,
-      unitLimitPerCPF: item.unitLimitPerCPF ?? item.unit_limit ?? null,
-      endDate: item.endDate ?? item.valid_until ?? null,
-      imagem: item.image_url ?? null,
-      imageUrl: item.image_url ?? null, linkloja: null, productUrl: null
-    }));
+    const campaignRows = await campaignItems(auth);
+    const campaignFor = item => (Array.isArray(campaignRows) ? campaignRows : []).find(candidate =>
+      (item.code != null && candidate.code != null && String(item.code) === String(candidate.code)) ||
+      (item.barcode && candidate.barcode && String(item.barcode) === String(candidate.barcode)) ||
+      (item.description && candidate.description && String(item.description).trim().toLowerCase() === String(candidate.description).trim().toLowerCase())
+    );
+    return (Array.isArray(rows) ? rows : []).map(item => {
+      const campaign = campaignFor(item);
+      const merged = {
+        ...item,
+        value: Number(item.value ?? item.price) > 0 ? (item.value ?? item.price) : (campaign?.value ?? campaign?.price ?? item.value ?? item.price),
+        price: Number(item.price) > 0 ? item.price : (campaign?.price ?? campaign?.value ?? item.price),
+        previous_price: Number(item.previous_price) > 0 ? item.previous_price : (campaign?.previous_price ?? campaign?.previousValue ?? item.previous_price),
+        club_price: Number(item.club_price) > 0 ? item.club_price : (campaign?.club_price ?? campaign?.clubValue ?? item.club_price),
+        leve_quantity: Number(item.leve_quantity) > 0 ? item.leve_quantity : (campaign?.leve_quantity ?? campaign?.quantityTake ?? item.leve_quantity),
+        pague_quantity: Number(item.pague_quantity) > 0 ? item.pague_quantity : (campaign?.pague_quantity ?? campaign?.quantityPay ?? item.pague_quantity),
+        promotion_type: item.promotion_type || campaign?.promotion_type || campaign?.promotionType || ''
+      };
+      return {
+        ...merged,
+        barCode: merged.barcode ?? null,
+        value: merged.value ?? null,
+        previousValue: merged.previousValue ?? merged.previous_price ?? null,
+        clubValue: merged.clubValue ?? merged.club_price ?? null,
+        wholesaleValue: merged.wholesaleValue ?? merged.wholesale_price ?? null,
+        wholesaleQuantity: merged.wholesaleQuantity ?? merged.wholesale_quantity ?? null,
+        quantityTake: merged.quantityTake ?? merged.leve_quantity ?? null,
+        quantityPay: merged.quantityPay ?? merged.pague_quantity ?? null,
+        productCategories: categoryObjects(merged),
+        secondUnitDiscount: merged.secondUnitDiscount ?? merged.second_unit_discount ?? null,
+        unitLimitPerCPF: merged.unitLimitPerCPF ?? merged.unit_limit ?? null,
+        endDate: merged.endDate ?? merged.valid_until ?? null,
+        imagem: merged.image_url ?? null,
+        imageUrl: merged.image_url ?? null, linkloja: null, productUrl: null
+      };
+    });
   }
 
   return {
