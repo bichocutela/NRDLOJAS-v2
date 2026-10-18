@@ -5,8 +5,9 @@ export function createAuthorizer({verify, document, hash}) {
     const token = req.headers.get('x-firebase-token');
     let identity = null;
     if (token) identity = await verify(token);
-    if (identity?.email === 'mestre@nrdlojas.com') return result(true,true);
-    if (identity?.email?.endsWith('@usuarios.nrdlojas.com')) {
+    const email=typeof identity?.email==='string' ? identity.email.trim().toLowerCase() : '';
+    if (email === 'mestre@nrdlojas.com') return result(true,true);
+    if (email.endsWith('@usuarios.nrdlojas.com')) {
       const deviceToken=req.headers.get('x-device-session');
       if(!deviceToken || !/^[a-f0-9]{64}$/.test(deviceToken))return result(false,false);
       const session=await document('access_sessions/'+encodeURIComponent(identity.uid));

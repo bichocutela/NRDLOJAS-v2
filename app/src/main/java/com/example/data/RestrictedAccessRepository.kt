@@ -186,7 +186,7 @@ object RestrictedAccessRepository {
         PromotionControlClient.write("config/restricted_access", mapOf("publicAccess" to enabled))
     }
     suspend fun current(): RestrictedAccess {
-        if (FirebaseAuth.getInstance().currentUser?.email == "mestre@nrdlojas.com") return RestrictedAccess(enabled = true, profile = true, promotions = true, prices = true)
+        if (FirebaseAuth.getInstance().currentUser?.email?.trim()?.lowercase(Locale.ROOT) == "mestre@nrdlojas.com") return RestrictedAccess(enabled = true, profile = true, promotions = true, prices = true)
         return try {
             val data = PromotionControlClient.request(JSONObject().put("operation", "access"))
             RestrictedAccess(enabled = data.optBoolean("enabled"), profile = data.optBoolean("profile"), promotions = data.optBoolean("promotions"), prices = data.optBoolean("prices"), publicAccess = data.optBoolean("publicAccess"), publicLoading = false)
