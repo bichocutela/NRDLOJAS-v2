@@ -18,7 +18,7 @@ test('ACP Tech resolve username, autentica e retorna itens de campanhas', async 
     config: {anonKey: 'anon-test', storeSlug: 'nordestao12'},
     fetcher: async (url, options) => {
       requests.push({url: String(url), options});
-      return responses.shift();
+      return responses.shift() ?? {ok:true, status:200, body:[]};
     }
   });
 
@@ -117,8 +117,15 @@ function fixture({products = [], campaigns = [], items = [], categories = [], ov
         return {ok:true, body:(categoryProducts[body.p_category_id] ?? products).slice(body.p_offset, body.p_offset + body.p_limit)};
       }
       if (failItems && path.endsWith('/campaign_items')) return {ok:false, status:500, body:{error:'mock'}};
-      const all = path.endsWith('/campaigns') ? campaigns : path.endsWith('/campaign_items') ? items :
+      let all = path.endsWith('/campaigns') ? campaigns : path.endsWith('/campaign_items') ? items :
         path.endsWith('/product_categories') ? categories : path.endsWith('/store_product_price_overrides') ? overrides : products;
+      if (request.searchParams.has('or') && (path.endsWith('/chain_products') || path.endsWith('/store_product_price_overrides'))) {
+        all = all.filter(row => Number(row.previous_price) > 0 || Number(row.club_price) > 0 || (Number(row.leve_quantity) > 0 && Number(row.pague_quantity) > 0));
+      }
+      if (request.searchParams.has('id')) {
+        const ids = JSON.parse('[' + request.searchParams.get('id').slice(4, -1) + ']');
+        all = all.filter(row => ids.includes(String(row.id)));
+      }
       const offset = Number(request.searchParams.get('offset') || 0);
       const limit = Math.min(Number(request.searchParams.get('limit') || 250), cap);
       return {ok:true, status:200, body:all.slice(offset, offset + limit),
@@ -197,4 +204,22 @@ test('catalogue-only conditions are also visible through existing Campaign/all p
   assert.equal(result.items[0].name, 'Condições do cadastro de produtos');
   assert.equal(result.items[0].products[0].value, 12);
   assert.equal(result.items[0].products[0].quantityTake, 3);
+});
+
+
+test('uncategorized catalogue offers use effective store values and exclude expired or cleared rules', async () => {
+  const {client, requests} = fixture({products:[
+    {id:'club', code:1, price:10, club_price:7},
+    {id:'take', code:2, price:12, leve_quantity:3, pague_quantity:2},
+    {id:'depor', code:3, price:6, previous_price:10},
+    {id:'local', code:4, price:10},
+    {id:'cleared', code:5, price:10, club_price:7},
+    {id:'expired', code:6, price:10, club_price:7, valid_until:'2026-10-17'},
+    {id:'normal', code:7, price:10}
+  ], overrides:[{chain_product_id:'local', club_price:8}, {chain_product_id:'cleared', club_price:0}]});
+  const result = await consult(client, 'Promotion/all', []);
+  assert.deepEqual(result.items.map(item => item.id).sort(), ['club','depor','local','take']);
+  assert.equal(result.items.find(item => item.id === 'local').clubValue, 8);
+  assert.ok(requests.some(row => row.url.searchParams.get('chain_id') === 'eq.c' && row.url.searchParams.has('or')));
+  assert.ok(requests.some(row => row.url.searchParams.get('store_id') === 'eq.s' && row.url.searchParams.has('or')));
 });
