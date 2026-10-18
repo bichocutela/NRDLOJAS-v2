@@ -298,13 +298,10 @@ internal fun AcpProductsPanel(
         if (index == 0 && canCopyDiagnostic && interactive) api.beginDiagnosticSession()
         searchJob = scope.launch {
             try {
-                val result = if (interactive) {
-                    // Busca explícita sempre vai direto ao ACP. As sugestões em segundo plano
-                    // continuam podendo aproveitar o cache para não consultar a cada tecla.
-                    api.searchProductsUnifiedFresh(searchText, index, freshStore)
-                } else {
-                    api.searchProductsUnified(searchText, index)
-                }
+                // The visible list always uses current prices and tags, including live
+                // typing. A 24-hour cached product could otherwise gain its badge only
+                // after the user opens the detail and forces a fresh read.
+                val result = api.searchProductsUnifiedFresh(searchText, index, freshStore)
                 if (ticket != generation) return@launch
 
                 // Product/all é o caminho crítico. Assim que ele responde, o produto já fica
