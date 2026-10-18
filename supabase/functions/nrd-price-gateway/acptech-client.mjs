@@ -115,10 +115,25 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       headers: {...headers(token), Prefer: 'count=exact'}
     });
     const body = await boundedJson(response);
+    if (!response.ok && response.status === 416) {
+      const available = typeof body?.details === 'string' ? body.details.match(/only (\d+) rows/) : null;
+      return {rows: [], total: available ? Number(available[1]) : 0};
+    }
     if (!response.ok) throw Error('ACPTECH_UPSTREAM_FAILURE');
     const range = response.headers?.get?.('content-range') || '';
     const match = range.match(/\/([0-9]+|\*)$/);
     return {rows: Array.isArray(body) ? body : [], total: match && match[1] !== '*' ? Number(match[1]) : null};
+  }
+
+  async function rpcPage(name, body, token) {
+    const response = await fetcher(`${supabaseUrl}/rest/v1/rpc/${name}`, {
+      method: 'POST', body: JSON.stringify(body),
+      redirect: 'error', signal: AbortSignal.timeout(20000),
+      headers: {...headers(token), 'Content-Type': 'application/json'}
+    });
+    const payload = await boundedJson(response);
+    if (!response.ok) throw Error('ACPTECH_UPSTREAM_FAILURE');
+    return {rows: Array.isArray(payload) ? payload : [], total: null};
   }
 
   async function campaignItems(auth, productCodes = null) {
@@ -183,13 +198,25 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     const size = Math.min(250, Math.max(1, Number(parameters.find(([key]) => key === 'pageSize')?.[1] ?? 50) || 50));
     const query = {select: '*', chain_id: auth.chainId ? `eq.${auth.chainId}` : undefined, deleted_at: 'is.null', limit: String(size), offset: String(page * size), order: 'description.asc,code.asc'};
     if (!query.chain_id) delete query.chain_id;
+    let code = null, barcode = null, description = null, categoryId = null;
     for (const [key, value] of parameters) {
-      if (key === 'code') query.code = `eq.${value}`;
-      if (key === 'barCode') query.barcode = `eq.${value}`;
-      if (key === 'description') query.description = `ilike.*${String(value).replace(/[*%]/g, '')}*`;
-      if (key === 'productCategoryIds' && value) query.category_id = `eq.${value}`;
+      if (key === 'code') { query.code = `eq.${value}`; code = /^\d+$/.test(String(value)) ? Number(value) : null; }
+      if (key === 'barCode') { query.barcode = `eq.${value}`; barcode = String(value); }
+      if (key === 'description') { query.description = `ilike.*${String(value).replace(/[*%]/g, '')}*`; description = String(value).trim(); }
+      if (key === 'productCategoryIds' && value) { query.category_id = `eq.${value}`; categoryId = String(value); }
     }
-    const result = await tablePage('chain_products', query, auth.token);
+    const searched = code != null || barcode != null || Boolean(description);
+    const result = searched
+      ? await rpcPage('search_chain_products', {
+        p_chain_id: auth.chainId,
+        p_category_id: categoryId,
+        p_code: code,
+        p_barcode_prefix: barcode,
+        p_description: description,
+        p_ids: null, p_codes: null, p_barcodes: null,
+        p_include_deleted: false, p_limit: size, p_offset: page * size
+      }, auth.token)
+      : await tablePage('chain_products', query, auth.token);
     const rows = result.rows;
     const campaignRows = await campaignItems(auth, rows.map(item => item.code)).catch(() => []);
     const campaignFor = item => (Array.isArray(campaignRows) ? campaignRows : []).find(candidate =>
@@ -227,7 +254,8 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
         imageUrl: merged.image_url ?? null, linkloja: null, productUrl: null
       };
     });
-    return {items, totalCount: result.total ?? (page * size + items.length), pageIndex: page, pageSize: size};
+    const totalCount = result.total ?? (page * size + items.length + (items.length === size ? size : 0));
+    return {items, totalCount, pageIndex: page, pageSize: size};
   }
 
   return {
