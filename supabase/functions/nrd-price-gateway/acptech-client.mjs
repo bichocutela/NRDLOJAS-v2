@@ -283,10 +283,16 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       }
       const code = item.code == null ? '' : String(item.code);
       const barcode = String(item.barcode ?? item.barCode ?? '');
-      if (code && barcode) return storeProducts.find(product =>
-        String(product.code ?? '') === code && String(product.barcode ?? product.barCode ?? '') === barcode);
+      if (code) {
+        const codeMatches = storeProducts.filter(product => String(product.code ?? '') === code);
+        if (codeMatches.length === 1) return codeMatches[0];
+        if (barcode) {
+          const exact = codeMatches.find(product => String(product.barcode ?? product.barCode ?? '') === barcode);
+          if (exact) return exact;
+        }
+        if (codeMatches.length > 1) return undefined;
+      }
       if (barcode) return storeProducts.find(product => String(product.barcode ?? product.barCode ?? '') === barcode);
-      if (code) return storeProducts.find(product => String(product.code ?? '') === code);
       return undefined;
     };
     return items.map(item => {

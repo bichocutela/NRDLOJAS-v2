@@ -165,7 +165,9 @@ test('campaign item inherits the store club override and campaign validity by pr
     products:[{id:'p1', code:2000451, barcode:'7896106900053', description:'Açúcar Triturado Dumel 1kg', price:4.19}],
     overrides:[{chain_product_id:'p1', price:4.19, club_price:2.89}],
     campaigns:[{id:'c1', code:'1476', name:'NORDCARD', start_date:'2026-10-19', end_date:'2026-10-21'}],
-    items:[{id:'i1', campaign_id:'c1', code:2000451, barcode:'7896106900053', description:'Açúcar Triturado Dumel',
+    // ACP's campaign row may expose a different/legacy barcode. A unique ACP
+    // product code remains the primary identity and still finds its override.
+    items:[{id:'i1', campaign_id:'c1', code:2000451, barcode:'1137989', description:'Açúcar Triturado Dumel',
       price:0, previous_price:3.79}]
   });
   const campaign = (await consult(client, 'Campaign/all', [])).items[0];
