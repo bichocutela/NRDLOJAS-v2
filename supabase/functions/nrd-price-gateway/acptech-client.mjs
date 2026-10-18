@@ -7,6 +7,21 @@ function encodeIn(values) {
   return `(${values.map(value => JSON.stringify(String(value))).join(',')})`;
 }
 
+function categoryObjects(item) {
+  if (Array.isArray(item.productCategories) && item.productCategories.length) return item.productCategories;
+  const price = Number(item.price ?? item.value);
+  const previous = Number(item.previous_price ?? item.previousValue);
+  const club = Number(item.club_price ?? item.clubValue);
+  const take = Number(item.leve_quantity ?? item.quantityTake);
+  const pay = Number(item.pague_quantity ?? item.quantityPay);
+  const categories = [];
+  if (Number.isFinite(price) && price > 0 && Number.isFinite(previous) && previous > price) categories.push({description: 'De-Por'});
+  if (Number.isFinite(club) && club > 0) categories.push({description: 'Clube de Vantagens'});
+  if (Number.isFinite(take) && Number.isFinite(pay) && take > pay && pay > 0) categories.push({description: 'Leve/Pague'});
+  if (Number(item.wholesale_price ?? item.wholesaleValue) > 0) categories.push({description: 'Atacado'});
+  return categories;
+}
+
 export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, config = {}}) {
   const supabaseUrl = String(config.url || DEFAULT_URL).replace(/\/$/, '');
   const storeSlug = String(config.storeSlug || DEFAULT_STORE);
@@ -118,6 +133,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       wholesaleQuantity: item.wholesaleQuantity ?? item.wholesale_quantity ?? null,
       quantityTake: item.quantityTake ?? item.leve_quantity ?? null,
       quantityPay: item.quantityPay ?? item.pague_quantity ?? null,
+      productCategories: categoryObjects(item),
       secondUnitDiscount: item.secondUnitDiscount ?? item.second_unit_discount ?? null,
       unitLimitPerCPF: item.unitLimitPerCPF ?? item.unit_limit ?? null,
       startDate: item.startDate ?? campaign?.start_date ?? null,
@@ -152,6 +168,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       wholesaleQuantity: item.wholesaleQuantity ?? item.wholesale_quantity ?? null,
       quantityTake: item.quantityTake ?? item.leve_quantity ?? null,
       quantityPay: item.quantityPay ?? item.pague_quantity ?? null,
+      productCategories: categoryObjects(item),
       secondUnitDiscount: item.secondUnitDiscount ?? item.second_unit_discount ?? null,
       unitLimitPerCPF: item.unitLimitPerCPF ?? item.unit_limit ?? null,
       endDate: item.endDate ?? item.valid_until ?? null,

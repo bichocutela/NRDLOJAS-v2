@@ -26,6 +26,7 @@ test('ACP Tech resolve username, autentica e retorna itens de campanhas', async 
   assert.equal(result.items[0].code, '0012');
   assert.equal(result.items[0].value, 4.99);
   assert.equal(result.items[0].previousValue, 5.99);
+  assert.deepEqual(result.items[0].productCategories, [{description: 'De-Por'}]);
   assert.equal(result.items[0].imageUrl, 'https://cdn.test/item.png');
   assert.match(requests[0].url, /functions\/v1\/store-auth/);
   assert.match(requests[1].url, /auth\/v1\/token\?grant_type=password/);
