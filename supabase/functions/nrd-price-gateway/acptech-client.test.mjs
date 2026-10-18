@@ -194,6 +194,31 @@ test('campaign item inherits the store club override and campaign validity by pr
   assert.ok(requests.some(request => request.url.pathname.endsWith('/chain_product_barcodes') && request.url.searchParams.get('barcode') === 'in.("1137989")'));
 });
 
+test('same product keeps each ACP campaign and its own validity window', async () => {
+  const {client} = fixture({
+    campaigns:[
+      {id:'c1', code:'1476', name:'Clube 19 a 21', start_date:'2026-10-19', end_date:'2026-10-21'},
+      {id:'c2', code:'next', name:'De-Por 23 a 25', start_date:'2026-10-23', end_date:'2026-10-25'}
+    ],
+    items:[
+      {id:'i1', campaign_id:'c1', code:2000451, price:4.19, club_price:2.89},
+      {id:'i2', campaign_id:'c2', code:2000451, price:2.89, previous_price:3.79}
+    ]
+  });
+  const result = await consult(client, 'Campaign/all', []);
+  const offers = result.items.flatMap(campaign => campaign.products.map(product => ({campaign, product})));
+  assert.equal(offers.length, 2);
+  const current = offers.find(({campaign}) => campaign.id === 'c1');
+  const next = offers.find(({campaign}) => campaign.id === 'c2');
+  assert.equal(current.product.clubValue, 2.89);
+  assert.equal(current.product.startDate, '2026-10-19');
+  assert.equal(current.product.endDate, '2026-10-21');
+  assert.equal(next.product.value, 2.89);
+  assert.equal(next.product.previousValue, 3.79);
+  assert.equal(next.product.startDate, '2026-10-23');
+  assert.equal(next.product.endDate, '2026-10-25');
+});
+
 test('promotions include club and take/pay from catalogue categories even without campaigns', async () => {
   const {client, requests} = fixture({categories:[{id:'club', name:'Clube de Vantagens'}, {id:'take', name:'Leve-Pague'}],
     categoryProducts:{club:[{id:'p1', code:123, description:'Clube', price:10, club_price:5}],
