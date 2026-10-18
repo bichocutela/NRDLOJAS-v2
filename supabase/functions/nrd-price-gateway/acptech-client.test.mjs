@@ -43,3 +43,29 @@ test('ACP Tech usa a chave pública padrão quando nenhuma chave é informada', 
   });
   await assert.rejects(() => client.consult({path: 'Promotion/all', parameters: [['pageIndex', '0'], ['pageSize', '1']]}), /ACPTECH_UPSTREAM_FAILURE/);
 });
+
+test('ACP Tech resolve chain_id pela loja antes de consultar produtos', async () => {
+  const requests = [];
+  const responses = [
+    {ok: true, status: 200, body: {email: 'resolved@example.invalid'}},
+    {ok: true, status: 200, body: {access_token: 'jwt-test'}},
+    {ok: true, status: 200, body: {user: {store_id: 'store-12', chain_id: null}}},
+    {ok: true, status: 200, body: [{chain_id: 'chain-1'}]},
+    {ok: true, status: 200, body: [{code: 2021000, description: 'Produto teste', image_url: ''}]}
+  ];
+  const client = createAcpTechClient({
+    boundedJson: async response => response.body,
+    credentials: () => ({login: 'nordestao12', password: 'not-a-real-password'}),
+    config: {anonKey: 'anon-test', storeSlug: 'nordestao12'},
+    fetcher: async (url, options) => {
+      requests.push({url: String(url), options});
+      return responses.shift();
+    }
+  });
+
+  const result = await client.consult({path: 'Product/all', parameters: [['code', '2021000'], ['pageIndex', '0'], ['pageSize', '10']]});
+  assert.equal(result.totalCount, 1);
+  assert.match(requests[3].url, /rest\/v1\/stores\?/);
+  assert.match(requests[4].url, /rest\/v1\/chain_products\?/);
+  assert.match(requests[4].url, /chain_id=eq\.chain-1/);
+});

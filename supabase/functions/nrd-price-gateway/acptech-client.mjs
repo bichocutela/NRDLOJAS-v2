@@ -58,8 +58,17 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
         body: JSON.stringify({action: 'bootstrap', storeSlug})
       });
       const storeId = boot?.user?.store_id;
-      const chainId = boot?.user?.chain_id;
+      // Some ACP Tech store users have no chain_id in bootstrap. The product
+      // table is keyed by chain_id, and an unfiltered read times out.
+      let chainId = boot?.user?.chain_id || null;
       if (!storeId) throw Error('ACPTECH_STORE_NOT_FOUND');
+      if (!chainId) {
+        const stores = await json(`${supabaseUrl}/rest/v1/stores?select=chain_id&id=eq.${encodeURIComponent(storeId)}&limit=1`, {
+          token: auth.access_token
+        });
+        chainId = Array.isArray(stores) ? stores[0]?.chain_id || null : null;
+      }
+      if (!chainId) throw Error('ACPTECH_CHAIN_NOT_FOUND');
       session = {token: auth.access_token, storeId, chainId};
       sessionAt = Date.now();
       campaignsCache = null;
@@ -138,7 +147,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
           return {items: rows.slice(page * size, (page + 1) * size), pageIndex: page,
             totalCount: rows.length, totalPages: rows.length ? Math.ceil(rows.length / size) : 0};
         } catch (error) {
-          if (attempt === 0 && /LOGIN|SESSION|UPSTREAM|STORE_NOT_FOUND/.test(String(error?.message))) {
+          if (attempt === 0 && /LOGIN|SESSION|UPSTREAM|STORE_NOT_FOUND|CHAIN_NOT_FOUND/.test(String(error?.message))) {
             session = null; campaignsCache = null; continue;
           }
           throw error;
