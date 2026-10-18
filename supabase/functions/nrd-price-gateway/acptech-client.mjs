@@ -362,36 +362,6 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
         if (page === 99) throw Error('ACPTECH_INCOMPLETE_RESULT');
       }
     }
-    // Promotional fields can exist without a category association. Include
-    // candidates from both chain prices and store overrides, then evaluate the
-    // effective store values (including explicit zeroes that remove an offer).
-    const condition = '(previous_price.gt.0,club_price.gt.0,and(leve_quantity.gt.0,pague_quantity.gt.0))';
-    // Read IDs first, as the official portal does for filtered catalogue reads.
-    // Wide rows plus an exact count on these unindexed commercial predicates
-    // can exceed the ACP database statement timeout.
-    const candidates = await tableAll('chain_products', {
-      select: 'id', chain_id: `eq.${auth.chainId}`, deleted_at: 'is.null',
-      or: condition, order: 'id.asc'
-    }, auth.token, 'planned');
-    const localOffers = await tableAll('store_product_price_overrides', {
-      select: 'chain_product_id', store_id: `eq.${auth.storeId}`,
-      or: '(previous_price.gt.0,club_price.gt.0)', order: 'chain_product_id.asc'
-    }, auth.token, 'planned');
-    const ids = [...new Set([...candidates.map(item => item.id),
-      ...localOffers.map(item => item.chain_product_id)].filter(Boolean).map(String))];
-    for (let offset = 0; offset < ids.length; offset += 100) {
-      const rows = await tableAll('chain_products', {
-        select: '*', chain_id: `eq.${auth.chainId}`, deleted_at: 'is.null',
-        id: `in.${encodeIn(ids.slice(offset, offset + 100))}`, order: 'id.asc'
-      }, auth.token, 'planned');
-      for (const item of await hydrateProducts(auth, rows)) {
-        const price = Number(item.value), previous = Number(item.previousValue);
-        const hasOffer = (price > 0 && previous > price) || Number(item.clubValue) > 0 ||
-          (Number(item.quantityTake) > Number(item.quantityPay) && Number(item.quantityPay) > 0);
-        if (hasOffer && withinValidity(item, now())) all.set(String(item.id), item);
-      }
-    }
-    if (all.size > 10000) throw Error('ACPTECH_RESULT_TOO_LARGE');
     promotionsCache = [...all.values()]; promotionsAt = now();
     return promotionsCache;
   }

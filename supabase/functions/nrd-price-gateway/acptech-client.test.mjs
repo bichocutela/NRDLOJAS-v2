@@ -206,20 +206,3 @@ test('catalogue-only conditions are also visible through existing Campaign/all p
   assert.equal(result.items[0].products[0].quantityTake, 3);
 });
 
-
-test('uncategorized catalogue offers use effective store values and exclude expired or cleared rules', async () => {
-  const {client, requests} = fixture({products:[
-    {id:'club', code:1, price:10, club_price:7},
-    {id:'take', code:2, price:12, leve_quantity:3, pague_quantity:2},
-    {id:'depor', code:3, price:6, previous_price:10},
-    {id:'local', code:4, price:10},
-    {id:'cleared', code:5, price:10, club_price:7},
-    {id:'expired', code:6, price:10, club_price:7, valid_until:'2026-10-17'},
-    {id:'normal', code:7, price:10}
-  ], overrides:[{chain_product_id:'local', club_price:8}, {chain_product_id:'cleared', club_price:0}]});
-  const result = await consult(client, 'Promotion/all', []);
-  assert.deepEqual(result.items.map(item => item.id).sort(), ['club','depor','local','take']);
-  assert.equal(result.items.find(item => item.id === 'local').clubValue, 8);
-  assert.ok(requests.some(row => row.url.searchParams.get('chain_id') === 'eq.c' && row.url.searchParams.has('or')));
-  assert.ok(requests.some(row => row.url.searchParams.get('store_id') === 'eq.s' && row.url.searchParams.has('or')));
-});
