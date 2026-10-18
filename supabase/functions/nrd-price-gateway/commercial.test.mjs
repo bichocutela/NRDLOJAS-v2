@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mergeCommercial, normalizeCommercial, withinValidity} from './commercial.mjs';
+import {mergeCommercial, normalizeCommercial, notExpired, withinValidity} from './commercial.mjs';
 
 const now = Date.parse('2026-10-18T19:00:00Z');
 test('current campaign De/Por replaces the normal catalogue price as one price pair', () => {
@@ -49,4 +49,9 @@ test('store snake-case values, including explicit zero, replace stale aliases', 
 test('validity uses the Fortaleza calendar date and includes the final day', () => {
   assert.equal(withinValidity({endDate:'2026-10-18'}, Date.parse('2026-10-19T02:59:00Z')), true);
   assert.equal(withinValidity({endDate:'2026-10-18'}, Date.parse('2026-10-19T03:00:00Z')), false);
+});
+
+test('upcoming campaigns remain available to search until their end date', () => {
+  assert.equal(notExpired({startDate:'2026-10-19', endDate:'2026-10-21'}, now), true);
+  assert.equal(notExpired({startDate:'2026-10-17', endDate:'2026-10-17'}, now), false);
 });

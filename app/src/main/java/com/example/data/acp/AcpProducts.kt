@@ -4,6 +4,7 @@ import org.json.JSONObject
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.Calendar
+import java.util.TimeZone
 import java.text.Normalizer
 import com.example.data.OFFER_BANNER_CASHBACK
 import com.example.data.OFFER_BANNER_CLUB
@@ -193,6 +194,16 @@ internal fun AcpOffer.isWithinValidity(fallback: AcpOfferValidity? = null, nowMi
     val start = parseAcpDate(dates?.startDate)
     val end = parseAcpDate(dates?.endDate)
     return (start == null || dateKey(start) <= dateKey(today)) && (end == null || dateKey(end) >= dateKey(today))
+}
+
+/** Search can advertise an upcoming campaign with its dates, while hiding expired offers. */
+internal fun AcpOffer.isNotExpired(fallback: AcpOfferValidity? = null, nowMillis: Long = System.currentTimeMillis()): Boolean {
+    val dates = validityOr(fallback)
+    val end = parseAcpDate(dates?.endDate) ?: return true
+    val today = Calendar.getInstance(TimeZone.getTimeZone("America/Fortaleza")).apply {
+        timeInMillis = nowMillis
+    }
+    return dateKey(end) >= dateKey(today)
 }
 
 /** Drops dated offers outside their effective window while retaining offers with no dates. */

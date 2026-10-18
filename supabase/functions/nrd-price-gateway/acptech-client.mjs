@@ -1,4 +1,4 @@
-import {mergeCommercial, normalizeCommercial, withinValidity} from './commercial.mjs';
+import {mergeCommercial, normalizeCommercial, notExpired} from './commercial.mjs';
 
 const DEFAULT_URL = 'https://lolnlmlnvspipzxatgvj.supabase.co';
 const DEFAULT_STORE = 'nordestao12';
@@ -237,12 +237,92 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       productUrl: null
       });
     });
-    if (!scoped) { campaignsCache = mapped; campaignsAt = Date.now(); }
-    return mapped;
+    const enriched = await enrichCampaignItems(auth, mapped);
+    if (!scoped) { campaignsCache = enriched; campaignsAt = Date.now(); }
+    return enriched;
+  }
+
+  async function enrichCampaignItems(auth, items) {
+    if (!items.length) return items;
+    const catalog = [];
+    const byId = new Set();
+    const codes = [...new Set(items.map(item => item.code).filter(value => value != null && String(value) !== '').map(String))];
+    const barcodes = [...new Set(items.map(item => item.barcode ?? item.barCode).filter(Boolean).map(String))];
+    const ids = [...new Set(items.map(item => item.chain_product_id ?? item.product_id).filter(Boolean).map(String))];
+    // Campaigns are small compared with the full catalogue. Resolve only their
+    // product identities, then apply the store-specific prices/conditions.
+    for (let offset = 0; offset < Math.max(codes.length, barcodes.length, ids.length); offset += 50) {
+      const pCodes = codes.slice(offset, offset + 50);
+      const pBarcodes = barcodes.slice(offset, offset + 50);
+      const pIds = ids.slice(offset, offset + 50);
+      const result = await rpcPage('search_chain_products', {
+        p_chain_id: auth.chainId,
+        p_category_id: null,
+        p_code: null,
+        p_barcode_prefix: null,
+        p_description: null,
+        p_ids: pIds.length ? pIds : null,
+        p_codes: pCodes.length ? pCodes : null,
+        p_barcodes: pBarcodes.length ? pBarcodes : null,
+        p_include_deleted: false,
+        p_limit: 250,
+        p_offset: 0
+      }, auth.token);
+      for (const product of result.rows) {
+        const id = String(product.id ?? '');
+        if (id && !byId.has(id)) { byId.add(id); catalog.push(product); }
+      }
+    }
+    if (!catalog.length) return items;
+    const storeProducts = await hydrateProducts(auth, catalog, false);
+    const productFor = item => {
+      const productId = item.chain_product_id ?? item.product_id;
+      if (productId != null) {
+        const byId = storeProducts.find(product => String(product.id) === String(productId));
+        if (byId) return byId;
+      }
+      const code = item.code == null ? '' : String(item.code);
+      const barcode = String(item.barcode ?? item.barCode ?? '');
+      if (code && barcode) return storeProducts.find(product =>
+        String(product.code ?? '') === code && String(product.barcode ?? product.barCode ?? '') === barcode);
+      if (barcode) return storeProducts.find(product => String(product.barcode ?? product.barCode ?? '') === barcode);
+      if (code) return storeProducts.find(product => String(product.code ?? '') === code);
+      return undefined;
+    };
+    return items.map(item => {
+      const product = productFor(item);
+      if (!product) return item;
+      const merged = {...product, ...item};
+      // ACP campaign rows can carry zero as a placeholder when the actual value
+      // lives in store_product_price_overrides. Keep each positive campaign
+      // value; otherwise fall back to the matched store product's value.
+      for (const [raw, alias] of [['price', 'value'], ['previous_price', 'previousValue'],
+        ['club_price', 'clubValue'], ['wholesale_price', 'wholesaleValue'],
+        ['wholesale_quantity', 'wholesaleQuantity'], ['leve_quantity', 'quantityTake'],
+        ['pague_quantity', 'quantityPay'], ['second_unit_discount', 'secondUnitDiscount'],
+        ['cashback_percent', 'cashback'], ['cashback_value', 'cashbackValue'], ['unit_limit', 'unitLimitPerCPF']]) {
+        const campaignValue = item[raw] ?? item[alias];
+        const productValue = product[raw] ?? product[alias];
+        const selected = Number(campaignValue) > 0 ? campaignValue : productValue ?? campaignValue ?? null;
+        merged[raw] = selected;
+        merged[alias] = selected;
+      }
+      // Campaign validity belongs to the campaign item, even when its price
+      // and eligibility fields come from the store override.
+      merged.startDate = item.startDate ?? item.start_date ?? null;
+      merged.endDate = item.endDate ?? item.end_date ?? item.valid_until ?? null;
+      merged.start_date = merged.startDate;
+      merged.valid_until = merged.endDate;
+      merged.productCategories = categoryObjects(merged);
+      return merged;
+    });
   }
 
   async function legacyCampaigns(auth) {
-    const items = (await promotions(auth)).filter(item => withinValidity(item, now()));
+    // Search/detail need upcoming campaign rules too, so the app can show the
+    // price and its start/end dates before the campaign begins. Promotions UI
+    // still filters to offers valid today on the client.
+    const items = (await promotions(auth)).filter(item => notExpired(normalizeCommercial(item), now()));
     const grouped = new Map();
     for (const item of items) {
       const id = item.campaignId ?? 'catalog-products';
