@@ -122,16 +122,20 @@ internal class AcpPromotionsRepository(context: Context) {
                 }
             }
         }
+        // Um produto pode aparecer em mais de uma campanha ACP Tech simultânea.
+        // O id de domínio é loja + produto + família da oferta; portanto essas
+        // linhas representam a mesma oferta na interface e não podem ser
+        // persistidas duas vezes no documento local.
+        val uniquePromotions = promotions.distinctBy { it.id }.toMutableList()
         val observedAt = System.currentTimeMillis()
-        promotions.indices.forEach { index ->
-            val offer = promotions[index]
-            promotions[index] = offer.copy(addedAt = cachedOffers[offer.id]?.addedAt ?: observedAt)
+        uniquePromotions.indices.forEach { index ->
+            val offer = uniquePromotions[index]
+            uniquePromotions[index] = offer.copy(addedAt = cachedOffers[offer.id]?.addedAt ?: observedAt)
         }
-        val fingerprint = MessageDigest.getInstance("SHA-256").digest(promotions.sortedBy { it.id }.toString().toByteArray())
+        val fingerprint = MessageDigest.getInstance("SHA-256").digest(uniquePromotions.sortedBy { it.id }.toString().toByteArray())
             .joinToString("") { "%02x".format(it.toInt() and 255) }
         val previousOffers = dao.offers().associateBy { it.id }
-        val nextOffers = promotions.associate { it.id to CachedOffer(it.id, PromotionCodec.encode(it)) }
-        require(nextOffers.size == promotions.size) { "Existem ofertas duplicadas no documento." }
+        val nextOffers = uniquePromotions.associate { it.id to CachedOffer(it.id, PromotionCodec.encode(it)) }
         val initialized = isInitialized()
         val changedOffers = nextOffers.values.filter { previousOffers[it.id]?.payload != it.payload }
         val removedOffers = previousOffers.keys - nextOffers.keys
@@ -164,7 +168,7 @@ internal class AcpPromotionsRepository(context: Context) {
             dao.put(PromotionMetadata("fingerprint", fingerprint))
             dao.put(PromotionMetadata("initialized", "1"))
         }
-        NossaGentePromotionsResult.Success(promotions, fingerprint)
+        NossaGentePromotionsResult.Success(uniquePromotions, fingerprint)
        } catch (cancelled: CancellationException) {
         throw cancelled
        } catch (failure: Exception) {
@@ -208,4 +212,3 @@ internal class AcpPromotionsRepository(context: Context) {
         }
     }
 }
-
