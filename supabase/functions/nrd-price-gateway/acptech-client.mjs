@@ -112,7 +112,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     const response = await fetcher(url, {
       redirect: 'error',
       signal: AbortSignal.timeout(20000),
-      headers: {...headers(token), Prefer: 'count=exact'}
+      headers: {...headers(token), Prefer: 'count=planned'}
     });
     const body = await boundedJson(response);
     if (!response.ok && response.status === 416) {
@@ -134,6 +134,17 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     const payload = await boundedJson(response);
     if (!response.ok) throw Error('ACPTECH_UPSTREAM_FAILURE');
     return {rows: Array.isArray(payload) ? payload : [], total: null};
+  }
+
+  async function rpcValue(name, body, token) {
+    const response = await fetcher(`${supabaseUrl}/rest/v1/rpc/${name}`, {
+      method: 'POST', body: JSON.stringify(body),
+      redirect: 'error', signal: AbortSignal.timeout(20000),
+      headers: {...headers(token), 'Content-Type': 'application/json'}
+    });
+    const payload = await boundedJson(response);
+    if (!response.ok) throw Error('ACPTECH_UPSTREAM_FAILURE');
+    return payload;
   }
 
   async function campaignItems(auth, productCodes = null) {
@@ -206,7 +217,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       if (key === 'productCategoryIds' && value) { query.category_id = `eq.${value}`; categoryId = String(value); }
     }
     const searched = code != null || barcode != null || Boolean(description);
-    const result = searched
+    let result = searched
       ? await rpcPage('search_chain_products', {
         p_chain_id: auth.chainId,
         p_category_id: categoryId,
@@ -217,6 +228,16 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
         p_include_deleted: false, p_limit: size, p_offset: page * size
       }, auth.token)
       : await tablePage('chain_products', query, auth.token);
+    if (!searched) {
+      try {
+        const counted = await rpcValue('count_chain_products', {
+          p_chain_id: auth.chainId, p_category_id: categoryId,
+          p_include_deleted: false
+        }, auth.token);
+        const total = Number(counted?.count ?? counted);
+        if (Number.isFinite(total) && total >= 0) result = {...result, total};
+      } catch { /* planned count remains a safe fallback */ }
+    }
     const rows = result.rows;
     const campaignRows = await campaignItems(auth, rows.map(item => item.code)).catch(() => []);
     const campaignFor = item => (Array.isArray(campaignRows) ? campaignRows : []).find(candidate =>

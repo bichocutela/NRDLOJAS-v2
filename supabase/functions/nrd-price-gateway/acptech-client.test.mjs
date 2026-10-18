@@ -82,6 +82,7 @@ test('ACP Tech usa offset e total do PostgREST para páginas de produtos', async
     {ok: true, status: 200, body: {access_token: 'jwt-test'}},
     {ok: true, status: 200, body: {user: {store_id: 'store-12', chain_id: 'chain-1'}}},
     {ok: true, status: 200, headers: new Headers({'content-range': '20-29/87'}), body: [{code: 2020020, description: 'Página 2'}]},
+    {ok: true, status: 200, body: 87},
     {ok: true, status: 200, body: []}
   ];
   const client = createAcpTechClient({
