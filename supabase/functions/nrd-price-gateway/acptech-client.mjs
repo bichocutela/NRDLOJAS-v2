@@ -1,5 +1,7 @@
 const DEFAULT_URL = 'https://lolnlmlnvspipzxatgvj.supabase.co';
 const DEFAULT_STORE = 'nordestao12';
+// Public browser key exposed by the ACP Tech portal; ACP credentials remain server-only.
+const DEFAULT_ANON_KEY = 'sb_publishable_kslyfs4uh1omFnKSjf_tyg_qfjh-N3Q';
 
 function encodeIn(values) {
   return `(${values.map(value => JSON.stringify(String(value))).join(',')})`;
@@ -8,7 +10,7 @@ function encodeIn(values) {
 export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, config = {}}) {
   const supabaseUrl = String(config.url || DEFAULT_URL).replace(/\/$/, '');
   const storeSlug = String(config.storeSlug || DEFAULT_STORE);
-  const anonKey = String(config.anonKey || '');
+  const anonKey = String(config.anonKey || DEFAULT_ANON_KEY);
   let session = null;
   let sessionAt = 0;
   let signingIn = null;

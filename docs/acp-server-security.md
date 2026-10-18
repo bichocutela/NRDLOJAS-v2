@@ -8,9 +8,11 @@ O novo portal da loja Nordestão 12 é `https://acptech.com.br/lojas/nordestao12
 Ele usa o projeto Supabase do ACP Tech, resolve o username pela Edge Function
 `store-auth`, autentica por Supabase Auth e lê campanhas/produtos com o JWT da sessão.
 O gateway suporta esse modelo sem alterar o cliente Android. Para ativá-lo no ambiente
-publicado, configure `ACP_PROVIDER=acptech`, `ACPTECH_LOGIN`, `ACPTECH_PASSWORD`,
-`ACPTECH_SUPABASE_ANON_KEY` e, opcionalmente, `ACPTECH_STORE_SLUG=nordestao12` e
-`ACPTECH_SUPABASE_URL`. Sem `ACP_PROVIDER=acptech`, o comportamento antigo continua.
+publicado, configure `ACP_PROVIDER=acptech`, `ACPTECH_LOGIN` e `ACPTECH_PASSWORD`.
+`ACPTECH_STORE_SLUG` e `ACPTECH_SUPABASE_URL` já possuem os padrões `nordestao12` e
+`https://lolnlmlnvspipzxatgvj.supabase.co`; a chave pública atual também está no
+adaptador e pode ser sobrescrita por `ACPTECH_SUPABASE_ANON_KEY` se o portal mudar.
+Sem `ACP_PROVIDER=acptech`, o comportamento antigo continua.
 
 ## Etapas e verificação
 

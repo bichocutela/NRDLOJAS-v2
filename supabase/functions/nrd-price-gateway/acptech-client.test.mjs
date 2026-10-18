@@ -32,11 +32,14 @@ test('ACP Tech resolve username, autentica e retorna itens de campanhas', async 
   assert.equal(requests[4].options.headers.Authorization, 'Bearer jwt-test');
 });
 
-test('ACP Tech falha fechado sem chave pública configurada', async () => {
+test('ACP Tech usa a chave pública padrão quando nenhuma chave é informada', async () => {
   const client = createAcpTechClient({
     boundedJson: async response => response.body,
     credentials: () => ({login: 'user', password: 'password'}),
-    fetcher: async () => { throw new Error('network must not be reached'); }
+    fetcher: async (url, options) => {
+      assert.match(options.headers.apikey, /^sb_publishable_/);
+      return {ok: false, status: 500, body: {error: 'expected mock failure'}};
+    }
   });
-  await assert.rejects(() => client.consult({path: 'Promotion/all', parameters: [['pageIndex', '0'], ['pageSize', '1']]}), /ANON_KEY_NOT_CONFIGURED/);
+  await assert.rejects(() => client.consult({path: 'Promotion/all', parameters: [['pageIndex', '0'], ['pageSize', '1']]}), /ACPTECH_UPSTREAM_FAILURE/);
 });
