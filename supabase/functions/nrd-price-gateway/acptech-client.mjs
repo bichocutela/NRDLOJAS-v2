@@ -106,6 +106,21 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     return json(url, {token});
   }
 
+  async function tablePage(name, query, token) {
+    const url = new URL(`${supabaseUrl}/rest/v1/${name}`);
+    for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+    const response = await fetcher(url, {
+      redirect: 'error',
+      signal: AbortSignal.timeout(20000),
+      headers: {...headers(token), Prefer: 'count=exact'}
+    });
+    const body = await boundedJson(response);
+    if (!response.ok) throw Error('ACPTECH_UPSTREAM_FAILURE');
+    const range = response.headers?.get?.('content-range') || '';
+    const match = range.match(/\/([0-9]+|\*)$/);
+    return {rows: Array.isArray(body) ? body : [], total: match && match[1] !== '*' ? Number(match[1]) : null};
+  }
+
   async function campaignItems(auth) {
     if (campaignsCache && Date.now() - campaignsAt < 60_000) return campaignsCache;
     const campaignQuery = {
@@ -157,22 +172,25 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
   }
 
   async function products(auth, parameters) {
-    const query = {select: '*', chain_id: auth.chainId ? `eq.${auth.chainId}` : undefined, deleted_at: 'is.null', limit: '250'};
+    const page = Math.max(0, Number(parameters.find(([key]) => key === 'pageIndex')?.[1] ?? 0) || 0);
+    const size = Math.min(250, Math.max(1, Number(parameters.find(([key]) => key === 'pageSize')?.[1] ?? 50) || 50));
+    const query = {select: '*', chain_id: auth.chainId ? `eq.${auth.chainId}` : undefined, deleted_at: 'is.null', limit: String(size), offset: String(page * size), order: 'description.asc,code.asc'};
     if (!query.chain_id) delete query.chain_id;
     for (const [key, value] of parameters) {
-      if (key === 'pageSize') query.limit = String(Math.min(Number(value) || 250, 250));
       if (key === 'code') query.code = `eq.${value}`;
       if (key === 'barCode') query.barcode = `eq.${value}`;
       if (key === 'description') query.description = `ilike.*${String(value).replace(/[*%]/g, '')}*`;
+      if (key === 'productCategoryIds' && value) query.category_id = `eq.${value}`;
     }
-    const rows = await table('chain_products', query, auth.token);
+    const result = await tablePage('chain_products', query, auth.token);
+    const rows = result.rows;
     const campaignRows = await campaignItems(auth).catch(() => []);
     const campaignFor = item => (Array.isArray(campaignRows) ? campaignRows : []).find(candidate =>
       (item.code != null && candidate.code != null && String(item.code) === String(candidate.code)) ||
       (item.barcode && candidate.barcode && String(item.barcode) === String(candidate.barcode)) ||
       (item.description && candidate.description && String(item.description).trim().toLowerCase() === String(candidate.description).trim().toLowerCase())
     );
-    return (Array.isArray(rows) ? rows : []).map(item => {
+    const items = (Array.isArray(rows) ? rows : []).map(item => {
       const campaign = campaignFor(item);
       const merged = {
         ...item,
@@ -202,6 +220,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
         imageUrl: merged.image_url ?? null, linkloja: null, productUrl: null
       };
     });
+    return {items, totalCount: result.total ?? (page * size + items.length), pageIndex: page, pageSize: size};
   }
 
   return {
@@ -216,6 +235,10 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
               select: '*', order: 'name.asc', limit: '250'
             }, auth.token)
             : [];
+          if (input.path === 'Product/all' && rows && !Array.isArray(rows)) {
+            const totalPages = rows.totalCount ? Math.ceil(rows.totalCount / rows.pageSize) : 0;
+            return {items: rows.items, pageIndex: rows.pageIndex, totalCount: rows.totalCount, totalPages};
+          }
           const page = Number(input.parameters.find(([key]) => key === 'pageIndex')?.[1] ?? 0);
           const size = Math.min(Number(input.parameters.find(([key]) => key === 'pageSize')?.[1] ?? 250), 250);
           return {items: rows.slice(page * size, (page + 1) * size), pageIndex: page,

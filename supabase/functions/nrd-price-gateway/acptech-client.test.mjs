@@ -74,3 +74,25 @@ test('ACP Tech resolve chain_id pela loja antes de consultar produtos', async ()
   assert.ok(productsRequest);
   assert.match(productsRequest.url, /chain_id=eq\.chain-1/);
 });
+
+test('ACP Tech usa offset e total do PostgREST para páginas de produtos', async () => {
+  const requests = [];
+  const responses = [
+    {ok: true, status: 200, body: {email: 'resolved@example.invalid'}},
+    {ok: true, status: 200, body: {access_token: 'jwt-test'}},
+    {ok: true, status: 200, body: {user: {store_id: 'store-12', chain_id: 'chain-1'}}},
+    {ok: true, status: 200, headers: new Headers({'content-range': '20-29/87'}), body: [{code: 2020020, description: 'Página 2'}]},
+    {ok: true, status: 200, body: []}
+  ];
+  const client = createAcpTechClient({
+    boundedJson: async response => response.body,
+    credentials: () => ({login: 'nordestao12', password: 'not-a-real-password'}),
+    config: {anonKey: 'anon-test', storeSlug: 'nordestao12'},
+    fetcher: async (url, options) => { requests.push({url: String(url), options}); return responses.shift(); }
+  });
+  const result = await client.consult({path: 'Product/all', parameters: [['code', '2020020'], ['pageIndex', '2'], ['pageSize', '10']]});
+  assert.equal(result.pageIndex, 2);
+  assert.equal(result.totalCount, 87);
+  assert.equal(result.totalPages, 9);
+  assert.match(requests.find(request => /chain_products/.test(request.url)).url, /offset=20/);
+});
