@@ -246,6 +246,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     if (!items.length) return items;
     const catalog = [];
     const byId = new Set();
+    const alternativeProductIdByBarcode = new Map();
     const codes = [...new Set(items.map(item => item.code).filter(value => value != null && String(value) !== '').map(String))];
     const barcodes = [...new Set(items.map(item => item.barcode ?? item.barCode).filter(Boolean).map(String))];
     const ids = [...new Set(items.map(item => item.chain_product_id ?? item.product_id).filter(Boolean).map(String))];
@@ -272,19 +273,29 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
         const id = String(product.id ?? '');
         if (id && !byId.has(id)) { byId.add(id); catalog.push(product); }
       }
-      // Some ACP deployments accept p_codes in the search RPC but return no
-      // rows for campaign records. Fall back to exact, bounded PostgREST
-      // filters for only these campaign identities; never scan the catalogue.
-      const identityFilters = [];
-      if (pIds.length) identityFilters.push(`id.in.${encodeIn(pIds)}`);
-      if (pCodes.length) identityFilters.push(`code.in.${encodeIn(pCodes)}`);
-      if (pBarcodes.length) identityFilters.push(`barcode.in.${encodeIn(pBarcodes)}`);
-      if (identityFilters.length) {
-        const matches = await tableAll('chain_products', {
-          select: '*', chain_id: `eq.${auth.chainId}`, deleted_at: 'is.null',
-          or: `(${identityFilters.join(',')})`, order: 'code.asc,id.asc'
+    }
+    // ACP campaign rows can carry a legacy EAN that is not the product's
+    // primary barcode. Resolve only those campaign EANs through ACP's alias
+    // table, then fetch the corresponding products by ID via its search RPC.
+    if (barcodes.length) {
+      const aliases = await tableAll('chain_product_barcodes', {
+        select: 'chain_product_id,barcode', barcode: `in.${encodeIn(barcodes)}`,
+        order: 'chain_product_id.asc,barcode.asc'
+      }, auth.token);
+      for (const alias of aliases) {
+        if (alias?.barcode && alias?.chain_product_id) {
+          alternativeProductIdByBarcode.set(String(alias.barcode), String(alias.chain_product_id));
+        }
+      }
+      const alternativeIds = [...new Set(aliases.map(alias => alias?.chain_product_id).filter(Boolean).map(String))];
+      for (let offset = 0; offset < alternativeIds.length; offset += 50) {
+        const result = await rpcPage('search_chain_products', {
+          p_chain_id: auth.chainId, p_category_id: null, p_code: null,
+          p_barcode_prefix: null, p_description: null,
+          p_ids: alternativeIds.slice(offset, offset + 50), p_codes: null, p_barcodes: null,
+          p_include_deleted: false, p_limit: 250, p_offset: 0
         }, auth.token);
-        for (const product of matches) {
+        for (const product of result.rows) {
           const id = String(product.id ?? '');
           if (id && !byId.has(id)) { byId.add(id); catalog.push(product); }
         }
@@ -293,13 +304,13 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     if (!catalog.length) return items;
     const storeProducts = await hydrateProducts(auth, catalog, false);
     const productFor = item => {
-      const productId = item.chain_product_id ?? item.product_id;
+      const barcode = String(item.barcode ?? item.barCode ?? '');
+      const productId = item.chain_product_id ?? item.product_id ?? alternativeProductIdByBarcode.get(barcode);
       if (productId != null) {
         const byId = storeProducts.find(product => String(product.id) === String(productId));
         if (byId) return byId;
       }
       const code = item.code == null ? '' : String(item.code);
-      const barcode = String(item.barcode ?? item.barCode ?? '');
       if (code) {
         const codeMatches = storeProducts.filter(product => String(product.code ?? '') === code);
         if (codeMatches.length === 1) return codeMatches[0];
