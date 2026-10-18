@@ -124,7 +124,11 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       const available = typeof body?.details === 'string' ? body.details.match(/only (\d+) rows/) : null;
       return {rows: [], total: available ? Number(available[1]) : 0};
     }
-    if (!response.ok) throw Error('ACPTECH_UPSTREAM_FAILURE');
+    if (!response.ok) {
+      console.warn('ACPTECH_TABLE_FAILURE', JSON.stringify({table: name, status: response.status,
+        code: /^[A-Z0-9_]+$/.test(String(body?.code ?? '')) ? body.code : null}));
+      throw Error('ACPTECH_UPSTREAM_FAILURE');
+    }
     const range = response.headers?.get?.('content-range') || '';
     const match = range.match(/\/([0-9]+|\*)$/);
     return {rows: Array.isArray(body) ? body : [], hasRange: Boolean(range), total: match && match[1] !== '*' ? Number(match[1]) : null};
@@ -411,6 +415,8 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
           return {items: rows.slice(page * size, (page + 1) * size), pageIndex: page,
             totalCount: rows.length, totalPages: rows.length ? Math.ceil(rows.length / size) : 0};
         } catch (error) {
+          console.warn('ACPTECH_CONSULT_FAILURE', JSON.stringify({path: input.path,
+            error: /^ACPTECH_[A-Z_]+$/.test(String(error?.message)) ? error.message : String(error?.name ?? 'Error')}));
           if (attempt === 0 && /LOGIN|SESSION|UPSTREAM|STORE_NOT_FOUND|CHAIN_NOT_FOUND/.test(String(error?.message))) {
             session = null; campaignsCache = null; promotionsCache = null; continue;
           }
