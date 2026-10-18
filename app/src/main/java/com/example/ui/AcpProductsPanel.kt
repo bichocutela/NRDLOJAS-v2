@@ -707,7 +707,7 @@ internal fun AcpProductsPanel(
                 .forAutomaticDisplay()
                 .filter { offer ->
                     val saved = offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, offer.family)]
-                    product.isWithinOfferValidity(saved)
+                    offer.isWithinValidity(product.offerValidityOr(saved))
                 }
             val shareLayer = rememberGraphicsLayer()
             val resultCardShape = if (isExpressive) {

@@ -23,6 +23,7 @@ import com.example.data.acp.AcpOfferValidity
 import com.example.data.acp.AcpOfferValidityStore
 import com.example.data.acp.brl
 import com.example.data.acp.family
+import com.example.data.acp.validityOr
 import com.example.data.ThemeBackground
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
@@ -99,7 +100,8 @@ internal fun AcpOfferPoster(
     validityOverride: AcpOfferValidity? = null
 ) {
     // Compact result cards receive validity from one shared list subscription.
-    val validity = validityOverride ?: if (compact) null else rememberOfferValidity(productName, offer).value
+    val savedValidity = if (compact) null else rememberOfferValidity(productName, offer).value
+    val validity = offer.validityOr(validityOverride ?: savedValidity)
     if (banner != null) {
         PersonalizedOfferBanner(productName, offer, banner, compact, validity)
         return
@@ -177,7 +179,8 @@ internal fun AcpOfferLandscapePoster(
     offer: AcpOffer,
     banner: ThemeBackground? = null
 ) {
-    val validity by rememberOfferValidity(productName, offer)
+    val savedValidity by rememberOfferValidity(productName, offer)
+    val validity = offer.validityOr(savedValidity)
     val isMaster = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email?.trim()?.lowercase() == "mestre@nrdlojas.com"
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val narrowPhone = screenWidthDp < 430

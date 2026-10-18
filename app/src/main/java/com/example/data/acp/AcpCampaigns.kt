@@ -88,7 +88,7 @@ internal data class AcpCampaign(
                 add(AcpOffer("Cashback em valor", "${it.brl()} de retorno. Não é desconto imediato; confira as condições de crédito. $source",
                     headline = "${it.brl()} DE VOLTA"))
             }
-        }
+        }.map { it.copy(startDate = rule.startDate ?: startDate, endDate = rule.endDate ?: endDate) }
     }.distinctBy { Triple(it.title, it.price, it.detail) }
 }
 
