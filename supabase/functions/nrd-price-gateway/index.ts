@@ -1,3 +1,4 @@
+// ACP Tech provider is selected by ACP_PROVIDER; legacy remains the default fallback.
 import { createRemoteJWKSet, jwtVerify, importPKCS8, SignJWT } from 'npm:jose@5.9.6';
 import { createHandler, boundedJson } from './handler.mjs';
 import { createPromotionSync } from './promotion-sync.mjs';
@@ -119,4 +120,3 @@ const handler = createHandler({
   acpTechClient
 });
 Deno.serve(handler);
-
