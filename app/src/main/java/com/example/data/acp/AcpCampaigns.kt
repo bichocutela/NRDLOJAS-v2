@@ -48,7 +48,7 @@ internal data class AcpCampaign(
         product.id in productIds || product.code.isNotBlank() && product.code in productCodes ||
             product.barcode.isNotBlank() && product.barcode in barcodes
 
-    fun offersFor(product: AcpProduct): List<AcpOffer> = if (active == false) emptyList() else productRules.filter { it.matches(product) }.flatMap { rule ->
+    fun offersFor(product: AcpProduct): List<AcpOffer> = productRules.filter { it.matches(product) }.flatMap { rule ->
         val source = buildString {
             append("Campanha: ").append(name)
             code?.let { append(" (#").append(it).append(')') }
@@ -73,17 +73,12 @@ internal data class AcpCampaign(
                 val equivalent = (rule.value ?: product.value)?.takeIf { it > BigDecimal.ZERO }?.multiply(rule.quantityPay)
                     ?.divide(rule.quantityTake, 2, RoundingMode.HALF_UP)
                 add(AcpOffer("Leve/Pague", "Leve ${rule.quantityTake.quantity()}, pague ${rule.quantityPay.quantity()}." +
-                    (equivalent?.let { " Equivale a ${it.brl()} por unidade ao completar a quantidade." } ?: "") + " $source",
-                    price = equivalent,
-                    referencePrice = (rule.value ?: product.value)?.takeIf { it > BigDecimal.ZERO },
-                    headline = "LEVE ${rule.quantityTake.quantity()} • PAGUE ${rule.quantityPay.quantity()}"))
+                    (equivalent?.let { " Equivale a ${it.brl()} por unidade ao completar a quantidade." } ?: "") + " $source"))
             }
-            rule.secondUnitDiscount?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let { discount ->
-                val reference = (rule.value ?: product.value)?.takeIf { it > BigDecimal.ZERO }
-                val discountedPrice = reference?.multiply(BigDecimal(100).subtract(discount))?.divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
-                add(AcpOffer("Segunda unidade", "${discount.quantity()}% de desconto na segunda unidade. $source",
-                    price = discountedPrice, referencePrice = reference,
-                    headline = "${discount.quantity()}% DE DESCONTO"))
+            rule.secondUnitDiscount?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let {
+                add(AcpOffer("Segunda unidade", "${it.quantity()}% de desconto na segunda unidade. $source",
+                    referencePrice = rule.value?.takeIf { price -> price > BigDecimal.ZERO } ?: product.value,
+                    headline = "${it.quantity()}% DE DESCONTO"))
             }
             rule.cashback?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let {
                 add(AcpOffer("Cashback", "${it.quantity()}% de retorno. Não é desconto imediato; confira as condições de crédito. $source",
@@ -93,7 +88,7 @@ internal data class AcpCampaign(
                 add(AcpOffer("Cashback em valor", "${it.brl()} de retorno. Não é desconto imediato; confira as condições de crédito. $source",
                     headline = "${it.brl()} DE VOLTA"))
             }
-        }.map { it.copy(startDate = rule.startDate ?: startDate, endDate = rule.endDate ?: endDate) }
+        }
     }.distinctBy { Triple(it.title, it.price, it.detail) }
 }
 
@@ -216,23 +211,17 @@ internal object AcpCampaignParser {
     }
 }
 
-private suspend fun AcpApi.allCampaigns(): List<AcpCampaign> = campaignRulesForConsultation {
+private suspend fun AcpApi.allCampaigns(): List<AcpCampaign> {
     val all = mutableListOf<AcpCampaign>()
-    val seenIds = mutableSetOf<String>()
-    var page = 0
-    var totalPages = 1
-    while (page < totalPages) {
-        val root = getFresh("Campaign/all", listOf("pageSize" to "100", "pageIndex" to page.toString()))
+    for (page in 0 until 30) {
+        val root = get("Campaign/all", listOf("pageSize" to "100", "pageIndex" to page.toString()))
         val campaigns = AcpCampaignParser.page(root)
-        val newCampaigns = campaigns.filter { seenIds.add(it.id) }
-        if (campaigns.isEmpty() || newCampaigns.isEmpty()) break
-        all += newCampaigns
+        all += campaigns
         val data = root.optJSONObject("data")
-        totalPages = root.optInt("totalPages", data?.optInt("totalPages", totalPages) ?: totalPages)
-            .coerceAtLeast(page + 1)
-        page++
+        val total = root.optInt("totalPages", data?.optInt("totalPages", 1) ?: 1)
+        if (campaigns.isEmpty() || page + 1 >= total) break
     }
-    all
+    return all.distinctBy { it.id }
 }
 
 internal suspend fun AcpApi.campaignsFor(product: AcpProduct): List<AcpCampaign> =
