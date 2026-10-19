@@ -157,7 +157,7 @@ class AcpProductsTest {
         assertNull(acpDateLabel(null))
     }
 
-    @Test fun exactBarcodeAndCodeArePrioritizedWithoutChangingCount() {
+    @Test fun exactIdentifiersArePrioritizedAndDescriptionResultsAreAlphabetical() {
         val page = AcpProductParser.page(JSONObject("""
             {"items":[
               {"id":"1","description":"Outro","code":"111","barCode":"123"},
@@ -169,7 +169,7 @@ class AcpProductsTest {
         assertEquals(2, byBarcode.totalCount)
         val byCode = page.prioritizeExact(AcpSearchField.CODE, "111")
         assertEquals("1", byCode.items.first().id)
-        assertEquals(listOf("1", "2"), page.prioritizeExact(AcpSearchField.DESCRIPTION, "Alvo").items.map { it.id })
+        assertEquals(listOf("2", "1"), page.prioritizeExact(AcpSearchField.DESCRIPTION, "Alvo").items.map { it.id })
     }
 
     @Test fun smartSearchExtractsBrandAndEquivalentVolumeUnits() {
