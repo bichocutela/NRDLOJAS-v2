@@ -4,7 +4,6 @@ import org.json.JSONObject
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.Calendar
-import java.util.TimeZone
 import java.text.Normalizer
 import com.example.data.OFFER_BANNER_CASHBACK
 import com.example.data.OFFER_BANNER_CLUB
@@ -17,7 +16,7 @@ import com.example.data.OFFER_BANNER_WHOLESALE
 internal enum class AcpSearchField(val parameter: String, val label: String) { BARCODE("barCode", "Cód. barras"), CODE("code", "Código"), DESCRIPTION("description", "Descrição") }
 internal data class AcpCategory(val id: String, val description: String)
 internal data class AcpProductPage(val items: List<AcpProduct>, val pageIndex: Int, val totalPages: Int, val totalCount: Int, val queriedAtMillis: Long = System.currentTimeMillis())
-internal data class AcpOffer(val title: String, val detail: String, val price: BigDecimal? = null, val referencePrice: BigDecimal? = null, val headline: String? = null, val startDate: String? = null, val endDate: String? = null)
+internal data class AcpOffer(val title: String, val detail: String, val price: BigDecimal? = null, val referencePrice: BigDecimal? = null, val headline: String? = null)
 internal data class AcpFeaturedOffer(val product: AcpProduct, val offer: AcpOffer)
 internal data class AcpFeaturedPage(val items: List<AcpFeaturedOffer>, val hasMore: Boolean)
 
@@ -64,18 +63,6 @@ internal fun List<AcpOffer>.forAutomaticDisplay(): List<AcpOffer> {
         .sortedWith(compareBy<AcpOffer> { priority[it.family] ?: Int.MAX_VALUE }.thenBy { it.title })
 }
 
-/** ACP repeats conditions in Product/all and Campaign/all; keep the richer campaign rule once. */
-internal fun List<AcpOffer>.mergeAutomaticOffers(campaignOffers: List<AcpOffer>): List<AcpOffer> {
-    val validCampaigns = campaignOffers.filter { it.isPlausiblePromotion() }
-    val campaignFamilies = validCampaigns.mapTo(mutableSetOf()) { it.family }
-    return (filter { it.family !in campaignFamilies && it.isPlausiblePromotion() } + validCampaigns)
-        .forAutomaticDisplay()
-}
-
-/** A promotional price above the current ACP reference is invalid as a discount. */
-internal fun AcpOffer.isPlausiblePromotion(): Boolean =
-    price == null || referencePrice == null || price <= referencePrice
-
 internal data class AcpProduct(
     val id: String, val code: String, val barcode: String, val description: String,
     val value: BigDecimal?, val previousValue: BigDecimal?, val clubValue: BigDecimal?,
@@ -99,9 +86,8 @@ internal data class AcpProduct(
         clubValue?.takeIf { it > BigDecimal.ZERO }?.let { clubPrice ->
             val reference = when {
                 value != null && value > clubPrice -> value
-                clubPrice > (value ?: BigDecimal.ZERO) -> value?.takeIf { it > BigDecimal.ZERO }
                 previousValue != null && previousValue > clubPrice -> previousValue
-                else -> value?.takeIf { it > BigDecimal.ZERO }
+                else -> null
             }
             add(AcpOffer("Clube de Vantagens", "Preço Clube: ${clubPrice.brl()}. Condicionado ao Clube.", clubPrice, reference))
         }
@@ -118,12 +104,7 @@ internal data class AcpProduct(
                 (equivalent?.let { " Média equivalente de ${it.brl()} por unidade ao completar a quantidade, calculada sobre o preço principal." } ?: "")
             add(AcpOffer("Leve/Pague", detail, equivalent, value?.takeIf { it > BigDecimal.ZERO }, headline))
         }
-        secondUnitDiscount?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let { discount ->
-            val reference = value?.takeIf { it > BigDecimal.ZERO }
-            val discountedPrice = reference?.multiply(BigDecimal(100).subtract(discount))?.divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
-            add(AcpOffer("Segunda unidade", "${discount.quantity()}% de desconto na segunda unidade. Base de preço e combinação com Clube ainda não verificadas.",
-                price = discountedPrice, referencePrice = reference, headline = "${discount.quantity()}% DE DESCONTO"))
-        }
+        secondUnitDiscount?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let { add(AcpOffer("Segunda unidade", "${it.quantity()}% de desconto na segunda unidade. Base de preço e combinação com Clube ainda não verificadas.", referencePrice = value?.takeIf { p -> p > BigDecimal.ZERO }, headline = "${it.quantity()}% DE DESCONTO")) }
         cashback?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let {
             add(AcpOffer("Cashback", "${it.quantity()}% de retorno. Não é desconto imediato; confira as condições de crédito.", referencePrice = value?.takeIf { p -> p > BigDecimal.ZERO }, headline = "${it.quantity()}% DE VOLTA"))
         }
@@ -134,7 +115,7 @@ internal data class AcpProduct(
         val start = validFrom?.let(::acpDateLabel)
         val end = validTo?.let(::acpDateLabel)
         if (start == null && end == null) offer
-        else offer.copy(detail = "${offer.detail} Vigência: ${start ?: "?"} até ${end ?: "?"}.", startDate = validFrom, endDate = validTo)
+        else offer.copy(detail = "${offer.detail} Vigência: ${start ?: "?"} até ${end ?: "?"}.")
     }
 }
 
@@ -149,14 +130,7 @@ internal fun acpDateLabel(raw: String?, includeTime: Boolean = false): String? {
 }
 
 internal fun AcpProductPage.prioritizeExact(field: AcpSearchField, query: String): AcpProductPage {
-    if (items.size < 2) return this
-    if (field == AcpSearchField.DESCRIPTION) {
-        return copy(items = items.sortedWith(
-            compareBy<AcpProduct> { normalizeAcpSearchText(it.description) }
-                .thenBy { it.description.lowercase(java.util.Locale.ROOT) }
-                .thenBy { it.id }
-        ))
-    }
+    if (field == AcpSearchField.DESCRIPTION || items.size < 2) return this
     val exact: (AcpProduct) -> Boolean = when (field) {
         AcpSearchField.BARCODE -> { product -> product.barcode == query }
         AcpSearchField.CODE -> { product -> product.code == query }
@@ -205,35 +179,9 @@ internal fun AcpProduct.offerValidityOr(fallback: AcpOfferValidity?): AcpOfferVa
     return AcpOfferValidity(start ?: fallback?.startDate.orEmpty(), end ?: fallback?.endDate.orEmpty())
 }
 
-/** Source dates belong to each offer; saved dates apply only to undated offers. */
-internal fun AcpOffer.validityOr(fallback: AcpOfferValidity?): AcpOfferValidity? {
-    val start = normalizeAcpDate(startDate)
-    val end = normalizeAcpDate(endDate)
-    return if (start == null && end == null) fallback
-    else AcpOfferValidity(start.orEmpty(), end.orEmpty())
-}
-
-internal fun AcpOffer.isWithinValidity(fallback: AcpOfferValidity? = null, nowMillis: Long = System.currentTimeMillis()): Boolean {
-    val dates = validityOr(fallback)
-    val today = Calendar.getInstance(TimeZone.getTimeZone("America/Fortaleza")).apply { timeInMillis = nowMillis }
-    val start = parseAcpDate(dates?.startDate)
-    val end = parseAcpDate(dates?.endDate)
-    return (start == null || dateKey(start) <= dateKey(today)) && (end == null || dateKey(end) >= dateKey(today))
-}
-
-/** Search can advertise an upcoming campaign with its dates, while hiding expired offers. */
-internal fun AcpOffer.isNotExpired(fallback: AcpOfferValidity? = null, nowMillis: Long = System.currentTimeMillis()): Boolean {
-    val dates = validityOr(fallback)
-    val end = parseAcpDate(dates?.endDate) ?: return true
-    val today = Calendar.getInstance(TimeZone.getTimeZone("America/Fortaleza")).apply {
-        timeInMillis = nowMillis
-    }
-    return dateKey(end) >= dateKey(today)
-}
-
 /** Drops dated offers outside their effective window while retaining offers with no dates. */
 internal fun AcpProduct.isWithinOfferValidity(fallback: AcpOfferValidity? = null, nowMillis: Long = System.currentTimeMillis()): Boolean {
-    val today = Calendar.getInstance(TimeZone.getTimeZone("America/Fortaleza")).apply {
+    val today = Calendar.getInstance().apply {
         timeInMillis = nowMillis
         set(Calendar.HOUR_OF_DAY, 0)
         set(Calendar.MINUTE, 0)
