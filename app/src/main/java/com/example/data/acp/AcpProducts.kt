@@ -190,7 +190,7 @@ internal fun AcpOffer.validityOr(fallback: AcpOfferValidity?): AcpOfferValidity?
 
 internal fun AcpOffer.isWithinValidity(fallback: AcpOfferValidity? = null, nowMillis: Long = System.currentTimeMillis()): Boolean {
     val dates = validityOr(fallback)
-    val today = Calendar.getInstance().apply { timeInMillis = nowMillis }
+    val today = Calendar.getInstance(TimeZone.getTimeZone("America/Fortaleza")).apply { timeInMillis = nowMillis }
     val start = parseAcpDate(dates?.startDate)
     val end = parseAcpDate(dates?.endDate)
     return (start == null || dateKey(start) <= dateKey(today)) && (end == null || dateKey(end) >= dateKey(today))
@@ -208,7 +208,7 @@ internal fun AcpOffer.isNotExpired(fallback: AcpOfferValidity? = null, nowMillis
 
 /** Drops dated offers outside their effective window while retaining offers with no dates. */
 internal fun AcpProduct.isWithinOfferValidity(fallback: AcpOfferValidity? = null, nowMillis: Long = System.currentTimeMillis()): Boolean {
-    val today = Calendar.getInstance().apply {
+    val today = Calendar.getInstance(TimeZone.getTimeZone("America/Fortaleza")).apply {
         timeInMillis = nowMillis
         set(Calendar.HOUR_OF_DAY, 0)
         set(Calendar.MINUTE, 0)
