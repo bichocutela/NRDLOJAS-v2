@@ -48,7 +48,7 @@ internal data class AcpCampaign(
         product.id in productIds || product.code.isNotBlank() && product.code in productCodes ||
             product.barcode.isNotBlank() && product.barcode in barcodes
 
-    fun offersFor(product: AcpProduct): List<AcpOffer> = productRules.filter { it.matches(product) }.flatMap { rule ->
+    fun offersFor(product: AcpProduct): List<AcpOffer> = if (active == false) emptyList() else productRules.filter { it.matches(product) }.flatMap { rule ->
         val source = buildString {
             append("Campanha: ").append(name)
             code?.let { append(" (#").append(it).append(')') }
