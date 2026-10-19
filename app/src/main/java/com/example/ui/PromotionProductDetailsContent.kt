@@ -37,7 +37,6 @@ internal fun PromotionProductDetailsContent(raw: String?, ean: String?, code: St
 internal fun AcpCommercialProductContent(
     item: AcpProduct,
     additionalOffers: List<AcpOffer> = emptyList(),
-    validityFor: (AcpOffer) -> AcpOfferValidity? = { null },
     bannerFor: (AcpOffer) -> com.example.data.ThemeBackground? = { null }
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -56,9 +55,6 @@ internal fun AcpCommercialProductContent(
             item.contentQuantity?.let { Text("Conteúdo: ${it.quantity()} ${item.contentUnit.orEmpty()}") }
             HorizontalDivider()
             Text("Preços e condições", style = MaterialTheme.typography.titleMedium)
-            item.offers().mergeAutomaticOffers(additionalOffers)
-                .filter { it.isPlausiblePromotion() }
-                .filter { offer -> offer.isWithinValidity(validityFor(offer)) }
-                .forEach { offer -> AcpOfferLandscapePoster(item.description, offer, bannerFor(offer)) }
+            (item.offers() + additionalOffers).forAutomaticDisplay().forEach { offer -> AcpOfferLandscapePoster(item.description, offer, bannerFor(offer)) }
     }
 }
