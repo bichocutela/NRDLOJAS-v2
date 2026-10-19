@@ -41,6 +41,9 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
   let signingIn = null;
   let campaignsCache = null;
   let campaignsAt = 0;
+  let campaignsLoading = null;
+  const scopedCampaignCache = new Map();
+  const scopedCampaignLoads = new Map();
   let promotionsCache = null;
   let promotionsAt = 0;
 
@@ -99,6 +102,9 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       session = {token: auth.access_token, storeId, chainId};
       sessionAt = Date.now();
       campaignsCache = null;
+      campaignsLoading = null;
+      scopedCampaignCache.clear();
+      scopedCampaignLoads.clear();
       promotionsCache = null;
       return session;
     })();
@@ -153,7 +159,11 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       headers: {...headers(token), 'Content-Type': 'application/json'}
     });
     const payload = await boundedJson(response);
-    if (!response.ok) throw Error('ACPTECH_UPSTREAM_FAILURE');
+    if (!response.ok) {
+      console.warn('ACPTECH_RPC_FAILURE', JSON.stringify({rpc: name, status: response.status,
+        code: /^[A-Z0-9_]+$/.test(String(payload?.code ?? '')) ? payload.code : null}));
+      throw Error('ACPTECH_UPSTREAM_FAILURE');
+    }
     return {rows: Array.isArray(payload) ? payload : [], total: null};
   }
 
@@ -180,6 +190,26 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
   async function campaignItems(auth, productCodes = null) {
     const scoped = Array.isArray(productCodes);
     if (!scoped && campaignsCache && Date.now() - campaignsAt < 60_000) return campaignsCache;
+    const productKey = scoped ? [...new Set(productCodes.flatMap(value => typeof value === 'object'
+      ? [value.code, value.barcode].filter(Boolean).map(String) : value == null ? [] : [String(value)]))].sort().join('|') : null;
+    if (scoped && productKey && scopedCampaignCache.has(productKey)) {
+      const cached = scopedCampaignCache.get(productKey);
+      if (Date.now() - cached.at < 30_000) return cached.items;
+      scopedCampaignCache.delete(productKey);
+    }
+    if (!scoped && campaignsLoading) return campaignsLoading;
+    if (scoped && productKey && scopedCampaignLoads.has(productKey)) return scopedCampaignLoads.get(productKey);
+    const loading = loadCampaignItems(auth, productCodes, scoped, productKey);
+    if (!scoped) campaignsLoading = loading;
+    else if (productKey) scopedCampaignLoads.set(productKey, loading);
+    try { return await loading; }
+    finally {
+      if (!scoped && campaignsLoading === loading) campaignsLoading = null;
+      if (scoped && productKey && scopedCampaignLoads.get(productKey) === loading) scopedCampaignLoads.delete(productKey);
+    }
+  }
+
+  async function loadCampaignItems(auth, productCodes, scoped, productKey) {
     const campaignQuery = {
       select: 'id,name,code,start_date,end_date,active,deleted_at,updated_at,store_id,chain_id',
       active: 'eq.true',
@@ -191,7 +221,11 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       : `eq.${auth.storeId}`;
     const campaigns = await tableAll('campaigns', campaignQuery, auth.token);
     const ids = (Array.isArray(campaigns) ? campaigns : []).map(c => c.id).filter(Boolean);
-    if (!ids.length) return [];
+    if (!ids.length) {
+      if (!scoped) { campaignsCache = []; campaignsAt = Date.now(); }
+      else if (productKey) scopedCampaignCache.set(productKey, {items: [], at: Date.now()});
+      return [];
+    }
     const items = [];
     const codes = scoped ? [...new Set(productCodes.map(value => typeof value === 'object' ? value.code : value).filter(value => value != null && String(value) !== '').map(String))] : [];
     const barcodes = scoped ? [...new Set(productCodes.map(value => typeof value === 'object' ? value.barcode : null).filter(Boolean).map(String))] : [];
@@ -237,25 +271,49 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       productUrl: null
       });
     });
-    const enriched = await enrichCampaignItems(auth, mapped);
+    const productCandidates = scoped ? productCodes.filter(value => value && typeof value === 'object' && value.id != null) : [];
+    const enriched = await enrichCampaignItems(auth, mapped, productCandidates);
     if (!scoped) { campaignsCache = enriched; campaignsAt = Date.now(); }
+    else if (productKey) {
+      scopedCampaignCache.set(productKey, {items: enriched, at: Date.now()});
+      if (scopedCampaignCache.size > 200) scopedCampaignCache.delete(scopedCampaignCache.keys().next().value);
+    }
     return enriched;
   }
 
-  async function enrichCampaignItems(auth, items) {
+  async function enrichCampaignItems(auth, items, productCandidates = []) {
     if (!items.length) return items;
     const catalog = [];
     const byId = new Set();
+    for (const product of productCandidates) {
+      const id = String(product.id ?? '');
+      if (id && !byId.has(id)) { byId.add(id); catalog.push(product); }
+    }
     const alternativeProductIdByBarcode = new Map();
     const codes = [...new Set(items.map(item => item.code).filter(value => value != null && String(value) !== '').map(String))];
     const barcodes = [...new Set(items.map(item => item.barcode ?? item.barCode).filter(Boolean).map(String))];
     const ids = [...new Set(items.map(item => item.chain_product_id ?? item.product_id).filter(Boolean).map(String))];
+    const candidateCodes = new Set(catalog.map(product => String(product.code ?? '')).filter(Boolean));
+    const candidateBarcodes = new Set(catalog.map(product => String(product.barcode ?? product.barCode ?? '')).filter(Boolean));
+    const candidateIds = new Set(catalog.map(product => String(product.id ?? '')).filter(Boolean));
+    const candidateCodeCounts = new Map();
+    for (const product of catalog) {
+      const code = String(product.code ?? '');
+      if (code) candidateCodeCounts.set(code, (candidateCodeCounts.get(code) ?? 0) + 1);
+    }
+    const lookupCodes = codes.filter(code => !candidateCodes.has(code));
+    const lookupBarcodes = barcodes.filter(barcode => !candidateBarcodes.has(barcode) &&
+      !items.some(item => String(item.barcode ?? item.barCode ?? '') === barcode &&
+        candidateCodeCounts.get(String(item.code ?? '')) === 1));
+    const lookupIds = ids.filter(id => !candidateIds.has(id));
     // Campaigns are small compared with the full catalogue. Resolve only their
     // product identities, then apply the store-specific prices/conditions.
-    for (let offset = 0; offset < Math.max(codes.length, barcodes.length, ids.length); offset += 50) {
-      const pCodes = codes.slice(offset, offset + 50);
-      const pBarcodes = barcodes.slice(offset, offset + 50);
-      const pIds = ids.slice(offset, offset + 50);
+    // Search results already contain the matching catalogue rows, so reuse
+    // those identities instead of querying the same RPC a second time.
+    for (let offset = 0; offset < Math.max(lookupCodes.length, lookupBarcodes.length, lookupIds.length); offset += 50) {
+      const pCodes = lookupCodes.slice(offset, offset + 50);
+      const pBarcodes = lookupBarcodes.slice(offset, offset + 50);
+      const pIds = lookupIds.slice(offset, offset + 50);
       const result = await rpcPage('search_chain_products', {
         p_chain_id: auth.chainId,
         p_category_id: null,
@@ -277,9 +335,9 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
     // ACP campaign rows can carry a legacy EAN that is not the product's
     // primary barcode. Resolve only those campaign EANs through ACP's alias
     // table, then fetch the corresponding products by ID via its search RPC.
-    if (barcodes.length) {
+    if (lookupBarcodes.length) {
       const aliases = await tableAll('chain_product_barcodes', {
-        select: 'chain_product_id,barcode', barcode: `in.${encodeIn(barcodes)}`,
+        select: 'chain_product_id,barcode', barcode: `in.${encodeIn(lookupBarcodes)}`,
         order: 'chain_product_id.asc,barcode.asc'
       }, auth.token);
       for (const alias of aliases) {
@@ -399,8 +457,10 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       if (key === 'productCategoryIds' && value) { query.category_id = `eq.${value}`; categoryId = String(value); }
     }
     const searched = code != null || barcode != null || Boolean(description);
-    let result = searched || categoryId
-      ? await rpcPage('search_chain_products', {
+    let result;
+    if (searched || categoryId) {
+      try {
+        result = await rpcPage('search_chain_products', {
         p_chain_id: auth.chainId,
         p_category_id: categoryId,
         p_code: code,
@@ -408,8 +468,16 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
         p_description: description,
         p_ids: null, p_codes: null, p_barcodes: null,
         p_include_deleted: false, p_limit: size, p_offset: page * size
-      }, auth.token)
-      : await tablePage('chain_products', query, auth.token);
+        }, auth.token);
+      } catch (error) {
+        // Keep the catalogue searchable if the ACP Tech search RPC is briefly
+        // unavailable. PostgREST supports the same exact and text filters.
+        console.warn('ACPTECH_SEARCH_RPC_FALLBACK', JSON.stringify({code: error?.message === 'ACPTECH_UPSTREAM_FAILURE' ? 'UPSTREAM' : 'ERROR'}));
+        result = await tablePage('chain_products', query, auth.token, 'exact');
+      }
+    } else {
+      result = await tablePage('chain_products', query, auth.token);
+    }
     if (!searched) {
       try {
         const counted = await rpcValue('count_chain_products', {
@@ -427,7 +495,17 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
 
   async function hydrateProducts(auth, rows, enrichCampaigns = false) {
     const overrides = await storeOverrides(auth, rows.map(item => item.id).filter(Boolean));
-    const campaignRows = enrichCampaigns ? await campaignItems(auth, rows) : [];
+    let campaignRows = [];
+    if (enrichCampaigns) {
+      try { campaignRows = await campaignItems(auth, rows); }
+      catch (error) {
+        // Campaign lookup supplements the product price. It must not hide the
+        // ACP catalogue price when the campaigns endpoint is temporarily down.
+        console.warn('ACPTECH_CAMPAIGN_ENRICHMENT_FAILURE', JSON.stringify({
+          error: error?.message === 'ACPTECH_UPSTREAM_FAILURE' ? 'UPSTREAM' : 'ERROR', count: rows.length
+        }));
+      }
+    }
     const campaignFor = item => (Array.isArray(campaignRows) ? campaignRows : []).filter(candidate =>
       (item.code != null && candidate.code != null && String(item.code) === String(candidate.code)) ||
       (item.barcode && candidate.barcode && String(item.barcode) === String(candidate.barcode))

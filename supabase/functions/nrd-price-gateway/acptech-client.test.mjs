@@ -100,7 +100,7 @@ test('ACP Tech usa offset e total do PostgREST para páginas de produtos', async
   assert.match(productsRequest.url, /offset=20/);
 });
 
-function fixture({products = [], campaigns = [], items = [], categories = [], overrides = [], alternativeBarcodes = [], categoryProducts = {}, cap = 250, failItems = false, campaignRpcEmpty = false} = {}) {
+function fixture({products = [], campaigns = [], items = [], categories = [], overrides = [], alternativeBarcodes = [], categoryProducts = {}, cap = 250, failItems = false, failSearchRpc = false, campaignRpcEmpty = false} = {}) {
   const requests = [];
   const now = () => Date.parse('2026-10-18T19:00:00Z');
   const client = createAcpTechClient({now, boundedJson: async response => response.body,
@@ -114,6 +114,7 @@ function fixture({products = [], campaigns = [], items = [], categories = [], ov
       if (path.endsWith('/rpc/count_chain_products')) return {ok:true, body:(categoryProducts[JSON.parse(options.body).p_category_id] ?? products).length};
       if (path.endsWith('/rpc/search_chain_products')) {
         const body = JSON.parse(options.body);
+        if (failSearchRpc) return {ok:false, status:502, body:{error:'mock'}};
         if (campaignRpcEmpty && body.p_codes?.length) return {ok:true, body:[]};
         return {ok:true, body:(categoryProducts[body.p_category_id] ?? products).slice(body.p_offset, body.p_offset + body.p_limit)};
       }
@@ -147,13 +148,15 @@ function fixture({products = [], campaigns = [], items = [], categories = [], ov
 const consult = (client, path = 'Product/all', parameters = [['code','123']]) => client.consult({path, parameters});
 
 test('product search returns current campaign price instead of a positive normal price', async () => {
-  const {client} = fixture({products:[{id:'p', code:123, description:'Teste', price:10, previous_price:0}],
+  const {client, requests} = fixture({products:[{id:'p', code:123, description:'Teste', price:10, previous_price:0}],
     campaigns:[{id:'c', start_date:'2026-10-16', end_date:'2026-10-18'}],
     items:[{id:'i', campaign_id:'c', code:123, price:6, previous_price:10}]});
   const result = (await consult(client)).items[0];
   assert.equal(result.value, 6);
   assert.equal(result.previousValue, 10);
   assert.ok(result.productCategories.some(category => category.description === 'De-Por'));
+  assert.equal(requests.filter(request => request.url.pathname.endsWith('/rpc/search_chain_products')).length, 1,
+    'campaign enrichment reuses the product already returned by search');
 });
 
 test('Campaign/all preserves separate club and multi-buy rules using the existing Android contract', async () => {
@@ -253,9 +256,21 @@ test('upstream page caps do not truncate categories or campaign items', async ()
   assert.deepEqual(requests.filter(row => row.url.pathname.endsWith('/campaign_items')).map(row => row.url.searchParams.get('offset')), ['0','2','4']);
 });
 
-test('campaign failure fails the query instead of silently returning only normal prices', async () => {
-  const {client} = fixture({products:[{id:'p', code:123, price:10}], campaigns:[{id:'c'}], failItems:true});
-  await assert.rejects(() => consult(client), /ACPTECH_UPSTREAM_FAILURE/);
+test('product search falls back from a failed RPC and keeps the normal price when campaigns are unavailable', async () => {
+  const {client, requests} = fixture({
+    products:[{id:'p', code:123, description:'Produto teste', price:10}],
+    campaigns:[{id:'c'}], failItems:true, failSearchRpc:true
+  });
+  const result = await consult(client);
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].value, 10);
+  assert.equal(result.items[0].productCategories.length, 0);
+  assert.ok(requests.some(request => request.url.pathname.endsWith('/chain_products')));
+});
+
+test('campaign endpoint still reports a failure instead of presenting an incomplete offer list', async () => {
+  const {client} = fixture({campaigns:[{id:'c'}], failItems:true});
+  await assert.rejects(() => consult(client, 'Campaign/all', []), /ACPTECH_UPSTREAM_FAILURE/);
 });
 
 test('unfiltered catalogue stays complete and applies store prices and stock aliases', async () => {
