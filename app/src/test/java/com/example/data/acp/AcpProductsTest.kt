@@ -122,12 +122,12 @@ class AcpProductsTest {
         assertEquals("R$ 3,49", offer.price?.brl())
     }
 
-    @Test fun missingNormalPriceIsNotInventedAndSecondUnitDoesNotInventAverage() {
+    @Test fun secondUnitPriceIsCalculatedWithoutClaimingBundleAverage() {
         assertNull(product(""""value":null,"clubValue":9.99""").offers().single().referencePrice)
         val offer = product(""""value":45.49,"secondUnitDiscount":50""").offers().single()
         assertEquals("50% DE DESCONTO", offer.headline)
         assertEquals("R$ 45,49", offer.referencePrice?.brl())
-        assertNull(offer.price)
+        assertEquals("R$ 22,75", offer.price?.brl())
     }
 
     @Test fun pagePreservesTotalCountFromProductAll() {

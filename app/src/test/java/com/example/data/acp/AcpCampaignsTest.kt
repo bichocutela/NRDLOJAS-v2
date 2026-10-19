@@ -46,6 +46,7 @@ class AcpCampaignsTest {
         assertEquals("Segunda unidade", offer.title)
         assertEquals("50% DE DESCONTO", offer.headline)
         assertEquals("R$ 45,49", offer.referencePrice?.brl())
+        assertEquals("R$ 22,75", offer.price?.brl())
         assertTrue(offer.detail.contains("50%"))
         assertTrue(offer.detail.contains("50SEG"))
     }

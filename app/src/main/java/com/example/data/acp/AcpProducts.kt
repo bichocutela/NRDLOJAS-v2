@@ -105,7 +105,12 @@ internal data class AcpProduct(
                 (equivalent?.let { " Média equivalente de ${it.brl()} por unidade ao completar a quantidade, calculada sobre o preço principal." } ?: "")
             add(AcpOffer("Leve/Pague", detail, equivalent, value?.takeIf { it > BigDecimal.ZERO }, headline))
         }
-        secondUnitDiscount?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let { add(AcpOffer("Segunda unidade", "${it.quantity()}% de desconto na segunda unidade. Base de preço e combinação com Clube ainda não verificadas.", referencePrice = value?.takeIf { p -> p > BigDecimal.ZERO }, headline = "${it.quantity()}% DE DESCONTO")) }
+        secondUnitDiscount?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let { discount ->
+            val reference = value?.takeIf { it > BigDecimal.ZERO }
+            val discountedPrice = reference?.multiply(BigDecimal(100).subtract(discount))?.divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
+            add(AcpOffer("Segunda unidade", "${discount.quantity()}% de desconto na segunda unidade. Base de preço e combinação com Clube ainda não verificadas.",
+                price = discountedPrice, referencePrice = reference, headline = "${discount.quantity()}% DE DESCONTO"))
+        }
         cashback?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let {
             add(AcpOffer("Cashback", "${it.quantity()}% de retorno. Não é desconto imediato; confira as condições de crédito.", referencePrice = value?.takeIf { p -> p > BigDecimal.ZERO }, headline = "${it.quantity()}% DE VOLTA"))
         }

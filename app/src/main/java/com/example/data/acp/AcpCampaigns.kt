@@ -78,10 +78,12 @@ internal data class AcpCampaign(
                     referencePrice = (rule.value ?: product.value)?.takeIf { it > BigDecimal.ZERO },
                     headline = "LEVE ${rule.quantityTake.quantity()} • PAGUE ${rule.quantityPay.quantity()}"))
             }
-            rule.secondUnitDiscount?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let {
-                add(AcpOffer("Segunda unidade", "${it.quantity()}% de desconto na segunda unidade. $source",
-                    referencePrice = rule.value?.takeIf { price -> price > BigDecimal.ZERO } ?: product.value,
-                    headline = "${it.quantity()}% DE DESCONTO"))
+            rule.secondUnitDiscount?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let { discount ->
+                val reference = (rule.value ?: product.value)?.takeIf { it > BigDecimal.ZERO }
+                val discountedPrice = reference?.multiply(BigDecimal(100).subtract(discount))?.divide(BigDecimal(100), 2, RoundingMode.HALF_UP)
+                add(AcpOffer("Segunda unidade", "${discount.quantity()}% de desconto na segunda unidade. $source",
+                    price = discountedPrice, referencePrice = reference,
+                    headline = "${discount.quantity()}% DE DESCONTO"))
             }
             rule.cashback?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let {
                 add(AcpOffer("Cashback", "${it.quantity()}% de retorno. Não é desconto imediato; confira as condições de crédito. $source",
