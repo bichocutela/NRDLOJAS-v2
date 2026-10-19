@@ -124,6 +124,8 @@ internal fun AcpProductsPanel(
     var scanning by remember { mutableStateOf(false) }
     var campaigns by remember { mutableStateOf<List<AcpCampaign>>(emptyList()) }
     var previewCampaignOffers by remember { mutableStateOf<Map<String, List<AcpOffer>>>(emptyMap()) }
+    var campaignLookupBusy by remember { mutableStateOf(false) }
+    var campaignLookupFailed by remember { mutableStateOf(false) }
     var integration by remember { mutableStateOf<AcpIntegrationInfo?>(null) }
     var detailBusy by remember { mutableStateOf(false) }
     var detailWarning by remember { mutableStateOf<String?>(null) }
@@ -295,6 +297,9 @@ internal fun AcpProductsPanel(
         }
         error = null
         closeDetail()
+        campaignLookupBusy = enrichCampaigns
+        campaignLookupFailed = false
+        previewCampaignOffers = emptyMap()
         if (index == 0 && canCopyDiagnostic && interactive) api.beginDiagnosticSession()
         searchJob = scope.launch {
             try {
@@ -307,11 +312,11 @@ internal fun AcpProductsPanel(
                 // Product/all é o caminho crítico. Assim que ele responde, o produto já fica
                 // disponível e clicável. Dados complementares não seguram mais a pesquisa.
                 page = result
-                previewCampaignOffers = emptyMap()
                 busy = false
 
                 if (!enrichCampaigns) {
                     previewCampaignOffers = emptyMap()
+                    campaignLookupBusy = false
                     return@launch
                 }
 
@@ -320,18 +325,31 @@ internal fun AcpProductsPanel(
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: AcpUnauthorized) {
-                    if (ticket == generation) onSessionExpired()
+                    if (ticket == generation) {
+                        campaignLookupBusy = false
+                        onSessionExpired()
+                    }
                     emptyMap()
                 } catch (_: Exception) {
+                    if (ticket == generation) campaignLookupFailed = true
                     emptyMap()
                 }
-                if (ticket == generation) previewCampaignOffers = campaignOffers
+                if (ticket == generation) {
+                    previewCampaignOffers = campaignOffers
+                    campaignLookupBusy = false
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: AcpUnauthorized) {
-                if (ticket == generation) onSessionExpired()
+                if (ticket == generation) {
+                    campaignLookupBusy = false
+                    onSessionExpired()
+                }
             } catch (failure: Exception) {
-                if (ticket == generation && interactive) error = acpErrorMessage(failure)
+                if (ticket == generation) {
+                    campaignLookupBusy = false
+                    if (interactive) error = acpErrorMessage(failure)
+                }
             } finally {
                 if (ticket == generation) busy = false
                 if (interactive && ticket == generation) api.warmFeaturedCatalog()
@@ -370,13 +388,18 @@ internal fun AcpProductsPanel(
                     if (ticket != generation) return@launch
                     page = fresh
                     lastExplicitQuery = clean
-                    previewCampaignOffers = try {
+                    campaignLookupBusy = true
+                    campaignLookupFailed = false
+                    val refreshedCampaignOffers = try {
                         api.campaignOffersFor(fresh.items)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
-                        emptyMap()
+                        campaignLookupFailed = true
+                        null
                     }
+                    if (refreshedCampaignOffers != null) previewCampaignOffers = refreshedCampaignOffers
+                    campaignLookupBusy = false
                     refreshMessage = "Preços atualizados agora pelo ACP."
                 }
             } catch (cancelled: CancellationException) {
@@ -402,12 +425,16 @@ internal fun AcpProductsPanel(
             busy = false
             page = null
             previewCampaignOffers = emptyMap()
+            campaignLookupBusy = false
+            campaignLookupFailed = false
             error = null
             lastExplicitQuery = null
             return@LaunchedEffect
         }
         if (clean.length < 2) {
             busy = false
+            campaignLookupBusy = false
+            campaignLookupFailed = false
             return@LaunchedEffect
         }
         if (clean == lastExplicitQuery) return@LaunchedEffect
@@ -445,9 +472,11 @@ internal fun AcpProductsPanel(
                 // Mantém também os selos/condições que já são montados para a lista.
                 previewCampaignOffers = try {
                     api.campaignOffersFor(fresh.items)
+                        .also { campaignLookupFailed = false }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
+                    campaignLookupFailed = true
                     previewCampaignOffers
                 }
             } catch (cancelled: CancellationException) {
@@ -546,6 +575,8 @@ internal fun AcpProductsPanel(
                     busy = query.trim().length >= 2
                     page = null
                     previewCampaignOffers = emptyMap()
+                    campaignLookupBusy = false
+                    campaignLookupFailed = false
                     lastExplicitQuery = null
                     refreshMessage = null
                     error = null
@@ -697,6 +728,18 @@ internal fun AcpProductsPanel(
         if (result == null && !busy && error == null) {
             item { Text("Digite ao menos 2 caracteres para ver sugestões, ou pesquise por código/código de barras.") }
         }
+        if (result != null && campaignLookupBusy) {
+            item { Text("Verificando ofertas e validades no ACP…", style = MaterialTheme.typography.bodySmall) }
+        }
+        if (result != null && campaignLookupFailed) {
+            item {
+                Text(
+                    "Preço carregado, mas não foi possível confirmar as ofertas no ACP. Toque em Atualizar para tentar novamente.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
         if (result != null && result.items.isEmpty() && !busy) {
             item { Text("Nenhum produto encontrado. Confira o termo e tente novamente.") }
         }
@@ -707,7 +750,7 @@ internal fun AcpProductsPanel(
                 .forAutomaticDisplay()
                 .filter { offer ->
                     val saved = offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, offer.family)]
-                    offer.isNotExpired(product.offerValidityOr(saved))
+                    offer.isWithinValidity(product.offerValidityOr(saved))
                 }
             val shareLayer = rememberGraphicsLayer()
             val resultCardShape = if (isExpressive) {
@@ -831,6 +874,9 @@ internal fun AcpProductsPanel(
                                 }
                             )
                         )
+                    }
+                    if (previewOffers.isEmpty() && !campaignLookupBusy && !campaignLookupFailed) {
+                        Text("Sem oferta ACP vigente.", style = MaterialTheme.typography.bodySmall)
                     }
                     product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let {
                         Text("Limite: ${it.quantity()} un. por CPF", style = MaterialTheme.typography.bodySmall)
@@ -968,9 +1014,16 @@ internal fun AcpProductsPanel(
                             }
                         }
                         nrdActionMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
-                        AcpCommercialProductContent(product, campaigns.flatMap { it.offersFor(product) }) { offer ->
-                            appearance.activeOfferBanner(offer.bannerKey)
-                        }
+                        AcpCommercialProductContent(
+                            item = product,
+                            additionalOffers = campaigns.flatMap { it.offersFor(product) },
+                            validityFor = { offer ->
+                                product.offerValidityOr(
+                                    offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, offer.family)]
+                                )
+                            },
+                            bannerFor = { offer -> appearance.activeOfferBanner(offer.bannerKey) }
+                        )
                         HorizontalDivider()
                         ActiveFlyerOffersForAcpProduct(product)
                         OutlinedCard(onClick = { syncExpanded = !syncExpanded }, modifier = Modifier.fillMaxWidth()) {

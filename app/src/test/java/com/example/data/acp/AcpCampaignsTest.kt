@@ -24,6 +24,8 @@ class AcpCampaignsTest {
         val stale = AcpOfferValidity("01/09/2026", "22/09/2026")
         assertEquals(AcpOfferValidity("19/10/2026", "21/10/2026"), offer.validityOr(stale))
         assertFalse(offer.isWithinValidity(stale, java.time.Instant.parse("2026-10-18T15:00:00Z").toEpochMilli()))
+        assertFalse(offer.isWithinValidity(stale, java.time.Instant.parse("2026-10-19T02:59:00Z").toEpochMilli()))
+        assertTrue(offer.isWithinValidity(stale, java.time.Instant.parse("2026-10-19T03:00:00Z").toEpochMilli()))
         assertTrue(offer.isNotExpired(stale, java.time.Instant.parse("2026-10-18T15:00:00Z").toEpochMilli()))
         assertTrue(offer.isWithinValidity(stale, java.time.Instant.parse("2026-10-20T15:00:00Z").toEpochMilli()))
         assertFalse(offer.isWithinValidity(stale, java.time.Instant.parse("2026-10-22T15:00:00Z").toEpochMilli()))
