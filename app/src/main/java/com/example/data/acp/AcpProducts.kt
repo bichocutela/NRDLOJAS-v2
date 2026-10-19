@@ -325,9 +325,10 @@ internal fun acpSearchRequest(rawQuery: String): AcpSearchRequest {
     val canonicalMeasure = measure?.let { canonicalAcpMeasure(it.groupValues[1], it.groupValues[2]) }
     val queryWithoutMeasure = if (measure != null) tokenizedQuery.removeRange(measure.range) else tokenizedQuery
     val terms = normalizeAcpSearchText(queryWithoutMeasure).split(' ').filter { it.length >= 2 }
-    // ACP description filtering is substring based. A stable brand/name token finds candidates;
-    // matching every remaining word and the requested package size happens locally below.
-    val seed = terms.firstOrNull() ?: clean
+    // ACP filters candidates by substring. Use the most selective word as the server-side
+    // seed, then verify every term and package size locally. Choosing the first word (often
+    // "bom", "leite", etc.) can return thousands of unrelated products.
+    val seed = terms.maxByOrNull { it.length } ?: clean
     return AcpSearchRequest(
         field = field,
         query = seed,
@@ -363,6 +364,92 @@ internal fun AcpProduct.matchesAcpSearch(rawQuery: String): Boolean {
         }
     }
     return productMeasures.any { (value, unit) -> unit == wantedUnit && value.compareTo(wantedValue) == 0 }
+}
+
+private const val ACP_DESCRIPTION_RESULT_PAGE_SIZE = 20
+private const val ACP_DESCRIPTION_CANDIDATE_PAGE_SIZE = 100
+private const val ACP_DESCRIPTION_SEARCH_CACHE_MILLIS = 60_000L
+
+/** Keep the complete match set briefly so opening page 2 does not rescan ACP. */
+private object AcpDescriptionSearchCache {
+    private val entries = linkedMapOf<String, Pair<Long, List<AcpProduct>>>()
+
+    @Synchronized
+    fun get(key: String): Pair<Long, List<AcpProduct>>? {
+        val now = System.currentTimeMillis()
+        entries.entries.removeAll { now - it.value.first !in 0 until ACP_DESCRIPTION_SEARCH_CACHE_MILLIS }
+        return entries[key]
+    }
+
+    @Synchronized
+    fun put(key: String, products: List<AcpProduct>) {
+        entries[key] = System.currentTimeMillis() to products
+        while (entries.size > 8) entries.remove(entries.keys.first())
+    }
+
+    @Synchronized
+    fun clearQuery(query: String) {
+        val prefix = "${normalizeAcpSearchText(query)}|"
+        entries.keys.removeAll { it.startsWith(prefix) }
+    }
+}
+
+internal fun paginateAcpDescriptionMatches(
+    matches: List<AcpProduct>,
+    pageIndex: Int,
+    pageSize: Int = ACP_DESCRIPTION_RESULT_PAGE_SIZE,
+    queriedAtMillis: Long = System.currentTimeMillis()
+): AcpProductPage {
+    require(pageIndex >= 0 && pageSize > 0)
+    val ordered = matches.distinctBy { it.id }.sortedWith(
+        compareBy<AcpProduct> { normalizeAcpSearchText(it.description) }
+            .thenBy { it.description.lowercase(java.util.Locale.ROOT) }
+            .thenBy { it.id }
+    )
+    val totalPages = (ordered.size + pageSize - 1) / pageSize
+    val start = (pageIndex * pageSize).coerceAtMost(ordered.size)
+    return AcpProductPage(
+        items = ordered.drop(start).take(pageSize),
+        pageIndex = pageIndex,
+        totalPages = totalPages,
+        totalCount = ordered.size,
+        queriedAtMillis = queriedAtMillis
+    )
+}
+
+internal fun clearAcpDescriptionSearchCache(query: String) = AcpDescriptionSearchCache.clearQuery(query)
+
+private suspend fun AcpApi.descriptionSearchResults(cleanQuery: String, category: AcpCategory?): List<AcpProduct> {
+    val request = acpSearchRequest(cleanQuery)
+    val cacheKey = "${normalizeAcpSearchText(cleanQuery)}|${category?.id.orEmpty()}"
+    AcpDescriptionSearchCache.get(cacheKey)?.let { return it.second }
+
+    val candidates = mutableListOf<AcpProduct>()
+    var pageIndex = 0
+    var totalPages = 1
+    while (pageIndex < totalPages) {
+        val parameters = mutableListOf(
+            "pageSize" to ACP_DESCRIPTION_CANDIDATE_PAGE_SIZE.toString(),
+            "pageIndex" to pageIndex.toString(),
+            AcpSearchField.DESCRIPTION.parameter to request.query
+        )
+        category?.let { parameters.add("productCategoryIds" to it.id) }
+        val candidatePage = AcpProductParser.page(get("Product/all", parameters), pageIndex)
+        candidates += candidatePage.items
+        totalPages = maxOf(
+            candidatePage.totalPages,
+            (candidatePage.totalCount + ACP_DESCRIPTION_CANDIDATE_PAGE_SIZE - 1) / ACP_DESCRIPTION_CANDIDATE_PAGE_SIZE,
+            pageIndex + 1
+        )
+        pageIndex++
+    }
+
+    val matches = candidates.asSequence()
+        .filter { it.matchesAcpSearch(cleanQuery) }
+        .distinctBy { it.id }
+        .toList()
+    AcpDescriptionSearchCache.put(cacheKey, matches)
+    return matches
 }
 
 private suspend fun AcpApi.searchProductsOnce(field: AcpSearchField, query: String, category: AcpCategory?, page: Int): AcpProductPage {
@@ -401,9 +488,10 @@ internal suspend fun AcpApi.searchProducts(field: AcpSearchField, query: String,
     if (field != preferredField) return AcpProductPage(emptyList(), page, 0, 0)
 
     if (preferredField == AcpSearchField.DESCRIPTION) {
-        val smart = acpSearchRequest(clean)
-        val candidates = searchProductsOnce(AcpSearchField.DESCRIPTION, smart.query, category, page)
-        return candidates.copy(items = candidates.items.filter { it.matchesAcpSearch(clean) })
+        val matches = descriptionSearchResults(clean, category)
+        val cacheKey = "${normalizeAcpSearchText(clean)}|${category?.id.orEmpty()}"
+        val fetchedAt = AcpDescriptionSearchCache.get(cacheKey)?.first ?: System.currentTimeMillis()
+        return paginateAcpDescriptionMatches(matches, page, queriedAtMillis = fetchedAt)
     }
 
     val first = searchProductsOnce(preferredField, clean, category, page)
