@@ -325,9 +325,8 @@ internal fun acpSearchRequest(rawQuery: String): AcpSearchRequest {
     val canonicalMeasure = measure?.let { canonicalAcpMeasure(it.groupValues[1], it.groupValues[2]) }
     val queryWithoutMeasure = if (measure != null) tokenizedQuery.removeRange(measure.range) else tokenizedQuery
     val terms = normalizeAcpSearchText(queryWithoutMeasure).split(' ').filter { it.length >= 2 }
-    // ACP filters candidates by substring. Use the most selective word as the server-side
-    // seed, then verify every term and package size locally. Choosing the first word (often
-    // "bom", "leite", etc.) can return thousands of unrelated products.
+    // In # mode ACP searches by one seed; the complete-word and package checks run locally.
+    // Ordinary searches keep the full phrase and trust ACP's own matching.
     val seed = terms.maxByOrNull { it.length } ?: clean
     // Ordinary typing follows ACP's own description search verbatim. The explicit # mode
     // searches by one seed and applies the stricter local token/size checks below.
@@ -427,9 +426,12 @@ internal fun paginateAcpDescriptionMatches(
 
 internal fun clearAcpDescriptionSearchCache(query: String) = AcpDescriptionSearchCache.clearQuery(query)
 
+internal fun acpDescriptionSearchCacheKey(query: String, category: AcpCategory?): String =
+    "${normalizeAcpSearchText(query)}|${if (query.contains('#')) "precise" else "plain"}|${category?.id.orEmpty()}"
+
 private suspend fun AcpApi.descriptionSearchResults(cleanQuery: String, category: AcpCategory?): List<AcpProduct> {
     val request = acpSearchRequest(cleanQuery)
-    val cacheKey = "${normalizeAcpSearchText(cleanQuery)}|${category?.id.orEmpty()}"
+    val cacheKey = acpDescriptionSearchCacheKey(cleanQuery, category)
     AcpDescriptionSearchCache.get(cacheKey)?.let { return it.second }
 
     val candidates = mutableListOf<AcpProduct>()
@@ -499,7 +501,7 @@ internal suspend fun AcpApi.searchProducts(field: AcpSearchField, query: String,
 
     if (preferredField == AcpSearchField.DESCRIPTION) {
         val matches = descriptionSearchResults(clean, category)
-        val cacheKey = "${normalizeAcpSearchText(clean)}|${category?.id.orEmpty()}"
+        val cacheKey = acpDescriptionSearchCacheKey(clean, category)
         val fetchedAt = AcpDescriptionSearchCache.get(cacheKey)?.first ?: System.currentTimeMillis()
         return paginateAcpDescriptionMatches(matches, page, queriedAtMillis = fetchedAt)
     }
