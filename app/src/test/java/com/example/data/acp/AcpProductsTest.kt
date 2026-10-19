@@ -175,7 +175,7 @@ class AcpProductsTest {
     @Test fun smartSearchExtractsBrandAndEquivalentVolumeUnits() {
         val request = acpSearchRequest("DOWNY 1 L")
         assertEquals(AcpSearchField.DESCRIPTION, request.field)
-        assertEquals("downy", request.query)
+        assertEquals("DOWNY 1 L", request.query)
         assertEquals(listOf("downy"), request.textTerms)
         val hashDelimited = acpSearchRequest("downy#1l#")
         assertEquals("downy", hashDelimited.query)
@@ -198,12 +198,21 @@ class AcpProductsTest {
         val lilas = product(""""contentQuantity":1,"contentUnit":"L"""", "Amaciante Downy Lilás 1L")
         assertTrue(lilas.matchesAcpSearch("downy#lilas"))
         assertFalse(item.matchesAcpSearch("downy#lilas"))
+        assertFalse(lilas.matchesAcpSearch("downy#lil"))
     }
 
     @Test fun smartSearchReadsVolumeFromDescriptionWhenCatalogContentIsMissing() {
         val item = product(""""code":"001"""", "Amaciante Downy Concentrado 1000 ml")
         assertTrue(item.matchesAcpSearch("downy 1 litro"))
         assertFalse(item.matchesAcpSearch("downy 2l"))
+    }
+
+    @Test fun plainDescriptionSearchUsesTheWholeAcpQueryAndHashSearchUsesWholeWords() {
+        assertEquals("Bom Todo", acpSearchRequest("Bom Todo").query)
+        assertEquals("todo", acpSearchRequest("bom#todo").query)
+        val product = product(""""code":"1"""", "Bom Todo Leite")
+        assertTrue(product.matchesAcpSearch("bom#todo"))
+        assertFalse(product.matchesAcpSearch("bom#tod"))
     }
 
     @Test fun descriptionResultsCompactMatchesFromSparseAcpPages() {
