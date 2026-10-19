@@ -123,16 +123,15 @@ class AcpProductsTest {
     }
 
     @Test fun duplicateCampaignReplacesProductOfferAndClubAboveRetailIsRejected() {
-        val invalidClub = product(\"\"\"\"value\":3.99,\"previousValue\":17.99,\"clubValue\":11.97,\"productCategories\":[{\"id\":5,\"description\":\"Clube de Vantagens\"}]\"\")
+        val invalidClub = product("""""value":3.99,"previousValue":17.99,"clubValue":11.97,"productCategories":[{"id":5,"description":"Clube de Vantagens"}]""")
         assertTrue(invalidClub.offers().none { it.family == AcpOfferFamily.CLUB && it.isPlausiblePromotion() })
 
-        val direct = AcpOffer(\"De/Por\", \"De R$ 4,99 por R$ 3,99.\", java.math.BigDecimal(\"3.99\"), java.math.BigDecimal(\"4.99\"))
-        val campaign = direct.copy(detail = \"Campanha ACP ativa\")
+        val direct = AcpOffer("De/Por", "De R$ 4,99 por R$ 3,99.", java.math.BigDecimal("3.99"), java.math.BigDecimal("4.99"))
+        val campaign = direct.copy(detail = "Campanha ACP ativa")
         val merged = listOf(direct).mergeAutomaticOffers(listOf(campaign))
         assertEquals(1, merged.size)
-        assertEquals(\"Campanha ACP ativa\", merged.single().detail)
+        assertEquals("Campanha ACP ativa", merged.single().detail)
     }
-
     @Test fun secondUnitPriceIsCalculatedWithoutClaimingBundleAverage() {
         assertNull(product(""""value":null,"clubValue":9.99""").offers().single().referencePrice)
         val offer = product(""""value":45.49,"secondUnitDiscount":50""").offers().single()
