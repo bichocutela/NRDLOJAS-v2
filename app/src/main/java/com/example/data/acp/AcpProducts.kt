@@ -329,9 +329,12 @@ internal fun acpSearchRequest(rawQuery: String): AcpSearchRequest {
     // seed, then verify every term and package size locally. Choosing the first word (often
     // "bom", "leite", etc.) can return thousands of unrelated products.
     val seed = terms.maxByOrNull { it.length } ?: clean
+    // Ordinary typing follows ACP's own description search verbatim. The explicit # mode
+    // searches by one seed and applies the stricter local token/size checks below.
+    val serverQuery = if (clean.contains('#')) seed else clean
     return AcpSearchRequest(
         field = field,
-        query = seed,
+        query = serverQuery,
         textTerms = terms,
         sizeValue = canonicalMeasure?.first,
         sizeUnit = canonicalMeasure?.second
@@ -346,7 +349,12 @@ internal fun AcpProduct.matchesAcpSearch(rawQuery: String): Boolean {
             .plus(auxDescriptions)
             .joinToString(" ")
     )
-    if (request.textTerms.any { term -> !searchable.split(' ').any { it.contains(term) } }) return false
+    val words = searchable.split(' ').filter(String::isNotBlank)
+    if (rawQuery.contains('#')) {
+        if (request.textTerms.any { term -> term !in words }) return false
+    } else if (request.textTerms.any { term -> !words.any { it.contains(term) } }) {
+        return false
+    }
 
     val wantedValue = request.sizeValue ?: return true
     val wantedUnit = request.sizeUnit ?: return true
@@ -444,8 +452,10 @@ private suspend fun AcpApi.descriptionSearchResults(cleanQuery: String, category
         pageIndex++
     }
 
+    // Plain text search already comes filtered by ACP; keep every returned product.
+    // The # syntax opts into stricter whole-word and package matching locally.
     val matches = candidates.asSequence()
-        .filter { it.matchesAcpSearch(cleanQuery) }
+        .filter { !cleanQuery.contains('#') || it.matchesAcpSearch(cleanQuery) }
         .distinctBy { it.id }
         .toList()
     AcpDescriptionSearchCache.put(cacheKey, matches)
