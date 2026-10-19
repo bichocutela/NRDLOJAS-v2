@@ -149,7 +149,14 @@ internal fun acpDateLabel(raw: String?, includeTime: Boolean = false): String? {
 }
 
 internal fun AcpProductPage.prioritizeExact(field: AcpSearchField, query: String): AcpProductPage {
-    if (field == AcpSearchField.DESCRIPTION || items.size < 2) return this
+    if (items.size < 2) return this
+    if (field == AcpSearchField.DESCRIPTION) {
+        return copy(items = items.sortedWith(
+            compareBy<AcpProduct> { normalizeAcpSearchText(it.description) }
+                .thenBy { it.description.lowercase(java.util.Locale.ROOT) }
+                .thenBy { it.id }
+        ))
+    }
     val exact: (AcpProduct) -> Boolean = when (field) {
         AcpSearchField.BARCODE -> { product -> product.barcode == query }
         AcpSearchField.CODE -> { product -> product.code == query }
