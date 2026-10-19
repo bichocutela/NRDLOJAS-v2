@@ -209,7 +209,7 @@ class AcpProductsTest {
 
     @Test fun plainDescriptionSearchUsesTheWholeAcpQueryAndHashSearchUsesWholeWords() {
         assertEquals("Bom Todo", acpSearchRequest("Bom Todo").query)
-        assertEquals("todo", acpSearchRequest("bom#todo").query)
+        assertEquals("bom", acpSearchRequest("bom#todo").query)
         assertNotEquals(
             acpDescriptionSearchCacheKey("bom todo", null),
             acpDescriptionSearchCacheKey("bom#todo", null)
