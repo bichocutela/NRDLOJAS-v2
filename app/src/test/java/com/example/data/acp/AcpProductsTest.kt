@@ -210,6 +210,10 @@ class AcpProductsTest {
     @Test fun plainDescriptionSearchUsesTheWholeAcpQueryAndHashSearchUsesWholeWords() {
         assertEquals("Bom Todo", acpSearchRequest("Bom Todo").query)
         assertEquals("todo", acpSearchRequest("bom#todo").query)
+        assertNotEquals(
+            acpDescriptionSearchCacheKey("bom todo", null),
+            acpDescriptionSearchCacheKey("bom#todo", null)
+        )
         val product = product(""""code":"1"""", "Bom Todo Leite")
         assertTrue(product.matchesAcpSearch("bom#todo"))
         assertFalse(product.matchesAcpSearch("bom#tod"))
