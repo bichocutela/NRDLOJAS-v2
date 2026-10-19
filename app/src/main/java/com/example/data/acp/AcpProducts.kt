@@ -64,6 +64,18 @@ internal fun List<AcpOffer>.forAutomaticDisplay(): List<AcpOffer> {
         .sortedWith(compareBy<AcpOffer> { priority[it.family] ?: Int.MAX_VALUE }.thenBy { it.title })
 }
 
+/** ACP repeats conditions in Product/all and Campaign/all; keep the richer campaign rule once. */
+internal fun List<AcpOffer>.mergeAutomaticOffers(campaignOffers: List<AcpOffer>): List<AcpOffer> {
+    val validCampaigns = campaignOffers.filter { it.isPlausiblePromotion() }
+    val campaignFamilies = validCampaigns.mapTo(mutableSetOf()) { it.family }
+    return (filter { it.family !in campaignFamilies && it.isPlausiblePromotion() } + validCampaigns)
+        .forAutomaticDisplay()
+}
+
+/** A promotional price above the current ACP reference is invalid as a discount. */
+internal fun AcpOffer.isPlausiblePromotion(): Boolean =
+    price == null || referencePrice == null || price <= referencePrice
+
 internal data class AcpProduct(
     val id: String, val code: String, val barcode: String, val description: String,
     val value: BigDecimal?, val previousValue: BigDecimal?, val clubValue: BigDecimal?,
@@ -87,8 +99,9 @@ internal data class AcpProduct(
         clubValue?.takeIf { it > BigDecimal.ZERO }?.let { clubPrice ->
             val reference = when {
                 value != null && value > clubPrice -> value
+                clubPrice > (value ?: BigDecimal.ZERO) -> value?.takeIf { it > BigDecimal.ZERO }
                 previousValue != null && previousValue > clubPrice -> previousValue
-                else -> null
+                else -> value?.takeIf { it > BigDecimal.ZERO }
             }
             add(AcpOffer("Clube de Vantagens", "Preço Clube: ${clubPrice.brl()}. Condicionado ao Clube.", clubPrice, reference))
         }
