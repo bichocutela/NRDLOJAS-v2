@@ -80,6 +80,15 @@ class AcpCampaignsTest {
         assertTrue(offer.detail.contains("R$ 8,00"))
     }
 
+    @Test fun inactiveCampaignDoesNotProduceSearchOffers() {
+        val p = product("""{"id":"p-inactive","code":"789","description":"Teste","value":12}""")
+        val campaign = AcpCampaignParser.page(JSONObject("""{"items":[{
+            "id":"disabled","active":false,"startDate":"2026-10-19","endDate":"2026-10-21",
+            "products":[{"product":{"id":"p-inactive"},"clubValue":8.00}]
+        }]}""")).single()
+        assertTrue(campaign.offersFor(p).isEmpty())
+    }
+
     @Test fun nestedDataItemsAreAccepted() {
         val campaigns = AcpCampaignParser.page(JSONObject("""{"data":{"items":[{"id":"c4","name":"Nested","products":[]}]}}"""))
         assertEquals(1, campaigns.size)
