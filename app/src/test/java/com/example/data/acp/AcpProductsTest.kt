@@ -206,6 +206,39 @@ class AcpProductsTest {
         assertFalse(item.matchesAcpSearch("downy 2l"))
     }
 
+    @Test fun descriptionResultsCompactMatchesFromSparseAcpPages() {
+        val candidates = listOf(
+            product(""""code":"1"""", "Bom Todo Leite"),
+            product(""""code":"2"""", "Bom Outro Produto"),
+            product(""""code":"3"""", "Leite Bom Todo")
+        )
+        val matches = candidates.filter { it.matchesAcpSearch("bom todo") }
+        val page = paginateAcpDescriptionMatches(matches, pageIndex = 0)
+
+        assertEquals(listOf("1", "3"), page.items.map { it.code })
+        assertEquals(2, page.totalCount)
+        assertEquals(1, page.totalPages)
+    }
+
+    @Test fun descriptionPaginationSortsAndSlicesTheCompleteMatchSet() {
+        val candidates = buildList {
+            repeat(22) { index ->
+                add(product(""""code":"${index.toString().padStart(2, '0')}"""", "Produto Bom Todo ${index.toString().padStart(2, '0')}"))
+                add(product(""""code":"x${index.toString().padStart(2, '0')}"""", "Produto sem correspondência"))
+            }
+        }
+        val matches = candidates.filter { it.matchesAcpSearch("bom todo") }
+        val first = paginateAcpDescriptionMatches(matches, pageIndex = 0)
+        val second = paginateAcpDescriptionMatches(matches, pageIndex = 1)
+
+        assertEquals(22, first.totalCount)
+        assertEquals(2, first.totalPages)
+        assertEquals(20, first.items.size)
+        assertEquals(2, second.items.size)
+        assertEquals("Produto Bom Todo 00", first.items.first().description)
+        assertEquals("Produto Bom Todo 21", second.items.last().description)
+    }
+
     @Test fun numericProductCodesAndBarcodesKeepTheirOriginalSearchField() {
         assertEquals(AcpSearchField.BARCODE, acpSearchRequest("7891234567890").field)
         assertEquals(AcpSearchField.CODE, acpSearchRequest("12345").field)
