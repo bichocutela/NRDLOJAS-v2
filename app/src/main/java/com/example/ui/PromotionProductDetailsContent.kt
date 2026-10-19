@@ -56,9 +56,9 @@ internal fun AcpCommercialProductContent(
             item.contentQuantity?.let { Text("Conteúdo: ${it.quantity()} ${item.contentUnit.orEmpty()}") }
             HorizontalDivider()
             Text("Preços e condições", style = MaterialTheme.typography.titleMedium)
-            (item.offers() + additionalOffers)
+            item.offers().mergeAutomaticOffers(additionalOffers)
+                .filter { it.isPlausiblePromotion() }
                 .filter { offer -> offer.isWithinValidity(validityFor(offer)) }
-                .forAutomaticDisplay()
                 .forEach { offer -> AcpOfferLandscapePoster(item.description, offer, bannerFor(offer)) }
     }
 }
