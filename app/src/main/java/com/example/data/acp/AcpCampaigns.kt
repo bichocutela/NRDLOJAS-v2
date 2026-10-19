@@ -73,7 +73,10 @@ internal data class AcpCampaign(
                 val equivalent = (rule.value ?: product.value)?.takeIf { it > BigDecimal.ZERO }?.multiply(rule.quantityPay)
                     ?.divide(rule.quantityTake, 2, RoundingMode.HALF_UP)
                 add(AcpOffer("Leve/Pague", "Leve ${rule.quantityTake.quantity()}, pague ${rule.quantityPay.quantity()}." +
-                    (equivalent?.let { " Equivale a ${it.brl()} por unidade ao completar a quantidade." } ?: "") + " $source"))
+                    (equivalent?.let { " Equivale a ${it.brl()} por unidade ao completar a quantidade." } ?: "") + " $source",
+                    price = equivalent,
+                    referencePrice = (rule.value ?: product.value)?.takeIf { it > BigDecimal.ZERO },
+                    headline = "LEVE ${rule.quantityTake.quantity()} • PAGUE ${rule.quantityPay.quantity()}"))
             }
             rule.secondUnitDiscount?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let {
                 add(AcpOffer("Segunda unidade", "${it.quantity()}% de desconto na segunda unidade. $source",

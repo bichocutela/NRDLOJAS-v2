@@ -65,12 +65,17 @@ class AcpCampaignsTest {
         val p = product("""{"id":"p3","code":"789","description":"Teste 3","value":12}""")
         val campaign = AcpCampaignParser.page(JSONObject("""
             {"items":[{
-              "id":"c3","description":"Leve 3 Pague 2",
+              "id":"c3","description":"Leve 3 Pague 2","startDate":"2026-10-19","endDate":"2026-10-21",
               "products":[{"product":{"id":"p3","code":"789"}}]
             }]}
         """)).single()
         val offer = campaign.offersFor(p).single()
         assertEquals("Leve/Pague", offer.title)
+        assertEquals("LEVE 3 • PAGUE 2", offer.headline)
+        assertEquals(java.math.BigDecimal("8.00"), offer.price)
+        assertEquals(java.math.BigDecimal("12"), offer.referencePrice)
+        assertEquals("2026-10-19", offer.startDate)
+        assertEquals("2026-10-21", offer.endDate)
         assertTrue(offer.detail.contains("Leve 3, pague 2"))
         assertTrue(offer.detail.contains("R$ 8,00"))
     }
