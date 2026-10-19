@@ -307,7 +307,7 @@ internal fun AcpProductsPanel(
                 // The visible list always uses current prices and tags, including live
                 // typing. A 24-hour cached product could otherwise gain its badge only
                 // after the user opens the detail and forces a fresh read.
-                val result = api.searchProductsUnifiedFresh(searchText, index, freshStore)
+                val result = api.searchProductsUnifiedFresh(searchText, index, freshStore, forceFresh = interactive && index == 0)
                 if (ticket != generation) return@launch
 
                 // Product/all é o caminho crítico. Assim que ele responde, o produto já fica
@@ -385,7 +385,7 @@ internal fun AcpProductsPanel(
                     refreshMessage = "Ofertas em destaque atualizadas agora pelo ACP."
                 } else {
                     val targetPage = page?.pageIndex ?: 0
-                    val fresh = api.searchProductsUnifiedFresh(clean, targetPage, freshStore)
+                    val fresh = api.searchProductsUnifiedFresh(clean, targetPage, freshStore, forceFresh = true)
                     if (ticket != generation) return@launch
                     page = fresh
                     lastExplicitQuery = clean
@@ -457,7 +457,7 @@ internal fun AcpProductsPanel(
             if (clean.length < 2 || busy || refreshing) continue
 
             try {
-                val fresh = api.searchProductsUnifiedFresh(clean, currentPage.pageIndex, freshStore)
+                val fresh = api.searchProductsUnifiedFresh(clean, currentPage.pageIndex, freshStore, forceFresh = true)
                 if (query.trim() != clean || page?.pageIndex != currentPage.pageIndex) continue
 
                 page = fresh
@@ -1274,7 +1274,8 @@ private suspend fun AcpApi.searchProductsUnified(query: String, pageIndex: Int):
 private suspend fun AcpApi.searchProductsUnifiedFresh(
     query: String,
     pageIndex: Int,
-    store: AcpSecureStore
+    store: AcpSecureStore,
+    forceFresh: Boolean = false
 ): AcpProductPage {
     val clean = com.example.data.storeProductLookupCode(query)
     require(clean.isNotBlank() && clean.length <= 200 && pageIndex >= 0)
@@ -1287,21 +1288,31 @@ private suspend fun AcpApi.searchProductsUnifiedFresh(
 
     val request = acpSearchRequest(clean)
 
-    fun clear(field: AcpSearchField, searchValue: String, page: Int) {
+    fun clear(field: AcpSearchField, searchValue: String, page: Int, pageSize: Int) {
         val parameters = listOf(
-            "pageSize" to "20",
+            "pageSize" to pageSize.toString(),
             "pageIndex" to page.toString(),
             field.parameter to searchValue
         )
         store.clear(acpResponseCacheName("Product/all", parameters))
     }
 
-    // Product/all normalmente usa cache diário. O gesto explícito de atualizar é a exceção:
-    // limpamos somente as chaves da pesquisa visível, sem varrer nem apagar o restante do cache.
-    clear(request.field, request.query, pageIndex)
-    if (numeric && pageIndex == 0) {
-        val alternate = if (preferred == AcpSearchField.BARCODE) AcpSearchField.CODE else AcpSearchField.BARCODE
-        clear(alternate, clean, 0)
+    if (forceFresh) {
+        clearAcpDescriptionSearchCache(clean)
+        // A busca por descrição lê páginas ACP de 100 candidatos e recompõe páginas visíveis
+        // de 20 após filtrar. Limpe o conjunto para uma atualização explícita não misturar
+        // páginas antigas do cache diário.
+        if (preferred == AcpSearchField.DESCRIPTION) {
+            for (candidatePage in 0 until 100) {
+                clear(request.field, request.query, candidatePage, 100)
+            }
+        } else {
+            clear(request.field, request.query, pageIndex, 20)
+            if (numeric && pageIndex == 0) {
+                val alternate = if (preferred == AcpSearchField.BARCODE) AcpSearchField.CODE else AcpSearchField.BARCODE
+                clear(alternate, clean, 0, 20)
+            }
+        }
     }
     return searchProductsUnified(clean, pageIndex)
 }
