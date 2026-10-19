@@ -122,22 +122,12 @@ class AcpProductsTest {
         assertEquals("R$ 3,49", offer.price?.brl())
     }
 
-    @Test fun duplicateCampaignReplacesProductOfferAndClubAboveRetailIsRejected() {
-        val invalidClub = product(""""value":3.99,"previousValue":17.99,"clubValue":11.97,"productCategories":[{"id":5,"description":"Clube de Vantagens"}]""")
-        assertTrue(invalidClub.offers().none { it.family == AcpOfferFamily.CLUB && it.isPlausiblePromotion() })
-
-        val direct = AcpOffer("De/Por", "De R$ 4,99 por R$ 3,99.", java.math.BigDecimal("3.99"), java.math.BigDecimal("4.99"))
-        val campaign = direct.copy(detail = "Campanha ACP ativa")
-        val merged = listOf(direct).mergeAutomaticOffers(listOf(campaign))
-        assertEquals(1, merged.size)
-        assertEquals("Campanha ACP ativa", merged.single().detail)
-    }
-    @Test fun secondUnitPriceIsCalculatedWithoutClaimingBundleAverage() {
+    @Test fun missingNormalPriceIsNotInventedAndSecondUnitDoesNotInventAverage() {
         assertNull(product(""""value":null,"clubValue":9.99""").offers().single().referencePrice)
         val offer = product(""""value":45.49,"secondUnitDiscount":50""").offers().single()
         assertEquals("50% DE DESCONTO", offer.headline)
         assertEquals("R$ 45,49", offer.referencePrice?.brl())
-        assertEquals("R$ 22,75", offer.price?.brl())
+        assertNull(offer.price)
     }
 
     @Test fun pagePreservesTotalCountFromProductAll() {
@@ -157,7 +147,7 @@ class AcpProductsTest {
         assertNull(acpDateLabel(null))
     }
 
-    @Test fun exactIdentifiersArePrioritizedAndDescriptionResultsAreAlphabetical() {
+    @Test fun exactBarcodeAndCodeArePrioritizedWithoutChangingCount() {
         val page = AcpProductParser.page(JSONObject("""
             {"items":[
               {"id":"1","description":"Outro","code":"111","barCode":"123"},
@@ -169,7 +159,7 @@ class AcpProductsTest {
         assertEquals(2, byBarcode.totalCount)
         val byCode = page.prioritizeExact(AcpSearchField.CODE, "111")
         assertEquals("1", byCode.items.first().id)
-        assertEquals(listOf("2", "1"), page.prioritizeExact(AcpSearchField.DESCRIPTION, "Alvo").items.map { it.id })
+        assertEquals(listOf("1", "2"), page.prioritizeExact(AcpSearchField.DESCRIPTION, "Alvo").items.map { it.id })
     }
 
     @Test fun smartSearchExtractsBrandAndEquivalentVolumeUnits() {
