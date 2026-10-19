@@ -747,8 +747,7 @@ internal fun AcpProductsPanel(
 
         itemsIndexed(result?.items.orEmpty(), key = { index, product -> "${product.id}:$index" }) { _, product ->
             val directOffers = product.offers()
-            val previewOffers = (directOffers + previewCampaignOffers[product.id].orEmpty())
-                .forAutomaticDisplay()
+            val previewOffers = directOffers.mergeAutomaticOffers(previewCampaignOffers[product.id].orEmpty())
                 .filter { offer ->
                     val saved = offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, offer.family)]
                     offer.isWithinValidity(product.offerValidityOr(saved))
