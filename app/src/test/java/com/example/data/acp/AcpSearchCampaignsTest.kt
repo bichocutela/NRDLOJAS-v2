@@ -25,6 +25,7 @@ class AcpSearchCampaignsTest {
 
     private class Server : Interceptor {
         var campaignReads = 0
+        var campaignPages = 1
         var failNextRead = false
         override fun intercept(chain: Interceptor.Chain): Response {
             val request = chain.request()
@@ -35,8 +36,12 @@ class AcpSearchCampaignsTest {
             }
             val failed = !session && failNextRead
             if (failed) failNextRead = false
+            val pageIndex = request.url.queryParameter("pageIndex")?.toIntOrNull() ?: 0
             val body = if (session) """{"user":{"accessToken":"synthetic-token","proxyEnable":false}}"""
             else if (failed) """{"error":"synthetic-failure"}"""
+            else if (campaignPages > 1) """{"items":[{"id":"campaign-$pageIndex","name":"Ofertas","products":[{
+                "code":"${if (pageIndex == campaignPages - 1) "123" else "999"}","value":10,"previousValue":12
+            }]}],"totalPages":$campaignPages}"""
             else """{"items":[{"id":"campaign","name":"Ofertas","products":[{
                 "code":"123","value":10,"previousValue":12,"clubValue":8,"quantityTake":3,"quantityPay":2
             }]}],"totalPages":1}"""
@@ -59,6 +64,14 @@ class AcpSearchCampaignsTest {
         assertEquals(1, server.campaignReads)
         assertEquals(first, api.campaignOffersFor(listOf(product)).getValue(product.id))
         assertEquals("Typing again reuses the recently loaded rules", 1, server.campaignReads)
+    }
+
+    @Test fun campaignSearchLoadsPagesBeyondThirty() = runBlocking {
+        val server = Server().apply { campaignPages = 31 }
+        val api = AcpApi(MemoryStore(), OkHttpClient.Builder().addInterceptor(server))
+        val offers = api.campaignOffersFor(listOf(product())).getValue("p")
+        assertEquals(listOf(AcpOfferFamily.DE_POR), offers.map { it.family })
+        assertEquals(31, server.campaignReads)
     }
 
     @Test fun failedInitialCampaignReadDoesNotCacheAnEmptySuccessfulResult() = runBlocking {
