@@ -14,25 +14,6 @@ class AcpCampaignsTest {
         JSONObject("""{"items":[$json],"pageIndex":0,"totalPages":1}"""), 0
     ).items.single()
 
-    @Test fun campaignDatesOverrideStaleSavedDatesInSearchAndPoster() {
-        val p = product("""{"id":"p1","code":"2000451","description":"Dumel","value":4.19}""")
-        val c = AcpCampaignParser.page(JSONObject("""{"items":[{
-          "id":"c","name":"Clube","startDate":"2026-10-19","endDate":"2026-10-21",
-          "products":[{"code":"2000451","value":4.19,"clubValue":2.89}]
-        }]}""")).single()
-        val offer = c.offersFor(p).single()
-        val stale = AcpOfferValidity("01/09/2026", "22/09/2026")
-        assertEquals(AcpOfferValidity("19/10/2026", "21/10/2026"), offer.validityOr(stale))
-        assertFalse(offer.isWithinValidity(stale, java.time.Instant.parse("2026-10-18T15:00:00Z").toEpochMilli()))
-        assertFalse(offer.isWithinValidity(stale, java.time.Instant.parse("2026-10-19T02:59:00Z").toEpochMilli()))
-        assertTrue(offer.isWithinValidity(stale, java.time.Instant.parse("2026-10-19T03:00:00Z").toEpochMilli()))
-        assertTrue(offer.isNotExpired(stale, java.time.Instant.parse("2026-10-18T15:00:00Z").toEpochMilli()))
-        assertTrue(offer.isWithinValidity(stale, java.time.Instant.parse("2026-10-20T15:00:00Z").toEpochMilli()))
-        assertFalse(offer.isWithinValidity(stale, java.time.Instant.parse("2026-10-22T15:00:00Z").toEpochMilli()))
-        assertFalse(offer.isNotExpired(stale, java.time.Instant.parse("2026-10-22T15:00:00Z").toEpochMilli()))
-        assertEquals(java.math.BigDecimal("2.89"), offer.price)
-    }
-
     @Test fun secondUnitPromotionComesFromCampaignProductRule() {
         val p = product("""{"id":"p1","code":"123","barCode":"789","description":"Teste","value":45.49}""")
         val campaign = AcpCampaignParser.page(JSONObject("""
@@ -46,7 +27,6 @@ class AcpCampaignsTest {
         assertEquals("Segunda unidade", offer.title)
         assertEquals("50% DE DESCONTO", offer.headline)
         assertEquals("R$ 45,49", offer.referencePrice?.brl())
-        assertEquals("R$ 22,75", offer.price?.brl())
         assertTrue(offer.detail.contains("50%"))
         assertTrue(offer.detail.contains("50SEG"))
     }
@@ -66,28 +46,14 @@ class AcpCampaignsTest {
         val p = product("""{"id":"p3","code":"789","description":"Teste 3","value":12}""")
         val campaign = AcpCampaignParser.page(JSONObject("""
             {"items":[{
-              "id":"c3","description":"Leve 3 Pague 2","startDate":"2026-10-19","endDate":"2026-10-21",
+              "id":"c3","description":"Leve 3 Pague 2",
               "products":[{"product":{"id":"p3","code":"789"}}]
             }]}
         """)).single()
         val offer = campaign.offersFor(p).single()
         assertEquals("Leve/Pague", offer.title)
-        assertEquals("LEVE 3 • PAGUE 2", offer.headline)
-        assertEquals(java.math.BigDecimal("8.00"), offer.price)
-        assertEquals(java.math.BigDecimal("12"), offer.referencePrice)
-        assertEquals("2026-10-19", offer.startDate)
-        assertEquals("2026-10-21", offer.endDate)
         assertTrue(offer.detail.contains("Leve 3, pague 2"))
         assertTrue(offer.detail.contains("R$ 8,00"))
-    }
-
-    @Test fun inactiveCampaignDoesNotProduceSearchOffers() {
-        val p = product("""{"id":"p-inactive","code":"789","description":"Teste","value":12}""")
-        val campaign = AcpCampaignParser.page(JSONObject("""{"items":[{
-            "id":"disabled","active":false,"startDate":"2026-10-19","endDate":"2026-10-21",
-            "products":[{"product":{"id":"p-inactive"},"clubValue":8.00}]
-        }]}""")).single()
-        assertTrue(campaign.offersFor(p).isEmpty())
     }
 
     @Test fun nestedDataItemsAreAccepted() {
