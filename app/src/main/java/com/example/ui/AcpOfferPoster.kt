@@ -156,6 +156,7 @@ internal fun AcpOfferPoster(
                         "De/Por" -> "POR"
                         "Atacado" -> "PREÇO ATACADO POR UNIDADE"
                         "Leve/Pague" -> "MÉDIA POR UNIDADE"
+                        "Segunda unidade" -> "PREÇO DA SEGUNDA UNIDADE"
                         else -> null
                     }
                     priceLabel?.let { Text(it, fontWeight = FontWeight.Black, color = red, style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium) }
