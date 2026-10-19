@@ -67,7 +67,8 @@ import java.util.Locale
 
 private enum class NrdIdentifier { BARCODE, PRODUCT_CODE }
 
-private const val AUTO_PRICE_REFRESH_MILLIS = 15_000L
+// Match campaign cache lifetime and avoid redundant product reads while keeping the visible result fresh.
+private const val AUTO_PRICE_REFRESH_MILLIS = 60_000L
 
 private enum class AcpFeaturedSort(val label: String) {
     MAIOR_DESCONTO("Maior desconto"),
