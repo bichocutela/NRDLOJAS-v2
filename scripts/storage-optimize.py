@@ -1,5 +1,6 @@
 """Lossless PNG optimization. Originals must be archived before the apply command."""
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import io
 import json
 import os
@@ -10,7 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 BASE = "https://kkayksyzksexoarpfxyj.supabase.co"
 WORK = Path("storage-optimization")
@@ -32,7 +33,17 @@ def call(body):
 
 
 def compress(data):
+    try:
+        return _compress(data)
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+        # Wrong MIME metadata and corrupt images must stay untouched.
+        return None
+
+
+def _compress(data):
     with Image.open(io.BytesIO(data)) as original:
+        if original.width * original.height > 16_000_000:
+            return None
         if original.format != "PNG" or getattr(original, "is_animated", False) or original.getexif().get(274, 1) != 1:
             return None
         # Do not reduce bit depth, dimensions, color gamut, or animated media.
@@ -51,9 +62,8 @@ def compress(data):
         return result if len(result) < len(data) * 0.9 else None
 
 
-def prepare():
-    plan = []
-    for item in call({"operation": "manifest"})["files"]:
+def prepare_one(item):
+    try:
         path = item["path"]
         if Path(path).is_absolute() or ".." in Path(path).parts:
             raise ValueError("Unsafe storage path")
@@ -62,16 +72,26 @@ def prepare():
             source = response.read(8 * 1024 * 1024 + 1)
         if len(source) != item["bytes"]:
             print("Skip changed source:", path, flush=True)
-            continue
+            return None
         optimized = compress(source)
         if optimized is None:
-            continue
+            print("Preserved without conversion:", path, flush=True)
+            return None
         for folder, data in (("originals", source), ("optimized", optimized)):
             destination = WORK / folder / path
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(data)
-        plan.append({**item, "optimized_bytes": len(optimized)})
         print(f"Prepared {path}: {len(source)} -> {len(optimized)} bytes", flush=True)
+        return {**item, "optimized_bytes": len(optimized)}
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        print("Preserved unreadable source:", item["path"], type(error).__name__, flush=True)
+        return None
+
+
+def prepare():
+    files = call({"operation": "manifest"})["files"]
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        plan = [item for item in pool.map(prepare_one, files) if item is not None]
     WORK.mkdir(exist_ok=True)
     (WORK / "plan.json").write_text(json.dumps(plan, indent=2))
     print(f"Prepared {len(plan)} files; potential savings {sum(i['bytes'] - i['optimized_bytes'] for i in plan)} bytes", flush=True)
