@@ -254,3 +254,62 @@ test('snapshot queries each ACP family separately and deduplicates products',asy
  const result=await (await handler(req({operation:'promotion_status'}))).json();
  assert.deepEqual(queried,['77','79','78']);assert.equal(result.totalCount,4);assert.equal(result.items.length,4);
 });
+
+test('uses the selected ACP Tech source first and falls back to legacy only after failure',async()=>{
+ const server=upstream();let techCalls=0;
+ const handler=createHandler({authorize:allow,credentials:source=>source==='legacy'?secret():{login:'tech-user',password:'tech-password'},
+  provider:'acptech',providerSettings:async()=>({legacyEnabled:true,acpTechEnabled:true,primary:'acptech'}),
+  acpTechClient:{consult:async()=>{techCalls++;throw Error('ACPTECH_LOGIN_FAILURE');}},fetcher:server.fetcher});
+ const response=await handler(req(input));
+ assert.equal(response.status,200);assert.equal(techCalls,1);
+ assert.equal((await response.json()).items[0].clubValue,39.99);
+ assert.equal(server.calls.filter(call=>call.url.endsWith('/credentials')).length,1);
+});
+
+test('a successful empty result is final and does not query the secondary ACP source',async()=>{
+ let legacyCalls=0;
+ const handler=createHandler({authorize:allow,credentials:secret,provider:'acptech',
+  providerSettings:async()=>({legacyEnabled:true,acpTechEnabled:true,primary:'acptech'}),
+  acpTechClient:{consult:async()=>({items:[],pageIndex:0,totalPages:0,totalCount:0})},
+  fetcher:async()=>{legacyCalls++;throw Error('should not run');}});
+ const response=await handler(req(input));
+ assert.equal(response.status,200);assert.deepEqual((await response.json()).items,[]);assert.equal(legacyCalls,0);
+});
+
+test('disabling both providers fails closed before querying either ACP source',async()=>{
+ let calls=0;
+ const handler=createHandler({authorize:allow,credentials:secret,
+  providerSettings:async()=>({legacyEnabled:false,acpTechEnabled:false,primary:'legacy'}),fetcher:async()=>{calls++;throw Error();}});
+ assert.equal((await handler(req(input))).status,503);assert.equal(calls,0);
+});
+
+test('only the verified Master can inspect effective provider settings',async()=>{
+ const settings={legacyEnabled:true,acpTechEnabled:true,primary:'acptech'};
+ const handler=createHandler({authorize:async()=>({allowed:true,master:true}),credentials:secret,providerSettings:async()=>settings});
+ const response=await handler(req({operation:'provider_status'}));
+ assert.equal(response.status,200);assert.deepEqual(await response.json(),settings);
+ const denied=createHandler({authorize:allow,credentials:secret});
+ assert.equal((await denied(req({operation:'provider_status'}))).status,403);
+});
+
+test('promotion snapshot retries the whole read on one source instead of mixing provider pages',async()=>{
+ let techCalls=0;
+ const server=upstream();
+ const categories=[{id:1,description:'De-Por'},{id:2,description:'Leve/Pague'},{id:3,description:'Clube de Vantagens'}];
+ const fetcher=async url=>{
+  const parsed=new URL(url);
+  if(parsed.pathname.endsWith('/csrf')||parsed.pathname.endsWith('/credentials')||parsed.pathname.endsWith('/session'))return server.fetcher(url);
+  if(parsed.pathname.endsWith('/ProductCategory/all'))return Response.json({items:categories,totalPages:1});
+  const id=parsed.searchParams.get('productCategoryIds');
+  return Response.json({items:[{id:`legacy-${id}`,code:id}],pageIndex:0,totalPages:1,totalCount:1});
+ };
+ const handler=createHandler({authorize:allow,credentials:source=>source==='legacy'?secret():{login:'tech',password:'password'},
+  provider:'acptech',providerSettings:async()=>({legacyEnabled:true,acpTechEnabled:true,primary:'acptech'}),
+  acpTechClient:{consult:async()=>{if(++techCalls===1)return {items:[{id:'tech-only'}],pageIndex:0,totalPages:1,totalCount:1};throw Error('ACPTECH_UPSTREAM_FAILURE');}},
+  fetcher,promotionSync:async({readPage})=>readPage(0)});
+ const response=await handler(req({operation:'promotion_status'}));
+ assert.equal(response.status,200);
+ const body=await response.json();
+ assert.ok(body.items.every(item=>String(item.id).startsWith('legacy-')));
+ assert.equal(body.items.some(item=>item.id==='tech-only'),false);
+});

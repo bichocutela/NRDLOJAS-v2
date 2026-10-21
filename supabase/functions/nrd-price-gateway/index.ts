@@ -1,4 +1,4 @@
-// ACP Tech provider is selected by ACP_PROVIDER; legacy remains the default fallback.
+// ACP_PROVIDER supplies the initial default. The Master Panel can enable either provider or both.
 import { createRemoteJWKSet, jwtVerify, importPKCS8, SignJWT } from 'npm:jose@5.9.6';
 import { createHandler, boundedJson } from './handler.mjs';
 import { createPromotionSync } from './promotion-sync.mjs';
@@ -77,18 +77,33 @@ const categorizer = createCategorizer({cache:serverCache, apiKey:Deno.env.get('G
   model:Deno.env.get('PROMOTION_GEMINI_MODEL') ?? 'gemini-3.5-flash-lite',
   background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)});
 const provider = Deno.env.get('ACP_PROVIDER')?.trim().toLowerCase() === 'acptech' ? 'acptech' : 'legacy';
-const providerCredentials = () => provider === 'acptech'
+const providerCredentials = (source = 'legacy') => source === 'acptech'
   ? {login:Deno.env.get('ACPTECH_LOGIN'), password:Deno.env.get('ACPTECH_PASSWORD')}
   : {login:Deno.env.get('NRD_PRICE_LOGIN'), password:Deno.env.get('NRD_PRICE_PASSWORD')};
-const acpTechClient = provider === 'acptech' ? createAcpTechClient({
+const acpTechClient = createAcpTechClient({
   boundedJson,
-  credentials: providerCredentials,
+  credentials: () => providerCredentials('acptech'),
   config: {
     url: Deno.env.get('ACPTECH_SUPABASE_URL'),
     anonKey: Deno.env.get('ACPTECH_SUPABASE_ANON_KEY'),
     storeSlug: Deno.env.get('ACPTECH_STORE_SLUG') ?? 'nordestao12'
   }
-}) : null;
+});
+let providerSettingsCache: {settings:Record<string,unknown>,expiresAt:number}|null = null;
+async function getProviderSettings() {
+  if (providerSettingsCache && Date.now() < providerSettingsCache.expiresAt) return providerSettingsCache.settings;
+  const defaults = {legacyEnabled:provider === 'legacy',acpTechEnabled:provider === 'acptech',primary:provider};
+  try {
+    const stored = await document('config/acpProvider');
+    const settings = typeof stored?.legacyEnabled === 'boolean' || typeof stored?.acpTechEnabled === 'boolean'
+      ? {legacyEnabled:stored.legacyEnabled,acpTechEnabled:stored.acpTechEnabled,primary:stored.primary}
+      : defaults;
+    providerSettingsCache = {settings,expiresAt:Date.now()+10_000};
+    return settings;
+  } catch {
+    return providerSettingsCache?.settings ?? defaults;
+  }
+}
 const githubKeys = createRemoteJWKSet(new URL('https://token.actions.githubusercontent.com/.well-known/jwks'));
 const handler = createHandler({
   authorize: async (req: Request) => {
@@ -117,6 +132,7 @@ const handler = createHandler({
   promotionSync: createPromotionSync({cache:serverCache, background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)}),
   credentials: providerCredentials,
   provider,
+  providerSettings: getProviderSettings,
   acpTechClient
 });
 Deno.serve(handler);

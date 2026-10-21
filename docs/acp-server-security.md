@@ -12,7 +12,12 @@ publicado, configure `ACP_PROVIDER=acptech`, `ACPTECH_LOGIN` e `ACPTECH_PASSWORD
 `ACPTECH_STORE_SLUG` e `ACPTECH_SUPABASE_URL` já possuem os padrões `nordestao12` e
 `https://lolnlmlnvspipzxatgvj.supabase.co`; a chave pública atual também está no
 adaptador e pode ser sobrescrita por `ACPTECH_SUPABASE_ANON_KEY` se o portal mudar.
-Sem `ACP_PROVIDER=acptech`, o comportamento antigo continua.
+Sem documento salvo no Painel do Mestre, `ACP_PROVIDER` escolhe o provedor inicial.
+Depois que o Mestre salva `config/acpProvider`, essa configuração controla quais
+provedores ficam ativos e qual é o principal. Com os dois ativos, o gateway usa o
+segundo somente se o primeiro falhar; nunca combina resultados. A leitura de cada
+snapshot é reiniciada por inteiro no segundo provedor para não misturar campanhas.
+Senhas continuam em Secrets do Supabase e devem ser atualizadas lá quando mudarem.
 
 ## Etapas e verificação
 

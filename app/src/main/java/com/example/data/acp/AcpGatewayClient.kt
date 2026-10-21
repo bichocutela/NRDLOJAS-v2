@@ -29,6 +29,8 @@ internal class AcpGatewayClient(
 ) {
     suspend fun checkAccess() { execute(JSONObject().put("operation", "access")) }
 
+    suspend fun providerStatus(): JSONObject = execute(JSONObject().put("operation", "provider_status"))
+
     suspend fun read(path: String, parameters: List<Pair<String, String>>): JSONObject = execute(
         JSONObject().put("path", path).put("parameters", JSONArray().apply {
             parameters.forEach { (key, value) -> put(JSONArray().put(key).put(value)) }

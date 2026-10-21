@@ -2,7 +2,7 @@
 export class ControlDocuments {
   constructor({url,key,fetcher=fetch}) {this.url=url?.replace(/\/$/,'');this.key=key;this.fetcher=fetcher;}
   valid(path) {
-    if(!/^(?:config\/(?:restricted_access|promotion_stores|acpOfferValidity|promotion_[a-zA-Z0-9_-]+)|(?:restricted_access|access_sessions)\/[a-zA-Z0-9_-]{1,128})$/.test(path))throw Error('INVALID_DOCUMENT');
+    if(!/^(?:config\/(?:restricted_access|promotion_stores|acpOfferValidity|acpProvider|promotion_[a-zA-Z0-9_-]+)|(?:restricted_access|access_sessions)\/[a-zA-Z0-9_-]{1,128})$/.test(path))throw Error('INVALID_DOCUMENT');
     return path;
   }
   async request(path,options={}) {
