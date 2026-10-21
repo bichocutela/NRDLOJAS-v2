@@ -20,7 +20,7 @@ internal object StorageImageOptimizer {
             val length = (0..3).fold(0L) { value, index -> (value shl 8) or (bytes[offset + index].toLong() and 255) }
             if (length > bytes.size - offset - 12) return original
             val type = String(bytes, offset + 4, 4, Charsets.US_ASCII)
-            if (type in setOf("acTL", "iCCP", "eXIf", "cICP")) return original
+            if (type in setOf("acTL", "iCCP", "eXIf", "cICP", "gAMA", "cHRM")) return original
             if (type == "IHDR" && (length != 13L || bytes[offset + 16].toInt() > 8)) return original
             offset += length.toInt() + 12
         }

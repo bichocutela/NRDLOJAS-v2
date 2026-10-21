@@ -36,7 +36,7 @@ def compress(data):
         if original.format != "PNG" or getattr(original, "is_animated", False) or original.getexif().get(274, 1) != 1:
             return None
         # Do not reduce bit depth, dimensions, color gamut, or animated media.
-        if original.mode not in ("RGB", "RGBA", "P", "L", "LA"):
+        if original.mode not in ("RGB", "RGBA", "P", "L", "LA") or "gamma" in original.info or "chromaticity" in original.info:
             return None
         pixels = original.convert("RGBA")
         output = io.BytesIO()
