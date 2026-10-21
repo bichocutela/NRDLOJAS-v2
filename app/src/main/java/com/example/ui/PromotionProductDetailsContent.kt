@@ -39,9 +39,13 @@ internal fun AcpCommercialProductContent(
     additionalOffers: List<AcpOffer> = emptyList(),
     bannerFor: (AcpOffer) -> com.example.data.ThemeBackground? = { null }
 ) {
+    val savedValidity by remember { AcpOfferValidityStore.observeAll() }.collectAsState(initial = emptyMap())
+    val offers = item.visibleOffers(additionalOffers, savedValidity = { family ->
+        savedValidity[AcpOfferValidityStore.keyFor(item.description, family)]
+    })
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Código: ${item.code.ifBlank { "não informado" }} • EAN: ${item.barcode.ifBlank { "não informado" }}")
-        Text("Preço principal: ${item.value?.brl() ?: "não informado"}${item.unit?.let { " / $it" } ?: ""}", style = MaterialTheme.typography.titleMedium)
+        if (offers.none { it.price != null }) Text("Preço: ${item.normalPrice(fallback = savedValidity[AcpOfferValidityStore.keyFor(item.description, AcpOfferFamily.DE_POR)])?.brl() ?: "não informado"}${item.unit?.let { " / $it" } ?: ""}", style = MaterialTheme.typography.titleMedium)
             Text("Informações do produto", style = MaterialTheme.typography.titleMedium)
             item.unit?.let { Text("Unidade: $it") }
             item.stockQuantity?.let { Text("Estoque: ${it.quantity()}") }
@@ -55,6 +59,6 @@ internal fun AcpCommercialProductContent(
             item.contentQuantity?.let { Text("Conteúdo: ${it.quantity()} ${item.contentUnit.orEmpty()}") }
             HorizontalDivider()
             Text("Preços e condições", style = MaterialTheme.typography.titleMedium)
-            (item.offers() + additionalOffers).forAutomaticDisplay().forEach { offer -> AcpOfferLandscapePoster(item.description, offer, bannerFor(offer)) }
+            offers.forEach { offer -> AcpOfferLandscapePoster(item.description, offer, bannerFor(offer)) }
     }
 }

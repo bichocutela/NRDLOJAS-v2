@@ -199,7 +199,10 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     let lastError;
     for (let index = 0; index < order.length; index++) {
       const source = order[index];
-      try { return await consultProvider(input, enrich, family, source); }
+      try {
+        const result = await consultProvider(input, enrich, family, source);
+        return ['Product/all','Campaign/all'].includes(input.path) ? {...result,nrdProvider:source} : result;
+      }
       catch (error) {
         lastError = error;
         if (index + 1 >= order.length) break;

@@ -447,7 +447,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
   async function products(auth, parameters, enrichCampaigns = true) {
     const page = Math.max(0, Number(parameters.find(([key]) => key === 'pageIndex')?.[1] ?? 0) || 0);
     const size = Math.min(250, Math.max(1, Number(parameters.find(([key]) => key === 'pageSize')?.[1] ?? 50) || 50));
-    const query = {select: '*', chain_id: auth.chainId ? `eq.${auth.chainId}` : undefined, deleted_at: 'is.null', limit: String(size), offset: String(page * size), order: 'description.asc,code.asc'};
+    const query = {select: '*', chain_id: auth.chainId ? `eq.${auth.chainId}` : undefined, deleted_at: 'is.null', limit: String(size), offset: String(page * size), order: 'description.asc,code.asc,id.asc'};
     if (!query.chain_id) delete query.chain_id;
     let code = null, barcode = null, description = null, categoryId = null;
     for (const [key, value] of parameters) {
