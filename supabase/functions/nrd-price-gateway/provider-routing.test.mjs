@@ -1,6 +1,14 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {providerOrder} from './provider-routing.mjs';
+import {providerOrder,providerSettingsFromFields} from './provider-routing.mjs';
+import {encodeFields} from '../nrd-promotion-control/documents.mjs';
+
+test('stored control document overrides the deployment default after field decoding',()=>{
+  const settings={legacyEnabled:true,acpTechEnabled:true,primary:'legacy'};
+  assert.deepEqual(providerSettingsFromFields(encodeFields(settings),'acptech'),settings);
+  assert.deepEqual(providerOrder(providerSettingsFromFields(encodeFields(settings),'acptech'),'acptech'),['legacy','acptech']);
+  assert.deepEqual(providerOrder(providerSettingsFromFields({},'acptech'),'acptech'),['acptech']);
+});
 
 test('keeps the configured provider as the default when no master setting exists',()=>{
   assert.deepEqual(providerOrder({},'acptech'),['acptech']);

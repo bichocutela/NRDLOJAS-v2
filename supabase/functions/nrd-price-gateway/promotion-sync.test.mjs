@@ -106,3 +106,23 @@ test('official images survive refresh for De/Por, Clube and Leve e Pague product
   assert.equal(next.imageUrl,old.imageUrl);
  }
 });
+
+test('repeated upstream failures back off, preserve the snapshot, and manual recovery resets the delay',async()=>{
+ const before=await snapshot([{id:1,value:2}]);let time=100000,calls=0;
+ const docs=new Map([['promotion_snapshot_v3',{payload:{revision:before.revision,checkedAt:1,count:1,pages:1,generation:'old'}}],['snapshot_old_0',{payload:{rows:before.rows}}]]);
+ const cache={get:async k=>docs.get(k),many:async keys=>new Map(keys.map(k=>[k,docs.get(k)])),
+  claim:async k=>docs.get(k),finish:async(k,c,payload)=>{const row={payload};docs.set(k,row);return row;}};
+ const sync=createPromotionSync({cache,now:()=>time});
+ const offline=async()=>{calls++;throw Error('offline');};
+ await sync({input:{operation:'promotion_status'},readPage:offline});
+ assert.equal(calls,1);assert.equal(docs.get('promotion_snapshot_v3').payload.retryAt,time+60000);
+ time+=60000;
+ await sync({input:{operation:'promotion_status'},readPage:offline});
+ assert.equal(calls,2);assert.equal(docs.get('promotion_snapshot_v3').payload.retryAt,time+120000);
+ time+=60000;
+ const stale=await sync({input:{operation:'promotion_status'},readPage:offline});
+ assert.equal(calls,2);assert.equal(stale.revision,before.revision);
+ await sync({input:{operation:'promotion_refresh',manifest:[]},readPage:async()=>({items:[{id:1,value:2}],pageIndex:0,totalCount:1,totalPages:1})});
+ assert.equal(docs.get('promotion_snapshot_v3').payload.retryAt,0);
+ assert.equal(docs.get('promotion_snapshot_v3').payload.failureCount,0);
+});
