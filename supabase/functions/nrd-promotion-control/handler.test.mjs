@@ -16,7 +16,7 @@ test('fresh profile-only grant works, missing or foreign session fails closed',a
 test('control documents round trip null, lists, numbers and nested maps',()=>{
  const value={bool:false,n:12,price:3.25,items:[{name:'Clube',to:null}],store:{enabled:true}};
  assert.deepEqual(decodeFields(encodeFields(value)),value);
- const docs=new ControlDocuments({});assert.throws(()=>docs.valid('config/anything'));assert.throws(()=>docs.valid('restricted_access/../master'));
+ const docs=new ControlDocuments({});assert.equal(docs.valid('config/acpProvider'),'config/acpProvider');assert.throws(()=>docs.valid('config/anything'));assert.throws(()=>docs.valid('restricted_access/../master'));
 });
 test('anonymous client cannot list grants, mutate settings or read private documents',async()=>{
  const documents=new ControlDocuments({});let writes=0;documents.write=async()=>{writes++;};
@@ -36,4 +36,19 @@ test('master merges fields with CAS and retries a competing edit',async()=>{
  const handler=createControlHandler({verify:async()=>({email:'mestre@nrdlojas.com'}),authorize,documents});
  assert.equal((await handler(req({operation:'write',path:'config/promotion_stores',data:{'0012':{enabled:false}},merge:true},{'x-firebase-token':'master'}))).status,200);
  assert.equal(attempt,2);
+});
+test('provider control accepts only a valid enabled primary and rejects disabling both providers',async()=>{
+ const documents=new ControlDocuments({});let writes=0;
+ documents.get=async()=>null;documents.write=async()=>{writes++;return {version:1};};
+ const handler=createControlHandler({verify:async()=>({email:'mestre@nrdlojas.com'}),authorize,documents});
+ const headers={'x-firebase-token':'master'};
+ const valid={operation:'write',path:'config/acpProvider',data:{legacyEnabled:true,acpTechEnabled:true,primary:'acptech'},merge:true};
+ assert.equal((await handler(req(valid,headers))).status,200);
+ for(const data of [
+  {legacyEnabled:false,acpTechEnabled:false,primary:'legacy'},
+  {legacyEnabled:true,acpTechEnabled:false,primary:'acptech'},
+  {legacyEnabled:true,acpTechEnabled:true,primary:'unknown'},
+  {legacyEnabled:true,acpTechEnabled:true,primary:'legacy',extra:true}
+ ])assert.equal((await handler(req({...valid,data},headers))).status,400);
+ assert.equal(writes,1);
 });

@@ -10,6 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.data.RestrictedAccessRepository
+import com.example.data.PromotionControlClient
+import com.example.data.acp.AcpGatewayClient
 import kotlinx.coroutines.launch
 
 @Composable
@@ -142,6 +144,96 @@ internal fun MestreAccessSettings() {
             }) { Text(if (busy) "Excluindo..." else "Excluir") } },
             dismissButton = { TextButton(enabled = !busy, onClick = { deleting = null }) { Text("Cancelar") } })
     }
+    AcpProviderSettings()
+}
+
+@Composable
+private fun AcpProviderSettings() {
+    var legacyEnabled by remember { mutableStateOf(false) }
+    var acpTechEnabled by remember { mutableStateOf(true) }
+    var primary by remember { mutableStateOf("acptech") }
+    var draftLegacy by remember { mutableStateOf(false) }
+    var draftAcpTech by remember { mutableStateOf(true) }
+    var draftPrimary by remember { mutableStateOf("acptech") }
+    var loading by remember { mutableStateOf(true) }
+    var saving by remember { mutableStateOf(false) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val gateway = remember { AcpGatewayClient() }
+
+    LaunchedEffect(Unit) {
+        try {
+            val config = gateway.providerStatus()
+            legacyEnabled = config.optBoolean("legacyEnabled", false)
+            acpTechEnabled = config.optBoolean("acpTechEnabled", false)
+            primary = config.optString("primary").takeIf { it in setOf("legacy", "acptech") }
+                ?: if (acpTechEnabled) "acptech" else "legacy"
+            draftLegacy = legacyEnabled
+            draftAcpTech = acpTechEnabled
+            draftPrimary = primary
+        } catch (_: Exception) {
+            loadError = "Não foi possível carregar a configuração dos provedores. Tente novamente."
+        } finally { loading = false }
+    }
+
+    Spacer(Modifier.height(24.dp))
+    HorizontalDivider()
+    Spacer(Modifier.height(16.dp))
+    Text("Provedores de preço ACP", style = MaterialTheme.typography.titleLarge)
+    Text("Ative um provedor ou os dois. Com os dois ativos, o secundário só será consultado se o principal falhar; os resultados nunca são misturados.")
+    if (loading) Text("Carregando configuração dos provedores...")
+    if (loadError != null) Text(loadError!!, color = MaterialTheme.colorScheme.error)
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Switch(checked = draftLegacy, enabled = !loading && !saving && loadError == null,
+            onCheckedChange = { enabled -> draftLegacy = enabled; if (enabled && draftPrimary !in setOf("legacy", "acptech")) draftPrimary = "legacy" })
+        Text("ACP antigo", modifier = Modifier.padding(start = 8.dp))
+    }
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Switch(checked = draftAcpTech, enabled = !loading && !saving && loadError == null,
+            onCheckedChange = { enabled -> draftAcpTech = enabled; if (enabled && draftPrimary !in setOf("legacy", "acptech")) draftPrimary = "acptech" })
+        Text("ACP Tech", modifier = Modifier.padding(start = 8.dp))
+    }
+    if (draftLegacy && draftAcpTech) {
+        Text("Provedor principal", style = MaterialTheme.typography.titleSmall)
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            RadioButton(selected = draftPrimary == "acptech", enabled = !loading && !saving && loadError == null,
+                onClick = { draftPrimary = "acptech" })
+            Text("ACP Tech", modifier = Modifier.clickable(enabled = !loading && !saving && loadError == null) { draftPrimary = "acptech" })
+        }
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            RadioButton(selected = draftPrimary == "legacy", enabled = !loading && !saving && loadError == null,
+                onClick = { draftPrimary = "legacy" })
+            Text("ACP antigo", modifier = Modifier.clickable(enabled = !loading && !saving && loadError == null) { draftPrimary = "legacy" })
+        }
+    }
+    val noProviderSelected = !draftLegacy && !draftAcpTech
+    if (noProviderSelected) Text("Mantenha pelo menos um provedor ativo.", color = MaterialTheme.colorScheme.error)
+    Button(enabled = !loading && !saving && loadError == null && !noProviderSelected &&
+        (draftLegacy != legacyEnabled || draftAcpTech != acpTechEnabled || draftPrimary != primary),
+        onClick = {
+            saving = true
+            message = null
+            scope.launch {
+                try {
+                    val selectedPrimary = if (draftPrimary == "legacy" && draftLegacy || draftPrimary == "acptech" && draftAcpTech) draftPrimary
+                        else if (draftAcpTech) "acptech" else "legacy"
+                    PromotionControlClient.write("config/acpProvider", mapOf(
+                        "legacyEnabled" to draftLegacy,
+                        "acpTechEnabled" to draftAcpTech,
+                        "primary" to selectedPrimary
+                    ), merge = true)
+                    legacyEnabled = draftLegacy
+                    acpTechEnabled = draftAcpTech
+                    primary = selectedPrimary
+                    draftPrimary = selectedPrimary
+                    message = "Provedores atualizados."
+                } catch (_: Exception) {
+                    message = "Não foi possível salvar. A configuração anterior continua ativa."
+                } finally { saving = false }
+            }
+        }) { Text(if (saving) "Salvando..." else "Salvar provedores") }
+    message?.let { Text(it) }
 }
 
 @Composable

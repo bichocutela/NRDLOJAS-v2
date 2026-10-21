@@ -29,6 +29,12 @@ export function createControlHandler({verify,authorize,documents}) {
    if(!master)return reply(403,{error:'ACCESS_DENIED'});
    if(body.operation!=='write'||Object.keys(body).some(k=>!['operation','path','data','merge'].includes(k))||!body.data||Array.isArray(body.data)||typeof body.data!=='object'||typeof body.merge!=='boolean'||path.startsWith('access_sessions/'))return reply(400,{error:'INVALID_REQUEST'});
    if(path==='config/restricted_access'&&(Object.keys(body.data).join(',')!=='publicAccess'||typeof body.data.publicAccess!=='boolean'))return reply(400,{error:'INVALID_REQUEST'});
+   if(path==='config/acpProvider'){
+    const {legacyEnabled,acpTechEnabled,primary}=body.data;
+    if(Object.keys(body.data).sort().join(',')!=='acpTechEnabled,legacyEnabled,primary'||
+      typeof legacyEnabled!=='boolean'||typeof acpTechEnabled!=='boolean'||(!legacyEnabled&&!acpTechEnabled)||
+      !['legacy','acptech'].includes(primary)||(primary==='legacy'&&!legacyEnabled)||(primary==='acptech'&&!acpTechEnabled))return reply(400,{error:'INVALID_REQUEST'});
+   }
    if(path.startsWith('restricted_access/')&&(Object.keys(body.data).some(k=>!['login','enabled','profile','promotions','prices'].includes(k))||Object.entries(body.data).some(([k,v])=>k==='login'?typeof v!=='string'||! /^[a-z0-9._-]{3,64}$/.test(v):typeof v!=='boolean')))return reply(400,{error:'INVALID_REQUEST'});
    // CAS makes read-modify-write of store enablement and validity safe across masters/devices.
    for(let attempt=0;attempt<4;attempt++){

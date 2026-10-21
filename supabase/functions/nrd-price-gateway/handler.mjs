@@ -1,5 +1,6 @@
 import { validSync } from './promotion-sync.mjs';
 import { resolvePromotions } from '../nordestao-catalog-resolver/handler.mjs';
+import { providerOrder } from './provider-routing.mjs';
 // Fixed read-only routes; credentials, upstream tokens and cookies never leave the server.
 export const TENANT = 'https://nordestao12.acp.app.br';
 const API = 'https://api.acp.app.br';
@@ -51,7 +52,7 @@ export function clean(value, depth = 0) {
 export function validate(input) {
   if (!input || Array.isArray(input) || typeof input !== 'object') return false;
   if (validSync(input)) return true;
-  if (['access','health','health_promotions','health_sync','health_categories','health_catalog','promotion_tick'].includes(input.operation)) return Object.keys(input).length === 1;
+  if (['access','provider_status','health','health_promotions','health_sync','health_categories','health_catalog','promotion_tick'].includes(input.operation)) return Object.keys(input).length === 1;
   if (Object.keys(input).some(k => !['path','parameters'].includes(k)) || !routes.has(input.path) || !Array.isArray(input.parameters) || input.parameters.length > 24) return false;
   if (input.path === "Promotion/all" && input.parameters.some(pair => !["pageSize","pageIndex"].includes(pair?.[0]))) return false;
   const seen = new Set();
@@ -70,7 +71,7 @@ export function validate(input) {
 }
 export function createHandler({authorize, credentials, fetcher = fetch, enrichPromotions = async items => items,
   promotionSync = null, catalogLoader = null, catalogLookup = null, catalogMinScore = 0.86, catalogCacheTtlMs = 15 * 60_000,
-  provider = 'legacy', acpTechClient = null}) {
+  provider = 'legacy', providerSettings = async () => ({}), acpTechClient = null}) {
   // ACP session shared only inside this server instance. Login is serialized, not per product.
   let session = null, sessionAt = 0, signingIn = null;
   let dePorCategory = null, dePorCategoryAt = 0;
@@ -88,7 +89,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     if (session && Date.now() - sessionAt < 10 * 60_000) return session;
     if (signingIn) return signingIn;
     signingIn = (async () => {
-      const secret = credentials();
+      const secret = credentials('legacy');
       if (!secret.login || !secret.password) throw Error('NOT_READY');
       const jar = new Map();
       const json = async (path, options = {}) => {
@@ -118,8 +119,9 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     items = (await enrichCatalog({items}, loadCatalog, catalogMinScore, catalogLookup)).items;
     try { return await enrichPromotions(items); } catch { return items; }
   }
-  async function consult(input, enrich = true, family = "depor") {
-      if (provider === 'acptech') {
+  async function consultProvider(input, enrich, family, source) {
+      if (source === 'acptech') {
+        if (!acpTechClient) throw Error('NOT_READY');
         const payload = await acpTechClient.consult(input);
         const sanitized = clean(payload);
         if (!enrich) return sanitized;
@@ -183,31 +185,69 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
       }
     throw Error('UPSTREAM_FAILURE');
   }
+  async function enabledProviderOrder() {
+    let settings = null;
+    try { settings = await providerSettings(); } catch { /* Keep the environment default during a control-store outage. */ }
+    return providerOrder(settings, provider).filter(source => {
+      const secret = credentials(source);
+      return Boolean(secret?.login && secret?.password && (source !== 'acptech' || acpTechClient));
+    });
+  }
+  async function consult(input, enrich = true, family = "depor") {
+    const order = await enabledProviderOrder();
+    if (!order.length) throw Error('NOT_READY');
+    let lastError;
+    for (let index = 0; index < order.length; index++) {
+      const source = order[index];
+      try { return await consultProvider(input, enrich, family, source); }
+      catch (error) {
+        lastError = error;
+        if (index + 1 >= order.length) break;
+        const code = /^[A-Z0-9_]+$/.test(String(error?.message ?? '')) ? error.message : 'UPSTREAM_FAILURE';
+        console.warn('ACP_PROVIDER_FALLBACK', JSON.stringify({from:source,to:order[index + 1],error:code}));
+      }
+    }
+    throw lastError ?? Error('UPSTREAM_FAILURE');
+  }
   function snapshotReader() {
     let loading;
     return async page => {
       if (!loading) loading = (async()=>{
-        const products=new Map();
-        for(const family of ['depor','takepay','club']) {
-          let expected=null,count=0;
-          for(let index=0;index<100;index++) {
-            const result=await consult({path:'Promotion/all',parameters:[['pageIndex',String(index)],['pageSize','250']]},false,family);
-            if(!Array.isArray(result.items) || result.pageIndex!==index || !Number.isInteger(result.totalCount) || result.totalCount<0 || result.totalCount>10000 || !Number.isInteger(result.totalPages) || result.totalPages<0 || result.totalPages>100)throw Error('INVALID_SNAPSHOT');
-            if(expected===null)expected=result.totalCount;
-            if(expected!==result.totalCount)throw Error('UNSTABLE_SNAPSHOT');
-            count+=result.items.length;
-            for(const item of result.items) {
-              const id=String(item.id ?? `${item.code}|${item.barCode}|${item.description}`);
-              if(!products.has(id))products.set(id,item);
+        const order=await enabledProviderOrder();
+        if(!order.length)throw Error('NOT_READY');
+        let lastError;
+        for(let sourceIndex=0;sourceIndex<order.length;sourceIndex++) {
+          const source=order[sourceIndex];
+          try {
+            const products=new Map();
+            for(const family of ['depor','takepay','club']) {
+              let expected=null,count=0;
+              for(let index=0;index<100;index++) {
+                const result=await consultProvider({path:'Promotion/all',parameters:[['pageIndex',String(index)],['pageSize','250']]},false,family,source);
+                if(!Array.isArray(result.items) || result.pageIndex!==index || !Number.isInteger(result.totalCount) || result.totalCount<0 || result.totalCount>10000 || !Number.isInteger(result.totalPages) || result.totalPages<0 || result.totalPages>100)throw Error('INVALID_SNAPSHOT');
+                if(expected===null)expected=result.totalCount;
+                if(expected!==result.totalCount)throw Error('UNSTABLE_SNAPSHOT');
+                count+=result.items.length;
+                for(const item of result.items) {
+                  const id=String(item.id ?? `${item.code}|${item.barCode}|${item.description}`);
+                  if(!products.has(id))products.set(id,item);
+                }
+                if(index+1>=result.totalPages)break;
+                if(!result.items.length)throw Error('INCOMPLETE_SNAPSHOT');
+              }
+              if(count!==expected)throw Error('INCOMPLETE_SNAPSHOT');
+              console.info('PROMOTION_FAMILY_COUNT',JSON.stringify({family,count,source}));
             }
-            if(index+1>=result.totalPages)break;
-            if(!result.items.length)throw Error('INCOMPLETE_SNAPSHOT');
+            if(products.size>10000)throw Error('INVALID_SNAPSHOT');
+            return [...products.values()];
+          } catch(error) {
+            lastError=error;
+            if(sourceIndex+1>=order.length)break;
+            const code=/^[A-Z0-9_]+$/.test(String(error?.message ?? ''))?error.message:'UPSTREAM_FAILURE';
+            console.warn('ACP_PROVIDER_SNAPSHOT_FALLBACK',JSON.stringify({from:source,to:order[sourceIndex+1],error:code}));
           }
-          if(count!==expected)throw Error('INCOMPLETE_SNAPSHOT');
-          console.info('PROMOTION_FAMILY_COUNT',JSON.stringify({family,count}));
         }
-        if(products.size>10000)throw Error('INVALID_SNAPSHOT');
-        return [...products.values()];
+        throw lastError ?? Error('UPSTREAM_FAILURE');
       })();
       const items=await loading;
       return {items:items.slice(page*250,(page+1)*250),pageIndex:page,totalCount:items.length,totalPages:Math.ceil(items.length/250)};
@@ -232,8 +272,18 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     if (identity.probe && !['health','health_promotions','health_sync','health_categories','health_catalog'].includes(input.operation)) return reply(403,{error:'ACCESS_DENIED'});
     if (['health','health_promotions','health_sync','health_categories','health_catalog'].includes(input.operation) && !identity.probe) return reply(403,{error:'ACCESS_DENIED'});
     if (masterRoutes.has(input.path) && !identity.master) return reply(403,{error:'ACCESS_DENIED'});
-    const secret = credentials();
-    if (!secret.login || !secret.password) return reply(503,{error:'SERVICE_NOT_READY'});
+    if (input.operation === 'provider_status') {
+      if (!identity.master) return reply(403,{error:'ACCESS_DENIED'});
+      let settings = null;
+      try { settings = await providerSettings(); } catch { /* Use the deployment default if the control store is unavailable. */ }
+      const legacyEnabled = typeof settings?.legacyEnabled === 'boolean' ? settings.legacyEnabled : provider === 'legacy';
+      const acpTechEnabled = typeof settings?.acpTechEnabled === 'boolean' ? settings.acpTechEnabled : provider === 'acptech';
+      const selected = settings?.primary === 'legacy' || settings?.primary === 'acptech' ? settings.primary : provider;
+      const primary = selected === 'legacy' && legacyEnabled || selected === 'acptech' && acpTechEnabled
+        ? selected : acpTechEnabled ? 'acptech' : 'legacy';
+      return reply(200,{legacyEnabled,acpTechEnabled,primary});
+    }
+    if (!(await enabledProviderOrder()).length) return reply(503,{error:'SERVICE_NOT_READY'});
     if (input.operation === 'access') return reply(200,{ok:true});
     if (input.operation === 'health_catalog') {
       // Fixed read-only CI fixture; never accepts caller-selected products or returns commercial data.
