@@ -55,6 +55,7 @@ fun AcpConsultationScreen(
     val glassStyle = LocalGlassSoftStyle.current
     val isExpressive = expressiveStyle.enabled
     val api = remember { AcpApi(context.applicationContext) }
+    DisposableEffect(api) { onDispose { api.close() } }
     val scope = rememberCoroutineScope()
     val screenProfile = rememberNrdScreenProfile()
     val historyExport = remember(context) { AcpHistoryExport(context.applicationContext) }

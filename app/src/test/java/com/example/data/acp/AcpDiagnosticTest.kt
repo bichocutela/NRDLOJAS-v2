@@ -117,6 +117,36 @@ class AcpDiagnosticTest {
         assertEquals(2, server.requests.size)
     }
 
+    @Test fun largeCatalogPreviewHasBoundedSizeAndDoesNotRetainResponse() {
+        val products = org.json.JSONArray()
+        repeat(250) { index -> products.put(JSONObject().put("id", index)
+            .put("description", "x".repeat(20_000)).put("token", "private-secret")
+            .put("dataLog", "{\"password\":\"embedded-secret\"}")) }
+        val response = JSONObject().put("items", products).put("totalCount", 250)
+        val preview = diagnosticPreview(response)
+        val text = preview.toString()
+        assertTrue(text.length < 35_000)
+        assertFalse(text.contains("private-secret"))
+        assertFalse(text.contains("embedded-secret"))
+        assertEquals(250, preview.getInt("totalCount"))
+        assertEquals(250, response.getJSONArray("items").length())
+        assertEquals(20_000, response.getJSONArray("items").getJSONObject(0).getString("description").length)
+    }
+
+    @Test fun closingConsultationDropsDiagnosticAndSearchSnapshots() = runBlocking {
+        val server = Server(session(), """{"items":[],"pageIndex":0,"totalPages":0,"totalCount":0}""")
+        val api = AcpApi(MemoryStore(), OkHttpClient.Builder().addInterceptor(server))
+        api.get("Product/all", listOf("barCode" to "123"))
+        api.descriptionSearchSnapshot = AcpDescriptionSearchSnapshot("query", null, emptyList(), 0L, null)
+        api.campaignSnapshot = 0L to emptyList()
+        assertNotNull(api.diagnosticText())
+        api.close()
+        assertNull(api.diagnosticText())
+        assertNull(api.descriptionSearchSnapshot)
+        assertNull(api.campaignSnapshot)
+        api.close() // Disposing twice is safe.
+    }
+
     @Test fun startingNewDiagnosticSessionClearsPreviousCapture() = runBlocking {
         val server = Server(session(), """{"items":[],"pageIndex":0,"totalPages":0,"totalCount":0}""")
         val api = AcpApi(MemoryStore(), OkHttpClient.Builder().addInterceptor(server))

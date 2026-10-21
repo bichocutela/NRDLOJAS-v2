@@ -38,7 +38,9 @@ internal suspend fun AcpApi.descriptionSearch(query: String, category: AcpCatego
         add("pageSize" to "250")
         category?.let { add("productCategoryIds" to it.id) }
     }
+    descriptionSearchSnapshot = null // Release the previous query before collecting its replacement.
     val products = mutableListOf<AcpProduct>()
+    var receivedCount = 0
     val ids = mutableSetOf<String>()
     var total: Int? = null
     var source: String? = null
@@ -53,9 +55,10 @@ internal suspend fun AcpApi.descriptionSearch(query: String, category: AcpCatego
             result.items.any { !ids.add(it.id) }) {
             throw AcpFailure("O catálogo mudou durante a pesquisa. Pesquise novamente para atualizar a lista.")
         }
-        products += result.items
+        receivedCount += result.items.size
+        products += result.items.filter { it.matchesAcpSearch(query) }
         if (index + 1 >= result.totalPages) {
-            if (products.size != total) throw AcpFailure("A ACP retornou uma pesquisa incompleta. Tente novamente.")
+            if (receivedCount != total) throw AcpFailure("A ACP retornou uma pesquisa incompleta. Tente novamente.")
             currentCoroutineContext().ensureActive()
             val snapshot = AcpDescriptionSearchSnapshot(query, category?.id, products.orderedSearchMatches(query), queriedAt, source)
             descriptionSearchSnapshot = snapshot
