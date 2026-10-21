@@ -78,7 +78,7 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
         const stable=enriched.map(item=>retainCatalogMetadata(item,previousItems.get(String(item.id ?? `${item.code}|${item.barCode}|${item.description}`))));
         const next=await snapshot(stable);
         if(next.revision===claim.payload.revision) {
-          return (await cache.finish('promotion_snapshot_v3',claim,{...claim.payload,enrichCursor,checkedAt:now()}))?.payload;
+          return (await cache.finish('promotion_snapshot_v3',claim,{...claim.payload,enrichCursor,checkedAt:now(),retryAt:0,failureCount:0}))?.payload;
         }
         const generation=crypto.randomUUID().replaceAll('-',''); const pages=[]; let chunk=[]; let bytes=0;
         for(const row of next.rows) {
@@ -103,7 +103,9 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
         const pointer={retired,enrichCursor,revision:next.revision,generation,pages:pages.length,count:next.rows.length,checkedAt:now()};
         return (await cache.finish('promotion_snapshot_v3',claim,pointer))?.payload;
       } catch(error) {
-        await cache.finish('promotion_snapshot_v3',claim,{...claim.payload,retryAt:now()+60000}).catch(()=>{});
+        const failureCount=Math.min(5,(Number(claim.payload.failureCount)||0)+1);
+        const retryDelay=Math.min(15*60_000,60_000*2**(failureCount-1));
+        await cache.finish('promotion_snapshot_v3',claim,{...claim.payload,failureCount,retryAt:now()+retryDelay}).catch(()=>{});
         throw error;
       }
     })();
@@ -112,6 +114,7 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
   return async ({input,readPage,enrichItems})=>{
     let pointer=(await cache.get('promotion_snapshot_v3'))?.payload;
     if(!pointer?.revision) {
+      if(input.operation!=='promotion_refresh' && (pointer?.retryAt ?? 0)>now())throw Error('INITIAL_SYNC_BUSY');
       pointer=await refresh(readPage,enrichItems);
       if(!pointer?.revision) {
         pointer=(await cache.get('promotion_snapshot_v3'))?.payload;

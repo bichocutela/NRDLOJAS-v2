@@ -98,6 +98,14 @@ object DynamicMediaUploader {
                 if (!temp.exists() || temp.length() <= 0L) {
                     error("O arquivo selecionado está vazio ou não pôde ser lido.")
                 }
+                var uploadMime = mime
+                if (mime == "image/png" && temp.length() <= 8_388_608) {
+                    val optimized = StorageImageOptimizer.optimize(temp.readBytes(), mime)
+                    if (optimized.mime == "image/webp") {
+                        temp.writeBytes(optimized.bytes)
+                        uploadMime = optimized.mime
+                    }
+                }
 
                 val token = FirebaseAuth.getInstance().currentUser
                     ?.getIdToken(false)?.await()?.token
@@ -115,7 +123,7 @@ object DynamicMediaUploader {
                     .addFormDataPart(
                         "file",
                         temp.name,
-                        temp.asRequestBody(mime.toMediaTypeOrNull())
+                        temp.asRequestBody(uploadMime.toMediaTypeOrNull())
                     )
                     .build()
                 val request = Request.Builder()

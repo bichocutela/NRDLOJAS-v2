@@ -848,11 +848,12 @@ object FirebaseService {
             val inputStream = contentResolver.openInputStream(uri) ?: return@withContext null
             val bytes = inputStream.readBytes()
             inputStream.close()
+            val upload = StorageImageOptimizer.optimize(bytes, mimeType)
             
             val requestBody = okhttp3.MultipartBody.Builder()
                 .setType(okhttp3.MultipartBody.FORM)
                 .addFormDataPart("path", path)
-                .addFormDataPart("file", "image.jpg", bytes.toRequestBody(mimeType.toMediaType()))
+                .addFormDataPart("file", "image.jpg", upload.bytes.toRequestBody(upload.mime.toMediaType()))
                 .build()
             
             val url = "$supabaseUrl/functions/v1/upload-image"

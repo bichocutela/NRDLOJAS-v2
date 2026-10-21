@@ -4,6 +4,7 @@ import { createHandler, boundedJson } from './handler.mjs';
 import { createPromotionSync } from './promotion-sync.mjs';
 import { SupabaseCache } from './supabase-cache.mjs';
 import { ControlDocuments } from '../nrd-promotion-control/documents.mjs';
+import { providerSettingsFromFields } from './provider-routing.mjs';
 import { ReadCache } from './read-cache.mjs';
 import { createCategorizer } from './categories.mjs';
 import { createAuthorizer } from './access.mjs';
@@ -94,10 +95,7 @@ async function getProviderSettings() {
   if (providerSettingsCache && Date.now() < providerSettingsCache.expiresAt) return providerSettingsCache.settings;
   const defaults = {legacyEnabled:provider === 'legacy',acpTechEnabled:provider === 'acptech',primary:provider};
   try {
-    const stored = await document('config/acpProvider');
-    const settings = typeof stored?.legacyEnabled === 'boolean' || typeof stored?.acpTechEnabled === 'boolean'
-      ? {legacyEnabled:stored.legacyEnabled,acpTechEnabled:stored.acpTechEnabled,primary:stored.primary}
-      : defaults;
+    const settings = providerSettingsFromFields(await document('config/acpProvider'), provider);
     providerSettingsCache = {settings,expiresAt:Date.now()+10_000};
     return settings;
   } catch {
