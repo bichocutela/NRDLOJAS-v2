@@ -100,6 +100,7 @@ test('preserves prices/offers, encodes repeated filters, isolates cookies and re
     const server=upstream(proxy);const handler=createHandler({authorize:allow,credentials:secret,fetcher:server.fetcher});
     const response=await handler(req(input));assert.equal(response.status,200);const body=await response.json();
     assert.equal(body.items[0].clubValue,39.99);assert.equal(body.items[0].quantityTake,3);assert.equal(body.items[0].cashback,30);
+    assert.equal(body.nrdProvider,'legacy');
     assert.equal(body.items[0].accessToken,undefined);assert.equal(body.items[0].user,undefined);
     const call=server.calls.at(-1),url=new URL(call.url);assert.equal(url.searchParams.get('description'),'Açúcar & Café');
     assert.deepEqual(url.searchParams.getAll('productCategoryIds'),['1','2']);

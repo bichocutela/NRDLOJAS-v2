@@ -39,6 +39,8 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     }, gateway = AcpGatewayClient())
     private val sessionLock = Mutex()
     private var accessConfirmed = false
+    internal var descriptionSearchSnapshot: AcpDescriptionSearchSnapshot? = null
+    internal var campaignSnapshot: Pair<Long, List<AcpCampaign>>? = null
     private var clubCategoryId: String? = null
     private var clubCategoryResolved = false
     private var catalogCategories: List<AcpCategory>? = null

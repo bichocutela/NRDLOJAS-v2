@@ -124,6 +124,8 @@ internal fun AcpProductsPanel(
     var scanning by remember { mutableStateOf(false) }
     var campaigns by remember { mutableStateOf<List<AcpCampaign>>(emptyList()) }
     var previewCampaignOffers by remember { mutableStateOf<Map<String, List<AcpOffer>>>(emptyMap()) }
+    var offersLoading by remember { mutableStateOf(false) }
+    var offersWarning by remember { mutableStateOf<String?>(null) }
     var integration by remember { mutableStateOf<AcpIntegrationInfo?>(null) }
     var detailBusy by remember { mutableStateOf(false) }
     var detailWarning by remember { mutableStateOf<String?>(null) }
@@ -269,7 +271,7 @@ internal fun AcpProductsPanel(
         detailAttempt++
     }
 
-    fun search(index: Int = 0, interactive: Boolean = true, enrichCampaigns: Boolean = interactive) {
+    fun search(index: Int = 0, interactive: Boolean = true) {
         val searchText = query.trim()
         if (searchText.isBlank()) {
             if (interactive) error = "Digite um código, código de barras ou descrição."
@@ -277,20 +279,22 @@ internal fun AcpProductsPanel(
         }
         searchJob?.cancel()
         val ticket = ++generation
+        refreshing = false
+        featuredJob?.cancel()
+        featuredRefreshJob?.cancel()
+        api.stopBackgroundSync()
+        featuredVisible = false
+        featuredExpanded = false
         if (interactive) {
-            featuredJob?.cancel()
-            featuredRefreshJob?.cancel()
-            api.stopBackgroundSync()
             busy = true
-            featuredVisible = false
-            featuredExpanded = false
             lastExplicitQuery = searchText
             keyboard?.hide()
         } else {
             // Sugestões nunca prendem a interface nem escondem o teclado.
-            busy = false
+            busy = true
         }
         error = null
+        offersWarning = null
         closeDetail()
         if (index == 0 && canCopyDiagnostic && interactive) api.beginDiagnosticSession()
         searchJob = scope.launch {
@@ -298,7 +302,7 @@ internal fun AcpProductsPanel(
                 val result = if (interactive) {
                     // Busca explícita sempre vai direto ao ACP. As sugestões em segundo plano
                     // continuam podendo aproveitar o cache para não consultar a cada tecla.
-                    api.searchProductsUnifiedFresh(searchText, index, freshStore)
+                    api.searchProductsUnifiedFresh(searchText, index, freshStore, forceDescriptionRefresh = index == 0)
                 } else {
                     api.searchProductsUnified(searchText, index)
                 }
@@ -308,13 +312,9 @@ internal fun AcpProductsPanel(
                 // disponível e clicável. Dados complementares não seguram mais a pesquisa.
                 page = result
                 busy = false
-
-                if (!enrichCampaigns) {
-                    previewCampaignOffers = emptyMap()
-                    return@launch
-                }
-
-                previewCampaignOffers = try {
+                previewCampaignOffers = emptyMap()
+                offersLoading = true
+                val campaignOffers = try {
                     api.campaignOffersFor(result.items)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -322,17 +322,19 @@ internal fun AcpProductsPanel(
                     if (ticket == generation) onSessionExpired()
                     emptyMap()
                 } catch (_: Exception) {
+                    if (ticket == generation) offersWarning = "Não foi possível conferir as campanhas. Toque em Atualizar para tentar novamente."
                     emptyMap()
                 }
+                if (ticket != generation) return@launch
+                previewCampaignOffers = campaignOffers
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: AcpUnauthorized) {
                 if (ticket == generation) onSessionExpired()
             } catch (failure: Exception) {
-                if (ticket == generation && interactive) error = acpErrorMessage(failure)
+                if (ticket == generation) error = acpErrorMessage(failure)
             } finally {
-                if (ticket == generation) busy = false
-                if (interactive && ticket == generation) api.warmFeaturedCatalog()
+                if (ticket == generation) { busy = false; offersLoading = false }
             }
         }
     }
@@ -368,13 +370,18 @@ internal fun AcpProductsPanel(
                     if (ticket != generation) return@launch
                     page = fresh
                     lastExplicitQuery = clean
-                    previewCampaignOffers = try {
+                    offersLoading = true
+                    offersWarning = null
+                    val refreshedOffers = try {
                         api.campaignOffersFor(fresh.items)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
+                        if (ticket == generation) offersWarning = "Não foi possível conferir as campanhas. Toque em Atualizar para tentar novamente."
                         emptyMap()
                     }
+                    if (ticket != generation) return@launch
+                    previewCampaignOffers = refreshedOffers
                     refreshMessage = "Preços atualizados agora pelo ACP."
                 }
             } catch (cancelled: CancellationException) {
@@ -385,7 +392,7 @@ internal fun AcpProductsPanel(
                     error = acpErrorMessage(failure)
                 }
             } finally {
-                if (ticket == generation) refreshing = false
+                if (ticket == generation) { refreshing = false; offersLoading = false }
             }
         }
     }
@@ -394,6 +401,15 @@ internal fun AcpProductsPanel(
     // Um debounce curto evita uma chamada por tecla, e cada nova digitação cancela a anterior.
     LaunchedEffect(query) {
         val clean = query.trim()
+        searchJob?.cancel()
+        generation++
+        busy = false
+        refreshing = false
+        offersLoading = false
+        offersWarning = null
+        previewCampaignOffers = emptyMap()
+        page = null
+        if (clean != lastExplicitQuery) lastExplicitQuery = null
         if (clean.isEmpty()) {
             searchJob?.cancel()
             generation++
@@ -402,12 +418,14 @@ internal fun AcpProductsPanel(
             previewCampaignOffers = emptyMap()
             error = null
             lastExplicitQuery = null
+            featuredVisible = true
+            api.warmFeaturedCatalog()
             return@LaunchedEffect
         }
         if (clean.length < 2 || clean == lastExplicitQuery) return@LaunchedEffect
-        delay(180)
+        delay(300)
         if (query.trim() == clean && clean != lastExplicitQuery) {
-            search(index = 0, interactive = false, enrichCampaigns = false)
+            search(index = 0, interactive = false)
         }
     }
 
@@ -420,11 +438,12 @@ internal fun AcpProductsPanel(
             delay(AUTO_PRICE_REFRESH_MILLIS)
             val clean = query.trim()
             val currentPage = page ?: continue
+            val ticket = generation
             if (clean.length < 2 || busy || refreshing) continue
 
             try {
                 val fresh = api.searchProductsUnifiedFresh(clean, currentPage.pageIndex, freshStore)
-                if (query.trim() != clean || page?.pageIndex != currentPage.pageIndex) continue
+                if (ticket != generation || query.trim() != clean || page?.pageIndex != currentPage.pageIndex) continue
 
                 page = fresh
                 val currentSelected = selected
@@ -437,12 +456,16 @@ internal fun AcpProductsPanel(
                 }
 
                 // Mantém também os selos/condições que já são montados para a lista.
-                previewCampaignOffers = try {
+                val refreshedOffers = try {
                     api.campaignOffersFor(fresh.items)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
                     previewCampaignOffers
+                }
+                if (ticket == generation && query.trim() == clean && page?.pageIndex == currentPage.pageIndex) {
+                    previewCampaignOffers = refreshedOffers
+                    offersWarning = null
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -653,6 +676,8 @@ internal fun AcpProductsPanel(
             item { Text(message, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
         }
         error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
+        if (offersLoading) item { Text("Conferindo ofertas e vigências…", style = MaterialTheme.typography.bodySmall) }
+        offersWarning?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) } }
 
         if (result != null) {
             item {
@@ -689,13 +714,9 @@ internal fun AcpProductsPanel(
         }
 
         itemsIndexed(result?.items.orEmpty(), key = { index, product -> "${product.id}:$index" }) { _, product ->
-            val directOffers = product.offers()
-            val previewOffers = (directOffers + previewCampaignOffers[product.id].orEmpty())
-                .forAutomaticDisplay()
-                .filter { offer ->
-                    val saved = offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, offer.family)]
-                    product.isWithinOfferValidity(saved)
-                }
+            val previewOffers = product.visibleOffers(previewCampaignOffers[product.id].orEmpty(), savedValidity = { family ->
+                offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, family)]
+            })
             val shareLayer = rememberGraphicsLayer()
             val resultCardShape = if (isExpressive) {
                 RoundedCornerShape(
@@ -774,7 +795,7 @@ internal fun AcpProductsPanel(
                         if (product.barcode.isNotBlank()) append(" • EAN: ${product.barcode}")
                     }
                     Text(identifiers, style = MaterialTheme.typography.bodySmall)
-                    Surface(
+                    if (previewOffers.none { it.price != null }) Surface(
                         shape = if (isExpressive) {
                             RoundedCornerShape(if (screenProfile.compact) 14.dp else 18.dp)
                         } else {
@@ -784,7 +805,7 @@ internal fun AcpProductsPanel(
                         contentColor = if (isExpressive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                     ) {
                         Text(
-                            "Preço: ${product.value?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}",
+                            "${if (offersLoading || offersWarning != null) "Preço cadastrado" else "Preço"}: ${product.normalPrice(fallback = offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, AcpOfferFamily.DE_POR)])?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = if (isExpressive) FontWeight.ExtraBold else FontWeight.Normal,
                             modifier = Modifier.padding(
@@ -812,12 +833,12 @@ internal fun AcpProductsPanel(
                                 compact = true,
                                 productName = product.description,
                                 banner = appearance.activeOfferBanner(offer.bannerKey),
-                                validityOverride = product.offerValidityOr(
+                                validityOverride = offer.validityFor(product,
                                     offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, offer.family)]
                                 )
                             )
                         }
-                    } else {
+                    } else if (!offersLoading && offersWarning == null) {
                         val standardBanner = appearance.activeOfferBanner(com.example.data.OFFER_BANNER_STANDARD)
                         if (standardBanner != null) {
                             AcpOfferPoster(
@@ -1209,16 +1230,19 @@ private suspend fun AcpApi.searchProductsUnified(query: String, pageIndex: Int):
 private suspend fun AcpApi.searchProductsUnifiedFresh(
     query: String,
     pageIndex: Int,
-    store: AcpSecureStore
+    store: AcpSecureStore,
+    forceDescriptionRefresh: Boolean = true
 ): AcpProductPage {
     val clean = com.example.data.storeProductLookupCode(query)
     require(clean.isNotBlank() && clean.length <= 200 && pageIndex >= 0)
+    if (forceDescriptionRefresh) campaignSnapshot = null
     val numeric = clean.all(Char::isDigit)
     val preferred = when {
         !numeric -> AcpSearchField.DESCRIPTION
         clean.length in setOf(8, 12, 13, 14) -> AcpSearchField.BARCODE
         else -> AcpSearchField.CODE
     }
+    if (!numeric) return searchProducts(AcpSearchField.DESCRIPTION, clean, null, pageIndex, forceFresh = forceDescriptionRefresh)
 
     val request = acpSearchRequest(clean)
 

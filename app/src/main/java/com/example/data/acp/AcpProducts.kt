@@ -16,7 +16,8 @@ import com.example.data.OFFER_BANNER_WHOLESALE
 internal enum class AcpSearchField(val parameter: String, val label: String) { BARCODE("barCode", "Cód. barras"), CODE("code", "Código"), DESCRIPTION("description", "Descrição") }
 internal data class AcpCategory(val id: String, val description: String)
 internal data class AcpProductPage(val items: List<AcpProduct>, val pageIndex: Int, val totalPages: Int, val totalCount: Int, val queriedAtMillis: Long = System.currentTimeMillis())
-internal data class AcpOffer(val title: String, val detail: String, val price: BigDecimal? = null, val referencePrice: BigDecimal? = null, val headline: String? = null)
+internal data class AcpOffer(val title: String, val detail: String, val price: BigDecimal? = null, val referencePrice: BigDecimal? = null, val headline: String? = null,
+    val validFrom: String? = null, val validTo: String? = null, val enabled: Boolean = true)
 internal data class AcpFeaturedOffer(val product: AcpProduct, val offer: AcpOffer)
 internal data class AcpFeaturedPage(val items: List<AcpFeaturedOffer>, val hasMore: Boolean)
 
@@ -72,7 +73,8 @@ internal data class AcpProduct(
     val stockQuantity: BigDecimal? = null, val dueDate: String? = null, val packageQuantity: BigDecimal? = null,
     val packageType: String? = null, val characteristic: String? = null, val contentQuantity: BigDecimal? = null,
     val contentUnit: String? = null, val productFamily: String? = null, val auxDescriptions: List<String> = emptyList(),
-    val validFrom: String? = null, val validTo: String? = null, val imageUrl: String? = null, val detailsJson: String? = null
+    val validFrom: String? = null, val validTo: String? = null, val imageUrl: String? = null, val detailsJson: String? = null,
+    val provider: String? = null
 ) {
     private fun hasCategory(expected: String): Boolean {
         val normalizedExpected = expected.lowercase().replace(Regex("[^a-z0-9]"), "")
@@ -114,8 +116,8 @@ internal data class AcpProduct(
     }.map { offer ->
         val start = validFrom?.let(::acpDateLabel)
         val end = validTo?.let(::acpDateLabel)
-        if (start == null && end == null) offer
-        else offer.copy(detail = "${offer.detail} Vigência: ${start ?: "?"} até ${end ?: "?"}.")
+        offer.copy(validFrom = validFrom, validTo = validTo, detail = if (start == null && end == null) offer.detail
+            else "${offer.detail} Vigência: ${start ?: "?"} até ${end ?: "?"}.")
     }
 }
 
@@ -181,23 +183,49 @@ internal fun AcpProduct.offerValidityOr(fallback: AcpOfferValidity?): AcpOfferVa
 
 /** Drops dated offers outside their effective window while retaining offers with no dates. */
 internal fun AcpProduct.isWithinOfferValidity(fallback: AcpOfferValidity? = null, nowMillis: Long = System.currentTimeMillis()): Boolean {
-    val today = Calendar.getInstance().apply {
-        timeInMillis = nowMillis
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }
-    val start = parseAcpDate(validFrom) ?: parseAcpDate(fallback?.startDate)
-    val end = parseAcpDate(validTo) ?: parseAcpDate(fallback?.endDate)
-    val todayKey = dateKey(today)
-    return (start == null || dateKey(start) <= todayKey) && (end == null || dateKey(end) >= todayKey)
+    val start = offerBoundary(validFrom, false) ?: offerBoundary(fallback?.startDate, false)
+    val end = offerBoundary(validTo, true) ?: offerBoundary(fallback?.endDate, true)
+    return (start == null || start <= nowMillis) && (end == null || end >= nowMillis)
 }
+
+private fun offerBoundary(raw: String?, end: Boolean): Long? {
+    if (raw?.contains('T') == true) {
+        val value = raw.replace(Regex("\\.([0-9]{3})[0-9]+"), ".$1")
+        for (pattern in listOf("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", "yyyy-MM-dd'T'HH:mm:ssXXX", "yyyy-MM-dd'T'HH:mmXXX", "yyyy-MM-dd'T'HH:mm:ss")) {
+            val position = java.text.ParsePosition(0)
+            val date = java.text.SimpleDateFormat(pattern, java.util.Locale.ROOT).apply { isLenient = false }.parse(value, position)
+            if (date != null && position.index == value.length) return date.time
+        }
+    }
+    return parseAcpDate(raw)?.apply {
+        if (end) { set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999) }
+    }?.timeInMillis
+}
+
+internal fun AcpProduct.visibleOffers(additional: List<AcpOffer> = emptyList(),
+    savedValidity: (AcpOfferFamily) -> AcpOfferValidity? = { null }, nowMillis: Long = System.currentTimeMillis()): List<AcpOffer> {
+    fun valid(offer: AcpOffer): Boolean = offer.enabled &&
+        (offerBoundary(offer.validFrom, false)?.let { it <= nowMillis } ?: true) &&
+        (offerBoundary(offer.validTo, true)?.let { it >= nowMillis } ?: true)
+    val direct = offers().filter { valid(it) && isWithinOfferValidity(savedValidity(it.family), nowMillis) }
+    val campaigns = additional.filter { valid(it) &&
+        (if (it.validFrom != null || it.validTo != null) true else isWithinOfferValidity(savedValidity(it.family), nowMillis)) }
+    return (direct + campaigns).sortedByDescending { offerBoundary(it.validFrom, false) ?: Long.MIN_VALUE }
+        .distinctBy { it.family }.forAutomaticDisplay()
+}
+
+internal fun AcpProduct.normalPrice(nowMillis: Long = System.currentTimeMillis(), fallback: AcpOfferValidity? = null): BigDecimal? =
+    if (offers().any { it.family == AcpOfferFamily.DE_POR } && !isWithinOfferValidity(fallback, nowMillis)) previousValue ?: value else value
+
+internal fun AcpOffer.validityFor(product: AcpProduct, fallback: AcpOfferValidity?): AcpOfferValidity? =
+    if (validFrom != null || validTo != null) AcpOfferValidity(normalizeAcpDate(validFrom).orEmpty(), normalizeAcpDate(validTo).orEmpty())
+    else product.offerValidityOr(fallback)
 
 internal object AcpProductParser {
     fun page(root: JSONObject, requestedPage: Int): AcpProductPage {
         val array = root.optJSONArray("items") ?: throw AcpFailure("A ACP retornou produtos em um formato não reconhecido.")
-        val items = (0 until array.length()).map { product(array.optJSONObject(it) ?: throw AcpFailure("A ACP retornou um produto inválido.")) }
+        val provider = root.optString("nrdProvider").takeIf { it.isNotBlank() }
+        val items = (0 until array.length()).map { product(array.optJSONObject(it) ?: throw AcpFailure("A ACP retornou um produto inválido.")).copy(provider = provider) }
         val page = root.optInt("pageIndex", requestedPage).coerceAtLeast(0)
         val totalPages = root.optInt("totalPages", if (items.isEmpty()) 0 else page + 1).coerceAtLeast(0)
         val totalCount = root.optInt("totalCount", items.size).coerceAtLeast(0)
@@ -316,7 +344,7 @@ internal fun AcpProduct.matchesAcpSearch(rawQuery: String): Boolean {
 private suspend fun AcpApi.searchProductsOnce(field: AcpSearchField, query: String, category: AcpCategory?, page: Int): AcpProductPage {
     val parameters = mutableListOf("pageSize" to "20", "pageIndex" to page.toString(), field.parameter to query)
     category?.let { parameters.add("productCategoryIds" to it.id) }
-    return AcpProductParser.page(get("Product/all", parameters), page).prioritizeExact(field, query)
+    return AcpProductParser.page(getFresh("Product/all", parameters), page).prioritizeExact(field, query)
 }
 
 private fun AcpProductPage.hasExact(field: AcpSearchField, query: String): Boolean = when (field) {
@@ -332,7 +360,7 @@ private fun AcpProductPage.hasExact(field: AcpSearchField, query: String): Boole
  * Numeric identifiers try the most likely kind first and only fall back to the other identifier
  * when there is no exact match. Text goes straight to description.
  */
-internal suspend fun AcpApi.searchProducts(field: AcpSearchField, query: String, category: AcpCategory?, page: Int): AcpProductPage {
+internal suspend fun AcpApi.searchProducts(field: AcpSearchField, query: String, category: AcpCategory?, page: Int, forceFresh: Boolean = false): AcpProductPage {
     require(query.isNotBlank() && query.length <= 200 && page >= 0)
     val clean = query.trim()
     val numeric = clean.all(Char::isDigit)
@@ -349,9 +377,7 @@ internal suspend fun AcpApi.searchProducts(field: AcpSearchField, query: String,
     if (field != preferredField) return AcpProductPage(emptyList(), page, 0, 0)
 
     if (preferredField == AcpSearchField.DESCRIPTION) {
-        val smart = acpSearchRequest(clean)
-        val candidates = searchProductsOnce(AcpSearchField.DESCRIPTION, smart.query, category, page)
-        return candidates.copy(items = candidates.items.filter { it.matchesAcpSearch(clean) })
+        return descriptionSearch(clean, category, page, forceFresh)
     }
 
     val first = searchProductsOnce(preferredField, clean, category, page)

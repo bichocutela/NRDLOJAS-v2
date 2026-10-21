@@ -42,18 +42,19 @@ internal data class AcpCampaign(
     val productIds: Set<String>,
     val productCodes: Set<String>,
     val barcodes: Set<String>,
-    val productRules: List<AcpCampaignProductRule>
+    val productRules: List<AcpCampaignProductRule>,
+    val provider: String? = null
 ) {
     fun matches(product: AcpProduct): Boolean =
         product.id in productIds || product.code.isNotBlank() && product.code in productCodes ||
             product.barcode.isNotBlank() && product.barcode in barcodes
 
     fun offersFor(product: AcpProduct): List<AcpOffer> = productRules.filter { it.matches(product) }.flatMap { rule ->
+        val effectiveStart = rule.startDate ?: startDate
+        val effectiveEnd = rule.endDate ?: endDate
         val source = buildString {
             append("Campanha: ").append(name)
             code?.let { append(" (#").append(it).append(')') }
-            val effectiveStart = rule.startDate ?: startDate
-            val effectiveEnd = rule.endDate ?: endDate
             if (effectiveStart != null || effectiveEnd != null) append(". Vigência: ").append(acpDateLabel(effectiveStart) ?: "?").append(" até ").append(acpDateLabel(effectiveEnd) ?: "?")
             rule.conditionText?.takeIf { it.isNotBlank() }?.let { append(". Condição: ").append(it) }
             active?.let { append(if (it) ". Ativa" else ". Inativa") }
@@ -73,7 +74,8 @@ internal data class AcpCampaign(
                 val equivalent = (rule.value ?: product.value)?.takeIf { it > BigDecimal.ZERO }?.multiply(rule.quantityPay)
                     ?.divide(rule.quantityTake, 2, RoundingMode.HALF_UP)
                 add(AcpOffer("Leve/Pague", "Leve ${rule.quantityTake.quantity()}, pague ${rule.quantityPay.quantity()}." +
-                    (equivalent?.let { " Equivale a ${it.brl()} por unidade ao completar a quantidade." } ?: "") + " $source"))
+                    (equivalent?.let { " Equivale a ${it.brl()} por unidade ao completar a quantidade." } ?: "") + " $source", equivalent, rule.value ?: product.value,
+                    "LEVE ${rule.quantityTake.quantity()} • PAGUE ${rule.quantityPay.quantity()}"))
             }
             rule.secondUnitDiscount?.takeIf { it > BigDecimal.ZERO && it <= BigDecimal(100) }?.let {
                 add(AcpOffer("Segunda unidade", "${it.quantity()}% de desconto na segunda unidade. $source",
@@ -88,7 +90,7 @@ internal data class AcpCampaign(
                 add(AcpOffer("Cashback em valor", "${it.brl()} de retorno. Não é desconto imediato; confira as condições de crédito. $source",
                     headline = "${it.brl()} DE VOLTA"))
             }
-        }
+        }.map { it.copy(validFrom = effectiveStart, validTo = effectiveEnd, enabled = active != false) }
     }.distinctBy { Triple(it.title, it.price, it.detail) }
 }
 
@@ -106,7 +108,8 @@ internal object AcpCampaignParser {
         val dataObject = root.optJSONObject("data")
         val items = root.optJSONArray("items") ?: root.optJSONArray("data") ?:
             dataObject?.optJSONArray("items") ?: dataObject?.optJSONArray("content") ?: dataObject?.optJSONArray("results") ?: JSONArray()
-        return (0 until items.length()).mapNotNull { items.optJSONObject(it)?.let(::campaign) }
+        val provider = root.optString("nrdProvider").takeIf { it.isNotBlank() }
+        return (0 until items.length()).mapNotNull { items.optJSONObject(it)?.let(::campaign)?.copy(provider = provider) }
     }
 
     private fun campaign(item: JSONObject): AcpCampaign {
@@ -212,26 +215,35 @@ internal object AcpCampaignParser {
 }
 
 private suspend fun AcpApi.allCampaigns(): List<AcpCampaign> {
+    campaignSnapshot?.takeIf { System.currentTimeMillis() - it.first in 0L..60_000L }?.let { confirmAccess(); return it.second }
     val all = mutableListOf<AcpCampaign>()
+    var provider: String? = null
     for (page in 0 until 30) {
-        val root = get("Campaign/all", listOf("pageSize" to "100", "pageIndex" to page.toString()))
+        val root = getFresh("Campaign/all", listOf("pageSize" to "100", "pageIndex" to page.toString()))
         val campaigns = AcpCampaignParser.page(root)
+        val source = root.optString("nrdProvider").takeIf { it.isNotBlank() }
+        if (page == 0) provider = source
+        if (source != provider) throw AcpFailure("O provedor mudou durante a leitura das campanhas. Atualize a pesquisa.")
         all += campaigns
         val data = root.optJSONObject("data")
         val total = root.optInt("totalPages", data?.optInt("totalPages", 1) ?: 1)
-        if (campaigns.isEmpty() || page + 1 >= total) break
+        if (page + 1 >= total) break
+        if (campaigns.isEmpty() || page == 29) throw AcpFailure("A ACP retornou uma lista de campanhas incompleta. Atualize a pesquisa.")
     }
-    return all.distinctBy { it.id }
+    return all.distinctBy { it.id }.also { campaignSnapshot = System.currentTimeMillis() to it }
 }
 
 internal suspend fun AcpApi.campaignsFor(product: AcpProduct): List<AcpCampaign> =
-    allCampaigns().filter { it.matches(product) }
+    allCampaigns().filter { it.matches(product) && it.provider == product.provider }
 
 internal suspend fun AcpApi.campaignOffersFor(products: List<AcpProduct>): Map<String, List<AcpOffer>> {
     if (products.isEmpty()) return emptyMap()
     val campaigns = allCampaigns()
+    if (campaigns.any { it.provider != products.first().provider }) {
+        throw AcpFailure("As campanhas vieram de outro provedor. Atualize para conferir as ofertas da mesma fonte.")
+    }
     return products.associate { product ->
-        product.id to campaigns.asSequence().filter { it.matches(product) }.flatMap { it.offersFor(product).asSequence() }
+        product.id to campaigns.asSequence().filter { it.matches(product) && it.provider == product.provider }.flatMap { it.offersFor(product).asSequence() }
             .distinctBy { Triple(it.title, it.price, it.detail) }.toList()
     }
 }
