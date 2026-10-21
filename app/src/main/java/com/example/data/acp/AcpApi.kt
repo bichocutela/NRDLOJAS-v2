@@ -4,6 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
@@ -53,6 +54,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         .connectTimeout(15, TimeUnit.SECONDS).readTimeout(25, TimeUnit.SECONDS)
         .callTimeout(35, TimeUnit.SECONDS).build()
 
+    @Volatile private var closed = false
     private val diagnostics = LinkedHashMap<String, JSONObject>()
     private val diagnosticRequests = mutableListOf<JSONObject>()
     private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -101,6 +103,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
      */
     internal fun warmFeaturedCatalog() {
         synchronized(this) {
+            if (closed) return
             if (featuredWarmupJob?.isActive == true) return
             featuredWarmupJob = backgroundScope.launch {
                 delay(FEATURED_WARMUP_INITIAL_DELAY_MILLIS)
@@ -140,6 +143,18 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
             featuredWarmupJob?.cancel()
             featuredWarmupJob = null
         }
+    }
+
+    /** Release screen-owned jobs and retained catalogs when consultation leaves composition. */
+    @Synchronized internal fun close() {
+        closed = true
+        backgroundScope.cancel()
+        featuredWarmupJob = null
+        descriptionSearchSnapshot = null
+        campaignSnapshot = null
+        catalogCategories = null
+        diagnostics.clear()
+        diagnosticRequests.clear()
     }
 
     private fun signIn() {
@@ -486,7 +501,8 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     }
 
     @Synchronized private fun recordDiagnostic(path: String, parameters: List<Pair<String, String>>, value: JSONObject) {
-        val sanitizedResponse = sanitize(value) as JSONObject
+        if (closed) return
+        val sanitizedResponse = diagnosticPreview(value)
         diagnostics[path] = sanitizedResponse
         val sanitizedParameters = JSONArray().also { array ->
             parameters.forEach { (key, parameterValue) ->
