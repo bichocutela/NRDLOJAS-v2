@@ -79,7 +79,7 @@ fun ProductBarcodeDialog(
     val expressiveGlassStyle = LocalExpressiveGlassStyle.current
     val expressiveStyle = LocalExpressiveStyle.current
     val isExpressive = expressiveStyle.enabled
-    var photoUrl by remember(product.code, product.imageUrl) {
+    var photoUrl by remember(product.code, product.name, product.imageUrl) {
         mutableStateOf(
             product.imageUrl
                 ?.trim()
