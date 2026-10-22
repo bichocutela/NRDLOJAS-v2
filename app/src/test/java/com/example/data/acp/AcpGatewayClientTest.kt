@@ -1,6 +1,14 @@
 package com.example.data.acp
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.Dispatchers
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -78,5 +86,36 @@ class AcpGatewayClientTest {
         assertTrue(runCatching { gateway(server).checkAccess() }.exceptionOrNull() is AcpUnauthorized)
         server.status = 502
         assertTrue(runCatching { gateway(server).checkAccess() }.exceptionOrNull() is AcpFailure)
+    }
+
+    @Test fun cancelledSearchReleasesTheQueueBeforeTheOldServerResponseArrives() = runBlocking {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val blockedCall = AtomicReference<okhttp3.Call>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val buffer = okio.Buffer()
+            chain.request().body!!.writeTo(buffer)
+            if (buffer.readUtf8().contains("\"cer\"")) {
+                blockedCall.set(chain.call())
+                entered.countDown()
+                check(release.await(10, TimeUnit.SECONDS))
+            }
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
+                .code(200).message("Synthetic").body("""{"items":[],"totalCount":0,"totalPages":0}""".toResponseBody()).build()
+        }.build()
+        val gateway = AcpGatewayClient("https://gateway.invalid", "public-test-key", client,
+            { "firebase-test-token" }, deviceTokenProvider = { null })
+        val api = AcpApi(Store(), gateway = gateway)
+        val old = launch { api.searchProductsSuggestion("cer") }
+        try {
+            withContext(Dispatchers.IO) { assertTrue(entered.await(3, TimeUnit.SECONDS)) }
+            withTimeout(3_000) { old.cancelAndJoin() }
+            assertTrue(blockedCall.get().isCanceled())
+            withTimeout(3_000) { api.searchProductsSuggestion("Cereja") }
+            assertEquals(1L, release.count) // The old response is still blocked.
+        } finally {
+            release.countDown()
+            old.cancelAndJoin()
+        }
     }
 }

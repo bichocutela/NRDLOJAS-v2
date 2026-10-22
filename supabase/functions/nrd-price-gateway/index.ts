@@ -104,6 +104,7 @@ async function getProviderSettings() {
 }
 const githubKeys = createRemoteJWKSet(new URL('https://token.actions.githubusercontent.com/.well-known/jwks'));
 const handler = createHandler({
+  background: (work:Promise<unknown>) => EdgeRuntime.waitUntil(work),
   authorize: async (req: Request) => {
     const schedulerToken = req.headers.get('x-nrd-scheduler-token');
     if (schedulerToken) {

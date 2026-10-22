@@ -5,13 +5,20 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import java.io.IOException
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /** Only Firebase identity travels to the gateway; no ACP password, cookie or access token. */
 internal class AcpGatewayClient(
@@ -64,19 +71,41 @@ internal class AcpGatewayClient(
             val requestClient = if (promotionsOnly && payload.optString("operation").startsWith("promotion_"))
                 client.newBuilder().readTimeout(120, TimeUnit.SECONDS).callTimeout(150, TimeUnit.SECONDS).build()
             else client
-            requestClient.newCall(request).execute().use { response ->
-                when (response.code) {
-                    401 -> throw AcpUnauthorized()
-                    403 -> throw AcpFailure(if (promotionsOnly) "Peça ao Mestre para liberar seu acesso às promoções." else "Peça ao Mestre para liberar seu acesso à consulta de preços.")
-                    429 -> throw AcpFailure("O serviço atingiu o limite temporário de consultas. Tente novamente mais tarde.")
-                    503 -> throw AcpFailure("O serviço de consulta está temporariamente indisponível. Tente novamente mais tarde.")
+            requestJson(requestClient, request)
+        }
+    }
+
+    /** Release AcpApi's session queue as soon as a superseded search is cancelled. */
+    private suspend fun requestJson(requestClient: OkHttpClient, request: Request): JSONObject =
+        suspendCancellableCoroutine { continuation ->
+            val call = requestClient.newCall(request)
+            continuation.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, failure: IOException) {
+                    if (continuation.isActive) continuation.resumeWithException(failure)
                 }
-                if (!response.isSuccessful) throw AcpFailure("Não foi possível consultar os produtos. Tente novamente.")
-                val raw = response.body?.string().orEmpty()
-                try { JSONObject(raw) } catch (_: Exception) {
-                    throw AcpFailure("O serviço retornou uma resposta incompatível. Tente novamente.")
+                override fun onResponse(call: Call, response: Response) {
+                    try {
+                        val result = parseResponse(response)
+                        if (continuation.isActive) continuation.resume(result)
+                    } catch (failure: Exception) {
+                        if (continuation.isActive) continuation.resumeWithException(failure)
+                    }
                 }
-            }
+            })
+        }
+
+    private fun parseResponse(response: Response): JSONObject = response.use {
+        when (response.code) {
+            401 -> throw AcpUnauthorized()
+            403 -> throw AcpFailure(if (promotionsOnly) "Peça ao Mestre para liberar seu acesso às promoções." else "Peça ao Mestre para liberar seu acesso à consulta de preços.")
+            429 -> throw AcpFailure("O serviço atingiu o limite temporário de consultas. Tente novamente mais tarde.")
+            503 -> throw AcpFailure("O serviço de consulta está temporariamente indisponível. Tente novamente mais tarde.")
+        }
+        if (!response.isSuccessful) throw AcpFailure("Não foi possível consultar os produtos. Tente novamente.")
+        val raw = response.body?.string().orEmpty()
+        try { JSONObject(raw) } catch (_: Exception) {
+            throw AcpFailure("O serviço retornou uma resposta incompatível. Tente novamente.")
         }
     }
 }

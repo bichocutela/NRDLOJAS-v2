@@ -133,6 +133,36 @@ test('catalog failure does not break the ACP response',async()=>{
   assert.equal(body.items[0].imageUrl,undefined);
   assert.equal(body.items[0].clubValue,39.99);
 });
+
+for (const provider of ['legacy','acptech']) test(`${provider} search returns prices before a blocked image lookup and keeps ready images`,async()=>{
+  const server=upstream();
+  let release;
+  const blocked=new Promise(resolve=>{release=resolve;});
+  const background=[];
+  let ready=false;
+  const catalog=[{produto_id:'9',codigo_interno:'1',descricao:'Café',imagem:'https://cdn.example.test/cafe.jpg'}];
+  const handler=createHandler({authorize:allow,credentials:secret,fetcher:server.fetcher,provider,
+    acpTechClient:{consult:async()=>({items:[{code:'1',description:'Café',value:45.49,clubValue:39.99}]})},
+    catalogSearchBudgetMs:5,background:work=>background.push(work),
+    catalogLookup:async()=>{if(!ready)await blocked;return catalog;}});
+  try {
+    const response=await Promise.race([handler(req(input)),new Promise((_,reject)=>{
+      const timer=setTimeout(()=>reject(Error('Prices blocked by image lookup')),1000);timer.unref();
+    })]);
+    assert.equal(response.status,200);
+    const body=await response.json();
+    assert.equal(body.items[0].value,45.49);
+    assert.equal(body.items[0].clubValue,39.99);
+    assert.equal(body.items[0].imageUrl,undefined);
+    assert.equal(body.nrdProvider,provider);
+    assert.equal(background.length,1);
+    ready=true;release();
+    const enriched=await background[0];
+    assert.equal(enriched.items[0].imageUrl,'https://cdn.example.test/cafe.jpg');
+    const next=await (await handler(req(input))).json();
+    assert.equal(next.items[0].imageUrl,'https://cdn.example.test/cafe.jpg');
+  } finally {release();}
+});
 test('session expiry renews exactly once; upstream error bodies are never disclosed',async()=>{
   const server=upstream(false,true);const handler=createHandler({authorize:allow,credentials:secret,fetcher:server.fetcher});
   assert.equal((await handler(req(input))).status,200);
@@ -228,6 +258,26 @@ test('catalog readiness is restricted to CI and verifies the fixed code and imag
   assert.deepEqual(await (await handler(req({operation:'health_catalog'}))).json(),{ok:true});
   assert.equal((await createHandler({...options,authorize:allow})(req({operation:'health_catalog'}))).status,403);
   assert.equal(validate({operation:'health_catalog',code:'another-code'}),false);
+});
+
+test('search timing probe is fixed to Cereja and does not expose products or open public access',async()=>{
+  const server=upstream();let reads=0;
+  const options={credentials:secret,fetcher:async(url,options)=>{
+    if(new URL(url).pathname.endsWith('/Product/all')) {
+      const query=new URL(url).searchParams;
+      assert.equal(query.get('description'),'Cereja');assert.equal(query.get('pageSize'),'20');
+      reads++;return Response.json({items:[{code:'1',description:'Cereja',value:10}]});
+    }
+    return server.fetcher(url,options);
+  }};
+  const handler=createHandler({...options,authorize:async()=>({allowed:true,probe:true})});
+  const response=await handler(req({operation:'health_search'}));
+  const body=await response.json();
+  assert.equal(response.status,200);assert.equal(body.ok,true);assert.equal(body.count,1);
+  assert.equal(typeof body.upstreamMs,'number');assert.equal(typeof body.gatewayMs,'number');
+  assert.equal(body.items,undefined);assert.equal(reads,2);
+  assert.equal((await createHandler({...options,authorize:allow})(req({operation:'health_search'}))).status,403);
+  assert.equal(validate({operation:'health_search',description:'another-query'}),false);
 });
 
 

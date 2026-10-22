@@ -54,6 +54,9 @@ jobs:
           token = json.load(urllib.request.urlopen(request, timeout=20))['value']
           status, body = post({'operation':'health'}, {'x-github-oidc-token':token})
           assert status == 200 and body == {'ok':True}, f'Gateway readiness failed: HTTP {status}, {body.get("error", "invalid result")}'
+          status, body = post({'operation':'health_search'}, {'x-github-oidc-token':token})
+          assert status == 200 and body.get('ok') is True and body.get('count',0) > 0, f'Cereja search readiness failed: HTTP {status}'
+          print('Cereja read-only latency (milliseconds):', json.dumps(body))
           status, body = post({'operation':'health_promotions'}, {'x-github-oidc-token':token})
           assert status == 200 and body == {'ok':True}, f'De/Por readiness failed: HTTP {status}, {body.get("error", "invalid result")}'
           status, body = post({'operation':'health_catalog'}, {'x-github-oidc-token':token})
