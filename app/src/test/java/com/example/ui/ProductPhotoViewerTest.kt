@@ -39,7 +39,7 @@ class ProductPhotoViewerTest {
                 center - Offset(90f, 0f), center + Offset(90f, 0f))
         }
         compose.onNodeWithTag("product-photo-canvas").assert(SemanticsMatcher("Zoom ampliado") {
-            it.config.getOrNull(SemanticsProperties.StateDescription) != "Zoom 100%"
+            it.config[SemanticsProperties.StateDescription] != "Zoom 100%"
         })
         compose.onNodeWithText("Redefinir").performClick()
         compose.onNodeWithTag("product-photo-canvas").assert(
