@@ -9,7 +9,19 @@ const masterRoutes = new Set(['TemplatePrintLog/all', 'ProductGroup/all']);
 const keys = new Set(['pageSize', 'pageIndex', 'code', 'barCode', 'description', 'productCategoryIds', 'orderByDescending', 'profileIdToBeDesconsidered']);
 const headers = {'Content-Type':'application/json', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff'};
 const reply = (status, body) => new Response(JSON.stringify(body), {status, headers});
-async function enrichCatalog(payload, catalogLoader, minScore, catalogLookup) {
+async function enrichCatalog(payload, catalogLoader, minScore, catalogLookup, delivery = null) {
+  if (delivery) {
+    // Product prices are already available. Optional image resolution must never hold them
+    // behind the storefront's multi-product network lookup (up to 12 seconds on a cold miss).
+    const work = enrichCatalog(payload, catalogLoader, minScore, catalogLookup).catch(() => payload);
+    delivery.background(work);
+    let timer;
+    try {
+      return await Promise.race([work, new Promise(resolve => {
+        timer = setTimeout(() => resolve(payload), delivery.budgetMs);
+      })]);
+    } finally { clearTimeout(timer); }
+  }
   if ((!catalogLoader && !catalogLookup) || !Array.isArray(payload?.items) || payload.items.length === 0) return payload;
   let catalog;
   try { catalog = catalogLoader ? await catalogLoader() : await catalogLookup(payload.items); } catch { return payload; }
@@ -52,7 +64,7 @@ export function clean(value, depth = 0) {
 export function validate(input) {
   if (!input || Array.isArray(input) || typeof input !== 'object') return false;
   if (validSync(input)) return true;
-  if (['access','provider_status','health','health_promotions','health_sync','health_categories','health_catalog','promotion_tick'].includes(input.operation)) return Object.keys(input).length === 1;
+  if (['access','provider_status','health','health_promotions','health_sync','health_categories','health_catalog','health_search','promotion_tick'].includes(input.operation)) return Object.keys(input).length === 1;
   if (Object.keys(input).some(k => !['path','parameters'].includes(k)) || !routes.has(input.path) || !Array.isArray(input.parameters) || input.parameters.length > 24) return false;
   if (input.path === "Promotion/all" && input.parameters.some(pair => !["pageSize","pageIndex"].includes(pair?.[0]))) return false;
   const seen = new Set();
@@ -71,7 +83,9 @@ export function validate(input) {
 }
 export function createHandler({authorize, credentials, fetcher = fetch, enrichPromotions = async items => items,
   promotionSync = null, catalogLoader = null, catalogLookup = null, catalogMinScore = 0.86, catalogCacheTtlMs = 15 * 60_000,
+  background = work => { void work.catch(() => {}); }, catalogSearchBudgetMs = 75,
   provider = 'legacy', providerSettings = async () => ({}), acpTechClient = null}) {
+  const catalogDelivery = {background, budgetMs:catalogSearchBudgetMs};
   // ACP session shared only inside this server instance. Login is serialized, not per product.
   let session = null, sessionAt = 0, signingIn = null;
   let dePorCategory = null, dePorCategoryAt = 0;
@@ -129,7 +143,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
           try { sanitized.items = await enrichPromotions(sanitized.items); } catch { /* enrichment is optional */ }
         }
         return ['Product/all','Promotion/all'].includes(input.path)
-          ? enrichCatalog(sanitized, loadCatalog, catalogMinScore, catalogLookup) : sanitized;
+          ? enrichCatalog(sanitized, loadCatalog, catalogMinScore, catalogLookup, input.path === 'Product/all' ? catalogDelivery : null) : sanitized;
       }
       attempts: for (let attempt = 0; attempt < 2; attempt++) {
         const auth = await signIn();
@@ -181,7 +195,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
           try { sanitized.items = await enrichPromotions(sanitized.items); } catch { /* fallback on client */ }
         }
         return ['Product/all','Promotion/all'].includes(input.path)
-          ? enrichCatalog(sanitized, loadCatalog, catalogMinScore, catalogLookup) : sanitized;
+          ? enrichCatalog(sanitized, loadCatalog, catalogMinScore, catalogLookup, input.path === 'Product/all' ? catalogDelivery : null) : sanitized;
       }
     throw Error('UPSTREAM_FAILURE');
   }
@@ -272,8 +286,8 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     if (identity.scheduler && input.operation !== 'promotion_tick') return reply(403,{error:'ACCESS_DENIED'});
     if (input.operation === 'promotion_tick' && !identity.scheduler) return reply(403,{error:'ACCESS_DENIED'});
     // CI may exercise exactly one fixed read to validate migration readiness, never arbitrary queries.
-    if (identity.probe && !['health','health_promotions','health_sync','health_categories','health_catalog'].includes(input.operation)) return reply(403,{error:'ACCESS_DENIED'});
-    if (['health','health_promotions','health_sync','health_categories','health_catalog'].includes(input.operation) && !identity.probe) return reply(403,{error:'ACCESS_DENIED'});
+    if (identity.probe && !['health','health_promotions','health_sync','health_categories','health_catalog','health_search'].includes(input.operation)) return reply(403,{error:'ACCESS_DENIED'});
+    if (['health','health_promotions','health_sync','health_categories','health_catalog','health_search'].includes(input.operation) && !identity.probe) return reply(403,{error:'ACCESS_DENIED'});
     if (masterRoutes.has(input.path) && !identity.master) return reply(403,{error:'ACCESS_DENIED'});
     if (input.operation === 'provider_status') {
       if (!identity.master) return reply(403,{error:'ACCESS_DENIED'});
@@ -288,10 +302,25 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     }
     if (!(await enabledProviderOrder()).length) return reply(503,{error:'SERVICE_NOT_READY'});
     if (input.operation === 'access') return reply(200,{ok:true});
+    if (input.operation === 'health_search') {
+      // CI-only, fixed read-only fixture. No arbitrary queries or product details are exposed.
+      try {
+        const search={path:'Product/all',parameters:[['description','Cereja'],['pageSize','20'],['pageIndex','0']]};
+        const start=performance.now();
+        const raw=await consult(search,false);
+        const upstreamMs=Math.round(performance.now()-start);
+        const appStart=performance.now();
+        const result=await consult(search);
+        const gatewayMs=Math.round(performance.now()-appStart);
+        if(!raw.items?.length || !result.items?.length)throw Error('EMPTY_SEARCH');
+        return reply(200,{ok:true,upstreamMs,gatewayMs,count:result.items.length,provider:result.nrdProvider});
+      } catch {return reply(503,{error:'SEARCH_NOT_READY'});}
+    }
     if (input.operation === 'health_catalog') {
       // Fixed read-only CI fixture; never accepts caller-selected products or returns commercial data.
       try {
-        const page = await consult({path:'Product/all',parameters:[['code','2021000'],['pageSize','10'],['pageIndex','0']]});
+        const raw = await consult({path:'Product/all',parameters:[['code','2021000'],['pageSize','10'],['pageIndex','0']]}, false);
+        const page = await enrichCatalog(raw, loadCatalog, catalogMinScore, catalogLookup);
         const product = page.items?.find(item => String(item.code ?? item.codproduto ?? item.internalCode) === '2021000');
         if (!product?.imageUrl || product.catalog_match_type !== 'internal_code' || product.catalog_department !== 'Bebidas alcoólicas') throw Error('CATALOG_NOT_READY');
         const image = await fetcher(product.imageUrl,{method:'HEAD',signal:AbortSignal.timeout(10000)});
