@@ -301,10 +301,10 @@ internal fun AcpProductsPanel(
             try {
                 val result = if (interactive) {
                     // Busca explícita sempre vai direto ao ACP. As sugestões em segundo plano
-                    // continuam podendo aproveitar o cache para não consultar a cada tecla.
+                    // consultam somente a primeira página; a busca completa fica para o botão.
                     api.searchProductsUnifiedFresh(searchText, index, freshStore, forceDescriptionRefresh = index == 0)
                 } else {
-                    api.searchProductsUnified(searchText, index)
+                    api.searchProductsSuggestion(searchText, index)
                 }
                 if (ticket != generation) return@launch
 

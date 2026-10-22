@@ -394,6 +394,24 @@ internal suspend fun AcpApi.searchProducts(field: AcpSearchField, query: String,
     }
 }
 
+/**
+ * Fast first-page lookup for the live suggestions shown while the user types.
+ * The complete description search deliberately walks every upstream page to return a stable,
+ * alphabetically ordered result set; autocomplete must not wait for that full catalog scan.
+ * The explicit Search action continues to use [searchProducts] and keeps the complete result set.
+ */
+internal suspend fun AcpApi.searchProductsSuggestion(query: String, page: Int = 0): AcpProductPage {
+    val clean = query.trim()
+    require(clean.isNotBlank() && clean.length <= 200 && page >= 0)
+    val numeric = clean.all(Char::isDigit)
+    val field = when {
+        !numeric -> AcpSearchField.DESCRIPTION
+        clean.length in setOf(8, 12, 13, 14) -> AcpSearchField.BARCODE
+        else -> AcpSearchField.CODE
+    }
+    return searchProductsOnce(field, clean, null, page)
+}
+
 /** Re-query the selected identity, never pick the first partial barcode match. */
 internal suspend fun AcpApi.refreshProduct(selected: AcpProduct): AcpProduct {
     val filters = buildList {
