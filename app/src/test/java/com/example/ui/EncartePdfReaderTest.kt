@@ -50,6 +50,40 @@ class EncartePdfReaderTest {
         canvas.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Zoom 100%"))
     }
 
+    @Test fun horizontalSwipesAdvanceAndReturnWhileZoomedDragsStayOnPage() {
+        val bitmap = Bitmap.createBitmap(400, 600, Bitmap.Config.ARGB_8888)
+        val changes = mutableListOf<Int>()
+        compose.setContent { MaterialTheme {
+            EncartePageCanvas(bitmap, 1, Modifier.requiredSize(320.dp, 480.dp), onPageDelta = { changes.add(it) })
+        } }
+        val canvas = compose.onNodeWithTag("encarte-page-canvas")
+        canvas.performTouchInput { swipeLeft() }
+        canvas.performTouchInput { swipeRight() }
+        compose.runOnIdle { assertEquals(listOf(1, -1), changes); changes.clear() }
+        canvas.performTouchInput { doubleClick(center) }
+        canvas.performTouchInput { swipeLeft() }
+        compose.runOnIdle { assertTrue(changes.isEmpty()) }
+        canvas.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Zoom 250%"))
+    }
+
+    @Test fun verticalDragsAndPinchesDoNotTurnPages() {
+        val bitmap = Bitmap.createBitmap(400, 600, Bitmap.Config.ARGB_8888)
+        val changes = mutableListOf<Int>()
+        compose.setContent { MaterialTheme {
+            EncartePageCanvas(bitmap, 1, Modifier.requiredSize(320.dp, 480.dp), onPageDelta = { changes.add(it) })
+        } }
+        val canvas = compose.onNodeWithTag("encarte-page-canvas")
+        canvas.performTouchInput { swipeUp() }
+        canvas.performTouchInput {
+            pinch(center - Offset(30f, 0f), center + Offset(30f, 0f),
+                center - Offset(90f, 0f), center + Offset(90f, 0f))
+        }
+        compose.runOnIdle { assertTrue(changes.isEmpty()) }
+        canvas.assert(SemanticsMatcher("Página ampliada") {
+            it.config[SemanticsProperties.StateDescription] != "Zoom 100%"
+        })
+    }
+
     @Test fun landscapeUsesAllAvailableHeight() {
         val bitmap = Bitmap.createBitmap(400, 600, Bitmap.Config.ARGB_8888)
         compose.setContent { MaterialTheme { EncartePageCanvas(bitmap, 0, Modifier.requiredSize(720.dp, 320.dp)) } }

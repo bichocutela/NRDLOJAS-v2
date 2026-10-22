@@ -4,7 +4,12 @@ import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculateCentroidSize
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -16,6 +21,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -29,6 +35,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.min
+import kotlin.math.abs
 
 internal data class EncarteTransform(val scale: Float = 1f, val offset: Offset = Offset.Zero) {
     fun update(zoom: Float, pan: Offset, centroid: Offset, viewport: IntSize, image: IntSize): EncarteTransform {
@@ -48,14 +55,49 @@ internal data class EncarteTransform(val scale: Float = 1f, val offset: Offset =
 
 /** Full remaining viewport. Page is fitted completely before pinch/pan; no capped card. */
 @Composable
-internal fun EncartePageCanvas(bitmap: Bitmap, page: Int, modifier: Modifier = Modifier) {
+internal fun EncartePageCanvas(bitmap: Bitmap, page: Int, modifier: Modifier = Modifier, onPageDelta: (Int) -> Unit = {}) {
+    val changePage by rememberUpdatedState(onPageDelta)
     var transform by remember(bitmap, page) { mutableStateOf(EncarteTransform()) }
     var viewport by remember { mutableStateOf(IntSize.Zero) }
     Column(modifier) {
         Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().onSizeChanged { viewport = it }
             .pointerInput(bitmap, page) {
-                detectTransformGestures { centroid, pan, zoom, _ ->
-                    transform = transform.update(zoom, pan, centroid, viewport, IntSize(bitmap.width, bitmap.height))
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    val swipeThreshold = maxOf(48.dp.toPx(), viewport.width * 0.18f)
+                    val startedZoomed = transform.scale > 1f
+                    var multiTouch = false
+                    var totalPan = Offset.Zero
+                    var totalZoom = 1f
+                    var pastSlop = false
+                    var cancelled: Boolean
+                    do {
+                        val event = awaitPointerEvent()
+                        cancelled = event.changes.any { it.isConsumed }
+                        if (!cancelled) {
+                            multiTouch = multiTouch || event.changes.count { it.pressed } > 1
+                            val zoom = event.calculateZoom()
+                            val pan = event.calculatePan()
+                            totalPan += pan
+                            totalZoom *= zoom
+                            if (!pastSlop) {
+                                val zoomMotion = abs(1f - totalZoom) * event.calculateCentroidSize(useCurrent = false)
+                                pastSlop = totalPan.getDistance() > viewConfiguration.touchSlop || zoomMotion > viewConfiguration.touchSlop
+                            }
+                            if (pastSlop) {
+                                if (startedZoomed || multiTouch || transform.scale > 1f) {
+                                    transform = transform.update(zoom, pan, event.calculateCentroid(useCurrent = false),
+                                        viewport, IntSize(bitmap.width, bitmap.height))
+                                }
+                                event.changes.forEach { if (it.positionChanged()) it.consume() }
+                            }
+                        }
+                    } while (!cancelled && event.changes.any { it.pressed })
+                    // A one-finger horizontal swipe pages only when this entire gesture stayed unzoomed.
+                    if (!cancelled && !startedZoomed && !multiTouch && transform.scale == 1f &&
+                        abs(totalPan.x) >= swipeThreshold && abs(totalPan.x) > abs(totalPan.y) * 1.5f) {
+                        changePage(if (totalPan.x < 0f) 1 else -1)
+                    }
                 }
             }.pointerInput(bitmap, page) {
                 detectTapGestures(onDoubleTap = { position ->
@@ -71,7 +113,7 @@ internal fun EncartePageCanvas(bitmap: Bitmap, page: Int, modifier: Modifier = M
                 }, contentScale = ContentScale.Fit)
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Use a pinça ou dois toques para ampliar. Arraste para mover.", modifier = Modifier.weight(1f),
+            Text("Deslize para trocar de página. Use a pinça ou dois toques para ampliar.", modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodySmall)
             TextButton(onClick = { transform = EncarteTransform() }, enabled = transform.scale != 1f) { Text("Ajustar") }
         }
@@ -147,6 +189,7 @@ private fun EncartePdfPages(file: File, modifier: Modifier) {
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { failed = true }
     }
+    val count = active?.pageCount ?: 0
     Column(modifier) {
         val image = bitmap
         when {
@@ -156,10 +199,10 @@ private fun EncartePdfPages(file: File, modifier: Modifier) {
                     TextButton(onClick = { failed = false; retry++ }) { Text("Tentar novamente") }
                 }
             }
-            image != null -> EncartePageCanvas(image, page, Modifier.weight(1f).fillMaxWidth())
+            image != null -> EncartePageCanvas(image, page, Modifier.weight(1f).fillMaxWidth(),
+                onPageDelta = { delta -> page = (page + delta).coerceIn(0, (count - 1).coerceAtLeast(0)) })
             else -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         }
-        val count = active?.pageCount ?: 0
         if (count > 1) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { page-- }, enabled = page > 0) { Text("Anterior") }
