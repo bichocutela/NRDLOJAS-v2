@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.School
@@ -293,6 +294,7 @@ fun AppNavGraph(
                         scope.launch { drawerState.close() }
                         openProfileSection("profile")
                     },
+                    onGoToEncartes = { scope.launch { drawerState.close() }; navController.navigate("encartes") { launchSingleTop = true } },
                     onGoToSettings = { scope.launch { drawerState.close() }; navController.navigate("settings") },
                     onGoToAcp = { scope.launch { drawerState.close() }; navController.navigate("acp_consultation") { launchSingleTop = true } },
                     onGoToAdmin = {
@@ -440,6 +442,7 @@ fun AppNavGraph(
                         }
                     }
                 }
+                composable("encartes") { EncartesScreen(onNavigateBack = { navController.popBackStack() }) }
                 composable("settings") { SettingsScreen(viewModel, onNavigateBack = { navController.popBackStack() }) }
                 composable("acp_consultation") {
                     RestrictedRoute(access.loading, access.prices, { navController.navigateToSearch() }) {
@@ -696,6 +699,7 @@ fun LoginDrawerContent(
     onGoToPromotions: () -> Unit,
     onGoToMyPoint: () -> Unit,
     onGoToSettings: () -> Unit,
+    onGoToEncartes: () -> Unit,
     onGoToAbout: () -> Unit,
     onGoToDynamicTab: (Int) -> Unit,
     onGoToAcp: () -> Unit = {}
@@ -971,6 +975,8 @@ fun LoginDrawerContent(
             icon = Icons.Default.LocalOffer,
             onClick = onGoToPromotions
         )
+        Spacer(modifier = Modifier.height(if (expressive) 6.dp else 8.dp))
+        DrawerActionButton(label = "Encartes", icon = Icons.Default.MenuBook, onClick = onGoToEncartes)
         Spacer(modifier = Modifier.height(if (expressive) 6.dp else 8.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
