@@ -1,1 +1,0 @@
-Bloco 1 concluído: leitura nativa de texto de PDFs digitais antes do OCR, com fallback preservado.
