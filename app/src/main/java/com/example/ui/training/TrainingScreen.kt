@@ -28,6 +28,7 @@ fun TrainingScreen(config: TrainingConfig, onBack: () -> Unit, preview: Boolean 
     val missions = config.missions.filter { it.enabled }
     var opened by remember { mutableStateOf(false) }
     var state by remember(config.revision) { mutableStateOf(TrainingState(missions.firstOrNull()?.id.orEmpty())) }
+    androidx.activity.compose.BackHandler(enabled = opened) { opened = false }
     val mission = missions.find { it.id == state.missionId } ?: missions.firstOrNull()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -36,6 +37,7 @@ fun TrainingScreen(config: TrainingConfig, onBack: () -> Unit, preview: Boolean 
         IconButton(onClick = { if (opened) opened = false else onBack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar") }
     }, actions = { if (!preview) TrainingNotificationBell(config.visibility == TrainingVisibility.ALL) }) }, snackbarHost = { SnackbarHost(snackbar) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (config.visibility == TrainingVisibility.TEST) Text("Modo Teste — somente o Mestre")
             if (!opened) {
                 Text("Treinamento de Caixa", style = MaterialTheme.typography.headlineMedium)
                 Text("Pratique as rotinas do caixa com o teclado do PDV, visor do operador e visor do cliente.")
@@ -70,8 +72,8 @@ fun TrainingScreen(config: TrainingConfig, onBack: () -> Unit, preview: Boolean 
                 }
                 val key = config.keys.find { it.id == state.displayKey }
                 val step = mission.steps.getOrNull(state.step)
-                val operator = when { state.finished && state.mode != TrainingMode.FREE -> "MISSÃO CONCLUÍDA"; key != null -> key.operatorText; state.mode == TrainingMode.FREE -> "CAIXA FECHADO"; else -> step?.operatorText.orEmpty() }
-                val customer = when { state.finished && state.mode != TrainingMode.FREE -> "OBRIGADO E VOLTE SEMPRE"; key != null -> key.customerText; state.mode == TrainingMode.FREE -> "NORDESTÃO"; else -> step?.customerText.orEmpty() }
+                val operator = when { key != null -> key.operatorText; state.finished && state.mode != TrainingMode.FREE -> "MISSÃO CONCLUÍDA"; state.mode == TrainingMode.FREE -> "FECHADO PARA BALANÇA"; else -> step?.operatorText.orEmpty() }
+                val customer = when { key != null -> key.customerText; state.finished && state.mode != TrainingMode.FREE -> "TREINAMENTO CONCLUÍDO"; state.mode == TrainingMode.FREE -> "CAIXA FECHADO"; else -> step?.customerText.orEmpty() }
                 TrainingDisplay(TrainingEngine.render(operator, state, key, mission), key?.operatorImage ?: step?.operatorImage.orEmpty(), false)
                 TrainingDisplay(TrainingEngine.render(customer, state, key, mission), key?.customerImage ?: step?.customerImage.orEmpty(), true)
                 val press: (String) -> Unit = { id ->

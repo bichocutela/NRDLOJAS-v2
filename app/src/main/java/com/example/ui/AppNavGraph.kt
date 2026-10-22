@@ -183,9 +183,12 @@ fun AppNavGraph(
         }
     }
 
+    var consumedTrainingNotification by remember { mutableLongStateOf(0L) }
     LaunchedEffect(trainingNotificationNavigationKey, trainingConfig?.visibility) {
-        if (trainingNotificationNavigationKey > 0 && trainingConfig?.visibility == com.example.data.training.TrainingVisibility.ALL)
+        if (trainingNotificationNavigationKey > consumedTrainingNotification && trainingConfig?.visibility == com.example.data.training.TrainingVisibility.ALL) {
+            consumedTrainingNotification = trainingNotificationNavigationKey
             navController.navigate("training") { launchSingleTop = true }
+        }
     }
     LaunchedEffect(encarteNotificationNavigationKey) {
         if (encarteNotificationNavigationKey > 0) navController.navigate("encartes") { launchSingleTop = true }
