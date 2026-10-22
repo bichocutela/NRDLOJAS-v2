@@ -363,6 +363,7 @@ class MainActivity : ComponentActivity() {
             openAboutFromNotification = true
         }
         if (intent.getStringExtra("type") == "NEW_ENCARTE") encarteNotificationNavigationKey += 1L
+        else encarteNotificationNavigationKey = 0L
         if (shouldOpenPromotions(intent)) {
             openPromotionsFromNotification = true
             promotionNotificationNavigationKey += 1L

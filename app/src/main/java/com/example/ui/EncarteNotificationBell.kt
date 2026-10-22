@@ -43,10 +43,11 @@ internal fun EncarteNotificationBell() {
                 if (chosen != EncarteNotifications.Mode.OFF && !UserPreferences(context).notificationsEnabled.first()) {
                     error = "Ative as notificações gerais nas Configurações do NRD primeiro."
                 } else {
-                    EncarteNotifications.setMode(context, chosen)
+                    kotlinx.coroutines.withTimeout(15_000) { EncarteNotifications.setMode(context, chosen) }
                     current = chosen; open = false
                 }
-            } catch (cancelled: CancellationException) { throw cancelled }
+            } catch (_: kotlinx.coroutines.TimeoutCancellationException) { error = "A conexão demorou. Confira a internet e tente novamente." }
+            catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { error = "Não foi possível salvar. Confira a conexão e tente novamente." }
             finally { busy = false }
         }
