@@ -87,6 +87,9 @@ object NotificationHelper {
                 description = "Avisos de novos encartes de Natal e região"
             })
             // Legacy channel just in case
+            notificationManager.createNotificationChannel(NotificationChannel("training_updates", "Novos treinamentos", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Avisos de novos treinamentos da Academia NRD"
+            })
             val legacy = NotificationChannel(CHANNEL_ID, "Atualizações de Produtos", NotificationManager.IMPORTANCE_DEFAULT)
             notificationManager.createNotificationChannel(legacy)
         }
@@ -138,6 +141,7 @@ object NotificationHelper {
         "SUGGESTION_FIXED" -> "suggestion_fixed"
         "APP_UPDATE" -> "app_update"
         "PROMOTION_UPDATED" -> "promotion_updates"
+        "NEW_TRAINING" -> "training_updates"
         "NEW_ENCARTE" -> "encartes"
         "BENEFIT_RELEASED", "BENEFIT_PURCHASE" -> "benefit_updates"
         "HOURS_UPDATED" -> "hours_updates"
@@ -268,6 +272,11 @@ object NotificationHelper {
                 val pending = content.code.takeIf { it.isNotBlank() }?.let { productPendingIntent(context, type, it) }
                 ProductDynamicNotification.decorate(context, builder, type, title, content, pending)
             }
+            "NEW_TRAINING" -> builder.setContentIntent(PendingIntent.getActivity(context, 3003,
+                Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    putExtra("type", "NEW_TRAINING")
+                }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             "NEW_ENCARTE" -> builder.setContentIntent(PendingIntent.getActivity(context, 3002,
                 Intent(context, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP

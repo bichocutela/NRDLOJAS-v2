@@ -77,6 +77,18 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 return@runBlocking
             }
 
+            if (type == TrainingNotifications.TYPE) {
+                if (TrainingNotifications.mode(applicationContext) == TrainingNotifications.Mode.OFF) return@runBlocking
+                val id = message.data["trainingId"] ?: return@runBlocking
+                if (TrainingNotifications.delivered(applicationContext, id)) return@runBlocking
+                val config = runCatching { com.example.data.training.TrainingRepository.load() }.getOrNull() ?: return@runBlocking
+                if (config.visibility != com.example.data.training.TrainingVisibility.ALL) return@runBlocking
+                val mission = config.missions.find { it.id == id && it.enabled } ?: return@runBlocking
+                NotificationHelper.showNotification(applicationContext, type, "Novo treinamento: ${mission.title}", "Toque para abrir a Academia NRD.", notificationTag = "training:$id")
+                preferences.addNotification(com.example.data.AppNotification(id = System.currentTimeMillis(), type = type, title = "Novo treinamento: ${mission.title}", body = "Toque para abrir a Academia NRD.", read = false, timestamp = System.currentTimeMillis()))
+                TrainingNotifications.markDelivered(applicationContext, id)
+                return@runBlocking
+            }
             if (type == EncarteNotifications.TYPE) {
                 val content = EncarteNotifications.content(EncarteNotifications.mode(applicationContext), message.data) ?: return@runBlocking
                 val id = message.data["encarteId"] ?: return@runBlocking
@@ -161,6 +173,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             val remoteNotificationsEnabled = FirebaseService.getNotificationSettings().enabled
             val effectiveNotificationsEnabled = notificationsEnabled && remoteNotificationsEnabled
             runCatching { EncarteNotifications.reconcile(applicationContext, effectiveNotificationsEnabled) }
+            runCatching { TrainingNotifications.reconcile(applicationContext, effectiveNotificationsEnabled) }
             FcmTopicSubscription.reconcile(effectiveNotificationsEnabled)
             FcmTopicSubscription.reconcileMasterUpdates(
                 isMaster = FcmTopicSubscription.isMasterAuthenticated(),
@@ -190,7 +203,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             TYPE_SCHEDULE_INSERTED,
             TYPE_SCHEDULE_CHANGED,
             "NEW_INSTALLATION",
-            EncarteNotifications.TYPE
+            EncarteNotifications.TYPE,
+            TrainingNotifications.TYPE
         )
     }
 }

@@ -122,7 +122,8 @@ fun MestreScreen(
     onNavigateToManageTabs: () -> Unit,
     onNavigateToManageProducts: () -> Unit,
     onNavigateBack: () -> Unit,
-    quickEditThemeKey: String? = null
+    quickEditThemeKey: String? = null,
+    onNavigateToTraining: () -> Unit = {}
 ) {
     var pageStack by rememberSaveable(quickEditThemeKey) {
         mutableStateOf(
@@ -533,6 +534,10 @@ fun MestreScreen(
                 ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            if (currentPage == MestrePanelPage.DASHBOARD || currentPage == MestrePanelPage.SETTINGS) {
+                OutlinedButton(onClick = onNavigateToTraining, modifier = Modifier.fillMaxWidth()) { Text("Aba Treinamento") }
+                Spacer(Modifier.height(12.dp))
+            }
             if (currentPage == MestrePanelPage.DASHBOARD) {
                 MestreDashboardOverview(
                     pendingSuggestions = suggestions.count { it.status == com.example.data.ProductSuggestion.STATUS_PENDING },
