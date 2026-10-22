@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-files-path name="my_downloads" path="Download/" />
+    <cache-path name="shared_cards" path="shared_cards/" />
+    <cache-path name="roster_photos" path="roster_photos/" />
+    <cache-path name="clock_exports" path="clock_exports/" />
+</paths>

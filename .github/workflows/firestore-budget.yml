@@ -1,0 +1,37 @@
+name: Firestore read budget
+on:
+  pull_request:
+    paths:
+      - 'app/src/main/java/com/example/data/**'
+      - 'supabase/functions/nrd-price-gateway/**'
+      - '.github/workflows/firestore-budget.yml'
+      - '.github/workflows/main.yml'
+      - '.github/ci/**'
+      - 'scripts/ci/**'
+      - 'tests/ci/**'
+concurrency:
+  group: firestore-budget-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  gateway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test supabase/functions/nrd-price-gateway/*.test.mjs
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      # Android CI checks executes both suites, compiles Android, and gates the
+      # required build status. Check the routing here instead of compiling twice.
+      - name: Verify primary Android coverage and publication gate
+        run: node --test tests/ci/*.test.mjs

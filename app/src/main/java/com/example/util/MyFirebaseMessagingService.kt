@@ -1,0 +1,210 @@
+package com.example.util
+
+import android.util.Log
+import com.example.data.NotificationSettings
+import com.example.data.UserPreferences
+import com.example.data.NossaGenteCredentialStore
+import com.example.data.FirebaseService
+import com.example.util.FcmTopicSubscription
+import com.google.firebase.messaging.FirebaseMessagingService
+import com.google.firebase.messaging.RemoteMessage
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+
+class MyFirebaseMessagingService : FirebaseMessagingService() {
+
+    override fun onMessageReceived(message: RemoteMessage) {
+        super.onMessageReceived(message)
+
+        val title = message.data["title"]?.trim()
+        val body = message.data["body"]?.trim()
+        val type = message.data["type"]?.trim()
+        val productCode = message.data["productCode"]?.trim()?.takeIf { it.isNotBlank() }
+        val messageStoreCode = message.data["storeCode"]?.trim()
+            ?: message.data["loja"]?.trim()
+
+        if (title.isNullOrBlank() || body.isNullOrBlank() || type.isNullOrBlank()) {
+            Log.w(TAG, "Mensagem FCM ignorada: title, body ou type ausente no payload data-only")
+            return
+        }
+
+        if (type !in SUPPORTED_TYPES) {
+            Log.w(TAG, "Mensagem FCM ignorada: type inválido ($type)")
+            return
+        }
+
+        Log.d(TAG, "Mensagem FCM data-only recebida: type=$type")
+        val preferences = UserPreferences(applicationContext)
+
+        runBlocking {
+            if (type == "NEW_INSTALLATION") {
+                val eventId = message.data["eventId"]
+                if (!InstallationNotificationPolicy.shouldDisplay(
+                    FcmTopicSubscription.isMasterAuthenticated(), preferences.notificationsEnabled.first(),
+                    preferences.masterInstallationNotificationsEnabled.first(), eventId)) return@runBlocking
+                val delivered = applicationContext.getSharedPreferences("master_installation_events", MODE_PRIVATE)
+                val key = "${com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid}:$eventId"
+                if (delivered.getBoolean(key, false)) return@runBlocking
+                NotificationHelper.showNotification(applicationContext, type, title, body, notificationTag = eventId)
+                preferences.addNotification(com.example.data.AppNotification(
+                    id = System.currentTimeMillis(), type = type, title = title, body = body,
+                    read = false, timestamp = System.currentTimeMillis()))
+                delivered.edit().putBoolean(key, true).apply()
+                return@runBlocking
+            }
+
+            if (type == TYPE_PROMOTION_UPDATED || ProfileNotificationRouting.profileSection(type) != null) {
+                val access = com.example.data.RestrictedAccessRepository.current()
+                if (type == TYPE_PROMOTION_UPDATED && !access.promotions) return@runBlocking
+                if (ProfileNotificationRouting.profileSection(type) != null && !access.profile) return@runBlocking
+            }
+            if (type == TYPE_APP_UPDATE && FcmTopicSubscription.isMasterAuthenticated()) {
+                runCatching { UpdateAvailabilityState.refresh(applicationContext) }
+                    .onFailure { Log.w(TAG, "Falha ao atualizar indicador imediato do Mestre", it) }
+            }
+
+            val notificationsEnabled = preferences.notificationsEnabled.first()
+            if (!notificationsEnabled) {
+                Log.d(TAG, "Mensagem FCM ignorada: notificações gerais desativadas; type=$type")
+                return@runBlocking
+            }
+
+            val remoteSettings = runCatching {
+                FirebaseService.getNotificationSettings()
+            }.getOrElse { NotificationSettings() }
+            if (!remoteSettings.enabled) {
+                Log.d(TAG, "Mensagem FCM ignorada: notificações globais desativadas pelo Mestre; type=$type")
+                return@runBlocking
+            }
+
+            if (type == TrainingNotifications.TYPE) {
+                if (TrainingNotifications.mode(applicationContext) == TrainingNotifications.Mode.OFF) return@runBlocking
+                val id = message.data["trainingId"] ?: return@runBlocking
+                if (TrainingNotifications.delivered(applicationContext, id)) return@runBlocking
+                val config = runCatching { com.example.data.training.TrainingRepository.load() }.getOrNull() ?: return@runBlocking
+                if (config.visibility != com.example.data.training.TrainingVisibility.ALL) return@runBlocking
+                val mission = config.missions.find { it.id == id && it.enabled } ?: return@runBlocking
+                NotificationHelper.showNotification(applicationContext, type, "Novo treinamento: ${mission.title}", "Toque para abrir a Academia NRD.", notificationTag = "training:$id")
+                preferences.addNotification(com.example.data.AppNotification(id = System.currentTimeMillis(), type = type, title = "Novo treinamento: ${mission.title}", body = "Toque para abrir a Academia NRD.", read = false, timestamp = System.currentTimeMillis()))
+                TrainingNotifications.markDelivered(applicationContext, id)
+                return@runBlocking
+            }
+            if (type == EncarteNotifications.TYPE) {
+                val content = EncarteNotifications.content(EncarteNotifications.mode(applicationContext), message.data) ?: return@runBlocking
+                val id = message.data["encarteId"] ?: return@runBlocking
+                if (EncarteNotifications.alreadyDelivered(applicationContext, id)) return@runBlocking
+                NotificationHelper.showNotification(applicationContext, type, content.first, content.second, notificationTag = "encarte:$id")
+                preferences.addNotification(com.example.data.AppNotification(id = System.currentTimeMillis(), type = type,
+                    title = content.first, body = content.second, read = false, timestamp = System.currentTimeMillis()))
+                EncarteNotifications.markDelivered(applicationContext, id)
+                return@runBlocking
+            }
+
+            val remoteTypeEnabled = when (type) {
+                TYPE_NEW_PRODUCT -> remoteSettings.productAddedEnabled
+                TYPE_CODE_CHANGED -> remoteSettings.codeChangedEnabled
+                TYPE_SUGGESTION_FIXED -> remoteSettings.suggestionFixedEnabled
+                TYPE_APP_UPDATE -> remoteSettings.appUpdateEnabled
+                TYPE_PROMOTION_UPDATED -> remoteSettings.promotionUpdatedEnabled
+                TYPE_SCHEDULE_INSERTED, TYPE_SCHEDULE_CHANGED -> true
+                else -> false
+            }
+            if (!remoteTypeEnabled) {
+                Log.d(TAG, "Mensagem FCM ignorada: tipo desativado pelo Mestre; type=$type")
+                return@runBlocking
+            }
+
+            val specificPreferenceEnabled = when (type) {
+                TYPE_NEW_PRODUCT -> preferences.notificationsProductAddedEnabled.first()
+                TYPE_CODE_CHANGED -> preferences.notificationsCodeChangedEnabled.first()
+                TYPE_SUGGESTION_FIXED -> true
+                TYPE_APP_UPDATE -> true
+                TYPE_PROMOTION_UPDATED -> true
+                TYPE_SCHEDULE_INSERTED, TYPE_SCHEDULE_CHANGED -> NossaGenteCredentialStore(applicationContext).isScheduleNotificationsEnabled()
+                else -> false
+            }
+
+            if (type == TYPE_PROMOTION_UPDATED) {
+                val favoriteStoreCode = preferences.favoriteStoreCode.first()?.trim().orEmpty()
+                if (!com.example.data.promotions.matchesFavoriteStore(favoriteStoreCode, messageStoreCode)) {
+                    Log.d(TAG, "Promoção ignorada: loja diferente da favorita")
+                    return@runBlocking
+                }
+            }
+
+            Log.d(
+                TAG,
+                "Preferências FCM: geral=$notificationsEnabled, específica=$specificPreferenceEnabled, type=$type",
+            )
+
+            if (!specificPreferenceEnabled) {
+                Log.d(TAG, "Mensagem FCM ignorada: preferência específica desativada; type=$type")
+                return@runBlocking
+            }
+
+            val channelId = NotificationHelper.channelIdForType(type)
+            if (channelId == null) {
+                Log.w(TAG, "Mensagem FCM ignorada: canal indisponível para type=$type")
+                return@runBlocking
+            }
+
+            preferences.addNotification(
+                com.example.data.AppNotification(
+                    id = System.currentTimeMillis(),
+                    type = type,
+                    title = title,
+                    body = body,
+                    read = false,
+                    timestamp = System.currentTimeMillis(),
+                    productCode = productCode
+                )
+            )
+            Log.d("MyFirebaseMessaging", "Exibindo notificação local: type=$type, canal=$channelId")
+            NotificationHelper.showNotification(applicationContext, type, title, body, productCode, productBarcode = message.data["barcode"])
+        }
+    }
+
+    override fun onNewToken(token: String) {
+        super.onNewToken(token)
+        Log.d(TAG, "Token FCM renovado; reconciliando inscrições sem registrar o token")
+        val preferences = UserPreferences(applicationContext)
+        runBlocking {
+            val notificationsEnabled = preferences.notificationsEnabled.first()
+            val remoteNotificationsEnabled = FirebaseService.getNotificationSettings().enabled
+            val effectiveNotificationsEnabled = notificationsEnabled && remoteNotificationsEnabled
+            runCatching { EncarteNotifications.reconcile(applicationContext, effectiveNotificationsEnabled) }
+            runCatching { TrainingNotifications.reconcile(applicationContext, effectiveNotificationsEnabled) }
+            FcmTopicSubscription.reconcile(effectiveNotificationsEnabled)
+            FcmTopicSubscription.reconcileMasterUpdates(
+                isMaster = FcmTopicSubscription.isMasterAuthenticated(),
+                notificationsEnabled = effectiveNotificationsEnabled
+            )
+            val installationId = preferences.getOrCreateInstallationId()
+            FcmTopicSubscription.reconcileSuggestionTopic(effectiveNotificationsEnabled, installationId)
+            FcmTopicSubscription.reconcileWorkSchedules(effectiveNotificationsEnabled && com.example.data.RestrictedAccessRepository.current().profile && NossaGenteCredentialStore(applicationContext).isScheduleNotificationsEnabled())
+        }
+    }
+
+    private companion object {
+        const val TAG = "MyFirebaseMessaging"
+        const val TYPE_NEW_PRODUCT = "NEW_PRODUCT"
+        const val TYPE_CODE_CHANGED = "CODE_CHANGED"
+        const val TYPE_SUGGESTION_FIXED = "SUGGESTION_FIXED"
+        const val TYPE_APP_UPDATE = "APP_UPDATE"
+        const val TYPE_PROMOTION_UPDATED = "PROMOTION_UPDATED"
+        const val TYPE_SCHEDULE_INSERTED = "SCHEDULE_INSERTED"
+        const val TYPE_SCHEDULE_CHANGED = "SCHEDULE_CHANGED"
+        val SUPPORTED_TYPES = setOf(
+            TYPE_NEW_PRODUCT,
+            TYPE_CODE_CHANGED,
+            TYPE_SUGGESTION_FIXED,
+            TYPE_APP_UPDATE,
+            TYPE_PROMOTION_UPDATED,
+            TYPE_SCHEDULE_INSERTED,
+            TYPE_SCHEDULE_CHANGED,
+            "NEW_INSTALLATION",
+            EncarteNotifications.TYPE,
+            TrainingNotifications.TYPE
+        )
+    }
+}

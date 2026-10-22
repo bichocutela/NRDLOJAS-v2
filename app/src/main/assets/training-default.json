@@ -1,0 +1,853 @@
+{
+  "visibility": "OFF",
+  "revision": 0,
+  "keys": [
+    {
+      "id": "k00",
+      "label": "ANULA",
+      "action": "MESSAGE",
+      "value": "ANULA",
+      "operatorText": "ANULA / VOLTA",
+      "customerText": "AGUARDE...",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k01",
+      "label": "",
+      "action": "MESSAGE",
+      "value": "",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k02",
+      "label": "CONS\nPLUS",
+      "action": "MESSAGE",
+      "value": "CONS PLUS",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k03",
+      "label": "CONVÊNIO\nNORDESTÃO",
+      "action": "MESSAGE",
+      "value": "CONVÊNIO NORDESTÃO",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k04",
+      "label": "TEF",
+      "action": "MESSAGE",
+      "value": "TEF",
+      "operatorText": "PAGAMENTO TEF",
+      "customerText": "AGUARDE O CARTÃO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k05",
+      "label": "LIMPA",
+      "action": "CLEAR",
+      "value": "LIMPA",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k06",
+      "label": "",
+      "action": "MESSAGE",
+      "value": "",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k07",
+      "label": "SHOW DE\nPRÊMIOS",
+      "action": "MESSAGE",
+      "value": "SHOW DE PRÊMIOS",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k08",
+      "label": "",
+      "action": "MESSAGE",
+      "value": "",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k09",
+      "label": "TROCA DE\nMERCADORIA",
+      "action": "MESSAGE",
+      "value": "TROCA DE MERCADORIA",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k10",
+      "label": "",
+      "action": "MESSAGE",
+      "value": "",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k11",
+      "label": "X",
+      "action": "MESSAGE",
+      "value": "X",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k12",
+      "label": "FUNÇÃO",
+      "action": "MESSAGE",
+      "value": "FUNÇÃO",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k13",
+      "label": "DINHEIRO",
+      "action": "MESSAGE",
+      "value": "DINHEIRO",
+      "operatorText": "PAGAMENTO EM DINHEIRO",
+      "customerText": "DINHEIRO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k14",
+      "label": "TOTAL",
+      "action": "MESSAGE",
+      "value": "TOTAL",
+      "operatorText": "TOTAL DA COMPRA",
+      "customerText": "TOTAL R$ 0,00",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k15",
+      "label": "VOLTA",
+      "action": "BACK",
+      "value": "VOLTA",
+      "operatorText": "ANULA / VOLTA",
+      "customerText": "AGUARDE...",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k16",
+      "label": "ENTRA",
+      "action": "MESSAGE",
+      "value": "ENTRA",
+      "operatorText": "ENTRA",
+      "customerText": "AGUARDE...",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k17",
+      "label": "7",
+      "action": "APPEND",
+      "value": "7",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k18",
+      "label": "8",
+      "action": "APPEND",
+      "value": "8",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k19",
+      "label": "9",
+      "action": "APPEND",
+      "value": "9",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k20",
+      "label": "4",
+      "action": "APPEND",
+      "value": "4",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k21",
+      "label": "5",
+      "action": "APPEND",
+      "value": "5",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k22",
+      "label": "6",
+      "action": "APPEND",
+      "value": "6",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k23",
+      "label": "1",
+      "action": "APPEND",
+      "value": "1",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k24",
+      "label": "2",
+      "action": "APPEND",
+      "value": "2",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k25",
+      "label": "3",
+      "action": "APPEND",
+      "value": "3",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k26",
+      "label": "",
+      "action": "MESSAGE",
+      "value": "",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k27",
+      "label": "0",
+      "action": "APPEND",
+      "value": "0",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k28",
+      "label": ".",
+      "action": "APPEND",
+      "value": ".",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k29",
+      "label": "DEPÓSITOS\nBANCÁRIOS",
+      "action": "MESSAGE",
+      "value": "DEPÓSITOS BANCÁRIOS",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k30",
+      "label": "",
+      "action": "MESSAGE",
+      "value": "",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k31",
+      "label": "CASHBACK",
+      "action": "MESSAGE",
+      "value": "CASHBACK",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k32",
+      "label": "REDUÇÃO\nZ",
+      "action": "MESSAGE",
+      "value": "REDUÇÃO Z",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k33",
+      "label": "DIFERENÇA\nDE PREÇO",
+      "action": "MESSAGE",
+      "value": "DIFERENÇA DE PREÇO",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k34",
+      "label": "BOLETO",
+      "action": "MESSAGE",
+      "value": "BOLETO",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k35",
+      "label": "CARTÃO\nPRESENTE",
+      "action": "MESSAGE",
+      "value": "CARTÃO PRESENTE",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k36",
+      "label": "PAUSA",
+      "action": "MESSAGE",
+      "value": "PAUSA",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k37",
+      "label": "CRÉDITO\nMANUAL",
+      "action": "MESSAGE",
+      "value": "CRÉDITO MANUAL",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k38",
+      "label": "POSIÇÃO\nOPERADOR",
+      "action": "MESSAGE",
+      "value": "POSIÇÃO OPERADOR",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k39",
+      "label": "CARTÃO\nCOMPRA",
+      "action": "MESSAGE",
+      "value": "CARTÃO COMPRA",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k40",
+      "label": "RECARGA\nCELULAR",
+      "action": "MESSAGE",
+      "value": "RECARGA CELULAR",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k41",
+      "label": "SANGRIA",
+      "action": "MESSAGE",
+      "value": "SANGRIA",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k42",
+      "label": "ENTRADA\nOPERADOR",
+      "action": "MESSAGE",
+      "value": "ENTRADA OPERADOR",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k43",
+      "label": "SAÍDA\nOPERADOR",
+      "action": "MESSAGE",
+      "value": "SAÍDA OPERADOR",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k44",
+      "label": "",
+      "action": "MESSAGE",
+      "value": "",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k45",
+      "label": "ABRE\nGAVETA",
+      "action": "MESSAGE",
+      "value": "ABRE GAVETA",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k46",
+      "label": "CANC\nITEM",
+      "action": "MESSAGE",
+      "value": "CANC ITEM",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    },
+    {
+      "id": "k47",
+      "label": "CANC\nCUPOM",
+      "action": "MESSAGE",
+      "value": "CANC CUPOM",
+      "operatorText": "TECLA: {tecla}",
+      "customerText": "OPERAÇÃO EM TREINAMENTO",
+      "operatorImage": "",
+      "customerImage": "",
+      "overrideGuided": false
+    }
+  ],
+  "missions": [
+    {
+      "id": "abertura",
+      "title": "Abrir caixa",
+      "subtitle": "Identificação e início do atendimento",
+      "enabled": true,
+      "steps": [
+        {
+          "keyId": "k16",
+          "operatorText": "FECHADO PARA BALANÇA",
+          "customerText": "CAIXA FECHADO",
+          "instruction": "Pressione ENTRA para iniciar.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k23",
+          "operatorText": "IDENTIFIQUE O OPERADOR",
+          "customerText": "AGUARDE...",
+          "instruction": "Digite o primeiro número demonstrativo.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k24",
+          "operatorText": "OPERADOR: 1_",
+          "customerText": "AGUARDE...",
+          "instruction": "Continue a identificação.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k25",
+          "operatorText": "OPERADOR: 12_",
+          "customerText": "AGUARDE...",
+          "instruction": "Continue a identificação.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k20",
+          "operatorText": "OPERADOR: 123_",
+          "customerText": "AGUARDE...",
+          "instruction": "Finalize a identificação demonstrativa.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k16",
+          "operatorText": "OPERADOR: 1234",
+          "customerText": "AGUARDE...",
+          "instruction": "Confirme com ENTRA.",
+          "operatorImage": "",
+          "customerImage": ""
+        }
+      ]
+    },
+    {
+      "id": "vendaDinheiro",
+      "title": "Venda em dinheiro",
+      "subtitle": "Finalização, pagamento e troco",
+      "enabled": true,
+      "steps": [
+        {
+          "keyId": "k14",
+          "operatorText": "COMPRA R$ 18,50",
+          "customerText": "TOTAL R$ 18,50",
+          "instruction": "Pressione TOTAL.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k13",
+          "operatorText": "FORMA DE PAGAMENTO",
+          "customerText": "TOTAL R$ 18,50",
+          "instruction": "Escolha DINHEIRO.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k24",
+          "operatorText": "VALOR RECEBIDO: 2_",
+          "customerText": "AGUARDE...",
+          "instruction": "Digite um valor demonstrativo.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k27",
+          "operatorText": "VALOR RECEBIDO: 20_",
+          "customerText": "AGUARDE...",
+          "instruction": "Continue o valor.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k16",
+          "operatorText": "DINHEIRO R$ 20,00",
+          "customerText": "TROCO R$ 1,50",
+          "instruction": "Confirme com ENTRA.",
+          "operatorImage": "",
+          "customerImage": ""
+        }
+      ]
+    },
+    {
+      "id": "vendaCartao",
+      "title": "Venda no cartão",
+      "subtitle": "Fluxo demonstrativo de pagamento TEF",
+      "enabled": true,
+      "steps": [
+        {
+          "keyId": "k14",
+          "operatorText": "COMPRA R$ 42,90",
+          "customerText": "TOTAL R$ 42,90",
+          "instruction": "Pressione TOTAL.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k04",
+          "operatorText": "SELECIONE PAGAMENTO",
+          "customerText": "AGUARDE O CARTÃO",
+          "instruction": "Pressione TEF.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k16",
+          "operatorText": "TEF EM TREINAMENTO",
+          "customerText": "INSIRA/APROXIME CARTÃO",
+          "instruction": "Confirme a etapa demonstrativa.",
+          "operatorImage": "",
+          "customerImage": ""
+        }
+      ]
+    },
+    {
+      "id": "cancelarItem",
+      "title": "Cancelar item",
+      "subtitle": "Treino de correção durante a compra",
+      "enabled": true,
+      "steps": [
+        {
+          "keyId": "k46",
+          "operatorText": "ITEM SELECIONADO",
+          "customerText": "AGUARDE...",
+          "instruction": "Pressione CANC ITEM.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k23",
+          "operatorText": "INFORME ITEM: _",
+          "customerText": "AGUARDE...",
+          "instruction": "Digite o número demonstrativo do item.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k16",
+          "operatorText": "ITEM 1 SELECIONADO",
+          "customerText": "AGUARDE...",
+          "instruction": "Confirme com ENTRA.",
+          "operatorImage": "",
+          "customerImage": ""
+        }
+      ]
+    },
+    {
+      "id": "sangria",
+      "title": "Sangria",
+      "subtitle": "Treino isolado da função de retirada",
+      "enabled": true,
+      "steps": [
+        {
+          "keyId": "k41",
+          "operatorText": "SANGRIA",
+          "customerText": "AGUARDE...",
+          "instruction": "Pressione SANGRIA.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k23",
+          "operatorText": "VALOR: 1_",
+          "customerText": "AGUARDE...",
+          "instruction": "Digite um valor demonstrativo.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k27",
+          "operatorText": "VALOR: 10_",
+          "customerText": "AGUARDE...",
+          "instruction": "Continue o valor.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k16",
+          "operatorText": "SANGRIA R$ 10,00",
+          "customerText": "AGUARDE...",
+          "instruction": "Confirme com ENTRA.",
+          "operatorImage": "",
+          "customerImage": ""
+        }
+      ]
+    },
+    {
+      "id": "fechamento",
+      "title": "Encerrar operação",
+      "subtitle": "Sequência demonstrativa de saída",
+      "enabled": true,
+      "steps": [
+        {
+          "keyId": "k43",
+          "operatorText": "SAÍDA DO OPERADOR",
+          "customerText": "CAIXA EM ENCERRAMENTO",
+          "instruction": "Pressione SAÍDA OPERADOR.",
+          "operatorImage": "",
+          "customerImage": ""
+        },
+        {
+          "keyId": "k16",
+          "operatorText": "CONFIRMAR SAÍDA?",
+          "customerText": "AGUARDE...",
+          "instruction": "Confirme com ENTRA.",
+          "operatorImage": "",
+          "customerImage": ""
+        }
+      ]
+    }
+  ],
+  "left": [
+    [
+      "k00",
+      "k01",
+      "k02"
+    ],
+    [
+      "k03",
+      "k04",
+      "k05"
+    ],
+    [
+      "k06",
+      "k07",
+      "k08"
+    ],
+    [
+      "k09",
+      "k10",
+      "k11"
+    ],
+    [
+      "k12",
+      "k13",
+      "k14"
+    ]
+  ],
+  "right": [
+    [
+      "k15",
+      "k16"
+    ],
+    [
+      "k17",
+      "k18",
+      "k19"
+    ],
+    [
+      "k20",
+      "k21",
+      "k22"
+    ],
+    [
+      "k23",
+      "k24",
+      "k25"
+    ],
+    [
+      "k26",
+      "k27",
+      "k28"
+    ]
+  ],
+  "bottom": [
+    [
+      "k29",
+      "k30",
+      "k31",
+      "k32"
+    ],
+    [
+      "k33",
+      "k34",
+      "k35",
+      "k36"
+    ],
+    [
+      "k37",
+      "k38",
+      "k39",
+      "k40"
+    ],
+    [
+      "k41",
+      "k42",
+      "k43",
+      "k44"
+    ],
+    [
+      "k16",
+      "k45",
+      "k46",
+      "k47"
+    ]
+  ]
+}

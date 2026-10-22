@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "146947124596",
+    "project_id": "appcodigo-7f245",
+    "storage_bucket": "appcodigo-7f245.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:146947124596:android:cd948b48ac3d150737d021",
+        "android_client_info": {
+          "package_name": "com.aistudio.codigomercado.xzbkql"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCGEkru0ZzdYtsK08AEWrivt0X_lWwJQiQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

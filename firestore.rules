@@ -1,0 +1,256 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Compatibilidade imediata com as contas administrativas atuais e
+    // preparação para migrar o papel para custom claims sem nova troca de regras.
+    function isManager() {
+      return isSignedIn() && (
+        request.auth.token.role == 'admin' ||
+        request.auth.token.role == 'mestre' ||
+        request.auth.token.email == 'admin@nrdlojas.com' ||
+        request.auth.token.email == 'mestre@nrdlojas.com'
+      );
+    }
+
+    function isMaster() {
+      return isSignedIn() && request.auth.token.email == 'mestre@nrdlojas.com';
+    }
+    function publicRestrictedAccess() {
+      return exists(/databases/$(database)/documents/config/restricted_access) &&
+        get(/databases/$(database)/documents/config/restricted_access).data.publicAccess == true;
+    }
+    function hasDeviceSession() {
+      return isSignedIn() && exists(/databases/$(database)/documents/access_sessions/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/access_sessions/$(request.auth.uid)).data.authTime == request.auth.token.auth_time;
+    }
+    match /access_sessions/{uid} {
+      // Only the server manages device capabilities. Clients cannot read or replace them.
+      allow read, write: if false;
+    }
+    function canReadProfile() {
+      return publicRestrictedAccess() || isMaster() || (hasDeviceSession() &&
+        exists(/databases/$(database)/documents/restricted_access/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/restricted_access/$(request.auth.uid)).data.enabled == true &&
+        get(/databases/$(database)/documents/restricted_access/$(request.auth.uid)).data.profile == true);
+    }
+    match /restricted_access/{uid} {
+      allow get: if isMaster() || (isSignedIn() && request.auth.uid == uid);
+      allow list, delete: if isMaster();
+      allow create, update: if isMaster() &&
+        request.resource.data.keys().hasOnly(['login', 'enabled', 'profile', 'promotions', 'prices']) &&
+        request.resource.data.login is string && request.resource.data.login.size() <= 64 &&
+        request.resource.data.enabled is bool && request.resource.data.profile is bool &&
+        request.resource.data.promotions is bool && request.resource.data.prices is bool;
+    }
+
+    // Catálogo público para consulta. Criação, remoção e alterações de conteúdo
+    // ficam restritas a Admin/Mestre. O único update público permitido é o
+    // incremento unitário do contador global de visualização.
+    match /products/{productId} {
+      allow read: if true;
+      allow create, delete: if isManager();
+      allow update: if isManager() || (
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['searchCount', 'lastViewedAt']) &&
+        request.resource.data.searchCount is int &&
+        resource.data.searchCount is int &&
+        request.resource.data.searchCount == resource.data.searchCount + 1 &&
+        request.resource.data.lastViewedAt == request.time
+      );
+    }
+
+    // Configurações globais precisam ser lidas por todos os aparelhos, mas só
+    // podem ser publicadas por perfis administrativos autenticados.
+    match /config/training_access {
+      allow read: if true;
+      allow create, update: if isMaster() && request.resource.data.keys().hasOnly(['visibility', 'revision']) &&
+        request.resource.data.visibility in ['OFF', 'TEST', 'ALL'] && request.resource.data.revision is int;
+      allow delete: if isMaster();
+    }
+    match /config/training {
+      allow get: if isMaster() || resource.data.visibility == 'ALL';
+      allow create, update: if isMaster() &&
+        request.resource.data.keys().hasOnly(['visibility', 'revision', 'payload']) &&
+        request.resource.data.visibility in ['OFF', 'TEST', 'ALL'] &&
+        request.resource.data.revision is int && request.resource.data.payload is string &&
+        request.resource.data.payload.size() <= 700000;
+      allow delete: if isMaster();
+    }
+    match /training_announcements/{id} { allow read, write: if false; }
+    match /config/{document} {
+      allow read: if document != 'training';
+      allow write: if document != 'training_access' && document != 'training' && document != 'restricted_access' && document != 'update_policy' && isManager();
+      allow create, update: if document == 'restricted_access' && isMaster() &&
+        request.resource.data.keys().hasOnly(['publicAccess']) && request.resource.data.publicAccess is bool;
+      allow delete: if document == 'restricted_access' && isMaster();
+      allow create, update: if document == 'update_policy' && isMaster() &&
+        request.resource.data.keys().hasOnly(['enabled', 'minimumVersion']) &&
+        request.resource.data.enabled is bool && request.resource.data.minimumVersion is string &&
+        request.resource.data.minimumVersion.matches('v?[0-9]+[.][0-9]+[.][0-9]+');
+      allow delete: if document == 'update_policy' && isMaster();
+    }
+
+    // Histórico de novidades publicado pelo Painel Mestre.
+    match /app_novelties/{noveltyId} {
+      allow read: if true;
+      allow create, update, delete: if isManager();
+    }
+
+    // Escalas publicadas para leitura pelos colaboradores; apenas Mestre/Admin altera.
+    match /work_schedules/{monthKey} {
+      allow read: if canReadProfile();
+      allow create, update: if isManager() &&
+        request.resource.data.year is int &&
+        request.resource.data.month is int && request.resource.data.month >= 1 && request.resource.data.month <= 12 &&
+        request.resource.data.employees is list && request.resource.data.employees.size() <= 200;
+      allow delete: if isManager();
+    }
+
+    // Abas dinâmicas fazem parte da navegação pública do aplicativo.
+    match /dynamic_tabs/{tabId} {
+      allow read: if true;
+      allow write: if isManager();
+    }
+
+    // Documento legado/auxiliar observado pelos clientes.
+    match /latest_product/{document} {
+      allow read: if true;
+      allow write: if isManager();
+    }
+
+    // Histórico e snapshots do catálogo são exclusivamente administrativos.
+    match /catalog_history/{snapshotId} {
+      allow read, write: if isManager();
+
+      match /products/{snapshotProductId} {
+        allow read, write: if isManager();
+      }
+    }
+
+    // Sugestões podem ser enviadas por usuários do aplicativo sem login, mas a
+    // criação é estritamente limitada aos campos e ao estado inicial esperados.
+    // Alterações de status são administrativas. Exclusão pelo próprio usuário só
+    // é aceita quando há Firebase Auth real e o UID do documento pertence a ele;
+    // sugestões anônimas antigas continuam removíveis por Admin/Mestre.
+    match /suggestions/{suggestionId} {
+      allow read: if true;
+
+      allow create: if
+        request.resource.data.keys().hasOnly([
+          'text',
+          'submittedBy',
+          'submittedByUid',
+          'installationId',
+          'appVersion',
+          'createdAt',
+          'status'
+        ]) &&
+        request.resource.data.text is string &&
+        request.resource.data.text.size() > 0 &&
+        request.resource.data.text.size() <= 1000 &&
+        request.resource.data.submittedBy is string &&
+        request.resource.data.submittedBy.size() <= 200 &&
+        request.resource.data.submittedByUid is string &&
+        request.resource.data.submittedByUid.size() <= 200 &&
+        request.resource.data.installationId is string &&
+        request.resource.data.installationId.size() > 0 &&
+        request.resource.data.installationId.size() <= 200 &&
+        request.resource.data.appVersion is string &&
+        request.resource.data.appVersion.size() <= 64 &&
+        request.resource.data.createdAt is int &&
+        request.resource.data.status == 'pending';
+
+      allow update: if isManager();
+
+      allow delete: if isManager() || (
+        isSignedIn() &&
+        resource.data.status == 'fixed' &&
+        resource.data.submittedByUid == request.auth.uid
+      );
+    }
+
+    // Um documento por aparelho. O Android envia somente um SHA-256 derivado
+    // do ANDROID_ID; o identificador bruto nunca é salvo na nuvem.
+    match /app_installations/{deviceId} {
+      // Necessário para a transação descobrir se este aparelho já foi registrado.
+      // Não permite enumerar a coleção.
+      allow get: if true;
+      allow list: if isManager();
+
+      allow create: if
+        request.resource.data.keys().hasOnly([
+          'deviceIdHash',
+          'firstSeenAt',
+          'lastSeenAt',
+          'appVersion',
+          'appVersionCode',
+          'platform'
+        ]) &&
+        request.resource.data.deviceIdHash == deviceId &&
+        request.resource.data.deviceIdHash is string &&
+        request.resource.data.deviceIdHash.size() == 64 &&
+        request.resource.data.firstSeenAt == request.time &&
+        request.resource.data.lastSeenAt == request.time &&
+        request.resource.data.appVersion is string &&
+        request.resource.data.appVersion.size() <= 64 &&
+        request.resource.data.appVersionCode is int &&
+        request.resource.data.platform == 'android';
+
+      allow update: if
+        request.resource.data.deviceIdHash == resource.data.deviceIdHash &&
+        request.resource.data.firstSeenAt == resource.data.firstSeenAt &&
+        request.resource.data.platform == resource.data.platform &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['lastSeenAt', 'appVersion', 'appVersionCode']) &&
+        request.resource.data.lastSeenAt == request.time &&
+        request.resource.data.appVersion is string &&
+        request.resource.data.appVersion.size() <= 64 &&
+        request.resource.data.appVersionCode is int;
+
+      allow delete: if isManager();
+    }
+
+    // Immutable event proof: only its holder can ask the server to deliver it.
+    // No enumeration, reads or modification from public clients.
+    match /app_installation_events/{eventId} {
+      allow create: if eventId.matches('[0-9a-f]{64}') &&
+        request.resource.data.keys().hasOnly(['deviceIdHash', 'appVersion', 'appVersionCode', 'firstSeenAt', 'createdAt']) &&
+        request.resource.data.deviceIdHash is string &&
+        request.resource.data.deviceIdHash.matches('[0-9a-f]{64}') &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.firstSeenAt == getAfter(/databases/$(database)/documents/app_installations/$(request.resource.data.deviceIdHash)).data.firstSeenAt &&
+        request.resource.data.appVersion == getAfter(/databases/$(database)/documents/app_installations/$(request.resource.data.deviceIdHash)).data.appVersion &&
+        request.resource.data.appVersionCode == getAfter(/databases/$(database)/documents/app_installations/$(request.resource.data.deviceIdHash)).data.appVersionCode;
+      allow read, update, delete: if false;
+    }
+
+    match /manual_days_off/{uid}/months/{monthKey} {
+      allow read, delete: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid &&
+        monthKey.matches('[0-9]{4}-[0-9]{2}') &&
+        request.resource.data.keys().hasOnly(['days', 'updatedAt']) &&
+        request.resource.data.days is list && request.resource.data.days.size() <= 31 &&
+        request.resource.data.days.toSet().hasOnly([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]) &&
+        request.resource.data.updatedAt is int;
+    }
+
+    match /personal_time_clock/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid &&
+        request.resource.data.keys().hasOnly(['payload', 'updatedAt']) &&
+        request.resource.data.payload is string && request.resource.data.payload.size() <= 900000 &&
+        request.resource.data.updatedAt is int;
+    }
+
+    // Qualquer coleção não declarada acima permanece bloqueada por padrão.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

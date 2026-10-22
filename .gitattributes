@@ -1,0 +1,7 @@
+*.jar binary
+*.png binary
+*.jpg binary
+*.webp binary
+*.jks binary
+*.keystore binary
+*.base64 binary

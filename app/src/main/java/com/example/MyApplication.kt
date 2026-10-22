@@ -1,0 +1,115 @@
+package com.example
+
+import android.app.Application
+import android.util.Log
+import com.example.data.CatalogCodeMigration
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import java.util.Locale
+
+class MyApplication : Application() {
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    @Volatile private var catalogCodeMigrationStarted = false
+
+    override fun onCreate() {
+        super.onCreate()
+        CrashReporter.setup(this)
+        com.example.data.promotions.PromotionSyncCoordinator.get(this).startForegroundMonitoring()
+        try {
+            com.example.data.FirebaseService.initialize(this)
+            Log.d("MyApplication", "Firebase initialized manually")
+            applicationScope.launch {
+                if (!com.example.data.DeviceInstallationTracker.register(this@MyApplication)) {
+                    com.example.util.InstallationRegistrationWorker.schedule(this@MyApplication)
+                }
+            }
+            scheduleCatalogCodeMigration()
+        } catch (e: Exception) {
+            Log.e("MyApplication", "Firebase initialization failed", e)
+        }
+        try {
+            com.example.util.UpdateNotificationWorker.schedule(this)
+            Log.d("MyApplication", "Periodic update check scheduled")
+        } catch (e: IllegalStateException) {
+            Log.w("MyApplication", "Periodic update check not scheduled in this process", e)
+        }
+        try {
+            com.example.util.PromotionNotificationWorker.schedule(this)
+            Log.d("MyApplication", "Favorite store promotion check scheduled")
+        } catch (e: IllegalStateException) {
+            Log.w("MyApplication", "Favorite store promotion check not scheduled in this process", e)
+        }
+        try {
+            val benefitNotificationsEnabled = com.example.data.NossaGenteCredentialStore(this)
+                .isBenefitNotificationsEnabled()
+            if (benefitNotificationsEnabled) {
+                com.example.util.BenefitNotificationWorker.schedule(this)
+                Log.d("MyApplication", "Benefit notification check scheduled")
+            } else {
+                com.example.util.BenefitNotificationWorker.cancel(this)
+            }
+        } catch (e: IllegalStateException) {
+            Log.w("MyApplication", "Benefit notification check not scheduled in this process", e)
+        }
+        try {
+            val credentials = com.example.data.NossaGenteCredentialStore(this)
+            credentials.setHoursNotificationsEnabled(false)
+            credentials.setPointNotificationsEnabled(false)
+            credentials.setScheduleNotificationsEnabled(false)
+            if (credentials.isDayOffNotificationsEnabled()) {
+                com.example.data.timeclock.TimeClockRepository(this).setDayOffReminders(true)
+                credentials.setDayOffNotificationsEnabled(false)
+            }
+            com.example.util.HoursNotificationWorker.cancel(this)
+            com.example.util.PointNotificationWorker.cancel(this)
+            com.example.util.ScheduleReminderWorker.cancel(this)
+        } catch (e: IllegalStateException) {
+            Log.w("MyApplication", "Legacy profile notification cleanup unavailable in this process", e)
+        }
+        // Cancel the old polling job; installation events now arrive through FCM.
+        runCatching { com.example.util.InstallationNotificationWorker.cancel(this) }
+            .onFailure { Log.w("MyApplication", "Legacy installation job could not be cancelled", it) }
+        try {
+            com.example.util.AcpCatalogSyncWorker.schedule(this)
+            Log.d("MyApplication", "ACP catalog sync scheduled")
+        } catch (e: IllegalStateException) {
+            Log.w("MyApplication", "ACP catalog sync not scheduled in this process", e)
+        }
+        try {
+            com.example.util.PersonalClockWorker.schedule(this)
+        } catch (e: IllegalStateException) {
+            Log.w("MyApplication", "Personal point scheduling unavailable in this process", e)
+        }
+        Log.d("MyApplication", "Application started and CrashReporter setup")
+    }
+
+    /**
+     * Aguarda uma sessão administrativa real do Firebase e aplica a tabela de
+     * códigos silenciosamente. Usuários comuns nunca tentam escrever no catálogo.
+     */
+    private fun scheduleCatalogCodeMigration() {
+        FirebaseAuth.getInstance().addAuthStateListener { auth ->
+            val email = auth.currentUser?.email?.lowercase(Locale.ROOT)
+            val isManager = email == "admin@nrdlojas.com" || email == "mestre@nrdlojas.com"
+            if (!isManager || catalogCodeMigrationStarted) return@addAuthStateListener
+
+            catalogCodeMigrationStarted = true
+            applicationScope.launch {
+                val result = CatalogCodeMigration.applySilently()
+                if (result.applied) {
+                    Log.i(
+                        "MyApplication",
+                        "Catalog code migration applied: migrated=${result.migrated}, " +
+                            "alreadyCorrect=${result.alreadyCorrect}, notFound=${result.notFound}"
+                    )
+                } else {
+                    Log.d("MyApplication", "Catalog code migration skipped: ${result.message.orEmpty()}")
+                }
+            }
+        }
+    }
+}

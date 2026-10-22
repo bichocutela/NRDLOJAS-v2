@@ -1,0 +1,52 @@
+name: Optimize NRD storage losslessly
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/storage-optimizer.yml'
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/storage-optimizer.yml'
+      - 'scripts/storage-optimize.py'
+      - 'scripts/test_storage_optimize.py'
+      - 'supabase/functions/nrd-storage-optimizer/**'
+concurrency:
+  group: nrd-storage-optimization-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'production' }}
+  cancel-in-progress: false
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test supabase/functions/nrd-storage-optimizer/*.test.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install Pillow==12.3.0
+      - name: Verify lossless codec and unreadable-file handling
+        run: python scripts/test_storage_optimize.py
+      - name: Prepare and verify identical pixels
+        if: github.event_name != 'pull_request'
+        run: python scripts/storage-optimize.py prepare
+      - name: Archive originals before any replacement
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nrd-storage-originals-${{ github.run_id }}
+          path: |
+            storage-optimization/originals/
+            storage-optimization/plan.json
+          retention-days: 30
+          if-no-files-found: error
+      - name: Apply verified smaller images at the same URLs
+        if: github.event_name != 'pull_request'
+        run: python scripts/storage-optimize.py apply

@@ -1,0 +1,94 @@
+name: ACP server security
+on:
+  push:
+    branches: [codex/acp-server-security, main]
+    paths:
+      - 'supabase/functions/nrd-price-gateway/**'
+      - '.github/workflows/acp-security.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  gateway:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify server authorization and commercial contract
+        run: node --test supabase/functions/nrd-price-gateway/*.test.mjs supabase/functions/nordestao-catalog-resolver/*.test.mjs
+      - name: Verify deployed gateway and server-side ACP credentials
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.request, urllib.error
+          def post_once(body, headers=None):
+              url = (os.environ.get('SUPABASE_URL') or 'https://kkayksyzksexoarpfxyj.supabase.co').rstrip('/') + '/functions/v1/nrd-price-gateway'
+              request = urllib.request.Request(url, data=json.dumps(body).encode(), headers={'Content-Type':'application/json', **(headers or {})})
+              try:
+                  response = urllib.request.urlopen(request, timeout=90)
+                  return response.status, json.load(response)
+              except urllib.error.HTTPError as error:
+                  return error.code, json.load(error)
+          def post(body, headers=None):
+              for attempt in range(3):
+                  status, data = post_once(body, headers)
+                  if status not in (502, 503, 504) or attempt == 2:
+                      return status, data
+                  time.sleep(2 ** (attempt + 1))
+          status, _ = post({'operation':'access'}, {'x-firebase-token':'synthetic-invalid-token'})
+          assert status == 401, 'Invalid Firebase token was not rejected'
+          pending = []
+          status, body = post({'operation':'access'})
+          if status == 429 and body == {'error':'PERMISSIONS_RATE_LIMITED'}:
+              pending.append('Public access permissions')
+              print('::warning::Firestore is rate-limited; permission reads fail closed. Live public-grant validation is pending.')
+          else:
+              assert status in (200, 403), f'Public access permission check unavailable: HTTP {status}'
+          token_url = os.environ['ACTIONS_ID_TOKEN_REQUEST_URL'] + '&audience=nrd-acp-security-check'
+          request = urllib.request.Request(token_url, headers={'Authorization':'Bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
+          token = json.load(urllib.request.urlopen(request, timeout=20))['value']
+          status, body = post({'operation':'health'}, {'x-github-oidc-token':token})
+          assert status == 200 and body == {'ok':True}, f'Gateway readiness failed: HTTP {status}, {body.get("error", "invalid result")}'
+          status, body = post({'operation':'health_search'}, {'x-github-oidc-token':token})
+          assert status == 200 and body.get('ok') is True and body.get('count',0) > 0, f'Cereja search readiness failed: HTTP {status}'
+          print('Cereja read-only latency (milliseconds):', json.dumps(body))
+          status, body = post({'operation':'health_promotions'}, {'x-github-oidc-token':token})
+          assert status == 200 and body == {'ok':True}, f'De/Por readiness failed: HTTP {status}, {body.get("error", "invalid result")}'
+          status, body = post({'operation':'health_catalog'}, {'x-github-oidc-token':token})
+          assert status == 200 and body == {'ok':True}, f'Catalog image readiness failed for code 2021000: HTTP {status}, {body.get("error", "invalid result")}'
+          print('Catalog code 2021000: exact internal-code match and official image HEAD passed.')
+          status, body = post({'operation':'health_sync'}, {'x-github-oidc-token':token})
+          if status == 429 and body == {'error':'SYNC_RATE_LIMITED'}:
+              pending.append('Differential sync')
+              print('::warning::Firestore quota exhausted; live differential sync validation is pending. This is not a healthy sync result.')
+          else:
+              assert status == 200 and body == {'ok':True}, f'Differential sync readiness failed: HTTP {status}, {body.get("error", "invalid result")}'
+          import time
+          for attempt in range(4):
+              status, body = post({'operation':'health_categories'}, {'x-github-oidc-token':token})
+              if status == 200 and body == {'ok':True}:
+                  break
+              if status == 429 and body == {'error':'SYNC_RATE_LIMITED'}:
+                  break
+              if attempt < 3:
+                  time.sleep(10)
+          if status == 429 and body == {'error':'SYNC_RATE_LIMITED'}:
+              pending.append('Gemini classification cache')
+              print('::warning::Firestore quota exhausted; live classification cache validation is pending. Re-run after quota recovery.')
+          else:
+              assert status == 200 and body == {'ok':True}, f'Gemini/cache readiness failed: HTTP {status}, {body.get("error", "invalid result")}'
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('## Gateway checks\n\nInvalid identity rejection and authenticated ACP reads passed.\n\n')
+              if pending:
+                  summary.write('Live checks pending because Firestore returned its explicit quota-limit error:\n\n' + ''.join('- ' + name + '\n' for name in pending))
+                  summary.write('\nFull live readiness is **not confirmed**. Re-run after Firestore quota recovery.\n')
+              else:
+                  summary.write('All live checks passed.\n')
+          print('Gateway rejected invalid identity and completed authenticated ACP read using server secrets.')
+          PY
+

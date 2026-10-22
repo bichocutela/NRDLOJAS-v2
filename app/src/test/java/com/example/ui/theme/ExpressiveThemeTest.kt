@@ -1,0 +1,198 @@
+package com.example.ui.theme
+
+import com.example.data.AppearanceSettings
+import com.example.data.SupportedThemeKeys
+import com.example.data.ThemeBackground
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import org.junit.Test
+
+class ExpressiveThemeTest {
+
+    private fun contrastRatio(a: Color, b: Color): Float {
+        val l1 = a.luminance()
+        val l2 = b.luminance()
+        val lighter = maxOf(l1, l2)
+        val darker = minOf(l1, l2)
+        return (lighter + 0.05f) / (darker + 0.05f)
+    }
+
+    @Test
+    fun `expressive dark palette keeps readable semantic pairs`() {
+        val scheme = expressiveColorScheme(darkTheme = true)
+        val pairs = listOf(
+            scheme.background to scheme.onBackground,
+            scheme.surface to scheme.onSurface,
+            scheme.surfaceVariant to scheme.onSurfaceVariant,
+            scheme.primary to scheme.onPrimary,
+            scheme.primaryContainer to scheme.onPrimaryContainer,
+            scheme.secondary to scheme.onSecondary,
+            scheme.secondaryContainer to scheme.onSecondaryContainer,
+            scheme.tertiary to scheme.onTertiary,
+            scheme.tertiaryContainer to scheme.onTertiaryContainer,
+            scheme.error to scheme.onError,
+            scheme.errorContainer to scheme.onErrorContainer
+        )
+
+        pairs.forEach { (background, foreground) ->
+            assertTrue(
+                "Contraste insuficiente: " + contrastRatio(background, foreground),
+                contrastRatio(background, foreground) >= 4.5f
+            )
+        }
+    }
+
+    @Test
+    fun `expressive is the eighth supported theme`() {
+        assertEquals(8, SupportedThemeKeys.distinct().size)
+        assertTrue("expressive" in SupportedThemeKeys)
+    }
+
+    @Test
+    fun `expressive background is scheduled independently`() {
+        val scheduled = ThemeBackground(
+            id = "expressive-scheduled",
+            label = "Expressivo",
+            url = "https://example.com/expressive.jpg",
+            isActive = true,
+            startDate = "2026-09-01",
+            endDate = "2026-09-30"
+        )
+        val settings = AppearanceSettings(
+            themeBackgrounds = mapOf("expressive" to listOf(scheduled))
+        )
+
+        assertEquals(scheduled, settings.activeBackgroundFor("expressive", "2026-09-24"))
+        assertEquals(null, settings.activeBackgroundFor("multicolor", "2026-09-24"))
+    }
+
+    @Test
+    fun `solid is not glass and glass variation is glass`() {
+        assertFalse(ExpressiveStyle(enabled = true, variant = "solid").isGlass)
+        assertTrue(ExpressiveStyle(enabled = true, variant = "glass").isGlass)
+        assertFalse(ExpressiveStyle(enabled = false, variant = "glass").isGlass)
+    }
+
+    @Test
+    fun `expressive glass exposes six independent colors and fluid controls`() {
+        assertEquals(
+            listOf("multicolor", "red", "green", "orange", "blue", "gold"),
+            ExpressiveGlassAccentNames
+        )
+        val dense = resolveExpressiveGlassStyle(
+            enabled = true,
+            isDark = false,
+            accentName = "red",
+            transparency = 0.20f,
+            fluidity = 0.10f
+        )
+        val liquid = resolveExpressiveGlassStyle(
+            enabled = true,
+            isDark = false,
+            accentName = "blue",
+            transparency = 0.90f,
+            fluidity = 0.90f
+        )
+        assertTrue(dense.surfaceAlpha > liquid.surfaceAlpha)
+        assertTrue(liquid.shadowElevation > dense.shadowElevation)
+        assertNotEquals(dense.accent, liquid.accent)
+        assertTrue(expressiveGlassBackgroundColors("gold", false) != glassSoftBackgroundColors("orange", false))
+    }
+
+    @Test
+    fun `expressive glass finish produces distinct useful surface densities`() {
+        val finishes = listOf("frosted", "glass", "crystal").map { finish ->
+            resolveExpressiveGlassStyle(
+                enabled = true,
+                isDark = false,
+                transparency = 0.55f,
+                glassFinish = finish
+            )
+        }
+
+        assertTrue(finishes[0].surfaceAlpha > finishes[1].surfaceAlpha)
+        assertTrue(finishes[1].surfaceAlpha > finishes[2].surfaceAlpha)
+        assertTrue(finishes[0].surfaceAlpha >= 0.86f)
+        assertTrue(finishes[2].surfaceAlpha <= 0.76f)
+    }
+
+    @Test
+    fun `water styles change water presence without changing glass finish`() {
+        val clear = resolveExpressiveGlassStyle(
+            enabled = true, isDark = false, waterStyle = "crystal", waterOpacity = 0.8f
+        )
+        val potable = resolveExpressiveGlassStyle(
+            enabled = true, isDark = false, waterStyle = "potable", waterOpacity = 0.8f
+        )
+
+        assertTrue(potable.waterOpacity > clear.waterOpacity)
+        assertEquals(clear.surfaceAlpha, potable.surfaceAlpha)
+    }
+
+    @Test
+    fun `glass bubble controls are clamped and reach the rendering style`() {
+        val style = resolveExpressiveGlassStyle(
+            enabled = true,
+            isDark = false,
+            bubbleSize = 2f,
+            bubbleExtraCount = 30,
+            bubbleBrightness = 0.1f,
+            bubbleOutline = false
+        )
+
+        assertEquals(1.8f, style.bubbleSize)
+        assertEquals(18, style.bubbleExtraCount)
+        assertEquals(0.25f, style.bubbleBrightness)
+        assertFalse(style.bubbleOutline)
+    }
+
+    @Test
+    fun `expressive glass dark mode keeps readable foregrounds on every accent`() {
+        ExpressiveGlassAccentNames.forEach { accent ->
+            val style = resolveExpressiveGlassStyle(
+                enabled = true,
+                isDark = true,
+                accentName = accent
+            )
+            val scheme = expressiveGlassColorScheme(style, darkTheme = true)
+
+            expressiveGlassBackgroundColors(accent, true).forEach { background ->
+                assertTrue(
+                    "Background escuro ilegível para $accent",
+                    contrastRatio(background, scheme.onBackground) >= 4.5f
+                )
+            }
+            assertTrue(
+                "Ação primária ilegível para $accent",
+                contrastRatio(scheme.primary, scheme.onPrimary) >= 4.5f
+            )
+            assertTrue(
+                "Superfície ilegível para $accent",
+                contrastRatio(style.surfaceBase, scheme.onSurface) >= 4.5f
+            )
+        }
+    }
+
+    @Test
+    fun `expressive glass owns its visual engine independently from glass soft`() {
+        val expressiveGlass = resolveExpressiveGlassStyle(enabled = true, isDark = false)
+        val glassSoft = resolveGlassSoftStyle(
+            enabled = true,
+            type = "soft",
+            transparency = 0.55f,
+            accentName = "multicolor",
+            isDark = false
+        )
+
+        assertTrue(expressiveGlass.enabled)
+        assertTrue(glassSoft.enabled)
+        assertNotEquals(expressiveGlass.accent, glassSoft.accent)
+        assertTrue(kotlin.math.abs(expressiveGlass.surfaceAlpha - glassSoft.surfaceAlpha) > 0.001f)
+        assertFalse(GlassSoftStyle().enabled)
+        assertFalse(ExpressiveGlassStyle().enabled)
+    }
+}

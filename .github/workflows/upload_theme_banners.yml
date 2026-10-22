@@ -1,0 +1,54 @@
+name: Validate Android Theme Banners
+
+on:
+  push:
+    paths:
+      - 'app/src/main/assets/themes/theme_red.jpg'
+      - 'app/src/main/assets/themes/theme_gold.jpg'
+      - 'app/src/main/assets/themes/theme_green.jpg'
+      - 'app/src/main/assets/themes/theme_blue.jpg'
+      - 'app/src/main/assets/themes/theme_orange.jpg'
+      - '.github/workflows/upload_theme_banners.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install image validation dependency
+        run: pip install Pillow
+
+      - name: Validate local Android theme banners
+        run: |
+          python - << 'PY_EOF'
+          from pathlib import Path
+          from PIL import Image
+
+          themes = ("red", "gold", "green", "blue", "orange")
+          assets = Path("app/src/main/assets/themes")
+          max_bytes = 512 * 1024
+
+          for theme in themes:
+              image_path = assets / f"theme_{theme}.jpg"
+              if not image_path.is_file():
+                  raise SystemExit(f"Missing banner: {image_path}")
+
+              with Image.open(image_path) as image:
+                  width, height = image.size
+                  if image.format != "JPEG":
+                      raise SystemExit(f"{image_path} must be a JPEG, found {image.format}")
+                  if width < 2000 or height < 600:
+                      raise SystemExit(f"{image_path} is below the high-resolution minimum: {width}x{height}")
+
+              size = image_path.stat().st_size
+              if size > max_bytes:
+                  raise SystemExit(f"{image_path} exceeds the upload-safe size limit: {size} bytes")
+              print(f"OK {image_path}: {width}x{height}, {size} bytes")
+          PY_EOF

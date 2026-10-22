@@ -1,0 +1,120 @@
+package com.example.data
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class GlobalProductUsageTest {
+    @Test
+    fun recentUsageRanksBeforeOlderHighCount() {
+        val now = 1_800_000_000_000L
+        val staleLeader = usage("old", count = 1_000, lastViewedAt = now - 70L * DAY)
+        val recent = usage("recent", count = 12, lastViewedAt = now)
+
+        val ranked = rankGloballyMostUsedProducts(
+            listOf(staleLeader, recent),
+            nowMillis = now
+        )
+
+        assertEquals(listOf("recent", "old"), ranked.map { it.code })
+    }
+
+    @Test
+    fun totalUsageBreaksTieWhenRecencyMatches() {
+        val now = 1_800_000_000_000L + HOUR
+        val ranked = rankGloballyMostUsedProducts(
+            listOf(
+                usage("less", count = 4, lastViewedAt = now),
+                usage("more", count = 9, lastViewedAt = now)
+            ),
+            nowMillis = now
+        )
+
+        assertEquals(listOf("more", "less"), ranked.map { it.code })
+    }
+
+    @Test
+    fun productsNeverOpenedAreNotShown() {
+        val now = 1_800_000_000_000L + 2L * HOUR
+        val ranked = rankGloballyMostUsedProducts(
+            listOf(usage("unused", count = 0, lastViewedAt = null)),
+            nowMillis = now
+        )
+
+        assertEquals(emptyList<Product>(), ranked)
+    }
+
+    @Test
+    fun rankingRefreshesImmediatelyWhenRecencyChanges() {
+        val now = 1_800_000_000_000L + 3L * HOUR
+        val initial = rankGloballyMostUsedProducts(
+            listOf(
+                usage("leader", count = 20, lastViewedAt = now),
+                usage("challenger", count = 10, lastViewedAt = now - 1_000L)
+            ),
+            nowMillis = now
+        )
+        val refreshed = rankGloballyMostUsedProducts(
+            listOf(
+                usage("leader", count = 20, lastViewedAt = now),
+                usage("challenger", count = 11, lastViewedAt = now + 1_000L)
+            ),
+            nowMillis = now + 2_000L
+        )
+
+        assertEquals(listOf("leader", "challenger"), initial.map { it.code })
+        assertEquals(listOf("challenger", "leader"), refreshed.map { it.code })
+    }
+
+    @Test
+    fun latestAddedUsesCreationDateAndSkipsUnknownDates() {
+        val newest = usage("newest", count = 0, lastViewedAt = null, createdAt = 300L)
+        val older = usage("older", count = 0, lastViewedAt = null, createdAt = 100L)
+        val unknown = usage("unknown", count = 0, lastViewedAt = null)
+
+        val ranked = rankLatestAddedProducts(listOf(older, unknown, newest))
+
+        assertEquals(listOf("newest", "older"), ranked.map { it.code })
+    }
+
+    @Test
+    fun partialCacheNeverDeletesProductsStoredOnDevice() {
+        val retained = usage("retained", 2, 100L).product
+        val cached = usage("cached", 3, 200L)
+        assertEquals(emptyList<Product>(), ProductCatalogSnapshot(listOf(cached), true)
+            .productsToDelete(listOf(retained, cached.product)))
+        assertEquals(emptyList<Product>(), ProductCatalogSnapshot(emptyList(), true)
+            .productsToDelete(listOf(retained)))
+    }
+
+    @Test
+    fun confirmedServerSnapshotStillRemovesDeletedProducts() {
+        val deleted = usage("deleted", 2, 100L).product
+        val retained = usage("retained", 3, 200L)
+        assertEquals(listOf(deleted), ProductCatalogSnapshot(listOf(retained), false)
+            .productsToDelete(listOf(deleted, retained.product)))
+        assertEquals(listOf(deleted), ProductCatalogSnapshot(emptyList(), false)
+            .productsToDelete(listOf(deleted)))
+    }
+
+    private fun usage(
+        code: String,
+        count: Int,
+        lastViewedAt: Long?,
+        createdAt: Long? = null
+    ) = GlobalProductUsage(
+        product = Product(
+            code = code,
+            name = code,
+            searchName = code,
+            category = "Mercearia",
+            searchCount = count
+        ),
+        lastViewedAt = lastViewedAt,
+        createdAt = createdAt
+    )
+
+    private companion object {
+        const val HOUR = 60L * 60L * 1000L
+        const val DAY = 24L * HOUR
+    }
+}
