@@ -55,15 +55,16 @@ fun EncartesScreen(onNavigateBack: () -> Unit) {
     val selected = encartes.firstOrNull { it.id == selectedId && it.isActive() }
     val goBack = { if (selectedId != null) selectedId = null else onNavigateBack() }
     BackHandler(onBack = goBack)
-    Scaffold(topBar = {
-        TopAppBar(title = { Text(if (selected != null) selected.name else "Encartes") },
+    Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0), topBar = {
+        TopAppBar(windowInsets = WindowInsets(0, 0, 0, 0), title = { Text(if (selected != null) selected.name else "Encartes") },
             navigationIcon = { IconButton(onClick = goBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar") } },
-            actions = { IconButton(onClick = { refreshKey++ }, enabled = !loading) { Icon(Icons.Default.Refresh, "Atualizar encartes") } })
+            actions = { IconButton(onClick = { refreshKey++ }, enabled = !loading) { Icon(Icons.Default.Refresh, "Atualizar encartes") }; if (selected == null) EncarteNotificationBell() })
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (selected != null) {
-                DynamicPdfBlock(url = selected.pdf, title = "Natal e região • ${selected.validity}", modifier = Modifier.fillMaxSize())
+                Text("Natal e região • ${selected.validity}", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                EncartePdfReader(url = selected.pdf, modifier = Modifier.weight(1f).fillMaxWidth())
             } else {
                 Text("Natal e região", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(16.dp))
                 when {

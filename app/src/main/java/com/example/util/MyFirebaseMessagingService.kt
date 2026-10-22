@@ -77,6 +77,17 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 return@runBlocking
             }
 
+            if (type == EncarteNotifications.TYPE) {
+                val content = EncarteNotifications.content(EncarteNotifications.mode(applicationContext), message.data) ?: return@runBlocking
+                val id = message.data["encarteId"] ?: return@runBlocking
+                if (EncarteNotifications.alreadyDelivered(applicationContext, id)) return@runBlocking
+                NotificationHelper.showNotification(applicationContext, type, content.first, content.second, notificationTag = "encarte:$id")
+                preferences.addNotification(com.example.data.AppNotification(id = System.currentTimeMillis(), type = type,
+                    title = content.first, body = content.second, read = false, timestamp = System.currentTimeMillis()))
+                EncarteNotifications.markDelivered(applicationContext, id)
+                return@runBlocking
+            }
+
             val remoteTypeEnabled = when (type) {
                 TYPE_NEW_PRODUCT -> remoteSettings.productAddedEnabled
                 TYPE_CODE_CHANGED -> remoteSettings.codeChangedEnabled
@@ -149,6 +160,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             val notificationsEnabled = preferences.notificationsEnabled.first()
             val remoteNotificationsEnabled = FirebaseService.getNotificationSettings().enabled
             val effectiveNotificationsEnabled = notificationsEnabled && remoteNotificationsEnabled
+            runCatching { EncarteNotifications.reconcile(applicationContext, effectiveNotificationsEnabled) }
             FcmTopicSubscription.reconcile(effectiveNotificationsEnabled)
             FcmTopicSubscription.reconcileMasterUpdates(
                 isMaster = FcmTopicSubscription.isMasterAuthenticated(),
@@ -177,7 +189,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             TYPE_PROMOTION_UPDATED,
             TYPE_SCHEDULE_INSERTED,
             TYPE_SCHEDULE_CHANGED,
-            "NEW_INSTALLATION"
+            "NEW_INSTALLATION",
+            EncarteNotifications.TYPE
         )
     }
 }

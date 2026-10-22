@@ -28,3 +28,30 @@ viewer uses the app's existing cache/validation and reader. Supabase credentials
 the tenant OAuth secret never ship in the Android app (only its public anon key).
 
 Verification: `node --test supabase/functions/nrd-encartes/*.test.mjs` and Android CI.
+
+## Opt-in notifications
+
+The list's bell offers a single persisted mode: off, simple, or detailed. Both active
+styles use the same `encartes_natal` FCM topic; the Android receiver chooses exactly one
+message format and deduplicates by the source ID. Detailed messages include the full
+name and validity; simple messages only announce availability. Tapping opens Encartes.
+Android permission and general NRD notification preferences are respected.
+
+The protected POST handler accepts only `sync`, `seed`, or `probe`; no caller may supply
+message content, a recipient, or an upstream URL. It requires platform JWT verification
+and a separate random scheduler capability from Vault. The capability is never in the
+APK or Git. `probe` uses FCM validate-only and sends no actual notification.
+
+Before scheduling, run `seed` once to mark existing active source IDs as known. The job
+checks the source every five minutes, regardless of whether the app is open. The private
+service-role-only outbox claims new IDs with an atomic SQL lease, acknowledges after
+successful FCM delivery and releases failures for retry. Withdrawn, future and expired
+source items are never queued for delivery. Names/validity edits to the same ID do not
+create another notification. Android deduplication handles retries after a lost server
+acknowledgement. Old event rows are removed after 90 days; no media bytes are stored.
+
+Vault setup: `nrd_encartes_scheduler` is a random 32-byte secret; `nrd_encartes_anon_jwt`
+is the project's public legacy anon JWT for cron platform authentication. Firebase
+credentials use the existing server-only `FIREBASE_SERVICE_ACCOUNT` environment variable.
+The notification channel is `encartes`. Delivery also depends on Android/FCM connectivity,
+permissions and battery restrictions; the five-minute scheduler is not a delivery SLA.
