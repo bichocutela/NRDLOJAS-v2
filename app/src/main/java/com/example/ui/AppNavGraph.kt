@@ -64,6 +64,7 @@ private const val ADMIN_LOGIN_TAG = "AdminLogin"
 @Composable
 fun AppNavGraph(
     viewModel: MainViewModel,
+    encarteNotificationNavigationKey: Long = 0L,
     openAboutFromNotification: Boolean = false,
     openPromotionsFromNotification: Boolean = false,
     promotionNotificationNavigationKey: Long = 0L,
@@ -180,6 +181,9 @@ fun AppNavGraph(
         }
     }
 
+    LaunchedEffect(encarteNotificationNavigationKey) {
+        if (encarteNotificationNavigationKey > 0) navController.navigate("encartes") { launchSingleTop = true }
+    }
     LaunchedEffect(openPromotionsFromNotification, promotionNotificationNavigationKey, access.promotions) {
         if (openPromotionsFromNotification && access.promotions) {
             // Launch the new-offers filter, even on a repeated tap while the app is open.

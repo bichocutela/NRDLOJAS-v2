@@ -58,7 +58,7 @@ fun EncartesScreen(onNavigateBack: () -> Unit) {
     Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0), topBar = {
         TopAppBar(windowInsets = WindowInsets(0, 0, 0, 0), title = { Text(if (selected != null) selected.name else "Encartes") },
             navigationIcon = { IconButton(onClick = goBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar") } },
-            actions = { IconButton(onClick = { refreshKey++ }, enabled = !loading) { Icon(Icons.Default.Refresh, "Atualizar encartes") } })
+            actions = { IconButton(onClick = { refreshKey++ }, enabled = !loading) { Icon(Icons.Default.Refresh, "Atualizar encartes") }; if (selected == null) EncarteNotificationBell() })
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())

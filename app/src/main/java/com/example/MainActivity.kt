@@ -93,6 +93,7 @@ class MainActivity : ComponentActivity() {
         MainViewModelFactory(repository, userPreferences)
     }
 
+    private var encarteNotificationNavigationKey by mutableStateOf(0L)
     private var openAboutFromNotification by mutableStateOf(false)
     private var openPromotionsFromNotification by mutableStateOf(false)
     private var promotionNotificationNavigationKey by mutableStateOf(0L)
@@ -107,6 +108,7 @@ class MainActivity : ComponentActivity() {
 
         super.onCreate(savedInstanceState)
         captureSharedOrderPdf(intent)
+        if (intent?.getStringExtra("type") == "NEW_ENCARTE") encarteNotificationNavigationKey = 1L
         openAboutFromNotification = shouldOpenAbout(intent)
         openPromotionsFromNotification = shouldOpenPromotions(intent)
         if (openPromotionsFromNotification) promotionNotificationNavigationKey = 1L
@@ -122,6 +124,7 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             val notificationsEnabled = userPreferences.notificationsEnabled.first()
+            runCatching { com.example.util.EncarteNotifications.reconcile(this@MainActivity, notificationsEnabled) }
             FcmTopicSubscription.reconcile(notificationsEnabled)
             FcmTopicSubscription.reconcileMasterUpdates(
                 isMaster = FcmTopicSubscription.isMasterAuthenticated(),
@@ -306,6 +309,7 @@ class MainActivity : ComponentActivity() {
                             androidx.compose.runtime.key(productNotificationNavigationKey) {
                                 AppNavGraph(
                                 viewModel = viewModel,
+                                encarteNotificationNavigationKey = encarteNotificationNavigationKey,
                                 openAboutFromNotification = openAboutFromNotification,
                                 openPromotionsFromNotification = openPromotionsFromNotification,
                                 promotionNotificationNavigationKey = promotionNotificationNavigationKey,
@@ -358,6 +362,7 @@ class MainActivity : ComponentActivity() {
         if (shouldOpenAbout(intent)) {
             openAboutFromNotification = true
         }
+        if (intent.getStringExtra("type") == "NEW_ENCARTE") encarteNotificationNavigationKey += 1L
         if (shouldOpenPromotions(intent)) {
             openPromotionsFromNotification = true
             promotionNotificationNavigationKey += 1L

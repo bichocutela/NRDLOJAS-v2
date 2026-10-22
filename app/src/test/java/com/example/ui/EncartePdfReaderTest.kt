@@ -44,7 +44,7 @@ class EncartePdfReaderTest {
         val bitmap = Bitmap.createBitmap(400, 600, Bitmap.Config.ARGB_8888)
         compose.setContent { MaterialTheme { EncartePageCanvas(bitmap, 0, Modifier.requiredSize(320.dp, 480.dp)) } }
         val canvas = compose.onNodeWithTag("encarte-page-canvas")
-        canvas.performTouchInput { doubleClick(Offset(size.width * 0.25f, size.height * 0.25f)) }
+        canvas.performTouchInput { doubleClick(center * 0.5f) }
         canvas.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Zoom 250%"))
         canvas.performTouchInput { doubleClick(center) }
         canvas.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Zoom 100%"))
