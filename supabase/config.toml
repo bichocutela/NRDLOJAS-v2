@@ -13,3 +13,6 @@ verify_jwt = false
 [functions.nrd-promotion-control]
 # Firebase JWT and device session are verified in the function.
 verify_jwt = false
+
+[functions.nrd-encartes]
+verify_jwt = true
