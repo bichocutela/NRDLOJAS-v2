@@ -134,6 +134,31 @@ class StoreProductImageRepositoryTest {
         }
     }
 
+    @Test fun explicitInternalCodeAndBarcodeAreSearchedIndependently() = runBlocking {
+        val terms = mutableListOf<String>()
+        val repository = StoreProductImageRepository(client { request ->
+            if (request.method == "POST") 200 to """{"data":"$session"}"""
+            else {
+                terms += request.url.encodedPath
+                200 to if (request.url.encodedPath.contains("/7891149840878/"))
+                    catalog("""{"produto_id":3653,"codigo_erp":"2021000","codigo_barras":"7891149840878","imagem":"$photo"}""")
+                else catalog("")
+            }
+        })
+        assertNotNull(repository.find("251196", "Produto", "7891149840878"))
+        assertTrue(terms.any { it.contains("/251196/") })
+        assertTrue(terms.any { it.contains("/7891149840878/") })
+    }
+
+    @Test fun descriptionMatchesUnitAbbreviationWithoutInventingCode() = runBlocking {
+        val repository = StoreProductImageRepository(client { request ->
+            200 to if (request.method == "POST") """{"data":"$session"}"""
+            else if (request.url.encodedPath.contains("/251196/")) catalog("")
+            else catalog("""{"produto_id":900,"codigo_erp":"501001","descricao":"Alface Americana","imagem":"$photo"}""")
+        })
+        assertNotNull(repository.find("251196", "Alface Americana - Un", ""))
+    }
+
     @Test fun descriptionNeverOverrulesAConflictingValidBarcode() = runBlocking {
         val repository = StoreProductImageRepository(client { request ->
             200 to if (request.method == "POST") """{"data":"$session"}"""

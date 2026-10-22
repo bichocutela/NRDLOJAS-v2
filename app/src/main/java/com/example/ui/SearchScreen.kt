@@ -2174,9 +2174,14 @@ fun ProductCard(
             .padding(if (compactExpressive) 12.dp else 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (product.imageUrl != null) {
+        val displayedImageUrl = rememberOfficialProductImage(
+                code = product.code,
+                name = product.name,
+                existingUrl = product.imageUrl
+            )
+            if (displayedImageUrl != null) {
             AsyncImage(
-                model = product.imageUrl,
+                model = displayedImageUrl,
                 contentDescription = product.name,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -2601,10 +2606,15 @@ fun MiniProductCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top
         ) {
-            if (product.imageUrl != null) {
+            val displayedImageUrl = rememberOfficialProductImage(
+                code = product.code,
+                name = product.name,
+                existingUrl = product.imageUrl
+            )
+            if (displayedImageUrl != null) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(product.imageUrl)
+                        .data(displayedImageUrl)
                         .crossfade(true)
                         .build(),
                     contentDescription = product.name,
@@ -2919,10 +2929,15 @@ fun HistoryItem(
                 )
             }
             Spacer(modifier = Modifier.width(if (compactExpressive) 7.dp else 9.dp))
-            if (product.imageUrl != null) {
+            val displayedImageUrl = rememberOfficialProductImage(
+                code = product.code,
+                name = product.name,
+                existingUrl = product.imageUrl
+            )
+            if (displayedImageUrl != null) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(product.imageUrl)
+                        .data(displayedImageUrl)
                         .crossfade(true)
                         .build(),
                     contentDescription = product.name,

@@ -21,15 +21,16 @@ internal class StoreProductImageRepository(
     private val now: () -> Long = System::currentTimeMillis
 ) {
     private data class Entry(val url: String?, val until: Long)
-    private data class Identity(val code: String, val description: String)
+    private data class Identity(val code: String, val description: String, val barcode: String)
     private val entries = linkedMapOf<Identity, Entry>()
     private val gate = Mutex()
     private var token = ""
     private var tokenUntil = 0L
 
-    suspend fun find(code: String, description: String = ""): String? = withContext(Dispatchers.IO) {
-        val key = Identity(code.trim(), description.trim())
-        if (!key.code.matches(Regex("[0-9]{1,30}")) && key.description.isBlank()) return@withContext null
+    suspend fun find(code: String, description: String = "", barcode: String = ""): String? = withContext(Dispatchers.IO) {
+        val key = Identity(code.trim(), description.trim(), barcode.trim())
+        if (listOf(key.code, key.barcode).none { it.matches(Regex("[0-9]{1,30}")) } &&
+            key.description.isBlank()) return@withContext null
         gate.withLock {
             entries[key]?.takeIf { it.until > now() }?.let { return@withLock it.url }
             var failed = false
@@ -79,9 +80,17 @@ internal class StoreProductImageRepository(
 
     private fun resolve(identity: Identity): String? {
         val records = mutableListOf<JSONObject>()
-        if (identity.code.matches(Regex("[0-9]{1,30}"))) {
-            records += search(identity.code)
-            exactMatches(identity.code, records).takeIf { it.isNotEmpty() }?.let { return photo(it) }
+        // Use both identifiers independently: the ACP internal code and the packaging EAN
+        // need not be equal. Never assume a substring search is an exact identifier match.
+        val identifiers = listOf(identity.code, identity.barcode)
+            .filter { it.matches(Regex("[0-9]{1,30}")) }.distinct()
+        for (identifier in identifiers) {
+            val found = search(identifier)
+            records += found
+            val exact = exactMatches(identifier, found)
+            if (exact.isNotEmpty()) {
+                photo(exact)?.let { return it }
+            }
         }
         if (identity.description.isBlank()) return null
         records += search(identity.description)
@@ -90,10 +99,11 @@ internal class StoreProductImageRepository(
         val query = nameTokens(identity.description)
         if (query.isEmpty()) return null
         val numbers = query.filter { it.any(Char::isDigit) }.toSet()
+        val expectedGtin = listOf(identity.barcode, identity.code).firstOrNull(Gtin::valid)
         val ranked = unique.filter { candidate ->
             val barcode = candidate.optString("codigo_barras")
-            // A description must never overrule two conflicting, valid GTINs.
-            !(Gtin.valid(identity.code) && Gtin.valid(barcode) && !sameBarcode(identity.code, barcode))
+            // A description must never overrule a conflicting, valid GTIN.
+            !(expectedGtin != null && Gtin.valid(barcode) && !sameBarcode(expectedGtin, barcode))
         }.mapNotNull { candidate ->
             val tokens = nameTokens(candidate.optString("descricao"))
             if (tokens.isEmpty() || tokens.filter { it.any(Char::isDigit) }.toSet() != numbers) return@mapNotNull null
@@ -103,7 +113,7 @@ internal class StoreProductImageRepository(
         }.sortedByDescending { it.second }
         val best = ranked.firstOrNull() ?: return null
         val margin = best.second - (ranked.getOrNull(1)?.second ?: 0.0)
-        return if (best.second >= 0.90 && margin >= 0.08) photo(listOf(best.first)) else null
+        return if (best.second >= 0.78 && margin >= 0.10) photo(listOf(best.first)) else null
     }
 
     private fun exactMatches(code: String, records: List<JSONObject>): List<JSONObject> {
@@ -127,7 +137,7 @@ internal class StoreProductImageRepository(
             " ${if (unit in listOf("kg", "mg", "g")) "mass" else "volume"}${amount} "
         }
         return sizes.split(Regex("[^a-z0-9.]+")).map { it.trim('.') }.filter {
-            it.isNotBlank() && it !in setOf("de", "da", "do", "das", "dos", "e")
+            it.isNotBlank() && it !in setOf("de", "da", "do", "das", "dos", "e", "un", "und", "unid", "unidade", "cada")
         }.toSet()
     }
 
