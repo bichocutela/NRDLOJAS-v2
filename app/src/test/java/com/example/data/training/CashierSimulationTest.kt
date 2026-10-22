@@ -63,4 +63,19 @@ class CashierSimulationTest {
         assertEquals(0L, pix.change)
         assertEquals(CashierPage.QR, pix.page)
     }
+    @Test fun registeredLoyaltyCustomerIsNamedThenAskedAboutMissingProducts() {
+        val named = run("ENTRA", "3", "1", "1", "SIM_PIN")
+        assertEquals(CashierPage.CUSTOMER_NAME, named.page)
+        assertTrue(CashierSimulation.operator(named).contains("CLIENTE DE TREINO"))
+        val offers = run("ENTRA", start = named)
+        assertEquals(CashierPage.OFFERS_CONFIRM, offers.page)
+        val question = run("SIM_ASKED", "0", start = offers)
+        assertEquals(CashierPage.MISSING, question.page)
+        assertEquals(CashierPage.SALE, run("SIM_FOUND", start = question).page)
+        val form = run("SIM_MISSING", start = question)
+        assertEquals(CashierPage.MISSING_FORM, run("SIM_SAVE_MISSING", start = form).page)
+        val saved = run("SIM_SAVE_MISSING", start = form.copy(missingName = "Treino", missingPhone = "00000000000", missingProduct = "Tomate"))
+        assertEquals(CashierPage.SALE, saved.page)
+        assertEquals("Tomate", saved.missingProduct)
+    }
 }

@@ -3,7 +3,7 @@ package com.example.data.training
 import java.util.Locale
 
 /** Local educational state only. No payment, CPF lookup or SMS is sent. */
-enum class CashierPage { AVAILABLE, CLUB, CLUB_METHOD, MAGNETIC, AGREEMENT, CPF, CNPJ, CNPJ_ERROR, UNREGISTERED, PHONE, LOYALTY, LOYALTY_CPF, IDENTIFY, SALE, FUNCTION, PARKING, STAMPS, RECEIVE, TEF, DEBIT_FORM, DEBIT_TYPE, CREDIT_FORM, CREDIT_TYPE, WALLET, PIX_CHANGE, PIX_CONFIRM, CARD, QR, AUTHORIZED, CANCEL_CARD, CANCEL_PIX, RECEIPT, DONATION, DONE }
+enum class CashierPage { AVAILABLE, CLUB, CLUB_METHOD, MAGNETIC, AGREEMENT, CPF, CNPJ, CNPJ_ERROR, UNREGISTERED, PHONE, CUSTOMER_NAME, OFFERS_CONFIRM, MISSING, MISSING_FORM, LOYALTY, LOYALTY_CPF, IDENTIFY, SALE, FUNCTION, PARKING, STAMPS, RECEIVE, TEF, DEBIT_FORM, DEBIT_TYPE, CREDIT_FORM, CREDIT_TYPE, WALLET, PIX_CHANGE, PIX_CONFIRM, CARD, QR, AUTHORIZED, CANCEL_CARD, CANCEL_PIX, RECEIPT, DONATION, DONE }
 data class PracticeItem(val code: String, val name: String, val cents: Long)
 data class CashierSession(
     val page: CashierPage = CashierPage.AVAILABLE, val input: String = "",
@@ -11,7 +11,8 @@ data class CashierSession(
     val cash: Boolean = false, val received: Long = 0, val change: Long = 0,
     val loyalty: Boolean = false, val registered: Boolean = true, val stamps: Boolean = false,
     val cpfReturn: CashierPage = CashierPage.IDENTIFY, val paymentReturn: CashierPage = CashierPage.CARD,
-    val compact: Boolean = true, val notice: String = ""
+    val compact: Boolean = true, val notice: String = "",
+    val customerName: String = "", val missingName: String = "", val missingPhone: String = "", val missingProduct: String = ""
 ) { val total get() = items.sumOf { it.cents } }
 object CashierSimulation {
     val products = listOf(PracticeItem("250008", "TOMATE", 599), PracticeItem("250095", "ABACAXI", 799), PracticeItem("253827", "BANANA PRATA", 499))
@@ -36,14 +37,19 @@ object CashierSimulation {
             CashierPage.MAGNETIC, CashierPage.AGREEMENT -> if(key == "SIM_CARD") go(CashierPage.LOYALTY) else s
             CashierPage.LOYALTY -> when(key) { "1" -> go(CashierPage.LOYALTY_CPF); "3" -> go(CashierPage.IDENTIFY); else -> s }
             CashierPage.LOYALTY_CPF -> when(key) { "1" -> s.copy(page = CashierPage.CPF, cpfReturn = CashierPage.IDENTIFY, loyalty = true, input = ""); "0" -> go(CashierPage.IDENTIFY); else -> s }
-            CashierPage.IDENTIFY -> when(key) { "1" -> s.copy(page = CashierPage.CPF, cpfReturn = CashierPage.SALE, loyalty = false); "3" -> go(CashierPage.CNPJ); "0" -> s.copy(page = CashierPage.SALE, noteOpen = true, input = ""); else -> s }
+            CashierPage.CUSTOMER_NAME -> if(key == "ENTRA") go(CashierPage.OFFERS_CONFIRM) else s
+            CashierPage.OFFERS_CONFIRM -> if(key == "SIM_ASKED") go(CashierPage.IDENTIFY) else s
+            CashierPage.MISSING -> when(key) { "SIM_MISSING" -> go(CashierPage.MISSING_FORM).copy(missingName = s.customerName); "SIM_FOUND" -> go(CashierPage.SALE).copy(noteOpen = true); else -> s }
+            CashierPage.MISSING_FORM -> if(key == "SIM_SAVE_MISSING" && s.missingName.isNotBlank() && s.missingPhone.isNotBlank() && s.missingProduct.isNotBlank()) go(CashierPage.SALE).copy(noteOpen = true, notice = "Anotação de treino concluída: ${s.missingName}, ${s.missingPhone}, ${s.missingProduct}. Entregue a nota conforme o procedimento da loja.") else s.copy(notice = "Preencha nome, telefone e produto que faltou.")
+            CashierPage.IDENTIFY -> when(key) { "1" -> s.copy(page = CashierPage.CPF, cpfReturn = CashierPage.SALE, loyalty = false); "3" -> go(CashierPage.CNPJ); "0" -> s.copy(page = if(s.customerName.isNotBlank()) CashierPage.MISSING else CashierPage.SALE, noteOpen = true, input = ""); else -> s }
             CashierPage.CPF -> if(key == "SIM_PIN") {
                 if(s.loyalty && !s.registered) go(CashierPage.UNREGISTERED)
-                else s.copy(page = s.cpfReturn, noteOpen = s.noteOpen || s.cpfReturn == CashierPage.SALE, input = "")
+                else if(s.loyalty) s.copy(page = CashierPage.CUSTOMER_NAME, customerName = "CLIENTE DE TREINO", input = "")
+                else s.copy(page = if(s.cpfReturn == CashierPage.SALE && s.customerName.isNotBlank()) CashierPage.MISSING else s.cpfReturn, noteOpen = s.noteOpen || s.cpfReturn == CashierPage.SALE, input = "")
             } else s
             CashierPage.UNREGISTERED -> if(key == "ENTRA") go(CashierPage.PHONE) else s
             CashierPage.PHONE -> if(key == "SIM_PIN") s.copy(page = s.cpfReturn, input = "", notice = "Oriente o cliente: você receberá um SMS para concluir o cadastro em casa. (SMS apenas simulado.)") else s
-            CashierPage.CNPJ -> if(key == "SIM_PIN") s.copy(page = CashierPage.SALE, noteOpen = true) else s
+            CashierPage.CNPJ -> if(key == "SIM_PIN") s.copy(page = if(s.customerName.isNotBlank()) CashierPage.MISSING else CashierPage.SALE, noteOpen = true) else s
             CashierPage.CNPJ_ERROR -> if(key == "0") go(CashierPage.IDENTIFY) else s
             CashierPage.SALE -> when {
                 digit -> s.copy(input = (s.input + key).take(6), notice = "")
@@ -92,6 +98,9 @@ object CashierSimulation {
         CashierPage.CNPJ_ERROR -> "CNPJ CLIENTE"
         CashierPage.UNREGISTERED -> "NAO CADASTRADO"
         CashierPage.PHONE -> "DDD+TELEFONE\n(PIN PAD)"
+        CashierPage.CUSTOMER_NAME, CashierPage.OFFERS_CONFIRM -> s.customerName
+        CashierPage.MISSING -> "CONSULTA DO OPERADOR"
+        CashierPage.MISSING_FORM -> "ANOTAR PRODUTO EM FALTA"
         CashierPage.SALE -> if(s.input.isNotEmpty()) "1,000 X CODIGO\n${s.input}" else s.items.lastOrNull()?.let { "1 X ${it.name}\n${money(it.cents)}" } ?: "1,000 X CODIGO"
         CashierPage.FUNCTION -> "FUNCAO\n${s.input}"
         CashierPage.PARKING -> "CARTAO ESTACIONAMENTO"

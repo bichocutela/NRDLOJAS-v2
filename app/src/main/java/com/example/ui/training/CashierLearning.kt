@@ -53,12 +53,16 @@ internal fun CashierLearning(config: TrainingConfig) {
         CashierPage.AVAILABLE -> "Pressione ENTRAR, a tecla amarela, para iniciar."
         CashierPage.CLUB, CashierPage.LOYALTY -> "Pergunte ao cliente e escolha 1 — Sim ou 3 — Não."
         CashierPage.CLUB_METHOD -> "Escolha 1 — Magnética, 2 — Cartão ou 3 — CPF."
-        CashierPage.IDENTIFY -> "1 — CPF na nota, 3 — CNPJ na nota, 0 — Sair e abrir/retomar a nota."
+        CashierPage.IDENTIFY -> "Pergunte se deseja Nota Potiguar. 1 — CPF na nota, 3 — CNPJ na nota, 0 — Sair e abrir/retomar a nota."
         CashierPage.SALE -> "Digite um código dos balões e pressione ENTRAR. TOTAL encerra os itens; ENTRAR sem código identifica o cliente; FUNÇÃO + 514 abre Nordestão pra Você."
         CashierPage.PARKING -> "Bipe o cartão de estacionamento ou pressione ANULA se o cliente não tiver."
         CashierPage.RECEIVE -> "Dinheiro: digite o valor recebido em centavos (5000 = R$ 50,00) e pressione DINHEIRO. Para cartões ou Pix, pressione TEF."
         CashierPage.TEF, CashierPage.DEBIT_FORM, CashierPage.DEBIT_TYPE, CashierPage.CREDIT_FORM, CashierPage.CREDIT_TYPE, CashierPage.WALLET -> "Olhe o visor do cliente: toque nele para ampliar e escolher a opção correta. Cartões alimentação também podem seguir o caminho débito, conforme o roteiro da loja."
         CashierPage.CPF, CashierPage.CNPJ -> "Peça ao cliente para digitar o documento no PINpad. Use o botão de simulação abaixo; não informe dados reais."
+        CashierPage.CUSTOMER_NAME -> "Diga o nome do cliente: ${session.customerName}. Pressione ENTRAR para praticar a pergunta sobre ativação de ofertas."
+        CashierPage.OFFERS_CONFIRM -> "${session.customerName}, você já ativou as ofertas? Faça essa pergunta antes de perguntar se deseja Nota Potiguar. Esta é uma orientação verbal; o simulador não ativa ofertas reais."
+        CashierPage.MISSING -> "${session.customerName}, procurou tudo que procurava ou faltou algum produto? Se faltou, dê a nota e anote nome, telefone e produto. Esta é uma orientação verbal, sem tecla numérica atribuída."
+        CashierPage.MISSING_FORM -> "Pratique a anotação usando dados fictícios. Anote nome, telefone e o produto que faltou antes de seguir."
         CashierPage.UNREGISTERED -> "Cliente não cadastrado. Pressione ENTRAR para simular a próxima tela de telefone."
         CashierPage.PHONE -> "Peça DDD + celular no PINpad e informe: você receberá um SMS para concluir o cadastro em casa."
         CashierPage.CNPJ_ERROR -> "Cliente desistiu do CNPJ: digite 0 para sair. O retorno à identificação é demonstrativo, ainda a confirmar."
@@ -89,6 +93,17 @@ internal fun CashierLearning(config: TrainingConfig) {
         CashierSimulation.products.forEach { p -> SuggestionChip(onClick = { session = session.copy(input = p.code) }, label = { Text("${p.name}\n${p.code}", fontSize = 10.sp) }) }
     }
     when(session.page) {
+        CashierPage.OFFERS_CONFIRM -> Button(onClick = { press("SIM_ASKED") }) { Text("Pergunta sobre ofertas realizada") }
+        CashierPage.MISSING -> {
+            Button(onClick = { press("SIM_MISSING") }) { Text("Cliente informa que faltou produto") }
+            OutlinedButton(onClick = { press("SIM_FOUND") }) { Text("Cliente encontrou tudo") }
+        }
+        CashierPage.MISSING_FORM -> {
+            OutlinedTextField(value = session.missingName, onValueChange = { session = session.copy(missingName = it.take(100)) }, label = { Text("Nome fictício") })
+            OutlinedTextField(value = session.missingPhone, onValueChange = { session = session.copy(missingPhone = it.take(20)) }, label = { Text("Telefone fictício") })
+            OutlinedTextField(value = session.missingProduct, onValueChange = { session = session.copy(missingProduct = it.take(160)) }, label = { Text("Produto que faltou") })
+            Button(onClick = { press("SIM_SAVE_MISSING") }) { Text("Concluir anotação de treino") }
+        }
         CashierPage.CPF, CashierPage.CNPJ, CashierPage.PHONE, CashierPage.PIX_CONFIRM -> Button(onClick = { press("SIM_PIN") }) { Text("Simular confirmação no PINpad") }
         CashierPage.MAGNETIC, CashierPage.AGREEMENT, CashierPage.PARKING -> Button(onClick = { press("SIM_CARD") }) { Text("Simular leitura do cartão") }
         CashierPage.CARD, CashierPage.QR -> Button(onClick = { press("SIM_APPROVE") }) { Text("Simular pagamento autorizado") }
