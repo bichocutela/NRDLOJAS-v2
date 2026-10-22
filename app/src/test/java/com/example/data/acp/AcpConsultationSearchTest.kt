@@ -61,6 +61,17 @@ class AcpConsultationSearchTest {
         assertTrue((first.items + second.items).all { it.provider == "legacy" })
     }
 
+    @Test fun liveSuggestionReadsOnlyTheFirstServerPage() = runBlocking {
+        val server = Server((0..300).reversed().map { row(it, "KitKat ${it}g") })
+        val result = server.api().searchProductsSuggestion("kitkat")
+        assertEquals(20, result.items.size)
+        assertEquals(301, result.totalCount)
+        assertEquals(16, result.totalPages)
+        assertEquals(1, server.queries.size)
+        assertEquals("20", server.queries.single().url.queryParameter("pageSize"))
+        assertEquals("kitkat", server.queries.single().url.queryParameter("description"))
+    }
+
     @Test fun hashFilterFindsMatchesInLaterUpstreamPagesWithoutAnEmptyFirstPage() = runBlocking {
         val server = Server((0..249).map { row(it, "Amaciante Downy 500ml") } +
             listOf(row(250, "Amaciante Downy 1L"), row(251, "Amaciante Downy 1000ml")))
