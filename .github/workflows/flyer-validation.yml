@@ -11,6 +11,9 @@ on:
       - '.github/workflows/flyer-validation.yml'
   workflow_dispatch:
 
+concurrency:
+  group: flyer-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 
@@ -20,12 +23,23 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        if: github.event_name == 'pull_request'
+        with:
+          node-version: '24'
+      - name: Verify shared Android test coverage
+        if: github.event_name == 'pull_request'
+        run: node --test tests/ci/*.test.mjs
       - uses: actions/setup-java@v4
+        if: github.event_name != 'pull_request'
         with:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
+        if: github.event_name != 'pull_request'
       - name: Verify wrapper integrity
+        if: github.event_name != 'pull_request'
         uses: gradle/actions/wrapper-validation@v4
       - name: Compile and run flyer tests
+        if: github.event_name != 'pull_request'
         run: bash gradlew testDebugUnitTest --tests 'com.example.data.flyer.*' -x processDebugGoogleServices
