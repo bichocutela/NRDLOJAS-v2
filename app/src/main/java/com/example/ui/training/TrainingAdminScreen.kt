@@ -188,7 +188,13 @@ private fun TrainingImageField(label: String, value: String, enabled: Boolean, o
         }
     }
     Column {
-        TrainingField("$label (link HTTPS)", value, enabled && !busy, onChange)
+        TrainingField("$label (link ou Google Drive)", value, enabled && !busy) { onChange(it.trim()) }
+        Text("Aceita link direto ou compartilhamento do Google Drive. No Drive, libere a imagem para qualquer pessoa com o link.", style = MaterialTheme.typography.bodySmall)
+        if (value.isNotBlank()) {
+            var failed by remember(value) { mutableStateOf(false) }
+            coil.compose.AsyncImage(model = TrainingImageUrl.normalize(value), contentDescription = "Prévia: $label", modifier = Modifier.fillMaxWidth().height(120.dp), onError = { failed = true })
+            if (failed) Text("Não foi possível carregar a imagem. Confira o link e a permissão de compartilhamento.", color = MaterialTheme.colorScheme.error)
+        }
         TextButton(enabled = enabled && !busy, onClick = { picker.launch("image/*") }) { Text(if (busy) "Enviando imagem…" else "Escolher imagem do aparelho") }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }

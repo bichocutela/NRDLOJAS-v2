@@ -103,7 +103,7 @@ private fun TrainingDisplay(text: String, image: String, customer: Boolean) {
     Column(Modifier.fillMaxWidth().background(if (customer) Color(0xFF101820) else Color(0xFFC8D77D), RoundedCornerShape(12.dp)).padding(16.dp)) {
         Text(if (customer) "VISOR DO CLIENTE" else "VISOR DO OPERADOR", color = if (customer) Color(0xFFE8F8FF) else Color(0xFF526126), fontSize = 11.sp)
         Text(text, color = if (customer) Color(0xFFE8F8FF) else Color(0xFF526126), fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.heightIn(min = 50.dp))
-        if (image.isNotBlank()) AsyncImage(model = image, contentDescription = "Imagem do visor", modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp))
+        if (image.isNotBlank()) AsyncImage(model = TrainingImageUrl.normalize(image), contentDescription = "Imagem do visor", modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp))
     }
 }
 
