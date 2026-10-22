@@ -58,7 +58,7 @@ jobs:
       run: node scripts/check-account-admin-permissions.mjs
 
     - name: Test ACP promotion authorization
-      run: node --test supabase/functions/nrd-price-gateway/*.test.mjs supabase/functions/nrd-promotion-control/*.test.mjs supabase/functions/nrd-encartes/*.test.mjs
+      run: node --test supabase/functions/send-fcm/*.test.mjs supabase/functions/nrd-price-gateway/*.test.mjs supabase/functions/nrd-promotion-control/*.test.mjs supabase/functions/nrd-encartes/*.test.mjs
 
     - name: Test account and installation event authorization
       run: node --test supabase/functions/nrd-account-admin/*.test.mjs supabase/functions/nrd-installation-event/handler.test.mjs tests/days-off/sync.test.mjs
@@ -180,6 +180,8 @@ jobs:
           --tests 'com.example.data.ProductRepositorySearchTest' \
           --tests 'com.example.data.RestrictedAccessLoginTest' \
           --tests 'com.example.data.UpdatePolicyTest' \
+          --tests 'com.example.data.training.*' \
+          --tests 'com.example.ui.training.*' \
           --tests 'com.example.data.StoreEncarteTest' \
           --tests 'com.example.data.DynamicPageScheduleTest' \
           --tests 'com.example.data.DynamicPageCodecTest' \

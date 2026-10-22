@@ -65,6 +65,7 @@ private const val ADMIN_LOGIN_TAG = "AdminLogin"
 fun AppNavGraph(
     viewModel: MainViewModel,
     encarteNotificationNavigationKey: Long = 0L,
+    trainingNotificationNavigationKey: Long = 0L,
     openAboutFromNotification: Boolean = false,
     openPromotionsFromNotification: Boolean = false,
     promotionNotificationNavigationKey: Long = 0L,
@@ -111,6 +112,7 @@ fun AppNavGraph(
     var profileRefreshKey by remember { mutableIntStateOf(0) }
     var requestedProfileSection by remember { mutableStateOf<String?>(null) }
     var profileFocusRequestKey by remember { mutableLongStateOf(0L) }
+    val trainingConfig by remember { com.example.data.training.TrainingRepository.observe() }.collectAsState(initial = null)
     val firebaseAuth = remember { FirebaseAuth.getInstance() }
     val access by remember { com.example.data.RestrictedAccessRepository.observe() }.collectAsState(initial = com.example.data.RestrictedAccess(loading = true))
     val initialRole = remember(firebaseAuth) { managementRoleForEmail(firebaseAuth.currentUser?.email) }
@@ -181,6 +183,13 @@ fun AppNavGraph(
         }
     }
 
+    var consumedTrainingNotification by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(trainingNotificationNavigationKey, trainingConfig?.visibility) {
+        if (trainingNotificationNavigationKey > consumedTrainingNotification && trainingConfig?.visibility == com.example.data.training.TrainingVisibility.ALL) {
+            consumedTrainingNotification = trainingNotificationNavigationKey
+            navController.navigate("training") { launchSingleTop = true }
+        }
+    }
     LaunchedEffect(encarteNotificationNavigationKey) {
         if (encarteNotificationNavigationKey > 0) navController.navigate("encartes") { launchSingleTop = true }
     }
@@ -258,6 +267,8 @@ fun AppNavGraph(
                     showMyProfile = access.profile,
                     showPromotions = access.promotions,
                     showPrices = access.prices,
+                    showTraining = trainingConfig?.visibleTo(isLoggedIn && userRole == "mestre") == true,
+                    onGoToTraining = { navController.navigate("training"); scope.launch { drawerState.close() } },
                     myProfilePhotoModel = drawerProfilePhotoModel,
                     myProfileName = drawerEmployeeProfile?.name,
                     onLoginSuccess = { role ->
@@ -355,7 +366,7 @@ fun AppNavGraph(
                 }
                 composable("mestre") {
                     ProtectedManagementRoute(isLoggedIn, userRole, setOf("mestre"), { navController.navigateToSearch() }) {
-                        MestreScreen(viewModel, { navController.navigate("admin") }, { navController.navigate("manage_tabs") }, { navController.navigate("manage_products") }, { navController.popBackStack() })
+                        MestreScreen(viewModel, { navController.navigate("admin") }, { navController.navigate("manage_tabs") }, { navController.navigate("manage_products") }, { navController.popBackStack() }, onNavigateToTraining = { navController.navigate("training_admin") })
                     }
                 }
                 composable("mestre/banner/{themeKey}") { backStackEntry ->
@@ -367,8 +378,25 @@ fun AppNavGraph(
                             onNavigateToManageTabs = { navController.navigate("manage_tabs") },
                             onNavigateToManageProducts = { navController.navigate("manage_products") },
                             onNavigateBack = { navController.popBackStack() },
+                            onNavigateToTraining = { navController.navigate("training_admin") },
                             quickEditThemeKey = themeKey
                         )
+                    }
+                }
+                composable("training") {
+                    val config = trainingConfig
+                    if (config != null && config.visibleTo(isLoggedIn && userRole == "mestre")) {
+                        com.example.ui.training.TrainingScreen(config, { navController.popBackStack() })
+                    } else {
+                        Column(Modifier.fillMaxSize().padding(24.dp)) {
+                            Text("Treinamento indisponível no momento.")
+                            TextButton(onClick = { navController.popBackStack() }) { Text("Voltar") }
+                        }
+                    }
+                }
+                composable("training_admin") {
+                    ProtectedManagementRoute(isLoggedIn, userRole, setOf("mestre"), { navController.navigateToSearch() }) {
+                        com.example.ui.training.TrainingAdminScreen { navController.popBackStack() }
                     }
                 }
                 composable("manage_tabs") {
@@ -706,7 +734,9 @@ fun LoginDrawerContent(
     onGoToEncartes: () -> Unit,
     onGoToAbout: () -> Unit,
     onGoToDynamicTab: (Int) -> Unit,
-    onGoToAcp: () -> Unit = {}
+    onGoToAcp: () -> Unit = {},
+    showTraining: Boolean = false,
+    onGoToTraining: () -> Unit = {}
 ) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -929,6 +959,14 @@ fun LoginDrawerContent(
         HorizontalDivider()
         Spacer(modifier = Modifier.height(10.dp))
 
+        if (showTraining) {
+            TextButton(onClick = onGoToTraining, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.School, contentDescription = null)
+                Spacer(Modifier.width(12.dp))
+                Text("Treinamento")
+            }
+            Spacer(Modifier.height(8.dp))
+        }
         val dynamicTabs by viewModel.dynamicTabs.collectAsState()
         val supportedDynamicTabs = dynamicTabs.filter { tab ->
             val supported = tab.type == "text" ||

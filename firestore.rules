@@ -67,9 +67,25 @@ service cloud.firestore {
 
     // Configurações globais precisam ser lidas por todos os aparelhos, mas só
     // podem ser publicadas por perfis administrativos autenticados.
-    match /config/{document} {
+    match /config/training_access {
       allow read: if true;
-      allow write: if document != 'restricted_access' && document != 'update_policy' && isManager();
+      allow create, update: if isMaster() && request.resource.data.keys().hasOnly(['visibility', 'revision']) &&
+        request.resource.data.visibility in ['OFF', 'TEST', 'ALL'] && request.resource.data.revision is int;
+      allow delete: if isMaster();
+    }
+    match /config/training {
+      allow get: if isMaster() || resource.data.visibility == 'ALL';
+      allow create, update: if isMaster() &&
+        request.resource.data.keys().hasOnly(['visibility', 'revision', 'payload']) &&
+        request.resource.data.visibility in ['OFF', 'TEST', 'ALL'] &&
+        request.resource.data.revision is int && request.resource.data.payload is string &&
+        request.resource.data.payload.size() <= 700000;
+      allow delete: if isMaster();
+    }
+    match /training_announcements/{id} { allow read, write: if false; }
+    match /config/{document} {
+      allow read: if document != 'training';
+      allow write: if document != 'training_access' && document != 'training' && document != 'restricted_access' && document != 'update_policy' && isManager();
       allow create, update: if document == 'restricted_access' && isMaster() &&
         request.resource.data.keys().hasOnly(['publicAccess']) && request.resource.data.publicAccess is bool;
       allow delete: if document == 'restricted_access' && isMaster();

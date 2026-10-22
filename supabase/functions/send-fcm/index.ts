@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import * as jose from "https://deno.land/x/jose@v4.14.4/index.ts";
 
+import { publishTraining } from "./training-notification.mjs";
+
 const projectId = "appcodigo-7f245";
 const issuer = `https://securetoken.google.com/${projectId}`;
 const certUrl = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com";
@@ -223,6 +225,13 @@ serve(async (request) => {
     const role = roleFor(identity);
     if (!role) return json({ ok: false, error: "Usuário não autorizado para esta ação" }, 403);
     if (body.action === "VALIDATE_MANAGE_ACCESS") return json({ ok: true, role });
+    if (body.action === "PUBLISH_TRAINING") {
+      if (role !== "mestre") return json({ ok: false, error: "Somente o Mestre pode publicar treinamentos" }, 403);
+      const training = await publishTraining({ role, id: body.trainingId, project: accountProject,
+        firestoreToken: await accessToken(account, "https://www.googleapis.com/auth/datastore"),
+        messagingToken: await accessToken(account, "https://www.googleapis.com/auth/firebase.messaging") });
+      return json(training.result, training.status);
+    }
     if (body.action === "PUBLISH_WORK_SCHEDULE") {
       const title = body.title;
       const messageBody = body.body;
