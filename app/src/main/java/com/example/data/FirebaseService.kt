@@ -1745,22 +1745,19 @@ object FirebaseService {
         }
     }
 
+    private val publicAppearanceReader by lazy {
+        RevalidatingJsonReader(appearanceHttpClient, ::parsePublicAppearanceManifest)
+    }
+
     private suspend fun fetchPublicAppearanceSettings(): AppearanceSettings? = withContext(Dispatchers.IO) {
-        val supabaseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
-        if (supabaseUrl.isBlank()) return@withContext null
+        val baseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
+        if (baseUrl.isBlank()) return@withContext null
         val request = Request.Builder()
-            .url("$supabaseUrl/storage/v1/object/public/nrdlojas-images/$APPEARANCE_MANIFEST_PATH?ts=${System.currentTimeMillis()}")
-            .get()
-            .header("Cache-Control", "no-cache")
-            .build()
-        runCatching {
-            appearanceHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@use null
-                parsePublicAppearanceManifest(response.body?.string().orEmpty())
-            }
-        }.onFailure { error ->
-            Log.w("FirebaseService", "Manifesto público de aparência indisponível", error)
-        }.getOrNull()
+            .url("$baseUrl/storage/v1/object/public/nrdlojas-images/$APPEARANCE_MANIFEST_PATH")
+            .get().build()
+        runCatching { publicAppearanceReader.read(request, 60_000L) }
+            .onFailure { Log.w("FirebaseService", "Manifesto público de aparência indisponível", it) }
+            .getOrNull()
     }
 
     private fun parsePublicAppearanceManifest(raw: String): AppearanceSettings? = runCatching {

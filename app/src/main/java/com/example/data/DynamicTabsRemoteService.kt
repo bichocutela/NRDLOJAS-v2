@@ -1,6 +1,12 @@
 package com.example.data
 
 import android.util.Log
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.SharingStarted
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -25,7 +31,7 @@ import org.json.JSONObject
  */
 object DynamicTabsRemoteService {
     private val client = OkHttpClient()
-    private const val POLL_INTERVAL_MS = 5_000L
+    private const val POLL_INTERVAL_MS = 30_000L
 
     @Volatile
     var lastError: String? = null
@@ -154,15 +160,17 @@ object DynamicTabsRemoteService {
      * A leitura é pública e leve; alterações do Mestre chegam aos aparelhos sem
      * depender de uma nova versão do APK.
      */
-    fun observe(): Flow<List<DynamicTab>> = flow {
+    private val updates: Flow<List<DynamicTab>> = flow {
         var previous: List<DynamicTab>? = null
         while (currentCoroutineContext().isActive) {
-            val current = fetchAll()
+            val current = if (ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) fetchAll() else null
             if (current != null && current != previous) {
                 emit(current)
                 previous = current
             }
             delay(POLL_INTERVAL_MS)
         }
-    }
+    }.shareIn(CoroutineScope(SupervisorJob() + Dispatchers.IO), SharingStarted.WhileSubscribed(0), replay = 1)
+
+    fun observe(): Flow<List<DynamicTab>> = updates
 }
