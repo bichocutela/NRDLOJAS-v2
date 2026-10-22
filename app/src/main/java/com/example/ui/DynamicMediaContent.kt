@@ -399,7 +399,7 @@ fun DynamicPdfBlock(url: String, title: String, modifier: Modifier = Modifier) {
     }
 }
 
-private fun loadValidatedPdfIntoCache(cacheDir: File, context: android.content.Context, rawUrl: String): File {
+internal fun loadValidatedPdfIntoCache(cacheDir: File, context: android.content.Context, rawUrl: String): File {
     val normalizedUrl = normalizeRemoteMediaUrl(rawUrl)
     val cached = File(cacheDir, "nrd_dynamic_${normalizedUrl.hashCode()}.pdf")
 
