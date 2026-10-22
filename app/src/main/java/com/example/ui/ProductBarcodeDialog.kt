@@ -87,6 +87,19 @@ fun ProductBarcodeDialog(
                 ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
         )
     }
+    // Keep manual photos authoritative; automatic photos are display-only and never saved to Firebase.
+    LaunchedEffect(product.code, product.imageUrl) {
+        if (photoUrl == null) {
+            val found = com.example.data.promotions.StoreProductImageRepository.shared.find(product.code)
+            if (found != null) {
+                val result = context.imageLoader.execute(
+                    coil.request.ImageRequest.Builder(context).data(found).size(720, 720).build()
+                )
+                // Hide the action for missing/broken store photos, without adding any status message.
+                if (result is coil.request.SuccessResult && photoUrl == null) photoUrl = found
+            }
+        }
+    }
     var showPhotoDialog by remember { mutableStateOf(false) }
     val isMaster = managementRoleForEmail(
         com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
