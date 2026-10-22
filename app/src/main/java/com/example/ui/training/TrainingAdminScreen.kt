@@ -37,7 +37,7 @@ fun TrainingAdminScreen(onBack: () -> Unit) {
     var preview by remember { mutableStateOf(false) }
     var confirmExit by remember { mutableStateOf(false) }
     val dirty = draft != saved
-    fun exit() { if (dirty) confirmExit = true else onBack() }
+    fun exit() { if (busy) return; if (dirty) confirmExit = true else onBack() }
     BackHandler { if (preview) preview = false else exit() }
     LaunchedEffect(Unit) {
         try {
@@ -83,21 +83,21 @@ fun TrainingAdminScreen(onBack: () -> Unit) {
                 Text("Teclas e comandos", style = MaterialTheme.typography.titleLarge)
                 Text("Edite inclusive as posições vazias. Variáveis nos textos: {entrada}, {tecla}, {missao}. Comandos operam apenas neste simulador.")
                 var keyId by remember { mutableStateOf(config.keys.first().id) }
-                TrainingPicker("Tecla", config.keys.map { it.id to it.label.ifBlank { "Posição ${it.id} (vazia)" }.replace('\n', ' ') }, keyId) { keyId = it }
+                TrainingPicker("Tecla", config.keys.map { it.id to it.label.ifBlank { "Posição ${it.id} (vazia)" }.replace('\n', ' ') }, keyId, enabled = !busy) { keyId = it }
                 val key = config.keys.firstOrNull { it.id == keyId } ?: config.keys.first()
                 fun keyChange(next: TrainingKey) { draft = config.copy(keys = config.keys.map { if (it.id == key.id) next else it }) }
                 TrainingField("Nome da tecla", key.label, !busy) { keyChange(key.copy(label = it)) }
-                TrainingPicker("Comando", KeyAction.entries.map { it.name to it.title }, key.action.name) { keyChange(key.copy(action = KeyAction.valueOf(it))) }
+                TrainingPicker("Comando", KeyAction.entries.map { it.name to it.title }, key.action.name, enabled = !busy) { keyChange(key.copy(action = KeyAction.valueOf(it))) }
                 if (key.action == KeyAction.APPEND) TrainingField("Valor acrescentado à entrada", key.value, !busy) { keyChange(key.copy(value = it)) }
                 Row { Checkbox(checked = key.overrideGuided, enabled = !busy, onCheckedChange = { keyChange(key.copy(overrideGuided = it)) }); Text("Usar os visores desta tecla também em Aprender e Prova") }
                 TrainingField("Mensagem no visor verde", key.operatorText, !busy) { keyChange(key.copy(operatorText = it)) }
-                TrainingImageField("Imagem no visor verde", key.operatorImage, !busy) { draft = draft?.let { latest -> latest.copy(keys = latest.keys.map { k -> if (k.id == key.id) k.copy(operatorImage = it) else k }) } }
+                TrainingImageField("Imagem no visor verde", key.operatorImage, !busy, { busy = it }) { draft = draft?.let { latest -> latest.copy(keys = latest.keys.map { k -> if (k.id == key.id) k.copy(operatorImage = it) else k }) } }
                 TrainingField("Mensagem no visor do cliente", key.customerText, !busy) { keyChange(key.copy(customerText = it)) }
-                TrainingImageField("Imagem no visor do cliente", key.customerImage, !busy) { draft = draft?.let { latest -> latest.copy(keys = latest.keys.map { k -> if (k.id == key.id) k.copy(customerImage = it) else k }) } }
+                TrainingImageField("Imagem no visor do cliente", key.customerImage, !busy, { busy = it }) { draft = draft?.let { latest -> latest.copy(keys = latest.keys.map { k -> if (k.id == key.id) k.copy(customerImage = it) else k }) } }
                 HorizontalDivider()
                 Text("Treinamentos e etapas", style = MaterialTheme.typography.titleLarge)
                 var missionId by remember { mutableStateOf(config.missions.first().id) }
-                TrainingPicker("Treinamento", config.missions.map { it.id to it.title }, missionId) { missionId = it }
+                TrainingPicker("Treinamento", config.missions.map { it.id to it.title }, missionId, enabled = !busy) { missionId = it }
                 val mission = config.missions.firstOrNull { it.id == missionId } ?: config.missions.first()
                 fun missionChange(next: TrainingMission) { draft = config.copy(missions = config.missions.map { if (it.id == mission.id) next else it }) }
                 TrainingField("Título", mission.title, !busy) { missionChange(mission.copy(title = it)) }
@@ -105,15 +105,15 @@ fun TrainingAdminScreen(onBack: () -> Unit) {
                 Row { Switch(checked = mission.enabled, enabled = !busy, onCheckedChange = { missionChange(mission.copy(enabled = it)) }); Text("  Treinamento disponível") }
                 var stepIndex by remember(mission.id) { mutableIntStateOf(0) }
                 val index = stepIndex.coerceIn(0, mission.steps.lastIndex)
-                TrainingPicker("Etapa", mission.steps.mapIndexed { i, s -> i.toString() to "${i + 1}. ${config.keys.find { it.id == s.keyId }?.label.orEmpty().replace('\n', ' ')}" }, index.toString()) { stepIndex = it.toInt() }
+                TrainingPicker("Etapa", mission.steps.mapIndexed { i, s -> i.toString() to "${i + 1}. ${config.keys.find { it.id == s.keyId }?.label.orEmpty().replace('\n', ' ')}" }, index.toString(), enabled = !busy) { stepIndex = it.toInt() }
                 val step = mission.steps[index]
                 fun stepChange(next: TrainingStep) { missionChange(mission.copy(steps = mission.steps.mapIndexed { i, s -> if (i == index) next else s })) }
-                TrainingPicker("Tecla esperada", config.keys.filter { it.label.isNotBlank() }.map { it.id to it.label.replace('\n', ' ') }, step.keyId) { stepChange(step.copy(keyId = it)) }
+                TrainingPicker("Tecla esperada", config.keys.filter { it.label.isNotBlank() }.map { it.id to it.label.replace('\n', ' ') }, step.keyId, enabled = !busy) { stepChange(step.copy(keyId = it)) }
                 TrainingField("Instrução", step.instruction, !busy) { stepChange(step.copy(instruction = it)) }
                 TrainingField("Mensagem no visor verde da etapa", step.operatorText, !busy) { stepChange(step.copy(operatorText = it)) }
-                TrainingImageField("Imagem no visor verde da etapa", step.operatorImage, !busy) { draft = draft?.let { latest -> latest.copy(missions = latest.missions.map { m -> if (m.id == mission.id) m.copy(steps = m.steps.mapIndexed { i, s -> if (i == index) s.copy(operatorImage = it) else s }) else m }) } }
+                TrainingImageField("Imagem no visor verde da etapa", step.operatorImage, !busy, { busy = it }) { draft = draft?.let { latest -> latest.copy(missions = latest.missions.map { m -> if (m.id == mission.id) m.copy(steps = m.steps.mapIndexed { i, s -> if (i == index) s.copy(operatorImage = it) else s }) else m }) } }
                 TrainingField("Mensagem no visor do cliente da etapa", step.customerText, !busy) { stepChange(step.copy(customerText = it)) }
-                TrainingImageField("Imagem no visor do cliente da etapa", step.customerImage, !busy) { draft = draft?.let { latest -> latest.copy(missions = latest.missions.map { m -> if (m.id == mission.id) m.copy(steps = m.steps.mapIndexed { i, s -> if (i == index) s.copy(customerImage = it) else s }) else m }) } }
+                TrainingImageField("Imagem no visor do cliente da etapa", step.customerImage, !busy, { busy = it }) { draft = draft?.let { latest -> latest.copy(missions = latest.missions.map { m -> if (m.id == mission.id) m.copy(steps = m.steps.mapIndexed { i, s -> if (i == index) s.copy(customerImage = it) else s }) else m }) } }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(enabled = !busy && index > 0, onClick = { val rows = mission.steps.toMutableList(); java.util.Collections.swap(rows, index, index - 1); missionChange(mission.copy(steps = rows)); stepIndex = index - 1 }) { Text("Subir") }
                     TextButton(enabled = !busy && index < mission.steps.lastIndex, onClick = { val rows = mission.steps.toMutableList(); java.util.Collections.swap(rows, index, index + 1); missionChange(mission.copy(steps = rows)); stepIndex = index + 1 }) { Text("Descer") }
@@ -145,17 +145,17 @@ private fun TrainingField(label: String, value: String, enabled: Boolean, onChan
     OutlinedTextField(value = value, onValueChange = onChange, label = { Text(label) }, enabled = enabled, modifier = Modifier.fillMaxWidth())
 }
 @Composable
-private fun TrainingPicker(label: String, options: List<Pair<String, String>>, selected: String, onChange: (String) -> Unit) {
+private fun TrainingPicker(label: String, options: List<Pair<String, String>>, selected: String, enabled: Boolean = true, onChange: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) { Text("$label: ${options.find { it.first == selected }?.second.orEmpty()}") }
+        OutlinedButton(enabled = enabled, onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) { Text("$label: ${options.find { it.first == selected }?.second.orEmpty()}") }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { (id, title) -> DropdownMenuItem(text = { Text(title) }, onClick = { expanded = false; onChange(id) }) }
+            options.forEach { (id, title) -> DropdownMenuItem(enabled = enabled, text = { Text(title) }, onClick = { expanded = false; onChange(id) }) }
         }
     }
 }
 @Composable
-private fun TrainingImageField(label: String, value: String, enabled: Boolean, onChange: (String) -> Unit) {
+private fun TrainingImageField(label: String, value: String, enabled: Boolean, onBusy: (Boolean) -> Unit, onChange: (String) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
@@ -163,7 +163,7 @@ private fun TrainingImageField(label: String, value: String, enabled: Boolean, o
     val currentOnChange by rememberUpdatedState(onChange)
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) scope.launch {
-            busy = true; error = null
+            busy = true; onBusy(true); error = null
             val target = currentOnChange
             try {
                 val url = withContext(Dispatchers.IO) {
@@ -184,7 +184,7 @@ private fun TrainingImageField(label: String, value: String, enabled: Boolean, o
                 }
                 target(url)
             } catch (e: Exception) { error = e.message ?: "Falha ao inserir imagem." }
-            finally { busy = false }
+            finally { busy = false; onBusy(false) }
         }
     }
     Column {
