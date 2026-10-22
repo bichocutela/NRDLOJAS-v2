@@ -78,7 +78,7 @@ internal fun AcpCommercialProductContent(
                         model = productPhoto,
                         contentDescription = "Foto de ${item.description}",
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.size(116.dp).clip(RoundedCornerShape(12.dp)),
+                        modifier = Modifier.size(116.dp).clip(RoundedCornerShape(12.dp)).expandProductPhoto(productPhoto, item.description),
                         onError = { imageFailed = true }
                     )
                 }

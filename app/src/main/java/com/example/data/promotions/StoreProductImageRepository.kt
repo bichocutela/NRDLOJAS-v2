@@ -4,6 +4,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -20,41 +22,57 @@ internal class StoreProductImageRepository(
     private val client: OkHttpClient = OkHttpClient.Builder().callTimeout(12, TimeUnit.SECONDS).build(),
     private val now: () -> Long = System::currentTimeMillis
 ) {
-    private data class Entry(val url: String?, val until: Long)
+    internal data class Lookup(val url: String?, val retryAt: Long? = null)
+    private class Entry {
+        val gate = Mutex()
+        var result = Lookup(null)
+        var until = 0L
+    }
     private data class Identity(val code: String, val description: String, val barcode: String)
     private val entries = linkedMapOf<Identity, Entry>()
-    private val gate = Mutex()
+    private val indexGate = Mutex()
+    private val authenticationGate = Mutex()
+    private val slots = Semaphore(2)
     private var token = ""
     private var tokenUntil = 0L
+    @Volatile private var unavailableUntil = 0L
 
-    suspend fun find(code: String, description: String = "", barcode: String = ""): String? = withContext(Dispatchers.IO) {
+    suspend fun find(code: String, description: String = "", barcode: String = ""): String? =
+        lookup(code, description, barcode).url
+
+    /** No category filter: every visible category shares this cache and bounded request pool. */
+    suspend fun lookup(code: String, description: String = "", barcode: String = ""): Lookup = withContext(Dispatchers.IO) {
         val key = Identity(code.trim(), description.trim(), barcode.trim())
         if (listOf(key.code, key.barcode).none { it.matches(Regex("[0-9]{1,30}")) } &&
-            key.description.isBlank()) return@withContext null
-        gate.withLock {
-            entries[key]?.takeIf { it.until > now() }?.let { return@withLock it.url }
-            var failed = false
-            val url = try {
-                resolve(key)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                failed = true
-                null
+            key.description.isBlank()) return@withContext Lookup(null)
+        val entry = indexGate.withLock {
+            entries[key] ?: Entry().also {
+                while (entries.size >= 256) entries.remove(entries.keys.first())
+                entries[key] = it
             }
-            entries.remove(key)
-            while (entries.size >= 256) entries.remove(entries.keys.first())
-            entries[key] = Entry(url, now() + when {
-                failed -> 60_000L
-                url == null -> 3_600_000L
-                else -> 86_400_000L
-            })
-            url
+        }
+        // Only duplicate requests for the same product wait for one another.
+        entry.gate.withLock {
+            if (entry.until > now()) return@withLock entry.result
+            val result = slots.withPermit {
+                if (unavailableUntil > now()) Lookup(null, unavailableUntil)
+                else try {
+                    Lookup(resolve(key))
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    unavailableUntil = now() + 60_000L
+                    Lookup(null, unavailableUntil)
+                }
+            }
+            entry.result = result
+            entry.until = result.retryAt ?: (now() + if (result.url == null) 3_600_000L else 86_400_000L)
+            result
         }
     }
 
-    private fun authenticate(): String {
-        if (token.isNotEmpty() && tokenUntil > now()) return token
+    private suspend fun authenticate(): String = authenticationGate.withLock {
+        if (token.isNotEmpty() && tokenUntil > now()) return@withLock token
         // Same public storefront identity used by the existing Promotions catalog resolver.
         val body = JSONObject().put("domain", DOMAIN).put("username", "loja")
             .put("key", PUBLIC_KEY).toString().toRequestBody("application/json".toMediaType())
@@ -71,14 +89,14 @@ internal class StoreProductImageRepository(
             if (value.length < 40) throw IOException("Invalid store session")
             token = value
             tokenUntil = now() + 20 * 60_000L
-            return value
+            return@withLock value
         }
     }
 
     private fun request(url: String) = Request.Builder().url(url)
         .header("Accept", "application/json").header("DomainKey", DOMAIN).header("OrganizationId", "52")
 
-    private fun resolve(identity: Identity): String? {
+    private suspend fun resolve(identity: Identity): String? {
         val records = mutableListOf<JSONObject>()
         // Use both identifiers independently: the ACP internal code and the packaging EAN
         // need not be equal. Never assume a substring search is an exact identifier match.
@@ -148,15 +166,16 @@ internal class StoreProductImageRepository(
         return "$IMAGE_BASE/250x250/$filename"
     }
 
-    private fun search(term: String): List<JSONObject> {
+    private suspend fun search(term: String): List<JSONObject> {
         repeat(2) { attempt ->
             val url = "$BASE/org/52/filial/1/centro_distribuicao/2/loja/buscas/produtos/termo".toHttpUrl()
                 .newBuilder().addPathSegment(term.trim().replace(Regex("\\s+"), "+"))
                 .addPathSegment("rapida").build()
-            val request = request(url.toString()).header("Authorization", "Bearer ${authenticate()}").build()
+            val access = authenticate()
+            val request = request(url.toString()).header("Authorization", "Bearer $access").build()
             client.newCall(request).execute().use { response ->
                 if (response.code == 401 && attempt == 0) {
-                    token = ""
+                    authenticationGate.withLock { if (token == access) token = "" }
                     return@use
                 }
                 if (!response.isSuccessful) throw IOException("Store lookup unavailable")

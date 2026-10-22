@@ -4,6 +4,11 @@ import android.app.Application
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -165,6 +170,63 @@ class StoreProductImageRepositoryTest {
             else catalog("""{"produto_id":1,"codigo_barras":"3017620422003","descricao":"Produto Marca 100g","imagem":"$photo"}""")
         })
         assertNull(repository.find("7891149840878", "Produto Marca 100g"))
+    }
+
+    @Test fun slowCategoryProductDoesNotBlockAnotherVisibleProduct() = runBlocking {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val repository = StoreProductImageRepository(client { request ->
+            200 to if (request.method == "POST") """{"data":"$session"}"""
+            else if (request.url.encodedPath.contains("/253940/")) {
+                entered.countDown()
+                check(release.await(8, TimeUnit.SECONDS))
+                catalog("")
+            } else catalog(row("7894900010015"))
+        })
+        val slow = async { repository.find("253940") }
+        try {
+            withContext(Dispatchers.IO) { assertTrue(entered.await(3, TimeUnit.SECONDS)) }
+            assertNotNull(withTimeout(3_000) { repository.find("7894900010015") })
+        } finally {
+            release.countDown()
+        }
+        assertNull(slow.await())
+    }
+
+    @Test fun temporaryOutageHasRetryTimeAndDoesNotHidePreviouslyCachedPhotos() = runBlocking {
+        var clock = 0L
+        var searches = 0
+        var unavailable = false
+        val repository = StoreProductImageRepository(client { request ->
+            if (request.method == "POST") 200 to """{"data":"$session"}"""
+            else {
+                searches++
+                if (unavailable) 503 to "{}"
+                else 200 to catalog(row(request.url.pathSegments[request.url.pathSegments.lastIndex - 1]))
+            }
+        }, { clock })
+        assertNotNull(repository.find("1"))
+        unavailable = true
+        val failed = repository.lookup("2")
+        assertNull(failed.url)
+        assertEquals(60_000L, failed.retryAt)
+        assertNotNull(repository.lookup("1").url)
+        assertEquals(60_000L, repository.lookup("3").retryAt)
+        assertEquals(2, searches) // The provider cooldown avoids one failed request per card.
+        unavailable = false
+        clock += 60_000
+        val recovered = repository.lookup("2")
+        assertNotNull(recovered.url)
+        assertNull(recovered.retryAt)
+    }
+
+    @Test fun confirmedAbsenceDoesNotRequestAutomaticRetry() = runBlocking {
+        val repository = StoreProductImageRepository(client { request ->
+            200 to if (request.method == "POST") """{"data":"$session"}""" else catalog("")
+        })
+        val result = repository.lookup("253940")
+        assertNull(result.url)
+        assertNull(result.retryAt)
     }
 
 }

@@ -113,6 +113,8 @@ fun ManageProductsScreen(viewModel: MainViewModel, onNavigateBack: () -> Unit) {
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        AutomaticProductThumbnail(product.code, product.name, existingUrl = product.imageUrl,
+                            modifier = Modifier.size(48.dp).padding(end = 8.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(product.name, style = MaterialTheme.typography.titleMedium)
                             Text(

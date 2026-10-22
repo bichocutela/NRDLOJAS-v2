@@ -31,6 +31,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,6 +74,19 @@ fun QuickAddProductDialog(
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var isValidatingImage by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
+
+    var photoQuery by remember { mutableStateOf("" to "") }
+    LaunchedEffect(productCode, productName, productImageUrl) {
+        kotlinx.coroutines.delay(650)
+        photoQuery = if (productImageUrl.isBlank() &&
+            (productCode.trim().length >= 4 || productName.trim().length >= 6)) {
+            productCode.trim() to productName.trim()
+        } else "" to ""
+    }
+    val automaticPreview = rememberOfficialProductImage(photoQuery.first, photoQuery.second)
+    // The automatic preview is never assigned to productImageUrl or saved as a manual picture.
+    val previewImageUrl = productImageUrl.takeIf { it.isNotBlank() }
+        ?: automaticPreview?.takeIf { photoQuery == (productCode.trim() to productName.trim()) }
 
     val photoLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -246,14 +260,15 @@ fun QuickAddProductDialog(
                     }
                 }
 
-                if (productImageUrl.isNotBlank()) {
+                if (previewImageUrl != null) {
                     AsyncImage(
-                        model = productImageUrl,
+                        model = previewImageUrl,
                         contentDescription = "Prévia da foto do produto",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 110.dp, max = 210.dp)
+                            .expandProductPhoto(previewImageUrl, productName)
                     )
                 }
 
