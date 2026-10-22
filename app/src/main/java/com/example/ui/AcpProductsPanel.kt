@@ -785,11 +785,15 @@ internal fun AcpProductsPanel(
                         ),
                     verticalArrangement = Arrangement.spacedBy(if (isExpressive) 6.dp else 4.dp)
                 ) {
-                    Text(
-                        product.description,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = if (isExpressive) FontWeight.ExtraBold else FontWeight.Normal
-                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        AutomaticProductThumbnail(product.code, product.description, product.barcode, product.imageUrl, Modifier.size(56.dp))
+                        Text(
+                            product.description,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = if (isExpressive) FontWeight.ExtraBold else FontWeight.Normal
+                        )
+                    }
                     val identifiers = buildString {
                         append("Código: ${product.code.ifBlank { "não informado" }}")
                         if (product.barcode.isNotBlank()) append(" • EAN: ${product.barcode}")
@@ -1593,14 +1597,15 @@ private fun AcpFeaturedOfferCard(
                 ),
             verticalArrangement = Arrangement.spacedBy(if (expressive) 7.dp else 5.dp)
         ) {
-            Text(
-                item.product.description,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = if (expressive) 44.dp else 40.dp)
-            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                AutomaticProductThumbnail(item.product.code, item.product.description, item.product.barcode, item.product.imageUrl, Modifier.size(48.dp))
+                Text(
+                    item.product.description,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = if (expressive) FontWeight.ExtraBold else FontWeight.Normal,
+                    modifier = Modifier.weight(1f).heightIn(min = if (expressive) 44.dp else 40.dp)
+                )
+            }
             Text(
                 "Código: ${item.product.code.ifBlank { "não informado" }}" +
                     item.product.barcode.takeIf { it.isNotBlank() }?.let { " • EAN: $it" }.orEmpty(),

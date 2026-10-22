@@ -2184,7 +2184,7 @@ fun ProductCard(
                 model = displayedImageUrl,
                 contentDescription = product.name,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier
+                modifier = Modifier.expandProductPhoto(displayedImageUrl, product.name)
                     .size(if (compactExpressive) 42.dp else 48.dp)
                     .then(if (performanceTier.isEntryLevel) Modifier else Modifier.clip(CircleShape))
             )
@@ -2619,7 +2619,7 @@ fun MiniProductCard(
                         .build(),
                     contentDescription = product.name,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier
+                    modifier = Modifier.expandProductPhoto(displayedImageUrl, product.name)
                         .size(
                             when {
                                 compactExpressive -> 46.dp
@@ -2942,7 +2942,7 @@ fun HistoryItem(
                         .build(),
                     contentDescription = product.name,
                     contentScale = ContentScale.Crop,
-                            modifier = Modifier
+                            modifier = Modifier.expandProductPhoto(displayedImageUrl, product.name)
                                 .size(if (compactExpressive) 46.dp else 54.dp)
                                 .then(
                                     if (performanceTier.isEntryLevel) Modifier

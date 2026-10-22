@@ -1560,48 +1560,7 @@ private fun ProductImage(
 
 @Composable
 private fun PromotionImageDialog(imageUrl: String, onDismiss: () -> Unit) {
-    val dialogShape = RoundedCornerShape(18.dp)
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .heightIn(max = 620.dp)
-                .glassSoftShadow(dialogShape),
-            shape = dialogShape,
-            color = MaterialTheme.colorScheme.surface
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Fechar imagem")
-                    }
-                }
-                Box(
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 260.dp, max = 540.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current).data(imageUrl).size(1200, 900).crossfade(false).build(),
-                        contentDescription = "Imagem ampliada da oferta",
-                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
-                        contentScale = ContentScale.Fit
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Toque fora da imagem ou no X para fechar.",
-                    modifier = Modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-        }
-    }
+    ProductPhotoViewerDialog(imageUrl, "Foto do produto", onDismiss)
 }
 
 @Composable

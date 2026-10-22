@@ -52,3 +52,25 @@ internal fun rememberOfficialProductImage(
     }
     return imageUrl
 }
+
+/** Optional thumbnail: preserves the surrounding layout when no photo is available. */
+@Composable
+internal fun AutomaticProductThumbnail(
+    code: String,
+    name: String,
+    barcode: String = "",
+    existingUrl: String? = null,
+    modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier
+) {
+    val photo = rememberOfficialProductImage(code, name, barcode, existingUrl)
+    var failed by remember(photo) { mutableStateOf(false) }
+    if (photo != null && !failed) {
+        coil.compose.AsyncImage(
+            model = photo,
+            contentDescription = "Foto de $name",
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+            modifier = modifier.expandProductPhoto(photo, name),
+            onError = { failed = true }
+        )
+    }
+}

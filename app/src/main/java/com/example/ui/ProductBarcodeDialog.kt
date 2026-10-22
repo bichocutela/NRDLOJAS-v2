@@ -754,7 +754,7 @@ fun ProductBarcodeDialog(
                                     model = displayedPhotoUrl,
                                     contentDescription = product.name,
                                     contentScale = ContentScale.Fit,
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier.fillMaxSize().expandProductPhoto(displayedPhotoUrl, product.name),
                                     onLoading = {
                                         isPhotoLoading = true
                                         photoLoadFailed = false
