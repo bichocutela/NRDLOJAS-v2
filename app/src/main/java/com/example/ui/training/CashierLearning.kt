@@ -1,6 +1,8 @@
 package com.example.ui.training
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -29,6 +31,7 @@ internal fun CashierLearning(config: TrainingConfig) {
             Column(Modifier.padding(8.dp)) {
                 Text("VISOR DO CLIENTE", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 Text(customer, fontSize = 9.sp, lineHeight = 11.sp, maxLines = 7, modifier = Modifier.weight(1f))
+                if (session.page == CashierPage.QR) PracticeQr(Modifier.size(40.dp))
                 Text("Toque para ampliar", fontSize = 10.sp)
             }
         }
@@ -37,7 +40,10 @@ internal fun CashierLearning(config: TrainingConfig) {
         Surface(shape = MaterialTheme.shapes.large) {
             Column(Modifier.fillMaxWidth().heightIn(max = 600.dp).padding(16.dp)) {
                 Text("VISOR DO CLIENTE", fontWeight = FontWeight.Bold)
-                Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) { Text(customer) }
+                Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                    Text(customer)
+                    if (session.page == CashierPage.QR) PracticeQr(Modifier.fillMaxWidth().aspectRatio(1f))
+                }
                 TextButton(onClick = { enlarged = false }) { Text("Fechar visor ampliado") }
             }
         }
@@ -97,4 +103,17 @@ internal fun CashierLearning(config: TrainingConfig) {
     }
     KeyboardBlock(config.bottom, config, Color(0xFF93C4E3), Modifier.fillMaxWidth(), keyboardPress)
     TextButton(onClick = { session = CashierSession() }) { Text("Reiniciar atendimento") }
+}
+
+@Composable
+private fun PracticeQr(modifier: Modifier) {
+    val bitmap = remember {
+        val matrix = com.google.zxing.MultiFormatWriter().encode(
+            "NRD TREINAMENTO - SIMULACAO SEM PAGAMENTO", com.google.zxing.BarcodeFormat.QR_CODE, 256, 256)
+        android.graphics.Bitmap.createBitmap(256, 256, android.graphics.Bitmap.Config.ARGB_8888).apply {
+            for (y in 0 until 256) for (x in 0 until 256)
+                setPixel(x, y, if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+        }.asImageBitmap()
+    }
+    Image(bitmap, contentDescription = "QR demonstrativo de treinamento, sem pagamento", modifier = modifier)
 }
