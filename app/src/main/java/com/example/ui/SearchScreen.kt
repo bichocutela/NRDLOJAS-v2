@@ -1597,8 +1597,8 @@ fun SearchScreen(
                     selectedNotificationProduct = updated
                     viewModel.updateProductLocally(updated)
                 },
-                onProductCodeChanged = { old, newCode ->
-                    viewModel.updateProductSuspend(old, old.copy(code = newCode))
+                onProductEdited = { old, updated ->
+                    viewModel.updateProductSuspend(old, updated)
                 },
                 onProductDeleted = { target ->
                     viewModel.deleteProductSuspend(target)
@@ -1614,8 +1614,8 @@ fun SearchScreen(
                     selectedMostUsedProduct = updated
                     viewModel.updateProductLocally(updated)
                 },
-                onProductCodeChanged = { old, newCode ->
-                    viewModel.updateProductSuspend(old, old.copy(code = newCode))
+                onProductEdited = { old, updated ->
+                    viewModel.updateProductSuspend(old, updated)
                 },
                 onProductDeleted = { target ->
                     viewModel.deleteProductSuspend(target)
@@ -2099,8 +2099,8 @@ fun ProductCard(
             product = product,
             onDismiss = { showDialog = false },
             onProductUpdated = { updated -> viewModel.updateProductLocally(updated) },
-            onProductCodeChanged = { old, newCode ->
-                viewModel.updateProductSuspend(old, old.copy(code = newCode))
+            onProductEdited = { old, updated ->
+                viewModel.updateProductSuspend(old, updated)
             },
             onProductDeleted = { target ->
                 viewModel.deleteProductSuspend(target)
@@ -2507,8 +2507,8 @@ fun MiniProductCard(
             product = product,
             onDismiss = { showDialog = false },
             onProductUpdated = { updated -> viewModel.updateProductLocally(updated) },
-            onProductCodeChanged = { old, newCode ->
-                viewModel.updateProductSuspend(old, old.copy(code = newCode))
+            onProductEdited = { old, updated ->
+                viewModel.updateProductSuspend(old, updated)
             },
             onProductDeleted = { target ->
                 viewModel.deleteProductSuspend(target)
@@ -2826,8 +2826,8 @@ fun HistoryItem(
             product = product,
             onDismiss = { showDialog = false },
             onProductUpdated = { updated -> viewModel.updateProductLocally(updated) },
-            onProductCodeChanged = { old, newCode ->
-                viewModel.updateProductSuspend(old, old.copy(code = newCode))
+            onProductEdited = { old, updated ->
+                viewModel.updateProductSuspend(old, updated)
             },
             onProductDeleted = { target ->
                 viewModel.deleteProductSuspend(target)

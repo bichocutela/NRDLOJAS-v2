@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.Product
+import com.example.data.ProductStandards
 import com.example.data.UserPreferences
 import com.example.ui.theme.LocalGlassSoftStyle
 import com.example.ui.theme.LocalExpressiveGlassStyle
@@ -59,7 +60,7 @@ fun ProductBarcodeDialog(
     onDismiss: () -> Unit,
     highlightedFromNotification: Boolean = false,
     onProductUpdated: (Product) -> Unit = {},
-    onProductCodeChanged: (suspend (Product, String) -> Boolean)? = null,
+    onProductEdited: (suspend (Product, Product) -> Boolean)? = null,
     onProductDeleted: (suspend (Product) -> Boolean)? = null
 ) {
     val showDialog = remember { mutableStateOf(true) }
@@ -109,6 +110,7 @@ fun ProductBarcodeDialog(
     var pendingPhotoUrl by remember(product.code) { mutableStateOf<String?>(null) }
     var showCodeEditDialog by remember { mutableStateOf(false) }
     var codeEditValue by remember(product.code) { mutableStateOf(product.code) }
+    var nameEditValue by remember(product.code, product.name) { mutableStateOf(product.name) }
     var isCodeSaving by remember { mutableStateOf(false) }
     var codeEditMessage by remember(product.code) { mutableStateOf<String?>(null) }
     var showDeleteProductDialog by remember { mutableStateOf(false) }
@@ -405,17 +407,18 @@ fun ProductBarcodeDialog(
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.weight(1f))
-                            if (isMaster && onProductCodeChanged != null) {
+                            if (isMaster && onProductEdited != null) {
                                 TextButton(
                                     onClick = {
                                         codeEditValue = product.code
+                                        nameEditValue = product.name
                                         codeEditMessage = null
                                         showCodeEditDialog = true
                                     },
                                     contentPadding = PaddingValues(horizontal = 4.dp)
                                 ) {
                                     Text(
-                                        "Alterar Código",
+                                        "Editar",
                                         maxLines = 2,
                                         fontSize = 12.sp,
                                         textAlign = TextAlign.End
@@ -533,7 +536,7 @@ fun ProductBarcodeDialog(
             }
         }
 
-        if (showCodeEditDialog && isMaster && onProductCodeChanged != null) {
+        if (showCodeEditDialog && isMaster && onProductEdited != null) {
             AlertDialog(
                 onDismissRequest = {
                     if (!isCodeSaving) {
@@ -541,7 +544,7 @@ fun ProductBarcodeDialog(
                         showCodeEditDialog = false
                     }
                 },
-                title = { Text("Alterar Código") },
+                title = { Text("Editar") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
@@ -555,9 +558,16 @@ fun ProductBarcodeDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         OutlinedTextField(
+                            value = nameEditValue,
+                            onValueChange = { nameEditValue = it },
+                            label = { Text("Nome do produto") },
+                            enabled = !isCodeSaving,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
                             value = codeEditValue,
                             onValueChange = { codeEditValue = it },
-                            label = { Text("Novo Código") },
+                            label = { Text("Código do produto") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             enabled = !isCodeSaving,
@@ -576,22 +586,29 @@ fun ProductBarcodeDialog(
                     TextButton(
                         onClick = {
                             val newCode = codeEditValue.trim()
+                            val newName = ProductStandards.normalizeProductName(nameEditValue.trim())
+                            val editedProduct = product.copy(
+                                code = newCode,
+                                name = newName,
+                                searchName = ProductStandards.searchNameFrom(newName)
+                            )
                             when {
-                                newCode.isBlank() -> codeEditMessage = "Informe o novo código."
-                                newCode == product.code -> codeEditMessage = "Digite um código diferente do atual."
+                                newCode.isBlank() -> codeEditMessage = "Informe o código do produto."
+                                newName.isBlank() -> codeEditMessage = "Informe o nome do produto."
+                                newCode == product.code && newName == product.name -> codeEditMessage = "Nenhuma alteração para salvar."
                                 else -> coroutineScope.launch {
                                     isCodeSaving = true
                                     codeEditMessage = null
                                     try {
-                                        val changed = onProductCodeChanged(product, newCode)
+                                        val changed = onProductEdited(product, editedProduct)
                                         if (changed) {
-                                            onProductUpdated(product.copy(code = newCode))
+                                            onProductUpdated(editedProduct)
                                             showCodeEditDialog = false
                                         } else {
-                                            codeEditMessage = "Não foi possível alterar o código."
+                                            codeEditMessage = "Não foi possível atualizar o produto."
                                         }
                                     } catch (_: Exception) {
-                                        codeEditMessage = "Não foi possível alterar o código. Tente novamente."
+                                        codeEditMessage = "Não foi possível atualizar o produto. Tente novamente."
                                     } finally {
                                         isCodeSaving = false
                                     }
@@ -612,9 +629,10 @@ fun ProductBarcodeDialog(
                         TextButton(
                             onClick = {
                                 codeEditValue = product.code
+                                nameEditValue = product.name
                                 codeEditMessage = null
                             },
-                            enabled = !isCodeSaving && codeEditValue != product.code
+                            enabled = !isCodeSaving && (codeEditValue != product.code || nameEditValue != product.name)
                         ) {
                             Text("Reverter")
                         }
