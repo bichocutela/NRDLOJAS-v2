@@ -25,3 +25,11 @@ A small native source change still needs a correctly versioned, optimized, signe
 ## Verification
 
 `node --test tests/ci/*.test.mjs` exercises failed/cancelled/missing publication prerequisites, conservative path classification, preservation of every regression suite and actual argument passing to a fake Gradle wrapper. Live PR/release runs verify the complete new pipeline. Compare actual job/step timestamps rather than GitHub run status alone, which can lag the step log. A first run warms the new cache; later runs give a better measure of cache benefit. No reduction percentage is guaranteed until measured.
+
+## Measured rollout results
+
+- PR #230, first validation with an empty new cache: Android command 6m19s; all gates passed.
+- Main rollout (39802876498): checks and packaging started together at 15:14:18 UTC. Both succeeded, cache entries were saved, the signature was verified and v1.0.833 was published. Signed assembly took 8m43s with the empty cache: this bootstrap publication was not faster than the baseline. A warm signed-release timing has not yet been established.
+- Revalidation of the same PR after main populated the cache (39801689152, attempt 2): the checks job took 2m49s, versus 4m32s in the previous pipeline's comparable PR check. The Gradle command took 2m24s and restored 22 of 49 tasks, including Kotlin compilation and tests. This measures unchanged-source revalidation, not every future source change.
+- The redundant Firestore Android job now takes 7 seconds while central Android regression coverage is preserved.
+- This documentation-only follow-up exercises the live non-APK path. It must finish green with Android/packaging skipped, preserve the existing latest release and create no new version tag.
