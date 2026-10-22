@@ -1,7 +1,5 @@
 name: Android CI
-# Publicação acionada manualmente após correções de Consultar Produtos.
-# Reexecução para publicar regras de telemetria após configurar FIREBASE_SERVICE_ACCOUNT.
-# Segunda tentativa de publicação solicitada pelo Mestre.
+# Android checks and release packaging run in parallel. Publication is gated by both.
 
 on:
   push:
@@ -19,10 +17,14 @@ on:
       - "settings.gradle.kts"
       - "build.gradle.kts"
       - "firestore.rules"
-      - "supabase/functions/send-fcm/**"
-      - "supabase/functions/nrd-account-admin/**"
-      - "supabase/functions/nrd-encartes/**"
+      - "supabase/**"
       - ".github/workflows/main.yml"
+      - ".github/workflows/firestore-budget.yml"
+      - ".github/workflows/flyer-validation.yml"
+      - ".github/workflows/branch-apk.yml"
+      - ".github/ci/**"
+      - "scripts/ci/**"
+      - "tests/ci/**"
   workflow_dispatch:
 
 # Cancela apenas execuções antigas da mesma PR quando chegam novos commits.
@@ -32,37 +34,55 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
+  scope:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
-      contents: write
-      id-token: write
-
+      contents: read
+    outputs:
+      android: ${{ steps.changes.outputs.android }}
+      rules: ${{ steps.changes.outputs.rules }}
     steps:
     - uses: actions/checkout@v4
+    - name: Classify changed paths conservatively
+      id: changes
+      env:
+        DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      run: node scripts/ci/change-scope.mjs
 
+  checks:
+    needs: scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
-
+    - name: Restore and refresh Gradle build cache
+      if: needs.scope.outputs.android == 'true'
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+        cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
     - uses: actions/setup-node@v4
       with:
         node-version: '24'
-
+    - name: Test CI publication and coverage contract
+      run: node --test tests/ci/*.test.mjs
     - name: Verify Firebase account administration permissions
       env:
         FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       run: node scripts/check-account-admin-permissions.mjs
-
     - name: Test ACP promotion authorization
       run: node --test supabase/functions/send-fcm/*.test.mjs supabase/functions/nrd-price-gateway/*.test.mjs supabase/functions/nrd-promotion-control/*.test.mjs supabase/functions/nrd-encartes/*.test.mjs
-
     - name: Test account and installation event authorization
       run: node --test supabase/functions/nrd-account-admin/*.test.mjs supabase/functions/nrd-installation-event/handler.test.mjs tests/days-off/sync.test.mjs
-
     - name: Verify live installation notification server
       if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       run: |
@@ -81,21 +101,54 @@ jobs:
           exit 1
         fi
         jq -e '.ready == true' "$RESULT_FILE"
+    - name: Verify committed Gradle wrapper
+      if: needs.scope.outputs.android == 'true'
+      uses: gradle/actions/wrapper-validation@v4
 
-    - name: Generate Debug Keystore (if missing)
+    - name: Grant execute permission for gradlew
+      if: needs.scope.outputs.android == 'true'
+      run: chmod +x gradlew
+    - name: Create google-services.json
+      if: needs.scope.outputs.android == 'true'
+      env:
+        GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
       run: |
-        if [ ! -f "debug.keystore" ]; then
-          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
-        fi
+        mkdir -p app
+        printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+        test -s app/google-services.json
+    - name: Run Android tests and validate PR APK
+      if: needs.scope.outputs.android == 'true'
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      run: bash scripts/ci/android-checks.sh "${{ github.event_name == 'pull_request' && 'pr' || 'main' }}"
 
-    - name: Fix Corrupt Gradle Wrapper Jar
-      run: |
-        rm -f gradle/wrapper/gradle-wrapper.jar
-        curl -fsSL -o gradle/wrapper/gradle-wrapper.jar "https://raw.githubusercontent.com/gradle/gradle/v9.3.1/gradle/wrapper/gradle-wrapper.jar"
+  package:
+    needs: scope
+    if: github.event_name != 'pull_request' && needs.scope.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.calc_version.outputs.TAG }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    - name: Restore and refresh Gradle build cache
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+        cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+    - name: Verify committed Gradle wrapper
+      uses: gradle/actions/wrapper-validation@v4
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
-
     - name: Create google-services.json
       env:
         GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
@@ -103,14 +156,12 @@ jobs:
         mkdir -p app
         printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
         test -s app/google-services.json
-
     - name: Decode Keystore
       if: github.event_name != 'pull_request'
       env:
         KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
       run: |
         echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
-
     - name: Validate Keystore
       if: github.event_name != 'pull_request'
       env:
@@ -126,7 +177,6 @@ jobs:
           exit 1
         fi
         echo "Keystore validation successful."
-
     - name: Calculate Next Version
       id: calc_version
       env:
@@ -168,49 +218,6 @@ jobs:
         echo "APP_VERSION_NAME=1.0.$NEXT_PATCH" >> "$GITHUB_ENV"
         echo "NEXT_TAG=$NEXT_TAG" >> "$GITHUB_ENV"
         echo "TAG=$NEXT_TAG" >> $GITHUB_OUTPUT
-
-    - name: Run Android unit tests
-      env:
-        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-        SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-      run: |
-        ./gradlew testDebugUnitTest \
-          --tests 'com.example.data.GlobalProductUsageTest' \
-          --tests 'com.example.data.ProductCategoriesTest' \
-          --tests 'com.example.data.ProductRepositorySearchTest' \
-          --tests 'com.example.data.RestrictedAccessLoginTest' \
-          --tests 'com.example.data.UpdatePolicyTest' \
-          --tests 'com.example.data.training.*' \
-          --tests 'com.example.ui.training.*' \
-          --tests 'com.example.data.StoreEncarteTest' \
-          --tests 'com.example.data.DynamicPageScheduleTest' \
-          --tests 'com.example.data.DynamicPageCodecTest' \
-          --tests 'com.example.data.acp.*' \
-          --tests 'com.example.data.promotions.*' \
-          --tests 'com.example.data.timeclock.*' \
-          --tests 'com.example.data.flyer.*' \
-          --tests 'com.example.data.NossaGenteApiTest' \
-          --tests 'com.example.ui.PromotionSortingTest' \
-          --tests 'com.example.ui.EncartePdfReaderTest' \
-          --tests 'com.example.ui.ProductPhotoViewerTest' \
-          --tests 'com.example.ui.VisualMixOrderSessionTest' \
-          --tests 'com.example.ui.DynamicMediaUrlTest' \
-          --tests 'com.example.ui.theme.GlassSoftThemeTest' \
-          --tests 'com.example.ui.theme.ExpressiveThemeTest' \
-          --tests 'com.example.util.EncarteNotificationsTest' \
-          --tests 'com.example.util.NativeNotificationColorsTest' \
-          --tests 'com.example.util.ProductNotificationContentTest' \
-          --tests 'com.example.util.XiaomiProgressPolicyTest' \
-          --tests 'com.example.util.ProfileNotificationRoutingTest' \
-          --tests 'com.example.util.InstallationNotificationPolicyTest'
-
-    - name: Validate PR debug build
-      if: github.event_name == 'pull_request'
-      env:
-        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-        SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-      run: ./gradlew assembleDebug --stacktrace
-
     - name: Build signed release APK
       if: github.event_name != 'pull_request'
       env:
@@ -226,9 +233,59 @@ jobs:
           -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
           -Pandroid.injected.signing.key.password=$KEY_PASSWORD \
           --stacktrace
+    - name: Verify APK Signature
+      if: github.event_name != 'pull_request'
+      run: |
+        APK_PATH="app/build/outputs/apk/release/app-release.apk"
+        if [ ! -f "$APK_PATH" ]; then echo "Error: APK not found at $APK_PATH"; exit 1; fi
+        APKSIGNER=$(find $ANDROID_SDK_ROOT/build-tools -name apksigner | sort -r | head -n 1)
+        if [ -z "$APKSIGNER" ]; then echo "Error: apksigner not found."; exit 1; fi
+        if ! $APKSIGNER verify --verbose "$APK_PATH"; then echo "Error: APK is not signed properly."; exit 1; fi
+        echo "APK signature verified."
+    - name: Upload APK
+      if: github.event_name != 'pull_request'
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-release
+        path: app/build/outputs/apk/release/app-release.apk
+    - name: Upload R8 mapping for crash diagnosis
+      if: github.event_name != 'pull_request'
+      uses: actions/upload-artifact@v4
+      with:
+        name: r8-mapping
+        path: app/build/outputs/mapping/release/mapping.txt
+        if-no-files-found: error
 
+  # Keep the existing required check name. Neither rules nor a release can be
+  # published unless checks and signed packaging for this exact commit succeeded.
+  build:
+    if: ${{ always() && !cancelled() }}
+    needs: [scope, checks, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      NEXT_TAG: ${{ needs.package.outputs.tag }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Require successful validation and packaging
+      env:
+        SCOPE_RESULT: ${{ needs.scope.result }}
+        CHECKS_RESULT: ${{ needs.checks.result }}
+        PACKAGE_RESULT: ${{ needs.package.result }}
+        APK_REQUIRED: ${{ needs.scope.outputs.android }}
+      run: node scripts/ci/publication-gate.mjs
+
+    - name: Download verified APK from this workflow
+      if: github.event_name != 'pull_request' && needs.scope.outputs.android == 'true'
+      uses: actions/download-artifact@v4
+      with:
+        name: app-release
+        path: app/build/outputs/apk/release
     - name: Deploy Firestore rules for installation telemetry
-      if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      if: needs.scope.outputs.rules == 'true' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       env:
         FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       run: |
@@ -289,34 +346,8 @@ jobs:
         fi
 
         echo "Firestore rules published successfully: $RULESET_NAME"
-
-    - name: Verify APK Signature
-      if: github.event_name != 'pull_request'
-      run: |
-        APK_PATH="app/build/outputs/apk/release/app-release.apk"
-        if [ ! -f "$APK_PATH" ]; then echo "Error: APK not found at $APK_PATH"; exit 1; fi
-        APKSIGNER=$(find $ANDROID_SDK_ROOT/build-tools -name apksigner | sort -r | head -n 1)
-        if [ -z "$APKSIGNER" ]; then echo "Error: apksigner not found."; exit 1; fi
-        if ! $APKSIGNER verify --verbose "$APK_PATH"; then echo "Error: APK is not signed properly."; exit 1; fi
-        echo "APK signature verified."
-
-    - name: Upload APK
-      if: github.event_name != 'pull_request'
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-release
-        path: app/build/outputs/apk/release/app-release.apk
-
-    - name: Upload R8 mapping for crash diagnosis
-      if: github.event_name != 'pull_request'
-      uses: actions/upload-artifact@v4
-      with:
-        name: r8-mapping
-        path: app/build/outputs/mapping/release/mapping.txt
-        if-no-files-found: error
-
     - name: Create GitHub Release
-      if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      if: needs.scope.outputs.android == 'true' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ env.NEXT_TAG }}
@@ -325,9 +356,8 @@ jobs:
         files: app/build/outputs/apk/release/app-release.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
     - name: Notify Mestre about new release
-      if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      if: needs.scope.outputs.android == 'true' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       env:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       run: |
