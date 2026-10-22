@@ -28,6 +28,7 @@ class CashierSimulationTest {
             val done = run("SIM_APPROVE", "ENTRA", "1", start = selected)
             assertEquals(CashierPage.DONE, done.page)
             assertFalse(done.cash)
+            assertEquals(done.total + done.change, done.received)
         }
     }
     @Test fun cancellationChoicesDifferForCardAndPix() {
@@ -54,5 +55,12 @@ class CashierSimulationTest {
         assertEquals(CashierPage.IDENTIFY, run("ENTRA", start = sale()).page)
         assertEquals(CashierPage.LOYALTY, run("FUNÇÃO", "5", "1", "4", start = sale()).page)
         assertEquals(CashierPage.CNPJ_ERROR, run("ENTRA", "3", "ANULA", start = sale()).page)
+    }
+    @Test fun cancelledPixChangeDoesNotLeakIntoNextPayment() {
+        val cancelled = run("TEF", "2", "2", "4", "1", "0", "0", "0", "ENTRA", "SIM_PIN", "ANULA", "1", start = receive())
+        assertEquals(0L, cancelled.change)
+        val pix = run("TEF", "2", "2", "3", start = cancelled)
+        assertEquals(0L, pix.change)
+        assertEquals(CashierPage.QR, pix.page)
     }
 }

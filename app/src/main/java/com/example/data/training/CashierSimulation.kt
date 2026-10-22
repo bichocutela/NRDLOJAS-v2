@@ -58,7 +58,7 @@ object CashierSimulation {
             CashierPage.STAMPS -> if(key == "ENTRA") go(CashierPage.RECEIVE) else s
             CashierPage.RECEIVE -> when {
                 digit -> s.copy(input = (s.input + key).take(9))
-                key == "TEF" -> go(CashierPage.TEF)
+                key == "TEF" -> go(CashierPage.TEF).copy(cash = false, change = 0, received = 0)
                 key == "DINHEIRO" -> amount(s.input)?.takeIf { it >= s.total }?.let { s.copy(page = CashierPage.RECEIPT, cash = true, received = it, input = "") } ?: s.copy(notice = "Digite o valor recebido em centavos, suficiente para a compra.")
                 else -> s
             }
@@ -69,10 +69,10 @@ object CashierSimulation {
             CashierPage.WALLET -> when(key) { "3" -> go(CashierPage.QR); "4" -> if(hour < 20) go(CashierPage.PIX_CHANGE) else s.copy(notice = "Pix Troco disponível somente até as 20h, conforme a regra da loja."); else -> s }
             CashierPage.PIX_CHANGE -> when { digit -> s.copy(input = (s.input + key).take(9)); key == "ENTRA" -> amount(s.input)?.let { s.copy(page = CashierPage.PIX_CONFIRM, change = it, input = "") } ?: s; else -> s }
             CashierPage.PIX_CONFIRM -> if(key == "SIM_PIN") go(CashierPage.QR) else s
-            CashierPage.CARD, CashierPage.QR -> if(key == "SIM_APPROVE") go(CashierPage.AUTHORIZED) else s
+            CashierPage.CARD, CashierPage.QR -> if(key == "SIM_APPROVE") go(CashierPage.AUTHORIZED).copy(received = s.total + s.change, cash = false) else s
             CashierPage.AUTHORIZED -> if(key == "ENTRA") go(CashierPage.RECEIPT) else s
-            CashierPage.CANCEL_CARD -> when(key) { "0" -> go(CashierPage.RECEIVE); "1" -> go(s.paymentReturn); else -> s }
-            CashierPage.CANCEL_PIX -> when(key) { "1" -> go(CashierPage.RECEIVE); "2" -> go(s.paymentReturn); else -> s }
+            CashierPage.CANCEL_CARD -> when(key) { "0" -> go(CashierPage.RECEIVE).copy(change = 0, received = 0); "1" -> go(s.paymentReturn); else -> s }
+            CashierPage.CANCEL_PIX -> when(key) { "1" -> go(CashierPage.RECEIVE).copy(change = 0, received = 0); "2" -> go(s.paymentReturn); else -> s }
             CashierPage.RECEIPT -> if(key == "1" || key == "3") s.copy(page = if(s.cash) CashierPage.DONATION else CashierPage.DONE, compact = key == "1") else s
             CashierPage.DONATION -> when(key) { "3" -> go(CashierPage.DONE); "1" -> s.copy(notice = "Fluxo de doação ainda aguardando as próximas telas. Nenhum valor foi doado."); else -> s }
             CashierPage.DONE -> if(key == "ENTRA") CashierSession(registered = s.registered, stamps = s.stamps) else s
