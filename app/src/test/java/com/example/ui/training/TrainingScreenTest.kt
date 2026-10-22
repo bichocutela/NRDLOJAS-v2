@@ -27,4 +27,13 @@ class TrainingScreenTest {
         compose.onNodeWithText("VISOR DO OPERADOR").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("VISOR DO CLIENTE").performScrollTo().assertIsDisplayed()
     }
+    @Test fun aprenderStartsAvailableAndCustomerDisplayExpands() {
+        val config = TrainingRepository.defaults(ApplicationProvider.getApplicationContext<Application>())
+        compose.setContent { MaterialTheme { TrainingScreen(config, {}, preview = true) } }
+        compose.onNodeWithText("Abrir simulador").performClick()
+        compose.onNodeWithText("DISPONIVEL").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Toque para ampliar").performScrollTo().performClick()
+        compose.onNodeWithText("Fechar visor ampliado").assertIsDisplayed().performClick()
+        compose.onNodeWithText("DISPONIVEL").assertExists()
+    }
 }

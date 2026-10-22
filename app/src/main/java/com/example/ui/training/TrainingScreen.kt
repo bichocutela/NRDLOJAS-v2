@@ -64,6 +64,9 @@ fun TrainingScreen(config: TrainingConfig, onBack: () -> Unit, preview: Boolean 
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     missions.forEach { m -> DropdownMenuItem(text = { Text(m.title) }, onClick = { expanded = false; state = TrainingState(m.id, completed = state.completed) }) }
                 }
+                if (state.mode == TrainingMode.LEARN) {
+                    CashierLearning(config)
+                } else {
                 if (state.mode != TrainingMode.FREE) {
                     LinearProgressIndicator(progress = { if (state.finished) 1f else state.step.toFloat() / mission.steps.size }, modifier = Modifier.fillMaxWidth())
                     Text("${if (state.finished) mission.steps.size else state.step + 1} de ${mission.steps.size} • ${state.errors} erro(s)")
@@ -92,6 +95,7 @@ fun TrainingScreen(config: TrainingConfig, onBack: () -> Unit, preview: Boolean 
                 KeyboardBlock(config.bottom, config, Color(0xFF93C4E3), Modifier.fillMaxWidth(), press)
                 TextButton(onClick = { state = TrainingEngine.reset(state) }) { Text("Reiniciar missão") }
                 if (state.history.isNotEmpty()) Text(state.history.take(6).joinToString("\n"), style = MaterialTheme.typography.bodySmall)
+                }
             }
             Text("Simulador educativo. Sequências demonstrativas: confirme os procedimentos oficiais da loja. Nenhuma operação real é realizada no PDV.", style = MaterialTheme.typography.bodySmall)
         }
@@ -99,7 +103,7 @@ fun TrainingScreen(config: TrainingConfig, onBack: () -> Unit, preview: Boolean 
 }
 
 @Composable
-private fun TrainingDisplay(text: String, image: String, customer: Boolean) {
+internal fun TrainingDisplay(text: String, image: String, customer: Boolean) {
     Column(Modifier.fillMaxWidth().background(if (customer) Color(0xFF101820) else Color(0xFFC8D77D), RoundedCornerShape(12.dp)).padding(16.dp)) {
         Text(if (customer) "VISOR DO CLIENTE" else "VISOR DO OPERADOR", color = if (customer) Color(0xFFE8F8FF) else Color(0xFF526126), fontSize = 11.sp)
         Text(text, color = if (customer) Color(0xFFE8F8FF) else Color(0xFF526126), fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.heightIn(min = 50.dp))
@@ -108,7 +112,7 @@ private fun TrainingDisplay(text: String, image: String, customer: Boolean) {
 }
 
 @Composable
-private fun KeyboardBlock(rows: List<List<String>>, config: TrainingConfig, color: Color, modifier: Modifier, onPress: (String) -> Unit, numeric: Boolean = false) {
+internal fun KeyboardBlock(rows: List<List<String>>, config: TrainingConfig, color: Color, modifier: Modifier, onPress: (String) -> Unit, numeric: Boolean = false) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
         rows.forEachIndexed { index, row ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
