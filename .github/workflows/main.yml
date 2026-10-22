@@ -21,6 +21,7 @@ on:
       - "firestore.rules"
       - "supabase/functions/send-fcm/**"
       - "supabase/functions/nrd-account-admin/**"
+      - "supabase/functions/nrd-encartes/**"
       - ".github/workflows/main.yml"
   workflow_dispatch:
 
@@ -179,6 +180,7 @@ jobs:
           --tests 'com.example.data.ProductRepositorySearchTest' \
           --tests 'com.example.data.RestrictedAccessLoginTest' \
           --tests 'com.example.data.UpdatePolicyTest' \
+          --tests 'com.example.data.StoreEncarteTest' \
           --tests 'com.example.data.DynamicPageScheduleTest' \
           --tests 'com.example.data.DynamicPageCodecTest' \
           --tests 'com.example.data.acp.*' \
