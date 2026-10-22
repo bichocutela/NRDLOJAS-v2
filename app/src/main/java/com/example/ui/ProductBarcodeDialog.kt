@@ -79,7 +79,7 @@ fun ProductBarcodeDialog(
     val expressiveGlassStyle = LocalExpressiveGlassStyle.current
     val expressiveStyle = LocalExpressiveStyle.current
     val isExpressive = expressiveStyle.enabled
-    var photoUrl by remember(product.code, product.imageUrl) {
+    var photoUrl by remember(product.code, product.name, product.imageUrl) {
         mutableStateOf(
             product.imageUrl
                 ?.trim()
@@ -89,9 +89,9 @@ fun ProductBarcodeDialog(
         )
     }
     // Keep manual photos authoritative; automatic photos are display-only and never saved to Firebase.
-    LaunchedEffect(product.code, product.imageUrl) {
+    LaunchedEffect(product.code, product.name, product.imageUrl) {
         if (photoUrl == null) {
-            val found = com.example.data.promotions.StoreProductImageRepository.shared.find(product.code)
+            val found = com.example.data.promotions.StoreProductImageRepository.shared.find(product.code, product.name)
             if (found != null) {
                 val result = context.imageLoader.execute(
                     coil.request.ImageRequest.Builder(context).data(found).size(720, 720).build()

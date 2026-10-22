@@ -99,4 +99,47 @@ class StoreProductImageRepositoryTest {
         assertEquals(2, logins)
         assertEquals(2, searches)
     }
+    @Test fun barcodeCanDifferFromInternalCodeAndAcceptGtinPadding() = runBlocking {
+        val repository = StoreProductImageRepository(client { request ->
+            200 to if (request.method == "POST") """{"data":"$session"}"""
+            else catalog("""{"produto_id":3653,"codigo_erp":2021000,"codigo_barras":"7891149840878","imagem":"$photo"}""")
+        })
+        assertNotNull(repository.find("7891149840878"))
+        assertNotNull(repository.find("07891149840878"))
+    }
+
+    @Test fun descriptionFallbackNormalizesAccentsUnitsAndUpdatesCacheAfterRename() = runBlocking {
+        val paths = mutableListOf<String>()
+        val repository = StoreProductImageRepository(client { request ->
+            paths += request.url.encodedPath
+            200 to if (request.method == "POST") """{"data":"$session"}"""
+            else if (request.url.encodedPath.contains("/999999/")) catalog("")
+            else catalog("""{"produto_id":9,"codigo_erp":123456,"descricao":"Pão de Queijo Marca 0,5kg","imagem":"$photo"}""")
+        })
+        assertNull(repository.find("999999", "Produto inexistente"))
+        assertNotNull(repository.find("999999", "Pao Queijo Marca 500g."))
+        assertTrue(paths.any { it.contains("Pao+Queijo+Marca+500g.") })
+    }
+
+    @Test fun descriptionRejectsOtherSizesFlavoursAndAmbiguity() = runBlocking {
+        for (rows in listOf(
+            """{"produto_id":1,"descricao":"Iogurte Marca Morango 200g","imagem":"$photo"}""",
+            """{"produto_id":1,"descricao":"Iogurte Marca Coco 100g","imagem":"$photo"}""",
+            """{"produto_id":1,"descricao":"Iogurte Marca Morango 100g","imagem":"$photo"},{"produto_id":2,"descricao":"Iogurte Marca Morango 100g","imagem":"$photo"}"""
+        )) {
+            val repository = StoreProductImageRepository(client { request ->
+                200 to if (request.method == "POST") """{"data":"$session"}""" else catalog(rows)
+            })
+            assertNull(repository.find("999999", "Iogurte Marca Morango 100g"))
+        }
+    }
+
+    @Test fun descriptionNeverOverrulesAConflictingValidBarcode() = runBlocking {
+        val repository = StoreProductImageRepository(client { request ->
+            200 to if (request.method == "POST") """{"data":"$session"}"""
+            else catalog("""{"produto_id":1,"codigo_barras":"3017620422003","descricao":"Produto Marca 100g","imagem":"$photo"}""")
+        })
+        assertNull(repository.find("7891149840878", "Produto Marca 100g"))
+    }
+
 }
