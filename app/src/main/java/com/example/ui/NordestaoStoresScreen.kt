@@ -47,7 +47,7 @@ fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> Nordesta
     var favorite by remember { mutableLongStateOf(preferences.getLong("favorite", -1)) }
     var mapMode by rememberSaveable { mutableStateOf(false) }
     var favoriteOnly by rememberSaveable { mutableStateOf(false) }
-    var nearest by rememberSaveable { mutableStateOf(false) }
+    var nearest by remember { mutableStateOf(false) }
     var location by remember { mutableStateOf<Pair<Double,Double>?>(null) }
     var locationRequest by remember { mutableIntStateOf(0) }
     var locating by remember { mutableStateOf(false) }
