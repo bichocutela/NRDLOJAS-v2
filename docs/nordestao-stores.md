@@ -10,7 +10,7 @@ O app consulta ao abrir/retornar e a cada minuto enquanto a tela está em primei
 
 Validação: cinco testes Node do contrato público/filtros/validação; testes Android com amostra observada das 12 lojas para parse, pesquisa, remoção e edição da origem; testes de UI de lista/detalhe/erro. Todos incluídos no CI existente.
 
-Comportamentos presentes no APK e reproduzidos no NRD: busca, lista/mapa com marcadores e detalhe, estrela de loja preferida, filtro da preferida e ordenação Mais próxima. A preferência fica no NRD e não altera a conta oficial ou os filtros ACP/encartes. Localização aproximada é pedida apenas ao tocar Mais próxima, usada em memória para distância em linha reta e não enviada ao backend de lojas. Sem permissão/GPS disponível, lista e mapa continuam utilizáveis. O mapa usa Leaflet 1.9.4 com integridade fixa, OpenStreetMap e atribuição visível, cache padrão do WebView, sem download em lote e identificação NRD no User-Agent. Texto da origem vira DOM textContent, sem executar HTML da loja ou ponte JavaScript nativa. Cartão financeiro, campanhas e perfil oficial não são alterados.
+Comportamentos presentes no APK e reproduzidos no NRD: busca, lista/mapa com marcadores e detalhe, estrela de loja preferida, filtro da preferida e ordenação Mais próxima. A preferência fica no NRD e não altera a conta oficial ou os filtros ACP/encartes. Localização é pedida apenas ao tocar Mais próxima ou Minha localização, usada em memória para distância em linha reta e não enviada ao backend de lojas. Sem permissão/GPS disponível, lista e mapa continuam utilizáveis. O mapa usa Leaflet 1.9.4 com integridade fixa, OpenStreetMap e atribuição visível, cache padrão do WebView, sem download em lote e identificação NRD no User-Agent. Texto da origem vira DOM textContent, sem executar HTML da loja ou ponte JavaScript nativa. Cartão financeiro, campanhas e perfil oficial não são alterados.
 
 ## Recuperação de falhas de carregamento
 
@@ -27,3 +27,9 @@ Horários do encarte fornecido em 23/10/2026 são fallback por nome exato normal
 ## Localização e gestos
 
 A localização aproximada já autorizada pelo usuário é enviada somente à WebView local, onde um marcador azul identifica a posição. O botão Minha localização solicita uma posição e centraliza novamente; conceder permissão continua sem enviar coordenadas ao backend. Atualizações de lojas usam JavaScript na página existente e preservam a câmera e o zoom, sem recarregar a WebView. O menu lateral não intercepta arrastos nessa rota e a WebView mantém a sequência de toque até UP/CANCEL. A ordenação por distância permanece disponível na lista.
+
+## Busca de posição no Android
+
+A busca não depende mais somente de NETWORK_PROVIDER. Usa os provedores habilitados (fused/rede e GPS quando há permissão precisa) e uma posição recente válida de até dois minutos. Um provedor sem resposta não descarta os demais; o prazo total é de 30 segundos. Todas as requisições pendentes são canceladas ao obter posição, ao terminar o prazo ou ao sair da tela.
+
+As permissões aproximada/precisa são solicitadas juntas; o usuário pode escolher aproximada. GPS requer permissão precisa e a tela oferece essa opção quando a busca falha. Falta de permissão, localização desligada, ausência de provedor e prazo esgotado têm mensagens distintas, com atalhos às configurações pertinentes. Não há localização em segundo plano.
