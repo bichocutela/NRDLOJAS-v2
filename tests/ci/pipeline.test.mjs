@@ -36,7 +36,7 @@ test('all existing Android regression suites remain in the central check', () =>
     'com.example.data.NossaGenteApiTest', 'com.example.ui.PromotionSortingTest', 'com.example.ui.EncartePdfReaderTest', 'com.example.ui.ProductPhotoViewerTest',
     'com.example.ui.VisualMixOrderSessionTest', 'com.example.ui.DynamicMediaUrlTest', 'com.example.ui.theme.GlassSoftThemeTest', 'com.example.ui.theme.ExpressiveThemeTest',
     'com.example.util.EncarteNotificationsTest', 'com.example.util.NativeNotificationColorsTest', 'com.example.util.ProductNotificationContentTest',
-    'com.example.util.XiaomiProgressPolicyTest', 'com.example.util.ProfileNotificationRoutingTest', 'com.example.util.InstallationNotificationPolicyTest'];
+    'com.example.util.XiaomiProgressPolicyTest', 'com.example.util.ProfileNotificationRoutingTest', 'com.example.util.InstallationNotificationPolicyTest', 'com.example.data.NordestaoStoresTest', 'com.example.ui.NordestaoStoresScreenTest'];
   assert.deepEqual(filters, required);
   assert.match(jobs.checks, /bash scripts\/ci\/android-checks.sh/);
 });

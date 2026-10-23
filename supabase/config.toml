@@ -16,3 +16,6 @@ verify_jwt = false
 
 [functions.nrd-encartes]
 verify_jwt = true
+
+[functions.nrd-stores]
+verify_jwt = true

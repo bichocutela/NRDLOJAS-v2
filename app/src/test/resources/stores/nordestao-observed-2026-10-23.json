@@ -1,0 +1,281 @@
+{
+  "stores": [
+    {
+      "id": 18055359,
+      "name": "Nordestão Abolição IV",
+      "identifier": "42",
+      "businessHours": "",
+      "isOpen": true,
+      "capacity": null,
+      "address": {
+        "type": "Residencial",
+        "street": "Avenida Abel Coelho",
+        "number": "1455-A",
+        "complement": "",
+        "neighborhood": "Abolição IV",
+        "city": "Mossoró",
+        "state": "RN",
+        "zipCode": "59612300",
+        "latitude": -5.164876,
+        "longitude": -37.360517
+      },
+      "phones": [
+        "8480008401"
+      ]
+    },
+    {
+      "id": 16145106,
+      "name": "Nordestão Alecrim",
+      "identifier": "8",
+      "businessHours": "",
+      "isOpen": true,
+      "capacity": null,
+      "address": {
+        "type": "Residencial",
+        "street": "Rua Presidente Bandeira",
+        "number": "717",
+        "complement": "",
+        "neighborhood": "Alecrim",
+        "city": "Natal",
+        "state": "RN",
+        "zipCode": "59032201",
+        "latitude": -5.800864,
+        "longitude": -35.215276
+      },
+      "phones": [
+        "8436154801"
+      ]
+    },
+    {
+      "id": 16145121,
+      "name": "Nordestão Cidade Jardim",
+      "identifier": "12",
+      "businessHours": "",
+      "isOpen": true,
+      "capacity": null,
+      "address": {
+        "type": "Residencial",
+        "street": "Rua Leôncio Etelvino de Medeiros",
+        "number": "2877",
+        "complement": "",
+        "neighborhood": "Capim Macio",
+        "city": "Natal",
+        "state": "RN",
+        "zipCode": "59078570",
+        "latitude": -5.849457,
+        "longitude": -35.206282
+      },
+      "phones": [
+        "8436154804"
+      ]
+    },
+    {
+      "id": 18055362,
+      "name": "Nordestão Doze Anos",
+      "identifier": "46",
+      "businessHours": "",
+      "isOpen": true,
+      "capacity": null,
+      "address": {
+        "type": "Residencial",
+        "street": "Rua Vereador João Manoel Filho",
+        "number": "S/N",
+        "complement": "",
+        "neighborhood": "Doze Anos",
+        "city": "Mossoró",
+        "state": "RN",
+        "zipCode": "59603050",
+        "latitude": -5.191137,
+        "longitude": -37.347664
+      },
+      "phones": [
+        "8480008401"
+      ]
+    },
+    {
+      "id": 16145139,
+      "name": "Nordestão Igapó",
+      "identifier": "16",
+      "businessHours": "",
+      "isOpen": true,
+      "capacity": null,
+      "address": {
+        "type": "Residencial",
+        "street": "Avenida Bacharel Tomaz Landim",
+        "number": "26",
+        "complement": "",
+        "neighborhood": "Igapó",
+        "city": "Natal",
+        "state": "RN",
+        "zipCode": "59290000",
+        "latitude": -5.778763,
+        "longitude": -35.24853
+      },
+      "phones": [
+        "8436154806"
+      ]
+    },
+    {
+      "id": 16145111,
+      "name": "Nordestão Lagoa Nova",
+      "identifier": "9",
+      "businessHours": "",
+      "isOpen": true,
+      "capacity": null,
+      "address": {
+        "type": "Residencial",
+        "street": "Avenida Senador Salgado Filho",
+        "number": "1656",
+        "complement": "",
+        "neighborhood": "Lagoa Nova",
+        "city": "Natal",
+        "state": "RN",
+        "zipCode": "59056000",
+        "latitude": -5.815623,
+        "longitude": -35.206775
+      },
+      "phones": [
+        "8436154803"
+      ]
+    },
+    {
+      "id": 16145175,
+      "name": "Nordestão Nova Parnamirim",
+      "identifier": "34",
+      "businessHours": "",
+      "isOpen": true,
+      "capacity": null,
+      "address": {
+        "type": "Residencial",
+        "street": "Avenida Maria Lacerda Montenegro",
+        "number": "1400",
+        "complement": "",
+        "neighborhood": "Nova Parnamirim",
+        "city": "Parnamirim",
+        "state": "RN",
+        "zipCode": "59152600",
+        "latitude": -5.887497,
+        "longitude": -35.21055
+      },
+      "phones": [
+        "8436154808"
+      ]
+    },
+    {
+      "id": 16145096,
+      "name": "Nordestão Petrópolis",
+      "identifier": "5",
+      "businessHours": "",
+      "isOpen": true,
+      "capacity": null,
+      "address": {
+        "type": "Residencial",
+        "street": "Rua Trairi",
+        "number": "342",
+        "complement": "",
+        "neighborhood": "Petrópolis",
+        "city": "Natal",
+        "state": "RN",
+        "zipCode": "59020150",
+        "latitude": -5.784374,
+        "longitude": -35.202743
+      },
+      "phones": [
+        "8436154802"
+      ]
+    },
+    {
+      "id": 16145185,
+      "name": "Nordestão Ponta Negra",
+      "identifier": "38",
+      "businessHours": "",
+      "isOpen": true,
+      "capacity": null,
+      "address": {
+        "type": "Residencial",
+        "street": "Avenida Engenheiro Roberto Freire",
+        "number": "2050",
+        "complement": "",
+        "neighborhood": "Capim Macio",
+        "city": "Natal",
+        "state": "RN",
+        "zipCode": "59082400",
+        "latitude": -5.854028,
+        "longitude": -35.202053
+      },
+      "phones": [
+        "8436154809"
+      ]
+    },
+    {
+      "id": 21543457,
+      "name": "Nordestão Rota do Sol",
+      "identifier": "39",
+      "businessHours": "",
+      "isOpen": true,
+      "capacity": null,
+      "address": {
+        "type": "Residencial",
+        "street": "Rua Deputado Antônio Florêncio de Queiroz",
+        "number": "2320",
+        "complement": "",
+        "neighborhood": "Ponta Negra",
+        "city": "Natal",
+        "state": "RN",
+        "zipCode": "59092500",
+        "latitude": -5.896683,
+        "longitude": -35.177915
+      },
+      "phones": [
+        "8480008401"
+      ]
+    },
+    {
+      "id": 16145131,
+      "name": "Nordestão Santa Catarina",
+      "identifier": "13",
+      "businessHours": "",
+      "isOpen": true,
+      "capacity": null,
+      "address": {
+        "type": "Residencial",
+        "street": "Avenida Doutor João Medeiros Filho",
+        "number": "1835",
+        "complement": "",
+        "neighborhood": "Potengi",
+        "city": "Natal",
+        "state": "RN",
+        "zipCode": "59108200",
+        "latitude": -5.76077,
+        "longitude": -35.252446
+      },
+      "phones": [
+        "8436154805"
+      ]
+    },
+    {
+      "id": 16145146,
+      "name": "Nordestão Tirol",
+      "identifier": "31",
+      "businessHours": "",
+      "isOpen": true,
+      "capacity": null,
+      "address": {
+        "type": "Residencial",
+        "street": "PRUDENTE DE MORAIS",
+        "number": "1140",
+        "complement": "",
+        "neighborhood": "TIROL",
+        "city": "NATAL",
+        "state": "RN",
+        "zipCode": "59020510",
+        "latitude": -5.79312,
+        "longitude": -35.20377
+      },
+      "phones": [
+        "8436154807"
+      ]
+    }
+  ],
+  "fetchedAt": "2026-10-23T14:05:08.327Z"
+}
