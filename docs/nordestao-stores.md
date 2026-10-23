@@ -11,3 +11,9 @@ O app consulta ao abrir/retornar e a cada minuto enquanto a tela está em primei
 Validação: cinco testes Node do contrato público/filtros/validação; testes Android com amostra observada das 12 lojas para parse, pesquisa, remoção e edição da origem; testes de UI de lista/detalhe/erro. Todos incluídos no CI existente.
 
 Comportamentos presentes no APK e reproduzidos no NRD: busca, lista/mapa com marcadores e detalhe, estrela de loja preferida, filtro da preferida e ordenação Mais próxima. A preferência fica no NRD e não altera a conta oficial ou os filtros ACP/encartes. Localização aproximada é pedida apenas ao tocar Mais próxima, usada em memória para distância em linha reta e não enviada ao backend de lojas. Sem permissão/GPS disponível, lista e mapa continuam utilizáveis. O mapa usa Leaflet 1.9.4 com integridade fixa, OpenStreetMap e atribuição visível, cache padrão do WebView, sem download em lote e identificação NRD no User-Agent. Texto da origem vira DOM textContent, sem executar HTML da loja ou ponte JavaScript nativa. Cartão financeiro, campanhas e perfil oficial não são alterados.
+
+## Recuperação de falhas de carregamento
+
+O endpoint mantém a última resposta oficial válida em `nrd_stores_cache`, acessível somente ao servidor (RLS habilitada e permissões de anon/authenticated revogadas). Após reinício do worker, essa resposta permite exibir as lojas imediatamente. Dados vencidos são renovados em segundo plano; falhas preservam a data real da última consulta e aplicam espera de 60 segundos entre tentativas. Uma resposta oficial vazia continua substituindo a lista. O prazo da consulta de lojas começa somente após a autenticação.
+
+O filtro Preferida mostra apenas a unidade marcada com estrela; desative-o para visualizar todas as lojas.
