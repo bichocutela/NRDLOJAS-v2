@@ -10,6 +10,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -47,7 +49,8 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
     var retry by remember { mutableIntStateOf(0) }
     var query by remember(store.id) { mutableStateOf("") }
     var category by remember(store.id) { mutableStateOf("Todas") }
-    var orderByPrice by remember { mutableStateOf(false) }
+    var sortName by rememberSaveable { mutableStateOf(OfferSortOption.NAME.name) }
+    val sortOption = OfferSortOption.values().firstOrNull { it.name == sortName } ?: OfferSortOption.NAME
     var detail by remember(store.id) { mutableStateOf<NordestaoStoreOffer?>(null) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -75,11 +78,15 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
     val active = snapshot?.offers.orEmpty().filter { it.active(now) }
     val categories = listOf("Todas") + active.map { it.category }.distinct().sorted()
     val shown = active.filter { it.matches(query) && (category == "Todas" || it.category == category) }
-        .let { if(orderByPrice) it.sortedWith(compareBy<NordestaoStoreOffer> { if(it.showPrice) it.priceCents else Long.MAX_VALUE }.thenBy { it.description }) else it }
+        .let { sortStoreOffers(it, sortOption) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row {
-            Text("${store.name} ★", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Text("${store.name} ★", fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onChooseStore) { Text("Alterar loja") }
+            Spacer(Modifier.width(8.dp))
+            OfferSortSelector(selected = sortOption, onSelected = { sortName = it.name }, options = listOf(
+                OfferSortOption.NAME, OfferSortOption.DISCOUNT_DESC, OfferSortOption.DISCOUNT_ASC,
+                OfferSortOption.PRICE_ASC, OfferSortOption.PRICE_DESC))
         }
         OutlinedTextField(query, { query = it }, label = { Text("Buscar produto") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         if(loading) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -92,7 +99,6 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(categories) { value -> FilterChip(selected = category == value, onClick = { category = value }, label = { Text(value) }) }
         }
-        TextButton(onClick = { orderByPrice = !orderByPrice }) { Text(if(orderByPrice) "Ordenação: menor preço" else "Ordenação: ofertas da loja") }
         if(snapshot != null && shown.isEmpty()) Text(if(active.isEmpty()) "Nenhuma oferta vigente disponível para esta loja." else "Nenhum produto encontrado.")
         LazyVerticalGrid(columns = GridCells.Adaptive(150.dp), modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
@@ -135,4 +141,18 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
         if(offer.discount > 0) Text("${offer.discount}% de desconto", color = MaterialTheme.colorScheme.primary)
     } else Text("Condição especial", fontWeight = FontWeight.Bold)
     if(offer.cashback.isNotBlank()) Text(offer.cashback, fontWeight = FontWeight.Bold)
+}
+
+internal fun sortStoreOffers(offers: List<NordestaoStoreOffer>, option: OfferSortOption): List<NordestaoStoreOffer> {
+    val byName = compareBy<NordestaoStoreOffer> { it.description.lowercase(Locale.forLanguageTag("pt-BR")) }.thenBy { it.id }
+    val comparator = when(option) {
+        OfferSortOption.DISCOUNT_DESC -> compareByDescending<NordestaoStoreOffer> { it.discount }.then(byName)
+        OfferSortOption.DISCOUNT_ASC -> compareBy<NordestaoStoreOffer> { it.discount }.then(byName)
+        OfferSortOption.PRICE_ASC -> compareBy<NordestaoStoreOffer> { !it.showPrice || it.priceCents <= 0 }
+            .thenBy { it.priceCents }.then(byName)
+        OfferSortOption.PRICE_DESC -> compareBy<NordestaoStoreOffer> { !it.showPrice || it.priceCents <= 0 }
+            .thenByDescending { it.priceCents }.then(byName)
+        else -> byName
+    }
+    return offers.sortedWith(comparator)
 }

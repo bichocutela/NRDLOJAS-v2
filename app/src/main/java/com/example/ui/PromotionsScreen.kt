@@ -1194,9 +1194,10 @@ private fun PromotionCategoryList(
 }
 
 @Composable
-private fun OfferSortSelector(
+internal fun OfferSortSelector(
     selected: OfferSortOption,
-    onSelected: (OfferSortOption) -> Unit
+    onSelected: (OfferSortOption) -> Unit,
+    options: List<OfferSortOption> = OfferSortOption.values().toList()
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -1216,7 +1217,7 @@ private fun OfferSortSelector(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
-            OfferSortOption.values().forEach { option ->
+            options.forEach { option ->
                 DropdownMenuItem(
                     text = {
                         Column {
