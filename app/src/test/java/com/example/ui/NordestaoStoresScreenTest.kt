@@ -5,6 +5,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.example.data.NordestaoStoresCodec
+import com.example.data.displayHours
+import com.example.data.hoursFromLeaflet
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -15,13 +17,13 @@ import org.robolectric.annotation.Config
 @Config(sdk=[28], application=Application::class)
 class NordestaoStoresScreenTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun searchOpensStoreWithRealAddressPhoneAndMissingHoursLabel() {
+    @Test fun searchOpensStoreWithRealAddressPhoneAndLeafletHours() {
         val raw = javaClass.classLoader!!.getResourceAsStream("stores/nordestao-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
         compose.setContent { MaterialTheme { NordestaoStoresScreen({}, { NordestaoStoresCodec.decode(raw) }) } }
         compose.onNodeWithText("Buscar loja, bairro ou cidade").performTextInput("igapo")
         compose.onNodeWithText("Nordestão Igapó").performClick()
         compose.onNodeWithText("Horário de funcionamento").assertExists()
-        compose.onNodeWithText("Não informado pela fonte. Consulte a unidade antes de se deslocar.").assertExists()
+        compose.onNodeWithText("Segunda a sábado: 07h às 22h\nDomingos e feriados: 07h às 20h").assertExists()
         compose.onNodeWithText("Ligar: 8436154806").performScrollTo().assertIsDisplayed()
     }
     @Test fun sourceFailureShowsRetryInsteadOfPretendingThereAreNoStores() {
@@ -33,11 +35,32 @@ class NordestaoStoresScreenTest {
     @Test fun mapEscapesSourceContentAndDistanceOrderingUsesCoordinates() {
         val raw = javaClass.classLoader!!.getResourceAsStream("stores/nordestao-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
         val store = NordestaoStoresCodec.decode(raw).stores.first().copy(name = "</script><img src=x onerror=alert(1)>")
-        val html = storesMapHtml(listOf(store))
+        val assets = androidx.test.core.app.ApplicationProvider.getApplicationContext<Application>().assets
+        val js = assets.open("store-map/leaflet.js").bufferedReader().use { it.readText() }
+        val css = assets.open("store-map/leaflet.css").bufferedReader().use { it.readText() }
+        val html = storesMapHtml(listOf(store), js, css)
         org.junit.Assert.assertFalse(html.contains("</script><img"))
         org.junit.Assert.assertTrue(html.contains("textContent=s.name"))
         org.junit.Assert.assertTrue(html.contains("OpenStreetMap"))
+        org.junit.Assert.assertFalse(html.contains("https://unpkg.com"))
+        org.junit.Assert.assertFalse(html.contains("<script src="))
+        org.junit.Assert.assertTrue(html.contains("Leaflet 1.9.4"))
+        org.junit.Assert.assertTrue(html.contains("store-pin"))
         org.junit.Assert.assertEquals(0.0, storeDistance(-5.8,-35.2,-5.8,-35.2),0.001)
         org.junit.Assert.assertTrue(storeDistance(-5.8,-35.2,-5.9,-35.3) > 10.0)
     }
+    @Test fun hoursMatchEveryNamedStoreAndMossoroHolidayConfirmation() {
+        val raw = javaClass.classLoader!!.getResourceAsStream("stores/nordestao-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
+        val stores = NordestaoStoresCodec.decode(raw).stores
+        org.junit.Assert.assertEquals(12, stores.count { it.hoursFromLeaflet })
+        stores.forEach { store ->
+            if(store.name.contains("Doze Anos") || store.name.contains("Abolição")) org.junit.Assert.assertEquals("Segunda a sábado: 07h às 22h\nDomingos, feriados e feriados locais: 07h às 20h",store.displayHours)
+            else if(store.name.contains("Alecrim") || store.name.contains("Petrópolis") || store.name.contains("Igapó") || store.name.contains("Rota do Sol")) org.junit.Assert.assertTrue(store.displayHours.contains("Domingos e feriados: 07h às 20h"))
+            else org.junit.Assert.assertTrue(store.displayHours.contains("Feriados: 07h às 22h"))
+        }
+        val official = stores.first().copy(businessHours="Horário especial da fonte")
+        org.junit.Assert.assertEquals("Horário especial da fonte",official.displayHours)
+        org.junit.Assert.assertFalse(official.hoursFromLeaflet)
+    }
+
 }
