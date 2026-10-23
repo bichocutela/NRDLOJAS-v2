@@ -114,7 +114,7 @@ class NordestaoStoresScreenTest {
         lateinit var map: android.webkit.WebView
         compose.runOnIdle {
             map = requireNotNull(find(root))
-            map.webViewClient.onPageFinished(map, "https://appassets.androidplatform.net/nrd-stores/")
+            map.webChromeClient!!.onConsoleMessage(android.webkit.ConsoleMessage("NRD_MAP_READY", "inline", 1, android.webkit.ConsoleMessage.MessageLevel.LOG))
         }
         compose.waitForIdle()
         val shadow = org.robolectric.Shadows.shadowOf(map)

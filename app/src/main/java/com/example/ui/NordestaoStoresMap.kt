@@ -36,7 +36,7 @@ L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribu
 const storesLayer=L.layerGroup().addTo(map);let initialBounds=false;let userPin=null;let lastLocationRequest=-1;
 window.nrdUpdateStores=function(stores){storesLayer.clearLayers();const bounds=[];for(const s of stores){const box=document.createElement('div');const title=document.createElement('strong');title.textContent=s.name;box.appendChild(title);const addr=document.createElement('p');addr.textContent=s.address;box.appendChild(addr);const a=document.createElement('a');a.href='nrd-store://'+s.id;a.textContent='Ver detalhes da loja';box.appendChild(a);L.marker([s.lat,s.lon],{icon:L.divIcon({className:'store-pin',iconSize:[18,18],iconAnchor:[9,9]})}).addTo(storesLayer).bindPopup(box);bounds.push([s.lat,s.lon]);}if(!initialBounds&&bounds.length){initialBounds=true;map.fitBounds(bounds,{padding:[25,25],maxZoom:15});}};
 window.nrdSetLocation=function(point,request){if(!point)return;if(!userPin){userPin=L.marker(point,{icon:L.divIcon({className:'user-pin',iconSize:[18,18],iconAnchor:[9,9]})}).addTo(map).bindPopup('Sua localização aproximada');}else userPin.setLatLng(point);if(request!==lastLocationRequest){lastLocationRequest=request;map.setView(point,14);}};
-window.nrdUpdateStores($data);
+window.nrdUpdateStores($data);console.info('NRD_MAP_READY');
 if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>map.invalidateSize()).observe(document.getElementById('map'));}
 
 </script></body></html>"""
@@ -56,6 +56,12 @@ internal fun NordestaoStoresMap(stores: List<NordestaoStore>, location: Pair<Dou
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         settings.userAgentString += " NRDLOJAS/Stores (+https://github.com/bichocutela/NRDLOJAS-v2)"
         CookieManager.getInstance().setAcceptThirdPartyCookies(this,false)
+        webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+                if(message.message() == "NRD_MAP_READY") { pageReady = true; return true }
+                return false
+            }
+        }
         webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) { pageReady = true }
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
