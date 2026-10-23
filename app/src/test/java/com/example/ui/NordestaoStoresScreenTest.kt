@@ -49,12 +49,12 @@ class NordestaoStoresScreenTest {
         org.junit.Assert.assertEquals(0.0, storeDistance(-5.8,-35.2,-5.8,-35.2),0.001)
         org.junit.Assert.assertTrue(storeDistance(-5.8,-35.2,-5.9,-35.3) > 10.0)
     }
-    @Test fun hoursMatchEveryNamedStoreAndDoNotInventMossoroHours() {
+    @Test fun hoursMatchEveryNamedStoreAndMossoroHolidayConfirmation() {
         val raw = javaClass.classLoader!!.getResourceAsStream("stores/nordestao-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
         val stores = NordestaoStoresCodec.decode(raw).stores
-        org.junit.Assert.assertEquals(10, stores.count { it.hoursFromLeaflet })
+        org.junit.Assert.assertEquals(12, stores.count { it.hoursFromLeaflet })
         stores.forEach { store ->
-            if(store.name.contains("Doze Anos") || store.name.contains("Abolição")) org.junit.Assert.assertEquals("",store.displayHours)
+            if(store.name.contains("Doze Anos") || store.name.contains("Abolição")) org.junit.Assert.assertEquals("Segunda a sábado: 07h às 22h\nDomingos, feriados e feriados locais: 07h às 20h",store.displayHours)
             else if(store.name.contains("Alecrim") || store.name.contains("Petrópolis") || store.name.contains("Igapó") || store.name.contains("Rota do Sol")) org.junit.Assert.assertTrue(store.displayHours.contains("Domingos e feriados: 07h às 20h"))
             else org.junit.Assert.assertTrue(store.displayHours.contains("Feriados: 07h às 22h"))
         }

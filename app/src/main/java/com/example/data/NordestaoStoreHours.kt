@@ -12,6 +12,7 @@ internal object NordestaoStoreHours {
         return when(key) {
             in daily -> "Segunda a domingo: 07h às 22h\nFeriados: 07h às 22h"
             in sundayShort -> "Segunda a sábado: 07h às 22h\nDomingos e feriados: 07h às 20h"
+            "doze anos", "abolicao iv" -> "Segunda a sábado: 07h às 22h\nDomingos, feriados e feriados locais: 07h às 20h"
             else -> null
         }
     }

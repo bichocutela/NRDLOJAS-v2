@@ -108,7 +108,7 @@ fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> Nordesta
                     if(selected.identifier.isNotBlank()) Text("Identificação da unidade: ${selected.identifier}")
                     StoreInfo("Endereço", selected.address.ifBlank { "Não informado pela fonte" })
                     StoreInfo("Horário de funcionamento", selected.displayHours.ifBlank { "Não informado pela fonte. Consulte a unidade antes de se deslocar." })
-                    if(selected.hoursFromLeaflet) Text("Horário do encarte informado em 23/10/2026. Atualizações de horário da fonte oficial têm prioridade.", style = MaterialTheme.typography.bodySmall)
+                    if(selected.hoursFromLeaflet) Text("Horário de referência informado em 23/10/2026. Atualizações de horário da fonte oficial têm prioridade.", style = MaterialTheme.typography.bodySmall)
                     selected.isOpen?.let { StoreInfo("Situação informada na última consulta", if(it) "Aberta" else "Fechada") }
                     selected.capacity?.let { StoreInfo("Capacidade informada", it.toString()) }
                     selected.mapUrl?.let { url -> OutlinedButton(onClick = { open(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }) { Text("Ver no mapa") } }
