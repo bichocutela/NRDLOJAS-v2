@@ -71,10 +71,11 @@ internal fun NordestaoStoresMap(stores: List<NordestaoStore>, location: Pair<Dou
     }
     val html = remember(assets) { storesMapHtml(emptyList(), assets[0], assets[1]) }
     AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize(), update = {
+        val ready = pageReady
         if(it.tag == null) {
             it.tag = "loading"
             it.loadDataWithBaseURL("https://appassets.androidplatform.net/nrd-stores/",html,"text/html","UTF-8",null)
-        } else if(pageReady && it.tag != commands) {
+        } else if(ready && it.tag != commands) {
             it.evaluateJavascript(commands, null)
             it.tag = commands
         }

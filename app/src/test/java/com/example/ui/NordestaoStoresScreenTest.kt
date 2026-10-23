@@ -96,4 +96,34 @@ class NordestaoStoresScreenTest {
         map.destroy()
     }
 
+    @Test fun readyMapReceivesStoresAndLocationWithoutReloadingItsPage() {
+        val raw = javaClass.classLoader!!.getResourceAsStream("stores/nordestao-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
+        val stores = NordestaoStoresCodec.decode(raw).stores
+        val point = androidx.compose.runtime.mutableStateOf<Pair<Double,Double>?>(null)
+        val request = androidx.compose.runtime.mutableIntStateOf(0)
+        lateinit var root: android.view.View
+        compose.setContent {
+            root = androidx.compose.ui.platform.LocalView.current.rootView
+            NordestaoStoresMap(stores, point.value, request.intValue, {}, {})
+        }
+        fun find(view: android.view.View): android.webkit.WebView? {
+            if(view is android.webkit.WebView) return view
+            if(view is android.view.ViewGroup) for(i in 0 until view.childCount) find(view.getChildAt(i))?.let { return it }
+            return null
+        }
+        lateinit var map: android.webkit.WebView
+        compose.runOnIdle {
+            map = requireNotNull(find(root))
+            map.webViewClient.onPageFinished(map, "https://appassets.androidplatform.net/nrd-stores/")
+        }
+        compose.waitForIdle()
+        val shadow = org.robolectric.Shadows.shadowOf(map)
+        org.junit.Assert.assertTrue(shadow.lastEvaluatedJavascript.contains("16145139"))
+        val firstLoad = shadow.lastLoadDataWithBaseURL
+        compose.runOnIdle { point.value = -5.81 to -35.21; request.intValue = 1 }
+        compose.waitForIdle()
+        org.junit.Assert.assertTrue(shadow.lastEvaluatedJavascript.contains("nrdSetLocation([-5.81,-35.21],1)"))
+        org.junit.Assert.assertSame(firstLoad, shadow.lastLoadDataWithBaseURL)
+    }
+
 }
