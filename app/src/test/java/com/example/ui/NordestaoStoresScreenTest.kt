@@ -244,4 +244,18 @@ class NordestaoStoresScreenTest {
         compose.onNodeWithText("Produto da loja ${stores[0].id}").assertDoesNotExist()
         org.junit.Assert.assertEquals(stores.map { it.id }, requests.take(2))
     }
+    @Test fun storeOfferSelectorSortsAllFiveWaysAndLeavesUnknownPricesLast() {
+        val raw = javaClass.classLoader!!.getResourceAsStream("stores/offers-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
+        val base = com.example.data.NordestaoStoreOffersCodec.decode(raw, 16145121).offers.first()
+        val offers = listOf(base.copy(id="b", description="Banana", priceCents=500, discount=10),
+            base.copy(id="a", description="Abacaxi", priceCents=200, discount=40),
+            base.copy(id="c", description="Cenoura", priceCents=900, discount=20),
+            base.copy(id="d", description="Damasco", priceCents=0, discount=0, showPrice=false))
+        fun ids(option: OfferSortOption) = sortStoreOffers(offers, option).map { it.id }
+        org.junit.Assert.assertEquals(listOf("a","b","c","d"), ids(OfferSortOption.NAME))
+        org.junit.Assert.assertEquals(listOf("a","c","b","d"), ids(OfferSortOption.DISCOUNT_DESC))
+        org.junit.Assert.assertEquals(listOf("d","b","c","a"), ids(OfferSortOption.DISCOUNT_ASC))
+        org.junit.Assert.assertEquals(listOf("a","b","c","d"), ids(OfferSortOption.PRICE_ASC))
+        org.junit.Assert.assertEquals(listOf("c","b","a","d"), ids(OfferSortOption.PRICE_DESC))
+    }
 }
