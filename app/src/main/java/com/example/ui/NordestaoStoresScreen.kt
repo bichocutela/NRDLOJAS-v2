@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -45,6 +46,7 @@ fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> Nordesta
     val context = LocalContext.current
     val preferences = remember(context) { context.getSharedPreferences("nrd_store_selection", android.content.Context.MODE_PRIVATE) }
     var favorite by remember { mutableLongStateOf(preferences.getLong("favorite", -1)) }
+    var offersMode by rememberSaveable { mutableStateOf(false) }
     var mapMode by rememberSaveable { mutableStateOf(false) }
     var favoriteOnly by rememberSaveable { mutableStateOf(false) }
     var nearest by remember { mutableStateOf(false) }
@@ -107,7 +109,7 @@ fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> Nordesta
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if(loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             Text("Informações do Nordestão Pra Você", style = MaterialTheme.typography.labelMedium)
-            snapshot?.let { Text("Última consulta à fonte: ${storeUpdateLabel(it.fetchedAt)}", style = MaterialTheme.typography.bodySmall) }
+            if(!offersMode) snapshot?.let { Text("Última consulta à fonte: ${storeUpdateLabel(it.fetchedAt)}", style = MaterialTheme.typography.bodySmall) }
             if(failed) {
                 Text(if(snapshot == null) "Não foi possível carregar as lojas. Tente novamente." else "Não foi possível atualizar. As informações abaixo são da última consulta e podem ter mudado.", color = MaterialTheme.colorScheme.error)
                 TextButton(onClick = { refresh++ }, enabled = !loading) { Text("Tentar novamente") }
@@ -135,12 +137,16 @@ fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> Nordesta
                     Spacer(Modifier.height(12.dp))
                 }
             } else {
-                OutlinedTextField(query, { query = it }, label = { Text("Buscar loja, bairro ou cidade") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = !mapMode, onClick = { mapMode = false }, label = { Text("Lista") })
-                    FilterChip(selected = mapMode, onClick = { mapMode = true }, label = { Text("Mapa") })
-                    FilterChip(selected = favoriteOnly, onClick = { favoriteOnly = !favoriteOnly }, label = { Text("Preferida") })
+                if(!offersMode) OutlinedTextField(query, { query = it }, label = { Text("Buscar loja, bairro ou cidade") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = !mapMode && !offersMode, onClick = { mapMode = false; offersMode = false }, label = { Text("Lista") })
+                    FilterChip(selected = mapMode && !offersMode, onClick = { mapMode = true; offersMode = false }, label = { Text("Mapa") })
+                    FilterChip(selected = favoriteOnly && !offersMode, onClick = { favoriteOnly = !favoriteOnly; offersMode = false }, label = { Text("Preferida") })
+                    FilterChip(selected = offersMode, onClick = { offersMode = true }, label = { Text("Ofertas") })
                 }
+                if(offersMode) {
+                    NordestaoStoreOffersContent(snapshot?.stores?.find { it.id == favorite }, refresh, { offersMode = false; mapMode = false; favoriteOnly = false }, Modifier.weight(1f))
+                } else {
                 OutlinedButton(onClick = {
                     if(!mapMode && nearest) nearest = false
                     else if(androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) locate()
@@ -180,6 +186,7 @@ fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> Nordesta
                             }
                         }
                     }
+                }
                 }
             }
         }

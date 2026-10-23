@@ -216,4 +216,32 @@ class NordestaoStoresScreenTest {
         org.junit.Assert.assertEquals(2,source.cancelled.size)
     }
 
+    @Test fun offersWithoutFavoriteAskForStoreWithoutFetching() {
+        var calls = 0
+        compose.setContent { MaterialTheme {
+            NordestaoStoreOffersContent(null, 0, {}, loadOffers = { calls++; error("No store") })
+        } }
+        compose.onNodeWithText("Escolher loja").assertExists()
+        org.junit.Assert.assertEquals(0, calls)
+    }
+    @Test fun changingFavoriteReplacesOffersAndKeepsTheRequestedStoreId() {
+        val raw = javaClass.classLoader!!.getResourceAsStream("stores/nordestao-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
+        val stores = NordestaoStoresCodec.decode(raw).stores.take(2)
+        val offersRaw = javaClass.classLoader!!.getResourceAsStream("stores/offers-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
+        val offer = com.example.data.NordestaoStoreOffersCodec.decode(offersRaw, 16145121).offers.first().copy(
+            startsAt = "2000-01-01T00:00:00.000Z", endsAt = "2100-01-01T00:00:00.000Z", image = "")
+        val selected = androidx.compose.runtime.mutableStateOf(stores.first())
+        val requests = mutableListOf<Long>()
+        compose.setContent { MaterialTheme {
+            NordestaoStoreOffersContent(selected.value, 0, {}, loadOffers = { id ->
+                requests.add(id)
+                com.example.data.NordestaoStoreOffersSnapshot(id, listOf(offer.copy(description = "Produto da loja $id")), "2026-10-23T16:00:00.000Z", false)
+            })
+        } }
+        compose.onNodeWithText("Produto da loja ${stores[0].id}").assertExists()
+        compose.runOnIdle { selected.value = stores[1] }
+        compose.onNodeWithText("Produto da loja ${stores[1].id}").assertExists()
+        compose.onNodeWithText("Produto da loja ${stores[0].id}").assertDoesNotExist()
+        org.junit.Assert.assertEquals(stores.map { it.id }, requests.take(2))
+    }
 }
