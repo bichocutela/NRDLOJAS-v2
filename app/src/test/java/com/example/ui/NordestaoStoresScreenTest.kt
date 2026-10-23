@@ -1,6 +1,10 @@
 package com.example.ui
 
 import android.app.Application
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.advanceUntilIdle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -13,6 +17,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[28], application=Application::class)
 class NordestaoStoresScreenTest {
@@ -124,6 +129,91 @@ class NordestaoStoresScreenTest {
         compose.waitForIdle()
         org.junit.Assert.assertTrue(shadow.lastEvaluatedJavascript.contains("nrdSetLocation([-5.81,-35.21],1)"))
         org.junit.Assert.assertSame(firstLoad, shadow.lastLoadDataWithBaseURL)
+    }
+
+    private class LocationSourceFake : StoreLocationSource {
+        var allowed = true
+        var switchedOn = true
+        var available = listOf("network", "gps")
+        var saved = emptyList<android.location.Location>()
+        var throwsFor: String? = null
+        var immediate: android.location.Location? = null
+        val callbacks = mutableMapOf<String, (android.location.Location?) -> Unit>()
+        val cancelled = mutableListOf<String>()
+        override fun permitted() = allowed
+        override fun enabled() = switchedOn
+        override fun providers() = available
+        override fun cached() = saved
+        override fun request(provider: String, callback: (android.location.Location?) -> Unit): () -> Unit {
+            if(provider == throwsFor) throw IllegalArgumentException("unavailable provider")
+            callbacks[provider] = callback
+            immediate?.let { callback(it) }
+            return { cancelled.add(provider) }
+        }
+    }
+    private fun position(lat: Double = -5.81, ageSeconds: Long = 1) = android.location.Location("test").apply {
+        latitude = lat; longitude = -35.21; elapsedRealtimeNanos = 1_000_000_000_000L - ageSeconds * 1_000_000_000L
+    }
+    @Test fun locationUsesNewestRecentPositionWithoutWaitingForAnotherFix() = runTest {
+        val source = LocationSourceFake().apply { saved = listOf(position(-5.8,10), position(-5.81,1)) }
+        org.junit.Assert.assertEquals(StoreLocationResult.Found(-5.81 to -35.21), resolveStoreLocation(source, nowNanos={1_000_000_000_000L}))
+        org.junit.Assert.assertTrue(source.callbacks.isEmpty())
+    }
+    @Test fun networkFailureDoesNotDiscardGpsFixAndAllRequestsAreCancelled() = runTest {
+        val source = LocationSourceFake()
+        val result = async { resolveStoreLocation(source, nowNanos={1_000_000_000_000L}) }
+        runCurrent()
+        source.callbacks.getValue("network")(null)
+        org.junit.Assert.assertFalse(result.isCompleted)
+        source.callbacks.getValue("gps")(position())
+        org.junit.Assert.assertEquals(StoreLocationResult.Found(-5.81 to -35.21),result.await())
+        org.junit.Assert.assertEquals(setOf("network","gps"),source.cancelled.toSet())
+    }
+    @Test fun brokenProviderDoesNotAbortTheOtherAvailableProvider() = runTest {
+        val source = LocationSourceFake().apply { throwsFor = "network" }
+        val result = async { resolveStoreLocation(source, nowNanos={1_000_000_000_000L}) }
+        runCurrent(); source.callbacks.getValue("gps")(position())
+        org.junit.Assert.assertTrue(result.await() is StoreLocationResult.Found)
+        org.junit.Assert.assertEquals(listOf("gps"),source.cancelled)
+    }
+    @Test fun staleAndInvalidPositionsAreRejectedAndDeadlineCleansUpRequests() = runTest {
+        val source = LocationSourceFake().apply { saved = listOf(position(ageSeconds=180),position(lat=100.0)) }
+        val result = async { resolveStoreLocation(source, timeoutMs=1000, nowNanos={1_000_000_000_000L}) }
+        advanceUntilIdle()
+        org.junit.Assert.assertEquals(StoreLocationResult.Error(StoreLocationFailure.TIMEOUT),result.await())
+        org.junit.Assert.assertEquals(setOf("network","gps"),source.cancelled.toSet())
+    }
+    @Test fun leavingScreenCancelsAllPendingLocationRequests() = runTest {
+        val source = LocationSourceFake()
+        val result = async { resolveStoreLocation(source, nowNanos={1_000_000_000_000L}) }
+        runCurrent(); result.cancel(); runCurrent()
+        org.junit.Assert.assertEquals(setOf("network","gps"),source.cancelled.toSet())
+    }
+    @Test fun missingPermissionAndDisabledDeviceHaveDifferentActionableFailures() = runTest {
+        val denied = LocationSourceFake().apply { allowed = false }
+        org.junit.Assert.assertEquals(StoreLocationResult.Error(StoreLocationFailure.PERMISSION_DENIED),resolveStoreLocation(denied))
+        val disabled = LocationSourceFake().apply { switchedOn = false }
+        org.junit.Assert.assertEquals(StoreLocationResult.Error(StoreLocationFailure.DISABLED),resolveStoreLocation(disabled))
+        org.junit.Assert.assertTrue(denied.callbacks.isEmpty() && disabled.callbacks.isEmpty())
+    }
+    @Test fun approximatePermissionUsesFusedAndNetworkWhileGpsRequiresFinePermission() {
+        org.junit.Assert.assertEquals(listOf("fused","network"),storeLocationProviders(listOf("gps","network","fused"),false))
+        org.junit.Assert.assertEquals(listOf("gps"),storeLocationProviders(listOf("gps"),true))
+        org.junit.Assert.assertEquals(emptyList<String>(),storeLocationProviders(listOf("gps"),false))
+    }
+
+    @Test fun immediateProviderReplyStillCancelsItsRequestWithoutWaitingForGps() = runTest {
+        val source = LocationSourceFake().apply { immediate = position() }
+        org.junit.Assert.assertTrue(resolveStoreLocation(source, nowNanos={1_000_000_000_000L}) is StoreLocationResult.Found)
+        org.junit.Assert.assertEquals(listOf("network"),source.cancelled)
+        org.junit.Assert.assertEquals(setOf("network"),source.callbacks.keys)
+    }
+    @Test fun allProvidersWithoutAFixReturnUnavailableInsteadOfCrashing() = runTest {
+        val source = LocationSourceFake()
+        val result = async { resolveStoreLocation(source, nowNanos={1_000_000_000_000L}) }
+        runCurrent(); source.callbacks.values.toList().forEach { it(null) }
+        org.junit.Assert.assertEquals(StoreLocationResult.Error(StoreLocationFailure.UNAVAILABLE),result.await())
+        org.junit.Assert.assertEquals(2,source.cancelled.size)
     }
 
 }

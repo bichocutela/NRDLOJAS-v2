@@ -51,18 +51,30 @@ fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> Nordesta
     var location by remember { mutableStateOf<Pair<Double,Double>?>(null) }
     var locationRequest by remember { mutableIntStateOf(0) }
     var locating by remember { mutableStateOf(false) }
+    var locationProblem by remember { mutableStateOf<StoreLocationFailure?>(null) }
     var locationMessage by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     fun locate() { scope.launch {
         locating = true
         try {
-            val point = storeLocation(context)
-            if(point != null) { location = point; nearest = true; locationRequest++ }
-            locationMessage = if(point == null) "Não foi possível obter sua localização. Confira se a localização do aparelho está ligada e tente novamente." else "Sua localização aproximada está marcada em azul no mapa. Distâncias em linha reta."
-        } finally { locating = false }
+            locationProblem = null
+            when(val result = storeLocation(context)) {
+                is StoreLocationResult.Found -> {
+                    location = result.point; nearest = true; locationRequest++
+                    locationMessage = "Sua localização está marcada em azul no mapa. Distâncias aproximadas em linha reta."
+                }
+                is StoreLocationResult.Error -> { locationProblem = result.reason; locationMessage = result.reason.message }
+            }
+        } catch(cancelled: CancellationException) { throw cancelled }
+        catch(_: Exception) { locationProblem = StoreLocationFailure.UNAVAILABLE; locationMessage = StoreLocationFailure.UNAVAILABLE.message }
+        finally { locating = false }
     } }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if(granted) locate() else { locating = false; locationMessage = "Localização não permitida. Você pode consultar as lojas pela lista ou mapa." }
+    val locationPermissions = arrayOf(android.Manifest.permission.ACCESS_COARSE_LOCATION, android.Manifest.permission.ACCESS_FINE_LOCATION)
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        if(grants.values.any { it }) locate() else {
+            locating = false; locationProblem = StoreLocationFailure.PERMISSION_DENIED
+            locationMessage = StoreLocationFailure.PERMISSION_DENIED.message
+        }
     }
     fun favoriteStore(id: Long) { favorite = if(favorite == id) -1 else id; preferences.edit().putLong("favorite",favorite).apply() }
 
@@ -132,9 +144,18 @@ fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> Nordesta
                 OutlinedButton(onClick = {
                     if(!mapMode && nearest) nearest = false
                     else if(androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) locate()
-                    else permission.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                    else permission.launch(locationPermissions)
                 }, enabled = !locating) { Text(if(locating) "Obtendo localização…" else if(mapMode) "Minha localização" else if(nearest) "Ordenar por nome" else "Mais próxima") }
                 if(locationMessage.isNotBlank()) Text(locationMessage, style = MaterialTheme.typography.bodySmall)
+                if(locationProblem == StoreLocationFailure.DISABLED) TextButton(onClick = {
+                    open(Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                }) { Text("Ativar localização do aparelho") }
+                if(locationProblem == StoreLocationFailure.PERMISSION_DENIED) TextButton(onClick = {
+                    open(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+                }) { Text("Abrir permissões do NRD") }
+                if(locationProblem in listOf(StoreLocationFailure.UNAVAILABLE, StoreLocationFailure.TIMEOUT) &&
+                    androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                    TextButton(onClick = { permission.launch(locationPermissions) }) { Text("Permitir localização precisa (GPS)") }
                 val stores = snapshot?.stores.orEmpty().filter { it.matches(query) && (!favoriteOnly || it.id == favorite) }.let { list ->
                     val point = location
                     if(nearest && point != null) list.sortedBy { if(it.latitude != null && it.longitude != null) storeDistance(point.first,point.second,it.latitude,it.longitude) else Double.MAX_VALUE } else list
