@@ -19,3 +19,6 @@ verify_jwt = true
 
 [functions.nrd-stores]
 verify_jwt = true
+
+[functions.nrd-store-offers]
+verify_jwt = true

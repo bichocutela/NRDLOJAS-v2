@@ -34,4 +34,19 @@ class NordestaoStoresTest {
         val root = org.json.JSONObject(fixture()); root.getJSONArray("stores").getJSONObject(0).put("id",0)
         assertThrows(Exception::class.java) { NordestaoStoresCodec.decode(root.toString()) }
     }
+    @Test fun offersRemainBoundToTheRequestedStoreAndPreserveCashbackPrices() {
+        val raw = javaClass.classLoader!!.getResourceAsStream("stores/offers-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
+        val snapshot = NordestaoStoreOffersCodec.decode(raw, 16145121)
+        assertEquals(4, snapshot.offers.size)
+        val cashback = snapshot.offers.first { it.cashback.isNotBlank() }
+        assertTrue(cashback.priceCents > 0)
+        assertTrue(cashback.matches(cashback.code))
+        assertThrows(IllegalArgumentException::class.java) { NordestaoStoreOffersCodec.decode(raw, 18055359) }
+        val restored = NordestaoStoreOffersCodec.decode(NordestaoStoreOffersCodec.encode(snapshot), 16145121)
+        assertEquals(snapshot.offers, restored.offers)
+        assertTrue(restored.stale)
+        val offer = snapshot.offers.first()
+        assertFalse(offer.active(0))
+        assertFalse(offer.active(Long.MAX_VALUE))
+    }
 }
