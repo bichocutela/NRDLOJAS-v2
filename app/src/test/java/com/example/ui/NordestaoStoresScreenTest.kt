@@ -63,4 +63,67 @@ class NordestaoStoresScreenTest {
         org.junit.Assert.assertFalse(official.hoursFromLeaflet)
     }
 
+    @Test fun mapLocationCommandsCarryThePointAndRecenterOnlyOnExplicitRequest() {
+        val script = storesMapUpdate(emptyList(), -5.81 to -35.21, 2)
+        org.junit.Assert.assertTrue(script.contains("window.nrdSetLocation([-5.81,-35.21],2)"))
+        org.junit.Assert.assertTrue(storesMapUpdate(emptyList(), null, 0).contains("nrdSetLocation(null,0)"))
+        org.junit.Assert.assertTrue(storesMapUpdate(emptyList(), Double.NaN to 0.0, 0).contains("nrdSetLocation(null,0)"))
+    }
+    @Test fun mapOwnsDragAndPinchUntilTheGestureEndsOrIsCancelled() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<Application>()
+        val requests = mutableListOf<Boolean>()
+        val parent = object : android.widget.FrameLayout(context) {
+            override fun requestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {
+                requests.add(disallowIntercept)
+                super.requestDisallowInterceptTouchEvent(disallowIntercept)
+            }
+        }
+        val map = StoreMapWebView(context)
+        parent.addView(map)
+        fun touch(action: Int) {
+            val event = android.view.MotionEvent.obtain(0, 1, action, 20f, 20f, 0)
+            try { map.dispatchTouchEvent(event) } finally { event.recycle() }
+        }
+        touch(android.view.MotionEvent.ACTION_DOWN)
+        org.junit.Assert.assertEquals(true, requests.last())
+        touch(android.view.MotionEvent.ACTION_MOVE)
+        org.junit.Assert.assertEquals(true, requests.last())
+        touch(android.view.MotionEvent.ACTION_UP)
+        org.junit.Assert.assertEquals(false, requests.last())
+        touch(android.view.MotionEvent.ACTION_DOWN)
+        touch(android.view.MotionEvent.ACTION_CANCEL)
+        org.junit.Assert.assertEquals(false, requests.last())
+        map.destroy()
+    }
+
+    @Test fun readyMapReceivesStoresAndLocationWithoutReloadingItsPage() {
+        val raw = javaClass.classLoader!!.getResourceAsStream("stores/nordestao-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
+        val stores = NordestaoStoresCodec.decode(raw).stores
+        val point = androidx.compose.runtime.mutableStateOf<Pair<Double,Double>?>(null)
+        val request = androidx.compose.runtime.mutableIntStateOf(0)
+        lateinit var root: android.view.View
+        compose.setContent {
+            root = androidx.compose.ui.platform.LocalView.current.rootView
+            NordestaoStoresMap(stores, point.value, request.intValue, {}, {})
+        }
+        fun find(view: android.view.View): android.webkit.WebView? {
+            if(view is android.webkit.WebView) return view
+            if(view is android.view.ViewGroup) for(i in 0 until view.childCount) find(view.getChildAt(i))?.let { return it }
+            return null
+        }
+        lateinit var map: android.webkit.WebView
+        compose.runOnIdle {
+            map = requireNotNull(find(root))
+            map.webChromeClient!!.onConsoleMessage(android.webkit.ConsoleMessage("NRD_MAP_READY", "inline", 1, android.webkit.ConsoleMessage.MessageLevel.LOG))
+        }
+        compose.waitForIdle()
+        val shadow = org.robolectric.Shadows.shadowOf(map)
+        org.junit.Assert.assertTrue(shadow.lastEvaluatedJavascript.contains("16145139"))
+        val firstLoad = shadow.lastLoadDataWithBaseURL
+        compose.runOnIdle { point.value = -5.81 to -35.21; request.intValue = 1 }
+        compose.waitForIdle()
+        org.junit.Assert.assertTrue(shadow.lastEvaluatedJavascript.contains("nrdSetLocation([-5.81,-35.21],1)"))
+        org.junit.Assert.assertSame(firstLoad, shadow.lastLoadDataWithBaseURL)
+    }
+
 }

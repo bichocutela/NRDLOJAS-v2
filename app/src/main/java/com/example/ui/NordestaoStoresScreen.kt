@@ -47,17 +47,19 @@ fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> Nordesta
     var favorite by remember { mutableLongStateOf(preferences.getLong("favorite", -1)) }
     var mapMode by rememberSaveable { mutableStateOf(false) }
     var favoriteOnly by rememberSaveable { mutableStateOf(false) }
-    var nearest by rememberSaveable { mutableStateOf(false) }
+    var nearest by remember { mutableStateOf(false) }
     var location by remember { mutableStateOf<Pair<Double,Double>?>(null) }
+    var locationRequest by remember { mutableIntStateOf(0) }
     var locating by remember { mutableStateOf(false) }
     var locationMessage by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     fun locate() { scope.launch {
         locating = true
-        location = storeLocation(context)
-        nearest = location != null
-        locationMessage = if(location == null) "Não foi possível obter sua localização. A lista continua disponível." else "Distâncias aproximadas em linha reta."
-        locating = false
+        try {
+            val point = storeLocation(context)
+            if(point != null) { location = point; nearest = true; locationRequest++ }
+            locationMessage = if(point == null) "Não foi possível obter sua localização. Confira se a localização do aparelho está ligada e tente novamente." else "Sua localização aproximada está marcada em azul no mapa. Distâncias em linha reta."
+        } finally { locating = false }
     } }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if(granted) locate() else { locating = false; locationMessage = "Localização não permitida. Você pode consultar as lojas pela lista ou mapa." }
@@ -128,10 +130,10 @@ fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> Nordesta
                     FilterChip(selected = favoriteOnly, onClick = { favoriteOnly = !favoriteOnly }, label = { Text("Preferida") })
                 }
                 OutlinedButton(onClick = {
-                    if(nearest) nearest = false
+                    if(!mapMode && nearest) nearest = false
                     else if(androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) locate()
                     else permission.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
-                }, enabled = !locating) { Text(if(locating) "Obtendo localização…" else if(nearest) "Ordenar por nome" else "Mais próxima") }
+                }, enabled = !locating) { Text(if(locating) "Obtendo localização…" else if(mapMode) "Minha localização" else if(nearest) "Ordenar por nome" else "Mais próxima") }
                 if(locationMessage.isNotBlank()) Text(locationMessage, style = MaterialTheme.typography.bodySmall)
                 val stores = snapshot?.stores.orEmpty().filter { it.matches(query) && (!favoriteOnly || it.id == favorite) }.let { list ->
                     val point = location
@@ -140,7 +142,7 @@ fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> Nordesta
                 if(snapshot != null) Text("${stores.size} unidade(s)", style = MaterialTheme.typography.labelMedium)
                 if(snapshot != null && stores.isEmpty()) Text(when { favoriteOnly -> "Nenhuma loja preferida encontrada. Use a estrela para escolher sua unidade."; query.isBlank() -> "Nenhuma loja disponível na fonte."; else -> "Nenhuma unidade encontrada." })
                 if(mapMode && stores.isNotEmpty()) {
-                    Box(Modifier.weight(1f)) { NordestaoStoresMap(stores, { selectedId = it }, { open(Intent(Intent.ACTION_VIEW,it)) }) }
+                    Box(Modifier.weight(1f)) { NordestaoStoresMap(stores, location, locationRequest, { selectedId = it }, { open(Intent(Intent.ACTION_VIEW,it)) }) }
                 } else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
                     items(stores, key = { it.id }) { store ->
                         OutlinedCard(onClick = { selectedId = store.id }, modifier = Modifier.fillMaxWidth()) {
