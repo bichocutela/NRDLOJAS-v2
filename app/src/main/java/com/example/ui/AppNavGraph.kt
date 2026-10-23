@@ -78,6 +78,7 @@ fun AppNavGraph(
     onSharedOrderPdfConsumed: () -> Unit = {}
 ) {
     val navController = rememberNavController()
+    val activeEntry by navController.currentBackStackEntryAsState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerOpenSignal = LocalNrdDrawerIsOpen.current
     val scope = rememberCoroutineScope()
@@ -244,6 +245,7 @@ fun AppNavGraph(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        gesturesEnabled = drawerState.isOpen || activeEntry?.destination?.route != "nordestao_stores",
         drawerContent = {
             ModalDrawerSheet(
                 modifier = Modifier

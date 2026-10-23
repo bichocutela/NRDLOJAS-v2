@@ -63,4 +63,37 @@ class NordestaoStoresScreenTest {
         org.junit.Assert.assertFalse(official.hoursFromLeaflet)
     }
 
+    @Test fun mapLocationCommandsCarryThePointAndRecenterOnlyOnExplicitRequest() {
+        val script = storesMapUpdate(emptyList(), -5.81 to -35.21, 2)
+        org.junit.Assert.assertTrue(script.contains("window.nrdSetLocation([-5.81,-35.21],2)"))
+        org.junit.Assert.assertTrue(storesMapUpdate(emptyList(), null, 0).contains("nrdSetLocation(null,0)"))
+        org.junit.Assert.assertTrue(storesMapUpdate(emptyList(), Double.NaN to 0.0, 0).contains("nrdSetLocation(null,0)"))
+    }
+    @Test fun mapOwnsDragAndPinchUntilTheGestureEndsOrIsCancelled() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<Application>()
+        val requests = mutableListOf<Boolean>()
+        val parent = object : android.widget.FrameLayout(context) {
+            override fun requestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {
+                requests.add(disallowIntercept)
+                super.requestDisallowInterceptTouchEvent(disallowIntercept)
+            }
+        }
+        val map = StoreMapWebView(context)
+        parent.addView(map)
+        fun touch(action: Int) {
+            val event = android.view.MotionEvent.obtain(0, 1, action, 20f, 20f, 0)
+            try { map.dispatchTouchEvent(event) } finally { event.recycle() }
+        }
+        touch(android.view.MotionEvent.ACTION_DOWN)
+        org.junit.Assert.assertEquals(true, requests.last())
+        touch(android.view.MotionEvent.ACTION_MOVE)
+        org.junit.Assert.assertEquals(true, requests.last())
+        touch(android.view.MotionEvent.ACTION_UP)
+        org.junit.Assert.assertEquals(false, requests.last())
+        touch(android.view.MotionEvent.ACTION_DOWN)
+        touch(android.view.MotionEvent.ACTION_CANCEL)
+        org.junit.Assert.assertEquals(false, requests.last())
+        map.destroy()
+    }
+
 }

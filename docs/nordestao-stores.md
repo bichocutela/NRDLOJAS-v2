@@ -23,3 +23,7 @@ O filtro Preferida mostra apenas a unidade marcada com estrela; desative-o para 
 Leaflet 1.9.4 (JS/CSS e licença BSD) incluído no APK, com SHA-256 conferido contra os hashes SRI oficiais. Não há script ou estilo de CDN ao abrir o mapa. Marcadores usam elementos locais, sem download de ícones. O fundo continua usando tiles HTTPS do OpenStreetMap, com atribuição e User-Agent do NRD. WebView ocupa tamanho explícito e o mapa recalcula o tamanho ao mudar o espaço disponível.
 
 Horários do encarte fornecido em 23/10/2026 são fallback por nome exato normalizado: Lagoa Nova, Cidade Jardim, Santa Catarina, Tirol, Nova Parnamirim e Ponta Negra abrem das 07h às 22h todos os dias, inclusive feriados. Alecrim, Petrópolis, Igapó/São Gonçalo e Rota do Sol abrem segunda a sábado das 07h às 22h, e domingos e feriados das 07h às 20h. O usuário confirmou Doze Anos e Abolição IV: segunda a sábado, 07h às 22h; domingos, feriados e feriados locais, 07h às 20h. Horários não vazios da API oficial têm prioridade.
+
+## Localização e gestos
+
+A localização aproximada já autorizada pelo usuário é enviada somente à WebView local, onde um marcador azul identifica a posição. O botão Minha localização solicita uma posição e centraliza novamente; conceder permissão continua sem enviar coordenadas ao backend. Atualizações de lojas usam JavaScript na página existente e preservam a câmera e o zoom, sem recarregar a WebView. O menu lateral não intercepta arrastos nessa rota e a WebView mantém a sequência de toque até UP/CANCEL. A ordenação por distância permanece disponível na lista.
