@@ -107,7 +107,8 @@ fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> Nordesta
                     if(favorite == selected.id) Text("Sua loja preferida no NRD")
                     if(selected.identifier.isNotBlank()) Text("Identificação da unidade: ${selected.identifier}")
                     StoreInfo("Endereço", selected.address.ifBlank { "Não informado pela fonte" })
-                    StoreInfo("Horário de funcionamento", selected.businessHours.ifBlank { "Não informado pela fonte. Consulte a unidade antes de se deslocar." })
+                    StoreInfo("Horário de funcionamento", selected.displayHours.ifBlank { "Não informado pela fonte. Consulte a unidade antes de se deslocar." })
+                    if(selected.hoursFromLeaflet) Text("Horário do encarte informado em 23/10/2026. Atualizações de horário da fonte oficial têm prioridade.", style = MaterialTheme.typography.bodySmall)
                     selected.isOpen?.let { StoreInfo("Situação informada na última consulta", if(it) "Aberta" else "Fechada") }
                     selected.capacity?.let { StoreInfo("Capacidade informada", it.toString()) }
                     selected.mapUrl?.let { url -> OutlinedButton(onClick = { open(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }) { Text("Ver no mapa") } }
@@ -151,7 +152,7 @@ fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> Nordesta
                                 val point = location
                                 if(nearest && point != null && store.latitude != null && store.longitude != null) Text(String.format(java.util.Locale.forLanguageTag("pt-BR"), "Aproximadamente %.1f km", storeDistance(point.first,point.second,store.latitude,store.longitude)))
                                 Text(listOf(store.neighborhood, store.city, store.state).filter { it.isNotBlank() }.joinToString(" • "))
-                                Text(if(store.businessHours.isBlank()) "Horário não informado pela fonte" else store.businessHours)
+                                Text(if(store.displayHours.isBlank()) "Horário não informado pela fonte" else store.displayHours)
                                 Text("Ver endereço e contatos", color = MaterialTheme.colorScheme.primary)
                             }
                         }

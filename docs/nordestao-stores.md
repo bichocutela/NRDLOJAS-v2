@@ -17,3 +17,9 @@ Comportamentos presentes no APK e reproduzidos no NRD: busca, lista/mapa com mar
 O endpoint mantém a última resposta oficial válida em `nrd_stores_cache`, acessível somente ao servidor (RLS habilitada e permissões de anon/authenticated revogadas). Após reinício do worker, essa resposta permite exibir as lojas imediatamente. Dados vencidos são renovados em segundo plano; falhas preservam a data real da última consulta e aplicam espera de 60 segundos entre tentativas. Uma resposta oficial vazia continua substituindo a lista. O prazo da consulta de lojas começa somente após a autenticação.
 
 O filtro Preferida mostra apenas a unidade marcada com estrela; desative-o para visualizar todas as lojas.
+
+## Mapa e horários (correção Android)
+
+Leaflet 1.9.4 (JS/CSS e licença BSD) incluído no APK, com SHA-256 conferido contra os hashes SRI oficiais. Não há script ou estilo de CDN ao abrir o mapa. Marcadores usam elementos locais, sem download de ícones. O fundo continua usando tiles HTTPS do OpenStreetMap, com atribuição e User-Agent do NRD. WebView ocupa tamanho explícito e o mapa recalcula o tamanho ao mudar o espaço disponível.
+
+Horários do encarte fornecido em 23/10/2026 são fallback por nome exato normalizado: Lagoa Nova, Cidade Jardim, Santa Catarina, Tirol, Nova Parnamirim e Ponta Negra abrem das 07h às 22h todos os dias, inclusive feriados. Alecrim, Petrópolis, Igapó/São Gonçalo e Rota do Sol abrem segunda a sábado das 07h às 22h, e domingos e feriados das 07h às 20h. O encarte não informa horários de Doze Anos e Abolição IV; nenhum horário é inferido para elas. Horários não vazios da API oficial têm prioridade.
