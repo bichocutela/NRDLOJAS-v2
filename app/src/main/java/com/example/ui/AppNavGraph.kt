@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Info
@@ -310,6 +311,7 @@ fun AppNavGraph(
                         openProfileSection("profile")
                     },
                     onGoToEncartes = { scope.launch { drawerState.close() }; navController.navigate("encartes") { launchSingleTop = true } },
+                    onGoToStores = { scope.launch { drawerState.close() }; navController.navigate("nordestao_stores") { launchSingleTop = true } },
                     onGoToSettings = { scope.launch { drawerState.close() }; navController.navigate("settings") },
                     onGoToAcp = { scope.launch { drawerState.close() }; navController.navigate("acp_consultation") { launchSingleTop = true } },
                     onGoToAdmin = {
@@ -474,6 +476,7 @@ fun AppNavGraph(
                         }
                     }
                 }
+                composable("nordestao_stores") { NordestaoStoresScreen(onBack = { navController.popBackStack() }) }
                 composable("encartes") { EncartesScreen(onNavigateBack = { navController.popBackStack() }) }
                 composable("settings") { SettingsScreen(viewModel, onNavigateBack = { navController.popBackStack() }) }
                 composable("acp_consultation") {
@@ -732,6 +735,7 @@ fun LoginDrawerContent(
     onGoToMyPoint: () -> Unit,
     onGoToSettings: () -> Unit,
     onGoToEncartes: () -> Unit,
+    onGoToStores: () -> Unit = {},
     onGoToAbout: () -> Unit,
     onGoToDynamicTab: (Int) -> Unit,
     onGoToAcp: () -> Unit = {},
@@ -1056,6 +1060,8 @@ fun LoginDrawerContent(
                 )
             }
         }
+        Spacer(modifier = Modifier.height(if (expressive) 6.dp else 8.dp))
+        DrawerActionButton(label = "Nossas Lojas", icon = Icons.Default.LocationOn, onClick = onGoToStores)
         Spacer(modifier = Modifier.height(if (expressive) 6.dp else 8.dp))
         DrawerActionButton(
             label = "Sobre",
