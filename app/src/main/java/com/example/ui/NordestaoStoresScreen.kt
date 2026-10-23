@@ -137,7 +137,7 @@ fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> Nordesta
                     if(nearest && point != null) list.sortedBy { if(it.latitude != null && it.longitude != null) storeDistance(point.first,point.second,it.latitude,it.longitude) else Double.MAX_VALUE } else list
                 }
                 if(snapshot != null) Text("${stores.size} unidade(s)", style = MaterialTheme.typography.labelMedium)
-                if(snapshot != null && stores.isEmpty()) Text(if(query.isBlank()) "Nenhuma loja disponível na fonte." else "Nenhuma unidade encontrada.")
+                if(snapshot != null && stores.isEmpty()) Text(when { favoriteOnly -> "Nenhuma loja preferida encontrada. Use a estrela para escolher sua unidade."; query.isBlank() -> "Nenhuma loja disponível na fonte."; else -> "Nenhuma unidade encontrada." })
                 if(mapMode && stores.isNotEmpty()) {
                     Box(Modifier.weight(1f)) { NordestaoStoresMap(stores, { selectedId = it }, { open(Intent(Intent.ACTION_VIEW,it)) }) }
                 } else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
