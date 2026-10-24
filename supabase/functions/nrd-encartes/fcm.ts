@@ -1,3 +1,4 @@
+import { createWebNotifier } from '../_shared/web-notifications.mjs';
 import * as jose from 'https://deno.land/x/jose@v4.14.4/index.ts';
 import { TOPIC } from './notifications.mjs';
 let cached = '', expires = 0;
@@ -30,4 +31,5 @@ export async function sendLeaflet(data: Record<string, string>, validateOnly = f
       android: { priority: 'high', ttl: `${ttl}s` } } }), signal: AbortSignal.timeout(12000),
   });
   if (!response.ok) throw new Error(`FCM unavailable (${response.status})`);
+  if (!validateOnly) await createWebNotifier({url:Deno.env.get('SUPABASE_URL'),key:Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),project:account.project_id,token:()=>firebaseToken(account)})(data);
 }

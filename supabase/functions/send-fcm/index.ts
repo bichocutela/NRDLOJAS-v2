@@ -1,3 +1,4 @@
+import { webPreferences, createWebNotifier } from '../_shared/web-notifications.mjs';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import * as jose from "https://deno.land/x/jose@v4.14.4/index.ts";
 
@@ -78,12 +79,12 @@ function webPushMirrorConfig() {
   return { url: url.replace(/\/$/, ""), serviceRoleKey };
 }
 
-async function saveWebPushToken(token: string, uid: string) {
+async function saveWebPushToken(token: string, uid: string, preferences: Record<string, unknown>) {
   const { url, serviceRoleKey } = webPushMirrorConfig();
   const response = await fetch(`${url}/rest/v1/web_push_subscriptions`, {
     method: "POST",
     headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify({ token, uid, updated_at: new Date().toISOString() }),
+    body: JSON.stringify({ token, uid, preferences, updated_at: new Date().toISOString() }),
   });
   if (!response.ok) throw new Error(`Não foi possível espelhar inscrição Web Push (HTTP ${response.status})`);
 }
@@ -152,12 +153,9 @@ async function sendEvent(
   // materializar notificações vazias e agrupá-las mostrando somente o horário.
   const send = await fetch("https://fcm.googleapis.com/v1/projects/" + accountProject + "/messages:send", { method: "POST", headers: { Authorization: "Bearer " + fcmToken, "Content-Type": "application/json" }, body: JSON.stringify({ message: { topic: targetTopic, ...message, android: { priority: "high" } } }) });
   if (!send.ok) throw new Error("FCM error " + send.status + ": " + await send.text());
-  const webTokens = mirrorToWeb ? await readWebPushTokens() : [];
-  const webResults = mirrorToWeb
-    ? await Promise.allSettled(webTokens.map((webToken) => fetch("https://fcm.googleapis.com/v1/projects/" + accountProject + "/messages:send", { method: "POST", headers: { Authorization: "Bearer " + fcmToken, "Content-Type": "application/json" }, body: JSON.stringify({ message: { token: webToken, ...message, webpush: { headers: { Urgency: "high", TTL: "2419200" }, fcm_options: { link: webLink } } } }) })))
-    : [];
-  const deliveredWeb = webResults.filter((result) => result.status === "fulfilled" && result.value.ok).length;
-  console.info("[send-fcm] Eventos enviados", { uid, type, topic: targetTopic, webSubscriptions: webTokens.length, deliveredWeb });
+  const web = mirrorToWeb ? await createWebNotifier({ url:Deno.env.get("SUPABASE_URL"), key:Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"), project:accountProject, token:async()=>fcmToken })(message.data) : { recipients:0, delivered:0 };
+  const deliveredWeb = web.delivered;
+  console.info("[send-fcm] Eventos enviados", { uid, type, topic: targetTopic, webSubscriptions:web.recipients, deliveredWeb });
   return { deliveredWeb };
 }
 
@@ -213,11 +211,12 @@ serve(async (request) => {
     }
     if (body.action === "REGISTER_WEB_TOKEN") {
       if (!body.webToken || typeof body.webToken !== "string" || body.webToken.length < 80) return json({ ok: false, error: "Invalid web token" }, 400);
+      let preferences; try { preferences = webPreferences(body.preferences ?? {}); } catch { return json({ok:false,error:"Invalid notification preferences"},400); }
       const firestoreToken = await accessToken(account, "https://www.googleapis.com/auth/datastore");
       const id = await tokenId(body.webToken);
       const result = await fetch(`https://firestore.googleapis.com/v1/projects/${accountProject}/databases/(default)/documents/webPushSubscriptions/${id}`, { method: "PATCH", headers: { Authorization: `Bearer ${firestoreToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ fields: { token: { stringValue: body.webToken }, uid: { stringValue: identity?.uid ?? "anonymous" }, updatedAt: { timestampValue: new Date().toISOString() } } }) });
       if (!result.ok) throw new Error(`Não foi possível registrar Web Push (HTTP ${result.status})`);
-      await saveWebPushToken(body.webToken, identity?.uid ?? "anonymous");
+      await saveWebPushToken(body.webToken, identity?.uid ?? "anonymous", preferences);
       console.info("[send-fcm] Web Push registrado", { uid: identity?.uid ?? "anonymous" });
       return json({ ok: true, registered: true });
     }
@@ -229,7 +228,8 @@ serve(async (request) => {
       if (role !== "mestre") return json({ ok: false, error: "Somente o Mestre pode publicar treinamentos" }, 403);
       const training = await publishTraining({ role, id: body.trainingId, project: accountProject,
         firestoreToken: await accessToken(account, "https://www.googleapis.com/auth/datastore"),
-        messagingToken: await accessToken(account, "https://www.googleapis.com/auth/firebase.messaging") });
+        messagingToken: await accessToken(account, "https://www.googleapis.com/auth/firebase.messaging"),
+        notifyWeb: createWebNotifier({url:Deno.env.get("SUPABASE_URL"),key:Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),project:accountProject,token:()=>accessToken(account,"https://www.googleapis.com/auth/firebase.messaging")}) });
       return json(training.result, training.status);
     }
     if (body.action === "PUBLISH_WORK_SCHEDULE") {

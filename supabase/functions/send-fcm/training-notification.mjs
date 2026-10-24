@@ -10,7 +10,7 @@ export function trainingNotice(visibility, raw, id) {
     type: 'NEW_TRAINING', trainingId: id };
 }
 
-export async function publishTraining({ role, id, project, firestoreToken, messagingToken, fetcher = fetch, now = Date.now() }) {
+export async function publishTraining({ role, id, project, firestoreToken, messagingToken, fetcher = fetch, now = Date.now(), notifyWeb = async () => {} }) {
   if (role !== 'mestre') return { status: 403, result: { ok: false, error: 'Somente o Mestre pode publicar treinamentos' } };
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(id ?? '')) return { status: 400, result: { ok: false, error: 'Identificador inválido' } };
   const base = `https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents`;
@@ -39,6 +39,7 @@ export async function publishTraining({ role, id, project, firestoreToken, messa
       body: JSON.stringify({ message: { topic: 'training_updates', data, android: { priority: 'high', ttl: '3600s' } } })
     });
     if (!sent.ok) throw new Error(`Falha ao enviar aviso (HTTP ${sent.status})`);
+    await notifyWeb(data);
     const marked = await fetcher(ref, { method: 'PATCH', headers, body: JSON.stringify({ fields: { status: { stringValue: 'sent' }, createdAt: { integerValue: String(now) } } }) });
     if (!marked.ok) throw new Error('Aviso enviado, mas a confirmação falhou. Aguarde antes de tentar novamente.');
     return { status: 200, result: { ok: true, alreadyAnnounced: false } };

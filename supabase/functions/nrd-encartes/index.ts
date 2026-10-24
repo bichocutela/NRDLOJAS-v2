@@ -1,3 +1,4 @@
+import { encartePdf } from './assets.mjs';
 import { natalCatalog, validDate } from './catalog.mjs';
 import { notifyCatalog, notificationPayload } from './notifications.mjs';
 import { sendLeaflet } from './fcm.ts';
@@ -89,6 +90,8 @@ Deno.serve(async req => {
       if (!pending) pending = refresh().finally(() => { pending = undefined; });
       await pending;
     }
+    const assetId = new URL(req.url).searchParams.get('asset');
+    if (assetId !== null) return await encartePdf(assetId, cache!.tabloids);
     // Recheck expiry even while the metadata cache is warm.
     return new Response(JSON.stringify({ ...cache, tabloids: cache!.tabloids.filter(t => validDate(t.endDate) >= Date.now()) }), { headers });
   } catch {
