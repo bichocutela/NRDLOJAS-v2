@@ -67,8 +67,10 @@ internal class AcpPromotionsRepository(context: Context) {
         var cityProducts = previousRows
         if (!isInitialized()) onNetwork(true)
         val stores = PromotionStores.read(forceRefresh).filter { it.enabled }
-        val promotions = mutableListOf<Promotion>()
-        for (store in stores) {
+        val promotions = loadStorePromotionSnapshots(stores, cachedOffers.values.toList(), onFailure = { code ->
+            if(code == "0012") { delta = null; cityProducts = previousRows }
+        }) { store ->
+            val storeOffers = mutableListOf<Promotion>()
             val imported = importedRecords(store)
             if (store.code == "0012") {
                 val validity = PromotionControlClient.read("config/acpOfferValidity")
@@ -108,19 +110,23 @@ internal class AcpPromotionsRepository(context: Context) {
                     val effective = product.offerValidityOr(fallback)
                     if (active(effective?.startDate, effective?.endDate)) {
                         val id = offerIdentity(store.code, product.code.ifBlank { product.barcode }, offer.family.promotionLabel())
-                        promotions += acpPromotion(store.code, product, offer, effective, cachedOffers[id]?.description)
+                        storeOffers += acpPromotion(store.code, product, offer, effective, cachedOffers[id]?.description)
                     }
                   }
                 }
             } else {
-                imported.forEach { record ->
+                imported.filter { active(it.from, it.to) }
+                    .groupBy { listOf(it.code.ifBlank { it.barcode }, it.family) }
+                    .map { (_, records) -> records.maxByOrNull { isoDate(it.from).orEmpty() }!! }
+                    .forEach { record ->
                     if (record.price.isFinite() && record.previous.isFinite() && record.price > 0 && record.previous > record.price &&
                         active(record.from, record.to)) {
-                        promotions += promotion(store.code, record.code.ifBlank { record.barcode }, record.name,
-                            BigDecimal.valueOf(record.price), BigDecimal.valueOf(record.previous), record.from, record.to, null, record.barcode, null)
+                        storeOffers += promotion(store.code, record.code.ifBlank { record.barcode }, record.name,
+                            BigDecimal.valueOf(record.price), BigDecimal.valueOf(record.previous), record.from, record.to, null, record.barcode, null, family = record.family)
                     }
                 }
             }
+            storeOffers
         }
         val observedAt = System.currentTimeMillis()
         promotions.indices.forEach { index ->
@@ -174,11 +180,11 @@ internal class AcpPromotionsRepository(context: Context) {
     }
 
     private fun promotion(store: String, code: String, name: String, price: BigDecimal, previous: BigDecimal,
-        from: String?, to: String?, image: String?, barcode: String?, detailsJson: String?, categoryOverride: String? = null, previousCategory: String? = null): Promotion {
+        from: String?, to: String?, image: String?, barcode: String?, detailsJson: String?, categoryOverride: String? = null, previousCategory: String? = null, family: String = "De/Por"): Promotion {
         val category = PromotionCategory.resolve(name, categoryOverride, previousCategory)
         val discount = previous.subtract(price).multiply(BigDecimal(100)).divide(previous, 0, RoundingMode.HALF_UP)
-        return Promotion(offerIdentity(store, code), "De/Por", category, image, isoDate(from), isoDate(to),
-            listOf(PromotionProduct(code, name, price.brl(), previous.brl(), "$discount%", store, image, barcode = barcode, detailsJson = detailsJson)))
+        return Promotion(offerIdentity(store, code, family), family, category, image, isoDate(from), isoDate(to),
+            listOf(PromotionProduct(code, name, price.brl(), previous.brl(), if(family == "Clube") "Clube" else "$discount%", store, image, barcode = barcode, detailsJson = detailsJson)))
     }
 
     companion object {
@@ -209,3 +215,22 @@ internal class AcpPromotionsRepository(context: Context) {
     }
 }
 
+
+/** One unavailable ACP/store must not block independent document-based stores. */
+internal suspend fun loadStorePromotionSnapshots(stores: List<PromotionStore>, cached: List<Promotion>,
+    onFailure: (String) -> Unit = {}, load: suspend (PromotionStore) -> List<Promotion>): MutableList<Promotion> {
+    val result = mutableListOf<Promotion>()
+    var failures = 0
+    var lastFailure: Exception? = null
+    for(store in stores) {
+        try { result += load(store) }
+        catch(cancelled: CancellationException) { throw cancelled }
+        catch(failure: Exception) {
+            failures++; lastFailure = failure; onFailure(store.code)
+            result += cached.filter { offer -> offer.products.any { it.storeCode == store.code } &&
+                AcpPromotionsRepository.active(offer.validFrom, offer.validTo) }
+        }
+    }
+    if(stores.isNotEmpty() && failures == stores.size) throw lastFailure ?: IllegalStateException("Nenhuma loja disponível")
+    return result
+}

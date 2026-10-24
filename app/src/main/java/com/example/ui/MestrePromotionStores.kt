@@ -47,9 +47,10 @@ internal fun MestrePromotionStores() {
         }
     }
 
+    MailImportPanel()
     Text("Habilitar lojas", style = MaterialTheme.typography.titleLarge)
     Text("Envie o mesmo Relatório de Produtos Alterados do Visual Mix usado em Consultar Preços. Confira a loja, os preços e as validades antes de publicar.")
-    Text("Cidade Jardim atualiza os preços pelo ACP. O documento complementa as validades. Nas outras lojas, as ofertas De/Por vêm do documento publicado.", style = MaterialTheme.typography.bodySmall)
+    Text("Cidade Jardim atualiza os preços pelo ACP. O documento complementa as validades. Nas outras lojas, as ofertas De/Por e Clube vêm dos documentos publicados.", style = MaterialTheme.typography.bodySmall)
     message?.let { Text(it, color = if (messageIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
     stores.forEach { store ->
@@ -71,7 +72,7 @@ internal fun MestrePromotionStores() {
                             finally { busy = false }
                         } })
                 }
-                Text(if (store.source.isBlank()) "Nenhum documento publicado" else "${store.source} • ${store.count} ofertas De/Por",
+                Text(if (store.source.isBlank()) "Nenhum documento publicado" else "${store.source} • ${store.count} ofertas",
                     style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(enabled = !busy, onClick = {
                     selectedStore = store.code
@@ -84,7 +85,7 @@ internal fun MestrePromotionStores() {
         }
     }
     analysis?.let { result ->
-        val records = remember(result) { PromotionStores.records(result) }
+        val records = remember(result) { PromotionStores.records(result, includeClub = selectedStore != "0012") }
         AlertDialog(onDismissRequest = { if (!busy) analysis = null },
             title = { Text("Publicar em ${StoreCatalog.nameFor(selectedStore)}?") },
             text = {
@@ -97,7 +98,7 @@ internal fun MestrePromotionStores() {
                 }
                 LazyColumn(Modifier.heightIn(max = 420.dp)) {
                     item { Column {
-                    Text("${records.size} ofertas De/Por. ${result.offers.size - records.size} linhas de outras regras ou inválidas não serão publicadas.")
+                    Text("${records.size} ofertas válidas. ${result.offers.size - records.size} linhas de outras regras ou inválidas não serão publicadas.")
                     result.warnings.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
                     } }
                     items(records) { record -> Column {
