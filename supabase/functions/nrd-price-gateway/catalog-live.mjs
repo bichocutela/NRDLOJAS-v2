@@ -37,7 +37,7 @@ async function identityKey(identity) {
 }
 /** Durable associations cover every page; only unresolved/stale products consume the lookup budget. */
 export function createLiveCatalogLookup({boundedJson,fetcher=fetch,now=Date.now,maxItems=80,store=null,
-  concurrency=4,budgetMs=12000,cacheTtlMs=24*60*60_000}={}) {
+  concurrency=4,budgetMs=12000,cacheTtlMs=24*60*60_000,strict=false}={}) {
   maxItems=Number.isFinite(maxItems)?Math.min(250,Math.max(1,Math.floor(maxItems))):80;
   const cache=new Map(),pending=new Map();
   let token='',tokenAt=0,signingIn=null,departments=VERIFIED_DEPARTMENT_MAP,departmentUntil=0,loadingDepartments=null;
@@ -99,6 +99,7 @@ export function createLiveCatalogLookup({boundedJson,fetcher=fetch,now=Date.now,
     const queue=[];
     for(const entry of entries){
       const association=cache.get(entry.key) ?? saved.get(entry.key)?.payload;
+      if(strict && association?.failed && association.until>now() && !association.product)throw Error('CATALOG_TEMPORARILY_UNAVAILABLE');
       if(association?.product)results.set(association.product.produto_id,association.product);
       if(!association || association.until<=now())queue.push({...entry,previous:association?.product});
     }
@@ -114,9 +115,9 @@ export function createLiveCatalogLookup({boundedJson,fetcher=fetch,now=Date.now,
           job=(async()=>{
             let product=null,failed=false;
             try{product=await resolve(identity,signal);}catch{failed=true;}
-            const value={product:product ?? previous ?? null,until:now()+(product?cacheTtlMs:failed?60000:60*60_000)};
+            const value={product:product ?? previous ?? null,failed,until:now()+(product?cacheTtlMs:failed?60000:60*60_000)};
             cache.delete(key);while(cache.size>=5000)cache.delete(cache.keys().next().value);cache.set(key,value);
-            await store?.write(key,value).catch(()=>{});return value.product;
+            await store?.write(key,value).catch(()=>{});if(strict && failed && !value.product)throw Error('CATALOG_TEMPORARILY_UNAVAILABLE');return value.product;
           })().finally(()=>pending.delete(key));
           pending.set(key,job);
         }
