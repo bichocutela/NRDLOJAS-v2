@@ -21,8 +21,8 @@ class PromotionNotificationWorker(
 
     override suspend fun doWork(): Result {
         val coordinator = com.example.data.promotions.PromotionSyncCoordinator.get(applicationContext)
-        return when (coordinator.sync()) {
-            is NossaGentePromotionsResult.Success -> Result.success()
+        return when (val result = coordinator.sync()) {
+            is NossaGentePromotionsResult.Success -> if(result.unavailableStoreCodes.isEmpty()) Result.success() else Result.retry()
             NossaGentePromotionsResult.Unauthorized -> Result.success()
             is NossaGentePromotionsResult.Error -> Result.retry()
         }

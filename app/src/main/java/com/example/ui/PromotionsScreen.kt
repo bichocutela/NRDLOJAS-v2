@@ -425,40 +425,18 @@ fun PromotionsScreen(
         scopeOfferGroups(offerGroups, selectedStore, enabledStores)
     }
     val normalizedQuery = searchQuery.trim().lowercase()
-    val visibleOffers = remember(scopedOffers, selectedFamily, selectedStore, normalizedQuery, selectedCategory, sortOption, enabledStores, showNewOffers, ui.latestAddedIds) {
-        val filtered = scopedOffers.filter { offer ->
-            val matchesCategory = selectedCategory == null || offer.category == selectedCategory
-            val matchesStore = selectedStore == ALL_STORES_LABEL || offer.stores.any { it.storeCode == selectedStore }
-            val matchesSearch = normalizedQuery.isBlank() ||
-                offer.name.lowercase().contains(normalizedQuery) ||
-                offer.code.lowercase().contains(normalizedQuery) ||
-                offer.barcode.contains(normalizedQuery)
-            val matchesNew = !showNewOffers || offer.stores.any {
-                (selectedStore == ALL_STORES_LABEL || it.storeCode == selectedStore) &&
-                    com.example.data.promotions.offerIdentity(it.storeCode, offer.code, selectedFamily) in ui.latestAddedIds
-            }
-            matchesCategory && matchesStore && matchesSearch && matchesNew && offer.stores.any { it.storeCode in enabledStores }
-        }
-        sortOfferGroups(filtered, sortOption)
+    val allMatchingOffers = remember(scopedOffers, selectedFamily, selectedStore, normalizedQuery, selectedCategory, sortOption, enabledStores) {
+        sortOfferGroups(filterPromotionGroups(scopedOffers, selectedStore, enabledStores, selectedFamily,
+            selectedCategory, normalizedQuery), sortOption)
+    }
+    val visibleOffers = remember(allMatchingOffers, showNewOffers, ui.latestAddedIds, selectedStore, selectedFamily, enabledStores) {
+        filterPromotionGroups(allMatchingOffers, selectedStore, enabledStores, selectedFamily,
+            onlyNew=showNewOffers, newIds=ui.latestAddedIds)
     }
     val categoryGroups = remember(scopedOffers, selectedFamily, selectedStore, normalizedQuery, sortOption, enabledStores, showNewOffers, ui.latestAddedIds) {
-        sortOfferGroups(scopedOffers, sortOption)
-            .asSequence()
-            .filter { offer ->
-                val matchesStore = selectedStore == ALL_STORES_LABEL || offer.stores.any { it.storeCode == selectedStore }
-                val matchesSearch = normalizedQuery.isBlank() ||
-                    offer.name.lowercase().contains(normalizedQuery) ||
-                    offer.code.lowercase().contains(normalizedQuery) ||
-                offer.barcode.contains(normalizedQuery)
-                val matchesNew = !showNewOffers || offer.stores.any {
-                    (selectedStore == ALL_STORES_LABEL || it.storeCode == selectedStore) &&
-                        com.example.data.promotions.offerIdentity(it.storeCode, offer.code, selectedFamily) in ui.latestAddedIds
-                }
-                matchesStore && matchesSearch && matchesNew && offer.stores.any { it.storeCode in enabledStores }
-            }
-            .groupBy { it.category }
-            .toList()
-            .sortedBy { it.first.lowercase() }
+        sortOfferGroups(filterPromotionGroups(scopedOffers, selectedStore, enabledStores, selectedFamily,
+            query=normalizedQuery, onlyNew=showNewOffers, newIds=ui.latestAddedIds), sortOption)
+            .groupBy { it.category }.toList().sortedBy { it.first.lowercase() }
     }
 
     LaunchedEffect(selectedFamily, selectedCategory, selectedStore, normalizedQuery, sortOptionName, showNewOffers, ui.latestAddedIds) {
@@ -525,14 +503,14 @@ fun PromotionsScreen(
                         Spacer(Modifier.width(6.dp))
                         NewOffersButton(
                             changeCount = newOffersCount,
-                            highlighted = showNewOffers || newOffersCount > 0,
-                            enabled = !isLoading,
+                            highlighted = showNewOffers,
+                            enabled = !isLoading && (showNewOffers || newOffersCount > 0),
                             onClick = {
                                 if (!showNewOffers) {
                                     selectedCategory = null
                                     searchQuery = ""
                                     showNewOffers = true
-                                }
+                                } else showNewOffers = false
                             }
                         )
                     }
@@ -663,6 +641,16 @@ fun PromotionsScreen(
                     containerColor = if (expressive || glassStyle.enabled) Color.Transparent else MaterialTheme.colorScheme.surface
                 )
             )
+            if(showNewOffers) {
+                Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
+                    Text("Filtro ativo: ofertas novas neste aparelho",modifier=Modifier.weight(1f),style=MaterialTheme.typography.bodySmall)
+                    TextButton(onClick={showNewOffers=false}) {Text("Mostrar todas")}
+                }
+            }
+            if(showSyncDiagnostics && ui.sync.lastCompleteSyncAt > 0L) {
+                Text("Última sincronização completa neste aparelho: " + java.text.SimpleDateFormat("dd/MM HH:mm:ss",java.util.Locale("pt","BR")).format(java.util.Date(ui.sync.lastCompleteSyncAt)),
+                    modifier=Modifier.padding(horizontal=12.dp,vertical=4.dp),style=MaterialTheme.typography.bodySmall)
+            }
           }
         }
     ) { innerPadding ->
@@ -676,6 +664,8 @@ fun PromotionsScreen(
             selectedCategory != null -> PromotionCategoryList(
                 innerPadding = innerPadding,
                 categoryName = selectedCategory.orEmpty(),
+                totalMatchingOffers = allMatchingOffers.size,
+                onlyNew = showNewOffers,
                 selectedStore = selectedStore,
                 searchQuery = searchQuery,
                 onSearchQueryChange = { searchQuery = it.take(MAX_SEARCH_LENGTH) },
@@ -1077,7 +1067,7 @@ private fun CompactOfferCard(offer: OfferGroup, onOfferClick: (OfferGroup) -> Un
                     .height(136.dp),
                 onClick = { onOfferClick(offer) },
                 validTo = offer.validTo,
-                ean = offer.barcode, category = offer.category
+                ean = offer.barcode, code = offer.code, productName = offer.name
             )
             Column(modifier = Modifier.padding(8.dp)) {
                 DiscountBadge(discount = offer.bestDiscount, compact = true)
@@ -1103,6 +1093,8 @@ private fun CompactOfferCard(offer: OfferGroup, onOfferClick: (OfferGroup) -> Un
 private fun PromotionCategoryList(
     innerPadding: PaddingValues,
     categoryName: String,
+    totalMatchingOffers: Int,
+    onlyNew: Boolean,
     selectedStore: String,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
@@ -1139,7 +1131,7 @@ private fun PromotionCategoryList(
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "$categoryName • ${visibleOffers.size}",
+                    if(onlyNew) "$categoryName • ${visibleOffers.size} de $totalMatchingOffers" else "$categoryName • ${visibleOffers.size}",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
@@ -1299,7 +1291,7 @@ private fun DetailedOfferCard(
                         ),
                     onClick = { onOfferClick(offer) },
                     validTo = offer.validTo,
-                ean = offer.barcode, category = offer.category
+                ean = offer.barcode, code = offer.code, productName = offer.name
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -1508,17 +1500,11 @@ private fun ProductImage(
     onClick: (String) -> Unit,
     validTo: String? = null,
     ean: String? = null,
-    category: String = "Outras ofertas"
+    code: String = "",
+    productName: String = contentDescription
 ) {
     val context = LocalContext.current
-    val imageRepository = remember(context) { com.example.data.promotions.ProductImageRepository.get(context) }
-    var external by remember(ean, category) {
-        mutableStateOf(imageRepository.cachedImage(ean, category))
-    }
-    LaunchedEffect(imageUrl, ean, category) {
-        if (imageUrl.isNullOrBlank()) external = imageRepository.find(ean, category)
-    }
-    val effectiveUrl = imageUrl?.takeIf { it.isNotBlank() } ?: external?.url
+    val effectiveUrl = rememberOfficialProductImage(code,productName,ean.orEmpty(),imageUrl)
     val imageRequest = remember(context, effectiveUrl) {
         ImageRequest.Builder(context).data(effectiveUrl).size(360, 280).crossfade(false).build()
     }
@@ -1572,6 +1558,8 @@ private fun PromotionDetailsDialog(
     onOpenStore: (String) -> Unit
 ) {
     val dialogShape = RoundedCornerShape(22.dp)
+    var enlargedPhoto by remember(offer.id) { mutableStateOf<String?>(null) }
+    enlargedPhoto?.let { url -> ProductPhotoViewerDialog(url,offer.name) {enlargedPhoto=null} }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -1613,8 +1601,8 @@ private fun PromotionDetailsDialog(
                 }
                 item {
                     ProductImage(imageUrl = offer.imageUrl, contentDescription = offer.name,
-                        modifier = Modifier.fillMaxWidth().height(270.dp), onClick = {},
-                        validTo = offer.validTo, ean = offer.barcode, category = offer.category)
+                        modifier = Modifier.fillMaxWidth().height(270.dp), onClick = {enlargedPhoto=it},
+                        validTo = offer.validTo, ean = offer.barcode, code = offer.code, productName = offer.name)
                 }
                 item {
                     SelectionContainer {
@@ -2399,4 +2387,19 @@ private fun PromotionChangeType.displayLabel(): String = when (this) {
     PromotionChangeType.ADDED -> "ENTROU EM OFERTA"
     PromotionChangeType.CHANGED -> "OFERTA ALTERADA"
     PromotionChangeType.REMOVED -> "SAIU DA OFERTA"
+}
+
+/** Newness belongs to the device's history; it must never shrink the unfiltered catalog. */
+internal fun filterPromotionGroups(
+    offers: List<OfferGroup>, selectedStore: String, enabledStores: Set<String>, family: String,
+    category: String? = null, query: String = "", onlyNew: Boolean = false, newIds: Set<String> = emptySet()
+): List<OfferGroup> {
+    val search=query.trim().lowercase()
+    return offers.filter { offer ->
+        val stores=offer.stores.filter { it.storeCode in enabledStores &&
+            (selectedStore == ALL_STORES_LABEL || it.storeCode == selectedStore) }
+        (category == null || offer.category == category) && stores.isNotEmpty() &&
+            (search.isBlank() || offer.name.lowercase().contains(search) || offer.code.lowercase().contains(search) || offer.barcode.contains(search)) &&
+            (!onlyNew || stores.any { com.example.data.promotions.offerIdentity(it.storeCode,offer.code,family) in newIds })
+    }
 }

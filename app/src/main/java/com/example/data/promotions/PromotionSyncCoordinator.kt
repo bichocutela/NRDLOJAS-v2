@@ -23,7 +23,14 @@ internal data class PromotionSyncState(
     val running: Boolean = false,
     val visibleNetwork: Boolean = false,
     val attempted: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val lastCompleteSyncAt: Long = 0L
+)
+
+internal fun PromotionSyncState.afterStoreSync(unavailable: Set<String>, now: Long): PromotionSyncState = copy(
+    lastCompleteSyncAt=if(unavailable.isEmpty()) now else lastCompleteSyncAt,
+    error=if(unavailable.isEmpty()) null else "A atualização ficou incompleta em " + unavailable.joinToString { StoreCatalog.nameFor(it) } +
+        ". As ofertas salvas dessas lojas foram mantidas. Uma nova tentativa será feita automaticamente."
 )
 
 /** One owner for foreground polling, screen refresh and WorkManager; no screen-owned timer. */
@@ -65,9 +72,9 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
 
     suspend fun sync(interactive: Boolean = false): NossaGentePromotionsResult = gate.withLock {
         if (!interactive && System.currentTimeMillis() < retryAt) {
-            return@withLock repository.cached() ?: NossaGentePromotionsResult.Error("Aguardando nova tentativa de sincronização.")
+            return@withLock NossaGentePromotionsResult.Error("Aguardando nova tentativa automática de sincronização.")
         }
-        mutableState.value = PromotionSyncState(running = true, visibleNetwork = interactive, attempted = true)
+        mutableState.value = mutableState.value.copy(running = true, visibleNetwork = interactive, attempted = true, error = null)
         try {
             if (!RestrictedAccessRepository.current().promotions) {
                 val message = "Peça ao Mestre para liberar seu acesso às promoções."
@@ -83,15 +90,16 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
             }
             when (result) {
                 is NossaGentePromotionsResult.Success -> {
-                    lastSuccessAt = System.currentTimeMillis()
+                    val complete=result.unavailableStoreCodes.isEmpty()
+                    lastSuccessAt = if(complete) System.currentTimeMillis() else 0L
                     failureCount = 0
                     retryAt = 0L
-                    mutableState.value = mutableState.value.copy(error = null)
+                    mutableState.value = mutableState.value.afterStoreSync(result.unavailableStoreCodes,lastSuccessAt)
                     deliverPendingNotifications()
                 }
                 is NossaGentePromotionsResult.Error -> {
                     deferRetry()
-                    mutableState.value = mutableState.value.copy(error = result.message.takeIf { interactive || !repository.isInitialized() })
+                    mutableState.value = mutableState.value.copy(error = result.message)
                 }
                 NossaGentePromotionsResult.Unauthorized -> {
                     deferRetry()
@@ -103,7 +111,7 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
         catch (_: Exception) {
             deferRetry()
             val message = "Não foi possível sincronizar agora. A lista salva foi mantida."
-            mutableState.value = mutableState.value.copy(error = message.takeIf { interactive || !repository.isInitialized() })
+            mutableState.value = mutableState.value.copy(error = message)
             NossaGentePromotionsResult.Error(message)
         } finally {
             mutableState.value = mutableState.value.copy(running = false, visibleNetwork = false, attempted = true)
