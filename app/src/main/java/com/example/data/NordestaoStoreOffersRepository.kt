@@ -15,8 +15,11 @@ data class NordestaoStoreOffer(
     val id: String, val description: String, val code: String, val category: String, val image: String,
     val priceCents: Long, val originalPriceCents: Long, val showPrice: Boolean, val discount: Int,
     val cashback: String, val maxAmount: Double, val tag: String, val startsAt: String, val endsAt: String,
-    val validity: String, val conditions: String, val activationRequired: Boolean
+    val validity: String, val conditions: String, val activationRequired: Boolean,
+    val images: List<String> = emptyList()
 ) {
+    fun imageCandidates(): List<String> = (images + image).map { it.trim() }
+        .filter { it.startsWith("https://") && !it.contains("semImagem",ignoreCase=true) }.distinct()
     fun active(now: Long = System.currentTimeMillis()): Boolean = runCatching {
         val parser = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
             timeZone = java.util.TimeZone.getTimeZone("UTC"); isLenient = false
@@ -37,6 +40,7 @@ object NordestaoStoreOffersCodec {
             val value = JSONObject()
             value.put("id", item.id).put("description", item.description).put("code", item.code).put("category", item.category)
                 .put("image", item.image).put("priceCents", item.priceCents).put("originalPriceCents", item.originalPriceCents)
+                .put("images", org.json.JSONArray(item.images))
                 .put("showPrice", item.showPrice).put("discount", item.discount).put("cashback", item.cashback)
                 .put("maxAmount", item.maxAmount).put("tag", item.tag).put("startsAt", item.startsAt).put("endsAt", item.endsAt)
                 .put("validity", item.validity).put("conditions", item.conditions).put("activationRequired", item.activationRequired)
@@ -59,7 +63,8 @@ object NordestaoStoreOffersCodec {
                 item.optString("image").takeIf { it.startsWith("https://") }.orEmpty(), price, original,
                 item.getBoolean("showPrice"), item.optInt("discount"), item.optString("cashback"), item.optDouble("maxAmount", 0.0),
                 item.optString("tag"), item.getString("startsAt"), item.getString("endsAt"), item.optString("validity"),
-                item.optString("conditions"), item.optBoolean("activationRequired"))
+                item.optString("conditions"), item.optBoolean("activationRequired"),
+                item.optJSONArray("images")?.let { array -> (0 until array.length()).mapNotNull { array.optString(it).takeIf { url -> url.startsWith("https://") } } }.orEmpty())
         }
         return NordestaoStoreOffersSnapshot(requestedStoreId, offers, root.getString("fetchedAt"), root.optBoolean("stale"))
     }

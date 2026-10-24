@@ -6,6 +6,17 @@ import org.junit.Test
 @org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
 @org.robolectric.annotation.Config(sdk = [28], application = android.app.Application::class)
 class NordestaoStoresTest {
+    @Test fun officialOfferImageListSurvivesCacheAndLegacySingleImagesStillWork() {
+        val raw=javaClass.classLoader!!.getResourceAsStream("stores/offers-observed-2026-10-23.json")!!.bufferedReader().use {it.readText()}
+        val root=org.json.JSONObject(raw)
+        val images=listOf("https://images.idever.io/first.png","https://cdn.test/backup.jpg")
+        root.getJSONArray("offers").getJSONObject(0).put("images",org.json.JSONArray(images + images.first() + "http://unsafe"))
+        val snapshot=NordestaoStoreOffersCodec.decode(root.toString(),16145121)
+        assertEquals(images + snapshot.offers.first().image,snapshot.offers.first().imageCandidates())
+        val restored=NordestaoStoreOffersCodec.decode(NordestaoStoreOffersCodec.encode(snapshot),16145121)
+        assertEquals(snapshot.offers.first().imageCandidates(),restored.offers.first().imageCandidates())
+        assertEquals(listOf(snapshot.offers[1].image),snapshot.offers[1].imageCandidates())
+    }
     private fun fixture() = javaClass.classLoader!!.getResourceAsStream("stores/nordestao-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
     @Test fun decodesAllObservedOfficialStoresAndKeepsMissingHoursMissing() {
         val snapshot = NordestaoStoresCodec.decode(fixture())

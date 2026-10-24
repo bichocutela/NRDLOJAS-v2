@@ -25,9 +25,12 @@ export function offerCatalog(source) {
       const original = number(item.originalPrice), price = number(item.price);
       const cashback = item.cashbackRule;
       const rules = Array.isArray(item.rules) ? item.rules.map(rule => [text(rule.message), number(rule.discountPercentual) ? `${number(rule.discountPercentual)}%` : ''].filter(Boolean).join(' ')).filter(Boolean) : [];
+      const images=[...new Set((Array.isArray(item.images) ? item.images : [])
+        .filter(url => typeof url === 'string').map(url => url.trim())
+        .filter(url => /^https:\/\//.test(url) && !/semImagem/i.test(url)))];
       offers.push({ id, description:text(item.description), code:String(item.codeErp || item.productId || ''),
         category:text(item.categoryName) || text(item.department) || 'Outras',
-        image:(Array.isArray(item.images) ? item.images : []).find(url => typeof url === 'string' && /^https:\/\//.test(url) && !/semImagem/i.test(url)) || '',
+        image:images[0] || '', images,
         priceCents:Math.round((price > 0 ? price : original) * 100), originalPriceCents:Math.round(original * 100),
         showPrice: price > 0 || item.indexibirPrecoBase !== false,
         discount: price > 0 && original > price && item.indexibirPercDesconto !== false ? Math.floor((original-price)/original*100) : 0,

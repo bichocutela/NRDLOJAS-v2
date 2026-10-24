@@ -29,3 +29,11 @@ test('malformed upstream does not become an empty successful catalog', () => {
   assert.throws(()=>offerCatalog({})); assert.throws(()=>offerCatalog(campaign([{id:1}])));
   assert.deepEqual(offerCatalog({promotions:[]}),[]);
 });
+test('preserves every official image in source order for client fallback without guessing URLs', () => {
+  const images=['https://images.idever.io/first.png','https://cdn.test/backup.jpg'];
+  const [offer]=offerCatalog(campaign([item({images:[null,' http://unsafe ', 'https://cdn.test/semImagem.png',
+    ' '+images[0]+' ',images[1],images[0]]})]));
+  assert.equal(offer.image,images[0]);
+  assert.deepEqual(offer.images,images);
+  assert.deepEqual(offerCatalog(campaign([item({images:[]})]))[0].images,[]);
+});

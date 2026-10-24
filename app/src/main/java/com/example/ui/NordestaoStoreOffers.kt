@@ -49,8 +49,8 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
     var retry by remember { mutableIntStateOf(0) }
     var query by remember(store.id) { mutableStateOf("") }
     var category by remember(store.id) { mutableStateOf("Todas") }
-    var sortName by rememberSaveable { mutableStateOf(OfferSortOption.NAME.name) }
-    val sortOption = OfferSortOption.values().firstOrNull { it.name == sortName } ?: OfferSortOption.NAME
+    var sortName by rememberSaveable { mutableStateOf(OfferSortOption.DISCOUNT_DESC.name) }
+    val sortOption = OfferSortOption.values().firstOrNull { it.name == sortName } ?: OfferSortOption.DISCOUNT_DESC
     var detail by remember(store.id) { mutableStateOf<NordestaoStoreOffer?>(null) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -106,8 +106,7 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
                 OutlinedCard(onClick = { detail = offer }) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         if(offer.tag.isNotBlank()) SuggestionChip(onClick = { detail = offer }, label = { Text(offer.tag) })
-                        if(offer.image.isNotBlank()) AsyncImage(model = offer.image, contentDescription = offer.description, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(130.dp))
-                        else Box(Modifier.height(130.dp)) { Text("Imagem não disponível", style = MaterialTheme.typography.bodySmall) }
+                        OfficialOfferPhoto(offer,Modifier.fillMaxWidth().height(130.dp))
                         OfferPrice(offer)
                         Text(offer.description, style = MaterialTheme.typography.bodyMedium)
                         if(offer.maxAmount > 0) Text("Máx. ${NumberFormat.getNumberInstance(Locale.forLanguageTag("pt-BR")).format(offer.maxAmount)} un.", style = MaterialTheme.typography.bodySmall)
@@ -121,7 +120,7 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
     detail?.let { offer ->
         AlertDialog(onDismissRequest = { detail = null }, title = { Text(offer.description) }, text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if(offer.image.isNotBlank()) AsyncImage(model = offer.image, contentDescription = offer.description, modifier = Modifier.fillMaxWidth().height(180.dp), contentScale = ContentScale.Fit)
+                OfficialOfferPhoto(offer,Modifier.fillMaxWidth().height(180.dp))
                 OfferPrice(offer)
                 Text(offer.validity)
                 if(offer.maxAmount > 0) Text("Quantidade máxima: ${NumberFormat.getNumberInstance(Locale.forLanguageTag("pt-BR")).format(offer.maxAmount)} un.")
@@ -141,6 +140,17 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
         if(offer.discount > 0) Text("${offer.discount}% de desconto", color = MaterialTheme.colorScheme.primary)
     } else Text("Condição especial", fontWeight = FontWeight.Bold)
     if(offer.cashback.isNotBlank()) Text(offer.cashback, fontWeight = FontWeight.Bold)
+}
+
+@Composable
+private fun OfficialOfferPhoto(offer: NordestaoStoreOffer, modifier: Modifier) {
+    val urls=remember(offer.image,offer.images) {offer.imageCandidates()}
+    var position by remember(offer.id,urls) {mutableIntStateOf(0)}
+    Box(modifier,contentAlignment=Alignment.Center) {
+        if(position < urls.size) AsyncImage(model=urls[position],contentDescription=offer.description,
+            contentScale=ContentScale.Fit,modifier=Modifier.fillMaxSize(),onError={position++})
+        else Text("Imagem não disponível",style=MaterialTheme.typography.bodySmall)
+    }
 }
 
 internal fun sortStoreOffers(offers: List<NordestaoStoreOffer>, option: OfferSortOption): List<NordestaoStoreOffer> {
