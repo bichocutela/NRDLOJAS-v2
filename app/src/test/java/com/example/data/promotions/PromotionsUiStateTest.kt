@@ -3,6 +3,16 @@ import com.example.ui.PromotionsUiState
 import org.junit.Assert.*
 import org.junit.Test
 class PromotionsUiStateTest {
+    @Test fun partialStoreFailureNeverClaimsACompleteFreshCatalogAndRecoveryClearsTheWarning() {
+        val previous=PromotionSyncState(lastCompleteSyncAt=100L)
+        val partial=previous.afterStoreSync(setOf("0012"),200L)
+        assertEquals(100L,partial.lastCompleteSyncAt)
+        assertTrue(partial.error!!.contains("Cidade Jardim"))
+        assertTrue(partial.error!!.contains("automaticamente"))
+        val recovered=partial.afterStoreSync(emptySet(),300L)
+        assertEquals(300L,recovered.lastCompleteSyncAt)
+        assertNull(recovered.error)
+    }
     @Test fun entryShowsSavedOffersDuringBackgroundScanAndFinishesOnFailure() {
         val entering = PromotionsUiState(initialized = true, opening = true,
             sync = PromotionSyncState(running = true))

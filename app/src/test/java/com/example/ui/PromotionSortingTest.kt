@@ -6,6 +6,27 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PromotionSortingTest {
+    @Test fun deviceHistoryOnlyFiltersExplicitNewViewAndNeverChangesFullCatalog() {
+        val rows=listOf(offer("a","R$ 1,00"),offer("b","R$ 2,00"),offer("c","R$ 3,00",store="0005"))
+        val firstHistory=setOf(com.example.data.promotions.offerIdentity("0012","a"))
+        val otherHistory=emptySet<String>()
+        fun filtered(onlyNew: Boolean, history: Set<String>) = filterPromotionGroups(rows,"0012",setOf("0012","0005"),"De/Por",
+            category="Alimentos",onlyNew=onlyNew,newIds=history).map {it.id}
+        assertEquals(listOf("a","b"),filtered(false,firstHistory))
+        assertEquals(filtered(false,firstHistory),filtered(false,otherHistory))
+        assertEquals(listOf("a"),filtered(true,firstHistory))
+        assertTrue(filtered(true,otherHistory).isEmpty())
+        assertEquals(listOf("a","b"),filtered(false,firstHistory))
+    }
+
+    @Test fun newFilterRespectsStoreFamilyCategoryAndSearchTogether() {
+        val rows=listOf(offer("a","R$ 1,00"),offer("b","R$ 2,00",store="0005"))
+        val ids=setOf(com.example.data.promotions.offerIdentity("0005","b","Clube"))
+        assertEquals(listOf("b"),filterPromotionGroups(rows,"0005",setOf("0012","0005"),"Clube",query="b",onlyNew=true,newIds=ids).map{it.id})
+        assertTrue(filterPromotionGroups(rows,"0005",setOf("0012","0005"),"De/Por",onlyNew=true,newIds=ids).isEmpty())
+        assertTrue(filterPromotionGroups(rows,"0005",setOf("0012"),"Clube",onlyNew=true,newIds=ids).isEmpty())
+        assertTrue(filterPromotionGroups(rows,"0005",setOf("0005"),"Clube",category="Limpeza",onlyNew=true,newIds=ids).isEmpty())
+    }
     private fun offer(id: String, price: String?, regular: String? = null, condition: String? = null,
         store: String = "0012", addedAt: Long = 0L, validTo: String? = null) =
         OfferGroup(id, "Alimentos", id, id, null, null, validTo,

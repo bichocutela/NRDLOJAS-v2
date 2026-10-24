@@ -67,7 +67,9 @@ internal class AcpPromotionsRepository(context: Context) {
         var cityProducts = previousRows
         if (!isInitialized()) onNetwork(true)
         val stores = PromotionStores.read(forceRefresh).filter { it.enabled }
+        val unavailableStores=mutableSetOf<String>()
         val promotions = loadStorePromotionSnapshots(stores, cachedOffers.values.toList(), onFailure = { code ->
+            unavailableStores.add(code)
             if(code == "0012") { delta = null; cityProducts = previousRows }
         }) { store ->
             val storeOffers = mutableListOf<Promotion>()
@@ -170,7 +172,7 @@ internal class AcpPromotionsRepository(context: Context) {
             dao.put(PromotionMetadata("fingerprint", fingerprint))
             dao.put(PromotionMetadata("initialized", "1"))
         }
-        NossaGentePromotionsResult.Success(promotions, fingerprint)
+        NossaGentePromotionsResult.Success(promotions, fingerprint, unavailableStores)
        } catch (cancelled: CancellationException) {
         throw cancelled
        } catch (failure: Exception) {

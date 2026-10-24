@@ -1380,7 +1380,8 @@ sealed interface NossaGenteLoginResult {
 sealed interface NossaGentePromotionsResult {
     data class Success(
         val promotions: List<Promotion>,
-        val fingerprint: String
+        val fingerprint: String,
+        val unavailableStoreCodes: Set<String> = emptySet()
     ) : NossaGentePromotionsResult
     data object Unauthorized : NossaGentePromotionsResult
     data class Error(val message: String) : NossaGentePromotionsResult
