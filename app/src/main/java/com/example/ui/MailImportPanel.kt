@@ -21,7 +21,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun MailImportPanel() {
+internal fun MailImportPanel(onPublished: () -> Unit = {}) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
@@ -163,6 +163,10 @@ internal fun MailImportPanel() {
             selected=selected-document.id
         }
         result.failures.forEach { (document,reason) -> failures.add("${document.filename}: $reason") }
+        if(result.published.isNotEmpty()) {
+            onPublished()
+            PromotionSyncCoordinator.get(context).requestSync(interactive=true)
+        }
         error=failures.isNotEmpty()
         message="${result.published.size} documento(s) publicado(s); $pending com linhas pendentes." +
             if(failures.isEmpty()) " Publicação concluída. As lojas publicadas foram habilitadas." else " Falharam ${failures.size}:\n"+failures.joinToString("\n")+"\nOs documentos que falharam continuam selecionados para tentar novamente."

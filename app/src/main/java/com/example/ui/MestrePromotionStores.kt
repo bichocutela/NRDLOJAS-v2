@@ -55,7 +55,7 @@ internal fun MestrePromotionStores() {
         }
     }
 
-    MailImportPanel()
+    MailImportPanel(onPublished={refreshKey++})
     Text("Habilitar lojas", style = MaterialTheme.typography.titleLarge)
     Text("Envie o mesmo Relatório de Produtos Alterados do Visual Mix usado em Consultar Preços. Confira a loja, os preços e as validades antes de publicar.")
     Text("Cidade Jardim atualiza os preços pelo ACP. O documento complementa as validades. Nas outras lojas, as ofertas De/Por e Clube vêm dos documentos publicados.", style = MaterialTheme.typography.bodySmall)
@@ -127,6 +127,7 @@ internal fun MestrePromotionStores() {
                         try {
                             stores = PromotionStores.publish(selectedStore, result)
                             refreshKey++
+                            com.example.data.promotions.PromotionSyncCoordinator.get(context).requestSync(interactive=true)
                             analysis = null
                             messageIsError = false
                             message = "Documento publicado e loja habilitada. As ofertas serão atualizadas automaticamente."
