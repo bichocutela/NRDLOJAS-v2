@@ -1,4 +1,35 @@
 import { offerCatalog, activeOffers } from './catalog.mjs';
+import { createOfferFailover } from './failover.mjs';
+import { createPortalSession } from './portal-session.mjs';
+import { createPortalOffers } from './portal-catalog.mjs';
+
+async function serverJson(path: string, options: RequestInit = {}) {
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const response = await fetch(Deno.env.get('SUPABASE_URL') + '/rest/v1/' + path, {
+    ...options, headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json',
+      ...options.headers }, signal: AbortSignal.timeout(8000) });
+  if (!response.ok) throw new Error('SERVER_STORAGE_UNAVAILABLE');
+  return response.status === 204 || response.headers.get('Content-Length') === '0' ? null : response.json();
+}
+
+const portal = createPortalSession({
+  onHttpFailure: (path: string, status: number) => console.warn('Portal source HTTP status:', path, status),
+  getCredentials: () => serverJson('rpc/nrd_portal_account', {
+  method: 'POST', body: '{}' }) });
+const authenticatedOffers = createPortalOffers({ session: portal,
+  lock: (owner: string, operation: string, original?: number, selected?: number) => serverJson('rpc/nrd_portal_offer_lock', {
+    method: 'POST', body: JSON.stringify({ p_owner: owner, p_operation: operation,
+      p_original: original ?? null, p_selected: selected ?? null }) }) });
+
+function sourceFailure(source: string, storeId: number, error: unknown) {
+  const allowed = new Set(['CONFIG_UNAVAILABLE','CONFIG_INVALID','AUTH_UNAVAILABLE','AUTH_INVALID',
+    'SOURCE_UNAVAILABLE','INVALID_CATALOG','INVALID_ITEMS','INVALID_DATES','INVALID_ITEM',
+    'SERVER_STORAGE_UNAVAILABLE','PORTAL_AUTH_UNAVAILABLE','PORTAL_RECONNECT_DEFERRED',
+    'PORTAL_SOURCE_UNAVAILABLE','PORTAL_BUSY','PORTAL_LEASE_LOST','PORTAL_STORE_INVALID',
+    'PORTAL_STORE_MISMATCH','PORTAL_RESTORE_FAILED']);
+  const reason = error instanceof Error && allowed.has(error.message) ? error.message : 'UPSTREAM_REQUEST_FAILED';
+  console.warn('Store offers source unavailable:', source, reason, 'store:', storeId);
+}
 let token = '', tokenUntil = 0;
 async function accessToken() {
   if (token && tokenUntil > Date.now()) return token;
@@ -34,37 +65,42 @@ async function knownStore(id: number) {
   }
   return stores.includes(id);
 }
-const cache = new Map<string, any>();
-const pending = new Map<string, Promise<any>>();
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type', 'Cache-Control': 'private, max-age=60' };
-async function refresh(storeId: string) {
+async function primaryOffers(storeId: number) {
   const request = async () => fetch('https://customer.idever.com.br/api/v1/customers/promotions?storeId=' + storeId, {
     headers: { Authorization: `Bearer ${await accessToken()}`, Accept: 'application/json' }, signal: AbortSignal.timeout(20000) });
   let response = await request();
   if(response.status === 401) { tokenUntil = 0; response = await request(); }
   if(!response.ok) throw new Error('SOURCE_UNAVAILABLE');
-  const value = { storeId: Number(storeId), offers: offerCatalog(await response.json()), fetchedAt: new Date().toISOString() };
-  cache.set(storeId, value);
-  return value;
+  return { storeId, offers: offerCatalog(await response.json()) };
 }
+const gateway = createOfferFailover({
+  primary: async (storeId: number) => {
+    try { return await primaryOffers(storeId); }
+    catch (error) { sourceFailure('primary', storeId, error); throw error; }
+  },
+  backup: async (storeId: number) => {
+    try { return await authenticatedOffers(storeId); }
+    catch (error) { sourceFailure('authenticated', storeId, error); throw error; }
+  },
+  readCache: async (storeId: number) => {
+    const rows = await serverJson('nrd_store_offer_cache?store_id=eq.' + storeId + '&select=payload');
+    return rows?.[0]?.payload ?? null;
+  },
+  writeCache: async (value: any) => serverJson('nrd_store_offer_cache?on_conflict=store_id', {
+    method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ store_id: value.storeId, payload: value, fetched_at: value.fetchedAt }) })
+});
 Deno.serve(async req => {
   if(req.method === 'OPTIONS') return new Response(null, { headers });
   if(req.method !== 'GET') return Response.json({ error: 'METHOD_NOT_ALLOWED' }, { status:405, headers });
   const storeId = new URL(req.url).searchParams.get('storeId') || '';
   if(!/^[1-9][0-9]{0,14}$/.test(storeId)) return Response.json({ error:'INVALID_STORE' }, { status:400, headers });
-  let value = cache.get(storeId);
   try {
     if(!await knownStore(Number(storeId))) return Response.json({ error:'UNKNOWN_STORE' }, { status:400, headers });
-    if(!value || Date.parse(value.fetchedAt) + 300000 <= Date.now()) {
-      let task = pending.get(storeId);
-      if(!task) { task = refresh(storeId).finally(() => pending.delete(storeId)); pending.set(storeId, task); }
-      value = await task;
-    }
-    return Response.json({ ...value, offers: activeOffers(value.offers), stale:false }, { headers });
-  } catch (error) {
-    const reason=error instanceof Error && /^(CONFIG_UNAVAILABLE|CONFIG_INVALID|AUTH_UNAVAILABLE|AUTH_INVALID|STORES_UNAVAILABLE|SOURCE_UNAVAILABLE|INVALID_CATALOG|INVALID_ITEMS|INVALID_DATES|INVALID_ITEM)$/.test(error.message) ? error.message : 'UPSTREAM_REQUEST_FAILED';
-    console.warn('Store offers unavailable:', reason, 'store:', storeId);
-    if(value) return Response.json({ ...value, offers:activeOffers(value.offers), stale:true }, { headers });
+    const value = await gateway.get(Number(storeId));
+    return Response.json({ ...value, offers: activeOffers(value.offers) }, { headers });
+  } catch {
     return Response.json({ error:'OFFERS_UNAVAILABLE' }, { status:503, headers:{ ...headers, 'Cache-Control':'no-store' } });
   }
 });

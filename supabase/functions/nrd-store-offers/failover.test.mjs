@@ -60,3 +60,34 @@ test('an empty valid catalog succeeds without resurrecting an old offer', async 
   const gateway = createOfferFailover({ primary: async storeId => ({ storeId, offers: [] }), backup: down });
   assert.deepEqual((await gateway.get(12)).offers, []);
 });
+
+test('probes primary during an outage without repeatedly fetching a still-fresh backup', async () => {
+  let time = 1000000000000, backupCalls = 0, primaryCalls = 0;
+  const gateway = createOfferFailover({ now: () => time,
+    primary: async () => { primaryCalls++; return down(); },
+    backup: async id => { backupCalls++; return catalog(id); } });
+  await gateway.get(12);
+  time += 61000;
+  await gateway.get(12);
+  assert.equal(primaryCalls, 2); assert.equal(backupCalls, 1);
+});
+
+test('hydrates a shared snapshot after a cold start and retains its original freshness', async () => {
+  const time = Date.parse('2026-10-24T10:00:00Z');
+  const saved = { ...catalog(12), source: 'authenticated', fetchedAt: new Date(time - 10000).toISOString() };
+  let calls = 0;
+  const gateway = createOfferFailover({ now: () => time, readCache: async () => saved,
+    primary: async () => { calls++; return down(); }, backup: down });
+  const value = await gateway.get(12);
+  assert.equal(value.fetchedAt, saved.fetchedAt); assert.equal(value.stale, false); assert.equal(calls, 0);
+  assert.equal(value.account, undefined);
+});
+
+test('does not hydrate another store or a future-dated snapshot', async () => {
+  const time = Date.parse('2026-10-24T10:00:00Z');
+  for (const bad of [{ ...catalog(9), source: 'primary', fetchedAt: new Date(time).toISOString() },
+    { ...catalog(12), source: 'primary', fetchedAt: new Date(time + 10000).toISOString() }]) {
+    const gateway = createOfferFailover({ now: () => time, readCache: async () => bad, primary: down, backup: down });
+    await assert.rejects(gateway.get(12), /^Error: OFFERS_UNAVAILABLE$/);
+  }
+});
