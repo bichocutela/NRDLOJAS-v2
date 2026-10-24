@@ -414,6 +414,7 @@ fun PromotionsScreen(
     LaunchedEffect(ui.offers, selectedFamily) {
         offerGroups = withContext(Dispatchers.Default) { buildOfferGroups(ui.offers.filter { it.title == selectedFamily }) }
         if (selectedCategory != null && offerGroups.none { it.category == selectedCategory }) selectedCategory = null
+        selectedOffer = selectedOffer?.let { selected -> offerGroups.firstOrNull { it.id == selected.id } }
     }
     val storeOptions = if (enabledStores.size > 1) listOf(ALL_STORES_LABEL) + StoreCatalog.codes else StoreCatalog.codes
     LaunchedEffect(stores) {
@@ -647,6 +648,9 @@ fun PromotionsScreen(
                     TextButton(onClick={showNewOffers=false}) {Text("Mostrar todas")}
                 }
             }
+            if(error != null && ui.offers.isNotEmpty()) {
+                Text(error!!,modifier=Modifier.padding(horizontal=12.dp,vertical=4.dp),color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)
+            }
             if(showSyncDiagnostics && ui.sync.lastCompleteSyncAt > 0L) {
                 Text("Última sincronização completa neste aparelho: " + java.text.SimpleDateFormat("dd/MM HH:mm:ss",java.util.Locale("pt","BR")).format(java.util.Date(ui.sync.lastCompleteSyncAt)),
                     modifier=Modifier.padding(horizontal=12.dp,vertical=4.dp),style=MaterialTheme.typography.bodySmall)
@@ -656,7 +660,7 @@ fun PromotionsScreen(
     ) { innerPadding ->
         when {
             isLoading -> LoadingPromotionsState(innerPadding)
-            error != null -> ErrorPromotionsState(
+            error != null && ui.offers.isEmpty() -> ErrorPromotionsState(
                 innerPadding = innerPadding,
                 message = error!!,
                 onRetry = { model.refresh() }

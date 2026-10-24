@@ -24,13 +24,15 @@ internal data class PromotionSyncState(
     val visibleNetwork: Boolean = false,
     val attempted: Boolean = false,
     val error: String? = null,
-    val lastCompleteSyncAt: Long = 0L
+    val lastCompleteSyncAt: Long = 0L,
+    val acpConfirmedAt: Long = 0L
 )
 
 internal fun PromotionSyncState.afterStoreSync(unavailable: Set<String>, now: Long): PromotionSyncState = copy(
     lastCompleteSyncAt=if(unavailable.isEmpty()) now else lastCompleteSyncAt,
+    acpConfirmedAt=if("0012" !in unavailable) now else 0L,
     error=if(unavailable.isEmpty()) null else "A atualização ficou incompleta em " + unavailable.joinToString { StoreCatalog.nameFor(it) } +
-        ". As ofertas salvas dessas lojas foram mantidas. Uma nova tentativa será feita automaticamente."
+        ". As ofertas do ACP sem confirmação foram ocultadas. Uma nova tentativa será feita automaticamente."
 )
 
 /** One owner for foreground polling, screen refresh and WorkManager; no screen-owned timer. */
@@ -78,7 +80,7 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
         try {
             if (!RestrictedAccessRepository.current().promotions) {
                 val message = "Peça ao Mestre para liberar seu acesso às promoções."
-                mutableState.value = mutableState.value.copy(error = message)
+                mutableState.value = mutableState.value.copy(error = message, acpConfirmedAt = 0L)
                 return@withLock NossaGentePromotionsResult.Unauthorized
             }
             if (!interactive && System.currentTimeMillis() - lastSuccessAt < 30_000) {
@@ -94,24 +96,24 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
                     lastSuccessAt = if(complete) System.currentTimeMillis() else 0L
                     failureCount = 0
                     retryAt = 0L
-                    mutableState.value = mutableState.value.afterStoreSync(result.unavailableStoreCodes,lastSuccessAt)
+                    mutableState.value = mutableState.value.afterStoreSync(result.unavailableStoreCodes,System.currentTimeMillis())
                     deliverPendingNotifications()
                 }
                 is NossaGentePromotionsResult.Error -> {
                     deferRetry()
-                    mutableState.value = mutableState.value.copy(error = result.message)
+                    mutableState.value = mutableState.value.copy(error = "Não foi possível confirmar as ofertas no ACP. As ofertas de Cidade Jardim foram ocultadas. Tente atualizar novamente.", acpConfirmedAt = 0L)
                 }
                 NossaGentePromotionsResult.Unauthorized -> {
                     deferRetry()
-                    mutableState.value = mutableState.value.copy(error = "Acesso às ofertas indisponível.")
+                    mutableState.value = mutableState.value.copy(error = "Acesso às ofertas indisponível.", acpConfirmedAt = 0L)
                 }
             }
             result
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) {
             deferRetry()
-            val message = "Não foi possível sincronizar agora. A lista salva foi mantida."
-            mutableState.value = mutableState.value.copy(error = message)
+            val message = "Não foi possível confirmar as ofertas no ACP. As ofertas de Cidade Jardim foram ocultadas."
+            mutableState.value = mutableState.value.copy(error = message, acpConfirmedAt = 0L)
             NossaGentePromotionsResult.Error(message)
         } finally {
             mutableState.value = mutableState.value.copy(running = false, visibleNetwork = false, attempted = true)
@@ -145,7 +147,8 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
             val json = JSONObject(event.value)
             val ids = json.getJSONArray("ids")
             val products = (0 until ids.length()).mapNotNull { current[ids.getString(it)] }
-                .filter { it.products.any { product -> matchesFavoriteStore(favorite, product.storeCode) } }
+                .filter { it.products.any { product -> matchesFavoriteStore(favorite, product.storeCode) &&
+                    (product.storeCode != "0012" || acpOffersConfirmed(mutableState.value.acpConfirmedAt)) } }
             if (products.isNotEmpty() && remote.enabled && remote.promotionUpdatedEnabled) {
                 val count = products.size
                 val suffix = " em ${StoreCatalog.nameFor(favorite)}"
@@ -173,3 +176,7 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
 /** Requires an explicitly selected favorite store: a generic broadcast must never notify every store. */
 internal fun matchesFavoriteStore(favorite: String?, offerStore: String?): Boolean =
     !favorite.isNullOrBlank() && favorite == offerStore
+
+/** Disk rows are a delta baseline, never proof that an ACP offer is still live. */
+internal fun acpOffersConfirmed(confirmedAt: Long, now: Long = System.currentTimeMillis()): Boolean =
+    confirmedAt > 0L && now >= confirmedAt && now - confirmedAt < 60_000L

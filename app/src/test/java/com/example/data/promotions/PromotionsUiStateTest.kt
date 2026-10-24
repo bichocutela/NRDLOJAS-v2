@@ -22,7 +22,7 @@ class PromotionsUiStateTest {
         val failed = entering.copy(opening = false,
             sync = PromotionSyncState(attempted = true, error = "offline"))
         assertFalse(failed.loading)
-        assertNull(failed.visibleSyncError(false))
+        assertNotNull(failed.visibleSyncError(false))
     }
 
     @Test fun cachedEmptyListIsReadyAndSilentChecksNeverShowSpinner() {
@@ -31,6 +31,16 @@ class PromotionsUiStateTest {
         assertFalse(PromotionsUiState(sync = PromotionSyncState(attempted = true, error = "offline")).loading)
         assertFalse(PromotionSyncState(running = true).visibleNetwork)
     }
+    @Test fun diskOffersRequireRecentAcpConfirmationAndFailuresRevokeIt() {
+        assertFalse(acpOffersConfirmed(0L, 100_000L))
+        assertTrue(acpOffersConfirmed(100_000L, 159_999L))
+        assertFalse(acpOffersConfirmed(100_000L, 160_000L))
+        assertFalse(acpOffersConfirmed(100_000L, 99_999L))
+        val confirmed=PromotionSyncState().afterStoreSync(emptySet(),100_000L)
+        assertEquals(100_000L,confirmed.acpConfirmedAt)
+        assertEquals(0L,confirmed.afterStoreSync(setOf("0012"),120_000L).acpConfirmedAt)
+        assertEquals(120_000L,confirmed.afterStoreSync(setOf("0005"),120_000L).acpConfirmedAt)
+    }
     @Test fun favoritesOnlyReceiveAlertsForTheirOwnStore() {
         assertFalse(matchesFavoriteStore(null, "0012"))
         assertFalse(matchesFavoriteStore("", "0012"))
@@ -38,7 +48,7 @@ class PromotionsUiStateTest {
         assertFalse(matchesFavoriteStore("0012", "0021"))
         assertTrue(matchesFavoriteStore("0012", "0012"))
     }
-    @Test fun quotaAndNetworkErrorsAreCompletelyHiddenFromOrdinaryUsers() {
+    @Test fun syncFailuresAreVisibleWithoutExposingTechnicalDetails() {
         for (message in listOf(
             "O serviço atingiu o limite temporário de consultas. Tente novamente mais tarde.",
             "O serviço de consulta está temporariamente indisponível.",
@@ -46,12 +56,12 @@ class PromotionsUiStateTest {
         )) {
             val noCache = PromotionsUiState(initialized = false,
                 sync = PromotionSyncState(attempted = true, error = message))
-            assertNull(noCache.visibleSyncError(showDiagnostics = false))
+            assertTrue(noCache.visibleSyncError(showDiagnostics = false)!!.contains("confirmar"))
             assertEquals(message, noCache.visibleSyncError(showDiagnostics = true))
 
             val cached = noCache.copy(initialized = true)
-            assertNull(cached.visibleSyncError(showDiagnostics = false))
-            assertNull(cached.visibleSyncError(showDiagnostics = true))
+            assertTrue(cached.visibleSyncError(showDiagnostics = false)!!.contains("confirmar"))
+            assertEquals(message,cached.visibleSyncError(showDiagnostics = true))
         }
     }
     @Test fun onlyAddedIdentitiesBecomeNewOffersAndReturningProductIsNewAgain() {

@@ -32,8 +32,7 @@ test('shared snapshot avoids duplicate reads, survives failure and forced refres
   assert.equal(first.items.length,1); assert.equal(calls,1);
   await sync({input:{operation:'promotion_status'},readPage}); assert.equal(calls,1);
   time+=61000;
-  const stale=await sync({input:{operation:'promotion_status'},readPage:async()=>{throw Error('offline');}});
-  assert.equal(stale.revision,first.revision);
+  await assert.rejects(()=>sync({input:{operation:'promotion_status'},readPage:async()=>{throw Error('offline');}}),/offline/);
   await Promise.all(jobs);
   current={id:1,value:3};
   const forced=await sync({input:{operation:'promotion_refresh',revision:first.revision,manifest:first.items.map(({id,hash})=>({id,hash}))},readPage});
@@ -81,13 +80,25 @@ test('snapshot enriches once after all ACP pages have been read',async()=>{
  assert.equal(enrichments,1);assert.equal(result.items.length,3);assert.ok(result.items.every(row=>row.item.nrdCategory==='Alimentos'));
 });
 
-test('stale status returns immediately while one background refresh owns the work',async()=>{
- const before=await snapshot([{id:1,value:2}]);const docs=new Map([['promotion_snapshot_v3',{payload:{revision:before.revision,checkedAt:1,count:1,pages:1,generation:'old'}}]]);let resolveRead;let calls=0;const jobs=[];
- const cache={get:async key=>docs.get(key),claim:async()=>({payload:docs.get('promotion_snapshot_v3').payload,version:1}),many:async keys=>new Map(keys.map(k=>[k,{payload:{rows:before.rows}}])),write:async()=>({}),finish:async(key,claim,payload)=>({payload})};
- const sync=createPromotionSync({cache,now:()=>100000,background:job=>jobs.push(job)});
- const status=await sync({input:{operation:'promotion_status'},readPage:async()=>{calls++;return new Promise(resolve=>resolveRead=resolve);}});
- assert.equal(status.revision,before.revision);assert.equal(calls,1);
- resolveRead({items:[{id:1,value:2}],pageIndex:0,totalCount:1,totalPages:1});await Promise.all(jobs);
+test('an expired status waits for ACP removal even if validity is still in the future',async()=>{
+ const docs=new Map();let time=1000,version=0;
+ const cache={get:async k=>docs.get(k),many:async keys=>new Map(keys.map(k=>[k,docs.get(k)])),
+ write:async(k,payload)=>{const row={payload,version:++version};docs.set(k,row);return row;},claim:async k=>cache.write(k,docs.get(k)?.payload??{}),finish:async(k,c,p)=>cache.write(k,p)};
+ const sync=createPromotionSync({cache,now:()=>time});
+ const before=await sync({input:{operation:'promotion_sync',manifest:[]},readPage:async()=>({items:[{id:'adria',endDate:'2099-12-31',quantityTake:3,quantityPay:2}],pageIndex:0,totalCount:1,totalPages:1})});
+ time+=60000;
+ const after=await sync({input:{operation:'promotion_sync',manifest:before.items},readPage:async()=>({items:[],pageIndex:0,totalCount:0,totalPages:0}),enrichItems:async()=>{throw Error('image service offline');}});
+ assert.equal(after.count,0);assert.deepEqual(after.removedIds,['adria']);assert.equal(after.checkedAt,time);
+});
+
+test('optional enrichment failure cannot hold a withdrawn promotion in the published snapshot',async()=>{
+ const docs=new Map();let v=0;
+ const cache={get:async k=>docs.get(k),many:async keys=>new Map(keys.map(k=>[k,docs.get(k)])),write:async(k,payload)=>{const row={payload,version:++v};docs.set(k,row);return row;},claim:async k=>cache.write(k,docs.get(k)?.payload??{}),finish:async(k,c,p)=>cache.write(k,p)};
+ const sync=createPromotionSync({cache});
+ const read=items=>async()=>({items,pageIndex:0,totalCount:items.length,totalPages:1});
+ const before=await sync({input:{operation:'promotion_sync',manifest:[]},readPage:read([{id:1,value:2},{id:2,value:3}])});
+ const after=await sync({input:{operation:'promotion_refresh',manifest:before.items},readPage:read([{id:1,value:2}]),enrichItems:async()=>{throw Error('offline');}});
+ assert.deepEqual(after.removedIds,['2']);assert.equal(after.count,1);
 });
 
 test('large snapshots keep all ACP products and rotate bounded enrichment batches',async()=>{
@@ -114,14 +125,14 @@ test('repeated upstream failures back off, preserve the snapshot, and manual rec
   claim:async k=>docs.get(k),finish:async(k,c,payload)=>{const row={payload};docs.set(k,row);return row;}};
  const sync=createPromotionSync({cache,now:()=>time});
  const offline=async()=>{calls++;throw Error('offline');};
- await sync({input:{operation:'promotion_status'},readPage:offline});
+ await assert.rejects(()=>sync({input:{operation:'promotion_status'},readPage:offline}),/offline/);
  assert.equal(calls,1);assert.equal(docs.get('promotion_snapshot_v3').payload.retryAt,time+60000);
  time+=60000;
- await sync({input:{operation:'promotion_status'},readPage:offline});
+ await assert.rejects(()=>sync({input:{operation:'promotion_status'},readPage:offline}),/offline/);
  assert.equal(calls,2);assert.equal(docs.get('promotion_snapshot_v3').payload.retryAt,time+120000);
  time+=60000;
- const stale=await sync({input:{operation:'promotion_status'},readPage:offline});
- assert.equal(calls,2);assert.equal(stale.revision,before.revision);
+ await assert.rejects(()=>sync({input:{operation:'promotion_status'},readPage:offline}),/SYNC_NOT_CONFIRMED/);
+ assert.equal(calls,2);
  await sync({input:{operation:'promotion_refresh',manifest:[]},readPage:async()=>({items:[{id:1,value:2}],pageIndex:0,totalCount:1,totalPages:1})});
  assert.equal(docs.get('promotion_snapshot_v3').payload.retryAt,0);
  assert.equal(docs.get('promotion_snapshot_v3').payload.failureCount,0);

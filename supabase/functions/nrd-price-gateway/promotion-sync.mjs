@@ -40,7 +40,7 @@ export function retainCatalogMetadata(item,previous) {
       if(previous[key]!=null)result[key]=previous[key];
   return result;
 }
-/** Shared ACP snapshot, immutable pages and one atomic pointer; stale data survives failed refresh. */
+/** Shared ACP snapshot, immutable pages and one atomic pointer; saved rows remain only as a delta baseline after failed refresh. */
 export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms))}) {
   let inFlight=null;
   async function refresh(readPage,enrichItems) {
@@ -67,9 +67,10 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
         const batchSize=enrichItems ? Math.min(80,products.length) : 0;
         if(batchSize) {
           const positions=Array.from({length:batchSize},(_,i)=>(cursor+i)%products.length);
-          const batch=await enrichItems(positions.map(i=>products[i]));
-          if(!Array.isArray(batch) || batch.length!==batchSize)throw Error('INVALID_ENRICHMENT');
-          positions.forEach((position,i)=>enriched[position]=batch[i]);
+          try {
+            const batch=await enrichItems(positions.map(i=>products[i]));
+            if(Array.isArray(batch) && batch.length===batchSize) positions.forEach((position,i)=>enriched[position]=batch[i]);
+          } catch { /* Optional photos/categories must never retain withdrawn commercial rules. */ }
         }
         const enrichCursor=products.length ? (cursor+batchSize)%products.length : 0;
         const previousKeys=Array.from({length:claim.payload.pages ?? 0},(_,i)=>`snapshot_${claim.payload.generation}_${i}`);
@@ -120,7 +121,8 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
         pointer=(await cache.get('promotion_snapshot_v3'))?.payload;
         if(!pointer?.revision) throw Error('INITIAL_SYNC_BUSY');
       }
-    } else if(input.operation==='promotion_refresh') {
+    } else if(input.operation==='promotion_refresh' || now()-pointer.checkedAt>=60000 || pointer.failureCount>0) {
+      if(input.operation!=='promotion_refresh' && (pointer.retryAt ?? 0)>now())throw Error('SYNC_NOT_CONFIRMED');
       // Another Edge instance may own the lease. Never report the previous page as a successful fresh scan.
       const startedAt=now();
       const previousCheck=pointer.checkedAt;
@@ -137,12 +139,6 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
         }
         if(!published) throw Error('REFRESH_BUSY');
       }
-    } else if(now()-pointer.checkedAt>=60000 && (pointer.retryAt ?? 0)<=now()) {
-      // Return the saved status immediately; the next poll observes the shared refresh.
-      // A closed/slow client does not own the server refresh lifetime.
-      const job=refresh(readPage,enrichItems).catch(()=>null);
-      if(background) background(job);
-      else pointer=await job ?? pointer;
     }
     const status={revision:pointer.revision,checkedAt:pointer.checkedAt,count:pointer.count};
     if(input.operation==='promotion_status') return status;

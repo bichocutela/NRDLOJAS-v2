@@ -17,9 +17,9 @@ internal data class PromotionsUiState(
     val opening: Boolean = false
 ) {
     val loading: Boolean get() = !initialized && (opening || sync.running || !sync.attempted)
-    /** Falhas do gateway não geram mensagem, toast, snackbar nem estado de erro para não-Mestre. */
+    /** Everyone sees an availability warning; technical diagnostics remain Master-only. */
     fun visibleSyncError(showDiagnostics: Boolean): String? =
-        sync.error?.takeIf { showDiagnostics && !initialized }
+        sync.error?.let { if (showDiagnostics) it else "Não foi possível confirmar as ofertas no ACP. Atualize para consultar as ofertas atuais." }
 }
 
 internal class PromotionsViewModel(application: Application) : AndroidViewModel(application) {
@@ -35,7 +35,9 @@ internal class PromotionsViewModel(application: Application) : AndroidViewModel(
     ) { offers, added, initialized, sync, opening ->
         // Recheck validity on each sync transition, even when the saved rows did not change.
         val currentOffers = offers.filter {
-            com.example.data.promotions.AcpPromotionsRepository.active(it.validFrom, it.validTo)
+            com.example.data.promotions.AcpPromotionsRepository.active(it.validFrom, it.validTo) &&
+                (it.products.none { product -> product.storeCode == "0012" } ||
+                    com.example.data.promotions.acpOffersConfirmed(sync.acpConfirmedAt))
         }
         PromotionsUiState(currentOffers, added, initialized.firstOrNull()?.value == "1", sync, opening)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PromotionsUiState(opening = true))
