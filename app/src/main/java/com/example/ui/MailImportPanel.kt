@@ -85,6 +85,16 @@ internal fun MailImportPanel() {
                     error=failures>0
                     message="${reviews.size} relatório(s) lido(s); $failures falha(s). Use Revisar para conferir ou tentar novamente."
                 }}) {Text("Ler todos os documentos")}
+                val selectableIds=documents.filter { document ->
+                    reviews[document.id]?.let { PromotionStores.records(it).isNotEmpty() } == true
+                }.map { it.id }.toSet()
+                if(selectableIds.isNotEmpty()) {
+                    val allSelected=selected.containsAll(selectableIds)
+                    OutlinedButton(enabled=!busy,onClick={
+                        selected=if(allSelected) selected-selectableIds else selected+selectableIds
+                    }) {Text(if(allSelected) "Desmarcar todos" else "Selecionar todos")}
+                    Text("${selected.intersect(selectableIds).size} de ${selectableIds.size} documento(s) disponível(is) selecionado(s)",style=MaterialTheme.typography.bodySmall)
+                }
                 documents.forEach { document ->
                     val analysis=reviews[document.id]
                     val records=analysis?.let { PromotionStores.records(it) }.orEmpty()

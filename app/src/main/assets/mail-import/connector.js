@@ -44,7 +44,8 @@ function receberRelatoriosNRD() {
         if(body.size>3145728){failures.push('PDF excede 3 MB: '+part.filename);all=false;continue;}
         const encoded = body.attachmentId ? Gmail.Users.Messages.Attachments.get('me',entry.id,body.attachmentId).data : body.data;
         if(!encoded) throw Error('Anexo indisponível: '+part.filename);
-        const pdf = Utilities.base64Encode(Utilities.base64DecodeWebSafe(encoded));
+        const pdf = Array.isArray(encoded) ? Utilities.base64Encode(encoded)
+          : Utilities.base64Encode(Utilities.base64DecodeWebSafe(encoded));
         const response = UrlFetchApp.fetch(NRD.url,{method:'post',contentType:'application/json',
           headers:{'x-nrd-mail-key':NRD.key},payload:JSON.stringify({operation:'ingest',filename:part.filename,pdf:pdf}),muteHttpExceptions:true});
         const status=response.getResponseCode();
