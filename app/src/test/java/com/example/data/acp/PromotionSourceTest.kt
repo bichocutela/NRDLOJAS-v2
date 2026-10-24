@@ -46,4 +46,25 @@ class PromotionSourceTest {
         assertEquals("2026-10-08", records.single().to)
         assertEquals(5.0, records.single().price, 0.0)
     }
+    @Test fun otherStoresPublishClubWithoutAnAcpMatchWhileCityGardenKeepsDePorPath() {
+        val offer = FlyerOffer(type=FlyerOfferType.FLYER_PRICE, sourceDescription="Produto clube", productCodes=listOf("1234"),
+            regularPrice=10.0, flyerPrice=8.0, clubCondition=FlyerClubCondition.REQUIRED,
+            validFrom="2026-10-24", validTo="2026-10-31")
+        val analysis=FlyerAnalysisResult("CLUBE_0005.pdf",null,null,listOf(offer),emptyList(),"visual_mix","CLUBE_0005.pdf")
+        assertEquals("Clube",PromotionStores.records(analysis).single().family)
+        assertEquals(FlyerMatchStatus.UNRESOLVED,offer.matchStatus)
+        assertTrue(PromotionStores.records(analysis,includeClub=false).isEmpty())
+    }
+    @Test fun dailyDeltasKeepCurrentAndFutureCampaignsAndDoNotEraseOtherProductsOrFamilies() {
+        val now=SimpleDateFormat("yyyy-MM-dd",Locale.ROOT).parse("2026-10-24")!!.time + 12*60*60*1000
+        val base=com.example.data.promotions.StorePromotionRecord("1234","","Arroz",5.0,8.0,"2026-10-24","2026-10-31")
+        val previous=listOf(base,base.copy(code="5678"),base.copy(family="Clube"),base.copy(code="old",to="2026-10-23"))
+        val incoming=listOf(base.copy(price=4.0,from="2026-10-25"))
+        val merged=com.example.data.promotions.mergeStoreRecords(previous,incoming,now)
+        assertEquals(4,merged.size)
+        assertTrue(merged.any{it.code=="5678"})
+        assertTrue(merged.any{it.family=="Clube"})
+        assertEquals(2,merged.count{it.code=="1234" && it.family=="De/Por"})
+        assertEquals(merged,com.example.data.promotions.mergeStoreRecords(merged,incoming,now))
+    }
 }

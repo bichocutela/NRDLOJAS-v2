@@ -10,7 +10,7 @@ internal class StorePublicationWriter(
         pages.forEachIndexed { index, page ->
             write("config/promotion_${code}_${revision}_$index", mapOf("items" to page.map {
                 mapOf("code" to it.code, "barcode" to it.barcode, "name" to it.name,
-                    "price" to it.price, "previous" to it.previous, "from" to it.from, "to" to it.to)
+                    "price" to it.price, "previous" to it.previous, "from" to it.from, "to" to it.to, "family" to it.family)
             }), false)
         }
         write("config/promotion_stores", mapOf(code to mapOf("enabled" to true, "revision" to revision,

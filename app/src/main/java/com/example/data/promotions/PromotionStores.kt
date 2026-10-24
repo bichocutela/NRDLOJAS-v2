@@ -3,10 +3,13 @@ package com.example.data.promotions
 import com.example.data.StoreCatalog
 import com.example.data.flyer.FlyerAnalysisResult
 import com.example.data.flyer.FlyerOfferType
+import com.example.data.flyer.FlyerClubCondition
 import com.google.firebase.auth.FirebaseAuth
 import com.example.data.PromotionControlClient
 import kotlinx.coroutines.flow.map
 import java.util.UUID
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 internal data class PromotionStore(
     val code: String,
@@ -26,11 +29,13 @@ internal data class StorePromotionRecord(
     val price: Double,
     val previous: Double,
     val from: String?,
-    val to: String?
+    val to: String?,
+    val family: String = "De/Por"
 )
 
 /** Publish immutable pages first, then one pointer. Readers never see half an import. */
 internal object PromotionStores {
+    private val publicationMutex = Mutex()
     private const val config = "config/promotion_stores"
     val defaults get() = StoreCatalog.codes.map { PromotionStore(it) }
 
@@ -65,18 +70,19 @@ internal object PromotionStores {
         return updated
     }
 
-    fun records(analysis: FlyerAnalysisResult): List<StorePromotionRecord> = analysis.offers
-        .filter { it.type == FlyerOfferType.DE_POR && it.reviewError() == null }
+    fun records(analysis: FlyerAnalysisResult, includeClub: Boolean = true): List<StorePromotionRecord> = analysis.offers
+        .filter { (it.type == FlyerOfferType.DE_POR || (includeClub && it.clubCondition == FlyerClubCondition.REQUIRED)) && it.reviewError() == null && it.regularPrice != null && it.flyerPrice != null && it.regularPrice > it.flyerPrice }
         .map { offer ->
             StorePromotionRecord(offer.productCodes.firstOrNull().orEmpty(), offer.barcodes.firstOrNull().orEmpty(),
                 offer.sourceDescription, offer.flyerPrice!!, offer.regularPrice!!,
-                offer.validFrom ?: analysis.validFrom, offer.validTo ?: analysis.validTo)
-        }.distinctBy { listOf(it.code, it.barcode, it.name, it.price, it.previous, it.from, it.to) }
+                offer.validFrom ?: analysis.validFrom, offer.validTo ?: analysis.validTo, if(includeClub && offer.clubCondition == FlyerClubCondition.REQUIRED) "Clube" else "De/Por")
+        }.distinctBy { listOf(it.code, it.barcode, it.name, it.price, it.previous, it.from, it.to, it.family) }
 
-    suspend fun publish(code: String, analysis: FlyerAnalysisResult): List<PromotionStore> {
+    suspend fun publish(code: String, analysis: FlyerAnalysisResult): List<PromotionStore> = publicationMutex.withLock {
         requireMaster(code)
-        val records = records(analysis)
-        require(records.isNotEmpty()) { "O documento não contém ofertas De/Por válidas com código ou EAN." }
+        val incoming = records(analysis, includeClub = code != "0012")
+        val records = if(code == "0012") incoming else mergeStoreRecords(readRecords(read(true).first { it.code == code }), incoming)
+        require(incoming.isNotEmpty()) { "O documento não contém ofertas válidas com código ou EAN." }
         records.firstOrNull { record ->
             (!record.from.isNullOrBlank() && AcpPromotionsRepository.isoDate(record.from) == null) ||
                 (!record.to.isNullOrBlank() && AcpPromotionsRepository.isoDate(record.to) == null) ||
@@ -90,7 +96,7 @@ internal object PromotionStores {
             write = { path, data, merge -> PromotionControlClient.write(path, data, merge) },
             read = { path -> PromotionControlClient.read(path) }
         )
-        return parse(writer.publish(code, UUID.randomUUID().toString(), records, analysis.sourceLabel, System.currentTimeMillis()))
+        parse(writer.publish(code, UUID.randomUUID().toString(), records, analysis.sourceLabel, System.currentTimeMillis()))
     }
 
     suspend fun readRecords(store: PromotionStore): List<StorePromotionRecord> {
@@ -105,9 +111,23 @@ internal object PromotionStores {
                     add(StorePromotionRecord(raw["code"] as? String ?: "", raw["barcode"] as? String ?: "",
                         raw["name"] as? String ?: "", (raw["price"] as? Number)?.toDouble() ?: 0.0,
                         (raw["previous"] as? Number)?.toDouble() ?: 0.0,
-                        raw["from"] as? String, raw["to"] as? String))
+                        raw["from"] as? String, raw["to"] as? String, raw["family"] as? String ?: "De/Por"))
                 }
             }
         }.also { require(it.size == store.count) { "Documento de promoções incompleto." } }
     }
+}
+
+/** Daily reports are deltas; a future campaign must not remove the current campaign. */
+internal fun mergeStoreRecords(previous: List<StorePromotionRecord>, incoming: List<StorePromotionRecord>, now: Long = System.currentTimeMillis()): List<StorePromotionRecord> {
+    val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).apply {
+        timeZone = java.util.TimeZone.getTimeZone("America/Fortaleza")
+    }.format(java.util.Date(now))
+    fun key(item: StorePromotionRecord) = listOf(item.code.ifBlank { item.barcode }, item.family, AcpPromotionsRepository.isoDate(item.from))
+    val merged = linkedMapOf<List<String?>, StorePromotionRecord>()
+    (previous + incoming).forEach { item ->
+        val end = AcpPromotionsRepository.isoDate(item.to)
+        if(end == null || end >= today) merged[key(item)] = item
+    }
+    return merged.values.toList()
 }

@@ -22,3 +22,7 @@ verify_jwt = true
 
 [functions.nrd-store-offers]
 verify_jwt = true
+
+[functions.nrd-mail-import]
+# Firebase JWT for Mestre; one-time connector capability for ingestion only.
+verify_jwt = false

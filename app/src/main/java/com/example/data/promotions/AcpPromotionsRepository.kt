@@ -113,11 +113,14 @@ internal class AcpPromotionsRepository(context: Context) {
                   }
                 }
             } else {
-                imported.forEach { record ->
+                imported.filter { active(it.from, it.to) }
+                    .groupBy { listOf(it.code.ifBlank { it.barcode }, it.family) }
+                    .map { (_, records) -> records.maxByOrNull { isoDate(it.from).orEmpty() }!! }
+                    .forEach { record ->
                     if (record.price.isFinite() && record.previous.isFinite() && record.price > 0 && record.previous > record.price &&
                         active(record.from, record.to)) {
                         promotions += promotion(store.code, record.code.ifBlank { record.barcode }, record.name,
-                            BigDecimal.valueOf(record.price), BigDecimal.valueOf(record.previous), record.from, record.to, null, record.barcode, null)
+                            BigDecimal.valueOf(record.price), BigDecimal.valueOf(record.previous), record.from, record.to, null, record.barcode, null, family = record.family)
                     }
                 }
             }
@@ -174,11 +177,11 @@ internal class AcpPromotionsRepository(context: Context) {
     }
 
     private fun promotion(store: String, code: String, name: String, price: BigDecimal, previous: BigDecimal,
-        from: String?, to: String?, image: String?, barcode: String?, detailsJson: String?, categoryOverride: String? = null, previousCategory: String? = null): Promotion {
+        from: String?, to: String?, image: String?, barcode: String?, detailsJson: String?, categoryOverride: String? = null, previousCategory: String? = null, family: String = "De/Por"): Promotion {
         val category = PromotionCategory.resolve(name, categoryOverride, previousCategory)
         val discount = previous.subtract(price).multiply(BigDecimal(100)).divide(previous, 0, RoundingMode.HALF_UP)
-        return Promotion(offerIdentity(store, code), "De/Por", category, image, isoDate(from), isoDate(to),
-            listOf(PromotionProduct(code, name, price.brl(), previous.brl(), "$discount%", store, image, barcode = barcode, detailsJson = detailsJson)))
+        return Promotion(offerIdentity(store, code, family), family, category, image, isoDate(from), isoDate(to),
+            listOf(PromotionProduct(code, name, price.brl(), previous.brl(), if(family == "Clube") "Clube" else "$discount%", store, image, barcode = barcode, detailsJson = detailsJson)))
     }
 
     companion object {
