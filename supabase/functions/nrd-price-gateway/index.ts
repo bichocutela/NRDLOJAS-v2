@@ -1,3 +1,4 @@
+import { withBrowserCors } from '../_shared/browser-cors.mjs';
 // ACP_PROVIDER supplies the initial default. The Master Panel can enable either provider or both.
 import { createRemoteJWKSet, jwtVerify, importPKCS8, SignJWT } from 'npm:jose@5.9.6';
 import { createHandler, boundedJson } from './handler.mjs';
@@ -138,4 +139,4 @@ const handler = createHandler({
   providerSettings: getProviderSettings,
   acpTechClient
 });
-Deno.serve(handler);
+Deno.serve(withBrowserCors(handler));

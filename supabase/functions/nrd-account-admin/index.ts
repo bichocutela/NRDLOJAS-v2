@@ -1,3 +1,4 @@
+import { withBrowserCors } from '../_shared/browser-cors.mjs';
 import { createRemoteJWKSet, jwtVerify, importPKCS8, SignJWT } from 'npm:jose@5.9.6';
 import {SupabaseCache} from '../nrd-price-gateway/supabase-cache.mjs';
 import {ControlDocuments} from '../nrd-promotion-control/documents.mjs';
@@ -92,4 +93,4 @@ const sessionHandler=createSessionHandler({verify,lookup,grant,
   },
   deleteSession: async (uid: string, version: string) => !!await documents.write(`access_sessions/${uid}`,{},{version:await ready()?Number(version):version,deleted:true}),
 });
-Deno.serve(req => new URL(req.url).pathname.endsWith('/session')?sessionHandler(req):adminHandler(req));
+Deno.serve(withBrowserCors(req => new URL(req.url).pathname.endsWith('/session')?sessionHandler(req):adminHandler(req)));
