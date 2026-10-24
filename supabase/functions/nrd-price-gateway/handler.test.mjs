@@ -6,6 +6,17 @@ const secret = () => ({login:'synthetic-user',password:'synthetic-password'});
 const req = (body,token) => new Request('https://gateway.invalid',{method:'POST',body:JSON.stringify(body),headers:token?{'x-firebase-token':token}:{}});
 const input = {path:'Product/all',parameters:[['description','Açúcar & Café'],['productCategoryIds','1'],['productCategoryIds','2']]};
 const allow = async () => ({allowed:true,master:false});
+test('legacy session is renewed when a centrally managed credential revision changes', async () => {
+  const server = upstream(); let revision = 'vault:1';
+  const handler = createHandler({ authorize: allow, fetcher: server.fetcher,
+    credentials: async () => ({ ...secret(), revision }) });
+  assert.equal((await handler(req(input))).status, 200);
+  assert.equal((await handler(req(input))).status, 200);
+  assert.equal(server.calls.filter(call => call.url.endsWith('/credentials')).length, 1);
+  revision = 'vault:2';
+  assert.equal((await handler(req(input))).status, 200);
+  assert.equal(server.calls.filter(call => call.url.endsWith('/credentials')).length, 2);
+});
 test('promotion permission cannot read the general catalogue or arbitrary category',async()=>{
   const authorize=createAuthorizer({verify:async()=>({uid:'uid',email:'user@example.com'}),
     document:async path=>path.startsWith('config/')?{}:{enabled:{booleanValue:true},promotions:{booleanValue:true},prices:{booleanValue:false}}});

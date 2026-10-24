@@ -10,6 +10,7 @@ import { createCategorizer } from './categories.mjs';
 import { createAuthorizer } from './access.mjs';
 import { createLiveCatalogLookup } from './catalog-live.mjs';
 import { createAcpTechClient } from './acptech-client.mjs';
+import { createIntegrationLogins } from '../_shared/integration-logins.mjs';
 const project = 'appcodigo-7f245';
 const jwks = createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
 let serviceToken = '', serviceExpires = 0;
@@ -78,9 +79,12 @@ const categorizer = createCategorizer({cache:serverCache, apiKey:Deno.env.get('G
   model:Deno.env.get('PROMOTION_GEMINI_MODEL') ?? 'gemini-3.5-flash-lite',
   background:(promise:Promise<unknown>) => EdgeRuntime.waitUntil(promise)});
 const provider = Deno.env.get('ACP_PROVIDER')?.trim().toLowerCase() === 'acptech' ? 'acptech' : 'legacy';
-const providerCredentials = (source = 'legacy') => source === 'acptech'
+const environmentCredentials = (source = 'legacy') => source === 'acptech'
   ? {login:Deno.env.get('ACPTECH_LOGIN'), password:Deno.env.get('ACPTECH_PASSWORD')}
   : {login:Deno.env.get('NRD_PRICE_LOGIN'), password:Deno.env.get('NRD_PRICE_PASSWORD')};
+const integrationLogins = createIntegrationLogins({ url:Deno.env.get('SUPABASE_URL'),
+  key:Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'), fallback:environmentCredentials });
+const providerCredentials = (source = 'legacy') => integrationLogins.get(source);
 const acpTechClient = createAcpTechClient({
   boundedJson,
   credentials: () => providerCredentials('acptech'),

@@ -38,6 +38,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
   const anonKey = String(config.anonKey || DEFAULT_ANON_KEY);
   let session = null;
   let sessionAt = 0;
+  let sessionRevision;
   let signingIn = null;
   let campaignsCache = null;
   let campaignsAt = 0;
@@ -65,11 +66,12 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
   }
 
   async function signIn() {
-    if (session && Date.now() - sessionAt < 10 * 60_000) return session;
+    const secret = await credentials();
+    if (!secret?.login || !secret?.password) throw Error('NOT_READY');
+    const revision = secret.revision ?? 0;
+    if (session && sessionRevision === revision && Date.now() - sessionAt < 10 * 60_000) return session;
     if (signingIn) return signingIn;
     signingIn = (async () => {
-      const secret = credentials();
-      if (!secret?.login || !secret?.password) throw Error('NOT_READY');
       const resolved = await json(`${supabaseUrl}/functions/v1/store-auth`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -101,6 +103,7 @@ export function createAcpTechClient({fetcher = fetch, boundedJson, credentials, 
       if (!chainId) throw Error('ACPTECH_CHAIN_NOT_FOUND');
       session = {token: auth.access_token, storeId, chainId};
       sessionAt = Date.now();
+      sessionRevision = revision;
       campaignsCache = null;
       campaignsLoading = null;
       scopedCampaignCache.clear();

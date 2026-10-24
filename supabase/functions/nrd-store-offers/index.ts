@@ -2,6 +2,7 @@ import { offerCatalog, activeOffers } from './catalog.mjs';
 import { createOfferFailover } from './failover.mjs';
 import { createPortalSession } from './portal-session.mjs';
 import { createPortalOffers } from './portal-catalog.mjs';
+import { createIntegrationLogins } from '../_shared/integration-logins.mjs';
 
 async function serverJson(path: string, options: RequestInit = {}) {
   const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -12,11 +13,14 @@ async function serverJson(path: string, options: RequestInit = {}) {
   return response.status === 204 || response.headers.get('Content-Length') === '0' ? null : response.json();
 }
 
+const integrationLogins = createIntegrationLogins({ url:Deno.env.get('SUPABASE_URL'),
+  key:Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') });
 const portal = createPortalSession({
   onHttpFailure: (path: string, status: number) => console.warn('Portal source HTTP status:', path, status),
-  getCredentials: () => serverJson('rpc/nrd_portal_account', {
-  method: 'POST', body: '{}' }) });
+  getCredentials: async () => { const value = await integrationLogins.get('offers');
+    return { user:value.login, password:value.password, revision:value.revision }; } });
 const authenticatedOffers = createPortalOffers({ session: portal,
+  beforeQuery: () => integrationLogins.get('offers', true),
   lock: (owner: string, operation: string, original?: number, selected?: number) => serverJson('rpc/nrd_portal_offer_lock', {
     method: 'POST', body: JSON.stringify({ p_owner: owner, p_operation: operation,
       p_original: original ?? null, p_selected: selected ?? null }) }) });

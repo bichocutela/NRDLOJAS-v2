@@ -2,6 +2,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createAcpTechClient} from './acptech-client.mjs';
 
+test('ACP Tech renews its session on credential rotation without waiting ten minutes', async () => {
+  let revision = 'vault:1', logins = 0;
+  const client = createAcpTechClient({ credentials: async () => ({ login: 'fake-user', password: 'fake-password', revision }),
+    boundedJson: response => response.json(), fetcher: async (url, options) => {
+      if (String(url).includes('store-auth')) return Response.json(JSON.parse(options.body).action === 'resolve_email'
+        ? { email: 'fake@example.invalid' } : { user: { store_id: 'store-12', chain_id: 'chain-1' } });
+      if (String(url).includes('/token?')) { logins++; return Response.json({ access_token: 'fake-token' }); }
+      return Response.json([]);
+    } });
+  await client.consult({ path: 'ProductCategory/all', parameters: [] });
+  await client.consult({ path: 'ProductCategory/all', parameters: [] });
+  assert.equal(logins, 1); revision = 'vault:2';
+  await client.consult({ path: 'ProductCategory/all', parameters: [] });
+  assert.equal(logins, 2);
+});
+
 test('ACP Tech resolve username, autentica e retorna itens de campanhas', async () => {
   const requests = [];
   const responses = [

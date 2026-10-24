@@ -103,6 +103,7 @@ private enum class MestrePanelPage(val title: String) {
     NOVELTY_SETTINGS("Inserir Novidade"),
     UPDATE_SETTINGS("Atualização do aplicativo"),
     ACCESS_SETTINGS("Cadastros e Acessos"),
+    INTEGRATION_LOGINS("Logins"),
     PWA_SETTINGS("PWA"),
     PROMOTION_STORES("Habilitar lojas"),
     WORK_SCHEDULE_SETTINGS("Inserir Escala"),
@@ -603,6 +604,7 @@ fun MestreScreen(
                     onOpenNovelties = { openPage(MestrePanelPage.NOVELTY_SETTINGS) },
                     onOpenWorkSchedule = { openPage(MestrePanelPage.WORK_SCHEDULE_SETTINGS) },
                     onOpenAccess = { openPage(MestrePanelPage.ACCESS_SETTINGS) },
+                    onOpenLogins = { openPage(MestrePanelPage.INTEGRATION_LOGINS) },
                     onOpenUpdates = { openPage(MestrePanelPage.UPDATE_SETTINGS) },
                     onOpenPwa = { openPage(MestrePanelPage.PWA_SETTINGS) },
                     onOpenPromotionStores = { openPage(MestrePanelPage.PROMOTION_STORES) }
@@ -619,6 +621,7 @@ fun MestreScreen(
             if (currentPage == MestrePanelPage.PWA_SETTINGS) { MestrePwaSettings() }
             if (currentPage == MestrePanelPage.PROMOTION_STORES) { MestrePromotionStores() }
             if (currentPage == MestrePanelPage.ACCESS_SETTINGS) { MestreAccessSettings() }
+            if (currentPage == MestrePanelPage.INTEGRATION_LOGINS) { MestreLoginsSettings() }
             if (currentPage == MestrePanelPage.WORK_SCHEDULE_SETTINGS) {
                 MestreWorkScheduleSettings()
                 Spacer(modifier = Modifier.height(16.dp))

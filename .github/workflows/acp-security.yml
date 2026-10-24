@@ -4,6 +4,7 @@ on:
     branches: [codex/acp-server-security, main]
     paths:
       - 'supabase/functions/nrd-price-gateway/**'
+      - 'supabase/functions/_shared/integration-logins.mjs'
       - '.github/workflows/acp-security.yml'
   workflow_dispatch:
 permissions:

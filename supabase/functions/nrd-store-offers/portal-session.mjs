@@ -14,12 +14,11 @@ export function portalExpiration(value) {
 // no credentials, token values or upstream error bodies may be logged/returned.
 export function createPortalSession({ getCredentials, getTenantToken = async () => '',
   fetchImpl = fetch, now = Date.now, loginRetryMs = 300000, onHttpFailure = () => {} }) {
-  let session, loginPending, blockedUntil = 0;
+  let session, loginPending, blockedUntil = 0, currentRevision;
 
-  async function login() {
+  async function login(credentials) {
     if (now() < blockedUntil) throw new Error('PORTAL_RECONNECT_DEFERRED');
     try {
-      const credentials = await getCredentials();
       if (!credentials?.user || !credentials?.password) throw new Error('PORTAL_NOT_CONFIGURED');
       const body = new FormData();
       body.append('user', credentials.user);
@@ -43,7 +42,7 @@ export function createPortalSession({ getCredentials, getTenantToken = async () 
           result.need_update_terms === true || result.need_update === true || result.need_update_favorite_store === true) {
         throw new Error('PORTAL_AUTH_REQUIRES_ADMIN');
       }
-      session = { token: result.access_token, expiresAt, tenantToken };
+      session = { token: result.access_token, expiresAt, tenantToken, revision:credentials.revision ?? 0 };
       return session;
     } catch {
       session = undefined;
@@ -53,8 +52,11 @@ export function createPortalSession({ getCredentials, getTenantToken = async () 
   }
 
   async function currentSession() {
-    if (session && session.expiresAt > now() + 60000) return session;
-    if (!loginPending) loginPending = login().finally(() => { loginPending = undefined; });
+    const credentials = await getCredentials();
+    const revision = credentials?.revision ?? 0;
+    if (currentRevision !== revision) { session = undefined; blockedUntil = 0; currentRevision = revision; }
+    if (session && session.revision === revision && session.expiresAt > now() + 60000) return session;
+    if (!loginPending) loginPending = login(credentials).finally(() => { loginPending = undefined; });
     return loginPending;
   }
 

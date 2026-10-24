@@ -2,6 +2,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createPortalSession, portalExpiration } from './portal-session.mjs';
 
+test('portal discards its old session after credential rotation', async () => {
+  let revision = 'vault:1', logins = 0;
+  const session = createPortalSession({ getCredentials: async () => ({ user: 'fake', password: 'fake', revision }),
+    fetchImpl: async url => {
+      if (String(url).endsWith('/auth/person')) { logins++; return Response.json({ isSuccess: true,
+        data: { access_token: 'fake-token-' + logins, expiration: Date.now() + 3600000 } }); }
+      return Response.json([]);
+    } });
+  await session.get('/promotion/customer'); await session.get('/promotion/customer');
+  assert.equal(logins, 1); revision = 'vault:2';
+  await session.get('/promotion/customer'); assert.equal(logins, 2);
+});
+
 test('accepts portal epoch milliseconds, epoch seconds and ISO expirations without guessing a duration', () => {
   const time = Date.parse('2026-10-24T10:00:00Z');
   assert.equal(portalExpiration(time), time);
