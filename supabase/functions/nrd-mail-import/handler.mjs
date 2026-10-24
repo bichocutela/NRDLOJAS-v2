@@ -9,7 +9,7 @@ export function documentStore(filename) {
 export async function digest(value) {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', typeof value === 'string' ? new TextEncoder().encode(value) : value))].map(x=>x.toString(16).padStart(2,'0')).join('');
 }
-export function createHandler({verify, db, random = () => crypto.randomUUID().replaceAll('-','') + crypto.randomUUID().replaceAll('-','')}) {
+export function createHandler({verify, db, random = () => [...crypto.getRandomValues(new Uint8Array(32))].map(x=>x.toString(16).padStart(2,'0')).join('')}) {
   const reply = (status, value) => Response.json(value, {status, headers:{'Cache-Control':'no-store'}});
   return async req => {
     if(req.method !== 'POST') return reply(405,{error:'METHOD_NOT_ALLOWED'});

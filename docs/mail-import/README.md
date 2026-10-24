@@ -14,6 +14,8 @@ Somente lojas diferentes de 0012. Cidade Jardim conserva ACP, conferência e val
 6. Encaminhe uma mensagem com os relatórios para a caixa exclusiva. O conector verifica os últimos 30 dias a cada 15 minutos. Para a primeira tentativa, execute receberRelatoriosNRD no editor. Se o Google pedir habilitar Gmail API, adicione Gmail em Serviços do projeto; o manifesto inclui o serviço avançado v1.
 7. No NRD, Buscar documentos recebidos → Ler todos → Revisar. Marque os documentos conferidos e publique em lote. O recebimento é automático; a revisão/publicação continua nas mãos do Mestre. A leitura dos PDFs acontece enquanto essa tela do app está aberta; se interrompida, os PDFs continuam na fila e podem ser lidos novamente.
 
+Se houver um documento vencido ou que não deva ser publicado, use Descartar da fila; o original continua no Gmail.
+
 A autorização real da conta e um e-mail real são necessários para o teste ponta a ponta. Uma caixa informada por texto não significa que a integração já foi autorizada. A conexão Gmail do ChatGPT não conecta automaticamente esse serviço ao NRD.
 
 ## Regras de publicação
@@ -22,7 +24,7 @@ A autorização real da conta e um e-mail real são necessários para o teste po
 - Relatórios de alterações são deltas. A publicação preserva outras ofertas não vencidas, mantém campanhas futuras junto das atuais e atualiza a mesma identidade/produto/família/data inicial. Entre campanhas vigentes sobrepostas, a data inicial mais recente prevalece.
 - De/Por e Clube têm identidades separadas. Os leitores antigos não conhecem o novo campo family; atualize os usuários para a versão nova antes de publicar Clube para outras lojas.
 - Datas faltantes impedem a publicação pela fila. Linhas inválidas/não suportadas são mostradas e ficam fora da publicação. O parser conserva os avisos de extração; revisão de um PDF real é necessária antes de aprovar comercialmente uma loja.
-- Repetir a publicação após uma interrupção não duplica os registros de mesma identidade e início. O processo de publicação é serializado no app. Publicação concorrente por vários dispositivos Mestre ainda deve ser evitada; o merge de deltas não é uma transação distribuída entre dispositivos.
+- Repetir a publicação após uma interrupção não duplica os registros de mesma identidade e início. O processo de publicação é serializado no app. Uma falha no ACP preserva o cache vigente da Cidade Jardim e não impede a atualização independente das outras lojas. Publicação concorrente por vários dispositivos Mestre ainda deve ser evitada; o merge de deltas não é uma transação distribuída entre dispositivos.
 
 ## Armazenamento e autorização
 

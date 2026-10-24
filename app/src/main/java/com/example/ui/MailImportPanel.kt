@@ -32,6 +32,7 @@ internal fun MailImportPanel() {
     var reviews by remember { mutableStateOf<Map<String, FlyerAnalysisResult>>(emptyMap()) }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var detail by remember { mutableStateOf<String?>(null) }
+    var discard by remember { mutableStateOf<MailImportDocument?>(null) }
     var publishConfirm by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     fun launchJob(job: suspend () -> Unit) {
@@ -97,6 +98,7 @@ internal fun MailImportPanel() {
                                 if(document.id !in reviews) reviews=reviews+(document.id to MailImportRepository.analyze(context,document))
                                 detail=document.id
                             }}) {Text("Revisar")}
+                            TextButton(enabled=!busy,onClick={discard=document}) {Text("Descartar da fila")}
                         }
                     }
                 }
@@ -106,6 +108,15 @@ internal fun MailImportPanel() {
             if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if(message.isNotBlank()) Text(message,color=if(error)MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodySmall)
         }
+    }
+    discard?.let { document ->
+        AlertDialog(onDismissRequest={discard=null},title={Text("Descartar ${document.filename}?")},
+            text={Text("O documento será retirado da fila do NRD. O e-mail original no Gmail e as ofertas já publicadas serão preservados.")},
+            confirmButton={TextButton(enabled=!busy,onClick={discard=null;launchJob {
+                MailImportRepository.finish(document,false)
+                documents=MailImportRepository.list(); selected=selected-document.id; reviews=reviews-document.id
+                message="Documento retirado da fila."
+            }}){Text("Descartar")}},dismissButton={TextButton(onClick={discard=null}){Text("Voltar")}})
     }
     if(publishConfirm) AlertDialog(onDismissRequest={if(!busy)publishConfirm=false},title={Text("Publicar documentos conferidos?")},text={
         val chosen=documents.filter{it.id in selected}

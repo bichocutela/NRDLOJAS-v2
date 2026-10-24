@@ -83,6 +83,7 @@ internal object PromotionStores {
         val incoming = records(analysis, includeClub = code != "0012")
         val records = if(code == "0012") incoming else mergeStoreRecords(readRecords(read(true).first { it.code == code }), incoming)
         require(incoming.isNotEmpty()) { "O documento não contém ofertas válidas com código ou EAN." }
+        require(records.isNotEmpty()) { "O documento contém somente ofertas vencidas. Confira as datas ou descarte este recebimento." }
         records.firstOrNull { record ->
             (!record.from.isNullOrBlank() && AcpPromotionsRepository.isoDate(record.from) == null) ||
                 (!record.to.isNullOrBlank() && AcpPromotionsRepository.isoDate(record.to) == null) ||

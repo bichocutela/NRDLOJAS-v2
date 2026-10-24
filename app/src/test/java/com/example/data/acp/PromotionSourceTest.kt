@@ -67,4 +67,17 @@ class PromotionSourceTest {
         assertEquals(2,merged.count{it.code=="1234" && it.family=="De/Por"})
         assertEquals(merged,com.example.data.promotions.mergeStoreRecords(merged,incoming,now))
     }
+    @Test fun unavailableAcpCannotBlockOtherStoreDocumentsAndCancellationIsNotSwallowed() = kotlinx.coroutines.runBlocking {
+        val cached=com.example.data.Promotion("0012|1","De/Por","",null,null,null,
+            listOf(com.example.data.PromotionProduct("1","Produto","5","8",null,"0012")))
+        val document=cached.copy(id="0005|2",products=listOf(cached.products.first().copy(code="2",storeCode="0005")))
+        val stores=listOf(com.example.data.promotions.PromotionStore("0012"),com.example.data.promotions.PromotionStore("0005"))
+        val result=com.example.data.promotions.loadStorePromotionSnapshots(stores,listOf(cached)) {
+            if(it.code=="0012") error("ACP offline") else listOf(document)
+        }
+        assertEquals(setOf("0012|1","0005|2"),result.map{it.id}.toSet())
+        assertTrue(runCatching {
+            com.example.data.promotions.loadStorePromotionSnapshots(stores,emptyList()) { throw kotlinx.coroutines.CancellationException() }
+        }.exceptionOrNull() is kotlinx.coroutines.CancellationException)
+    }
 }
