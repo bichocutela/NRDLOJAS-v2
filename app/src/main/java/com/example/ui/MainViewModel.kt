@@ -214,12 +214,15 @@ class MainViewModel(private val repository: ProductRepository, val userPreferenc
     val searchResults: StateFlow<List<Product>> = _searchQuery
         .debounce(300)
         .flatMapLatest { query ->
-            if (query.isBlank()) flowOf(emptyList()) else repository.searchProducts(query)
+            if (query.isBlank()) flowOf(emptyList())
+            else repository.searchProducts(com.example.data.storeProductLookupCode(query))
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun updateSearchQuery(query: String) {
-        _searchQuery.value = com.example.data.storeProductLookupCode(query)
+        // Keep editable text intact: trimming here consumes the space before the next word.
+        // Normalize scale labels only when executing the lookup above.
+        _searchQuery.value = query
     }
 
     fun onProductSearched(product: Product) {
