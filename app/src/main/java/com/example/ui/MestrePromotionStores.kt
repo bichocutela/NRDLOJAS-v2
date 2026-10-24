@@ -33,6 +33,14 @@ internal fun MestrePromotionStores() {
     var message by remember { mutableStateOf<String?>(null) }
     var publicationError by remember { mutableStateOf<String?>(null) }
     var messageIsError by remember { mutableStateOf(false) }
+    LaunchedEffect(refreshKey) {
+        try { stores=PromotionStores.read(true) }
+        catch(cancelled: CancellationException) { throw cancelled }
+        catch(failure: Exception) {
+            messageIsError=true
+            message=failure.message ?: "Não foi possível carregar as lojas. Tente novamente."
+        }
+    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             busy = true
@@ -52,13 +60,14 @@ internal fun MestrePromotionStores() {
     Text("Envie o mesmo Relatório de Produtos Alterados do Visual Mix usado em Consultar Preços. Confira a loja, os preços e as validades antes de publicar.")
     Text("Cidade Jardim atualiza os preços pelo ACP. O documento complementa as validades. Nas outras lojas, as ofertas De/Por e Clube vêm dos documentos publicados.", style = MaterialTheme.typography.bodySmall)
     message?.let { Text(it, color = if (messageIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
+    if(messageIsError) TextButton(enabled=!busy,onClick={refreshKey++}) {Text("Tentar carregar lojas novamente")}
     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
     stores.forEach { store ->
         Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
             Column(Modifier.padding(12.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(StoreCatalog.labelFor(store.code), modifier = Modifier.weight(1f))
-                    Switch(checked = store.enabled, enabled = !busy && (store.code == "0012" || store.count > 0),
+                    Switch(checked = store.enabled, enabled = !busy && (store.enabled || store.code == "0012" || store.count > 0),
                         onCheckedChange = { enabled -> scope.launch {
                             busy = true
                             try {

@@ -2,6 +2,8 @@ package com.example.ui
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -68,8 +70,12 @@ internal fun MailImportPanel() {
             }
             Button(enabled=!busy,onClick={launchJob {
                 documents=MailImportRepository.list()
+                val currentIds=documents.map { it.id }.toSet()
+                selected=selected.intersect(currentIds); reviews=reviews.filterKeys { it in currentIds }
                 message="${documents.size} documento(s) aguardando revisão."
             }}) {Text("Buscar documentos recebidos")}
+            if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if(message.isNotBlank()) Text(message,color=if(error)MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodySmall)
             if(documents.isNotEmpty()) {
                 Text("${documents.size} documento(s) pendente(s). Confira a loja e a validade de cada relatório antes de publicar.")
                 OutlinedButton(enabled=!busy,onClick={launchJob {
@@ -94,6 +100,9 @@ internal fun MailImportPanel() {
                         selected=if(allSelected) selected-selectableIds else selected+selectableIds
                     }) {Text(if(allSelected) "Desmarcar todos" else "Selecionar todos")}
                     Text("${selected.intersect(selectableIds).size} de ${selectableIds.size} documento(s) disponível(is) selecionado(s)",style=MaterialTheme.typography.bodySmall)
+                    Button(enabled=!busy && selected.intersect(selectableIds).isNotEmpty(),onClick={message="";error=false;publishConfirm=true}) {
+                        Text("Publicar e habilitar lojas (${selected.intersect(selectableIds).size})")
+                    }
                 }
                 documents.forEach { document ->
                     val analysis=reviews[document.id]
@@ -113,10 +122,8 @@ internal fun MailImportPanel() {
                     }
                 }
                 Text("Marque somente os documentos conferidos. Serão publicadas apenas as ofertas válidas de cada documento; as linhas pendentes não serão publicadas.",style=MaterialTheme.typography.bodySmall)
-                Button(enabled=!busy && selected.isNotEmpty(),onClick={publishConfirm=true}) {Text("Publicar documentos conferidos (${selected.size})")}
+                Button(enabled=!busy && selected.isNotEmpty(),onClick={message="";error=false;publishConfirm=true}) {Text("Publicar documentos conferidos (${selected.size})")}
             }
-            if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            if(message.isNotBlank()) Text(message,color=if(error)MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodySmall)
         }
     }
     discard?.let { document ->
@@ -131,23 +138,35 @@ internal fun MailImportPanel() {
     if(publishConfirm) AlertDialog(onDismissRequest={if(!busy)publishConfirm=false},title={Text("Publicar documentos conferidos?")},text={
         val chosen=documents.filter{it.id in selected}
         val omitted=chosen.sumOf{doc->reviews[doc.id]?.let{it.offers.size-PromotionStores.records(it).size} ?: 0}
-        Text("Serão publicados ${chosen.size} documento(s). $omitted linha(s) inválida(s) ou não suportada(s) ficarão pendentes e não serão publicadas. As demais ofertas vigentes serão preservadas. Confira se as lojas indicadas estão corretas.")
-    },confirmButton={TextButton(enabled=!busy,onClick={publishConfirm=false;launchJob {
-                    var successes=0
-                    var pending=0
-                    for(document in documents.filter{it.id in selected}) {
-                        val analysis=reviews[document.id] ?: continue
-                        val records=PromotionStores.records(analysis)
-                        require(records.all { AcpPromotionsRepository.isoDate(it.from)!=null && AcpPromotionsRepository.isoDate(it.to)!=null }) {"Confira as datas de ${document.filename}."}
-                        message="Publicando ${document.filename}…"
-                        PromotionStores.publish(document.storeCode,analysis)
-                        if(analysis.offers.size == records.size) MailImportRepository.finish(document,true) else pending++
-                        selected=selected-document.id; successes++
-                    }
-                    documents=MailImportRepository.list()
-                    message="$successes documento(s) publicado(s); $pending com linhas pendentes continuam na fila. As outras ofertas vigentes foram preservadas."
-                
-    }}){Text("Publicar")}},dismissButton={TextButton(onClick={publishConfirm=false}){Text("Voltar à revisão")}})
+        Column(Modifier.heightIn(max=420.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            Text("${chosen.size} documento(s) selecionado(s). $omitted linha(s) inválida(s) ou não suportada(s) ficarão pendentes. As demais ofertas vigentes serão preservadas. Confira as lojas antes de publicar.")
+            if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if(message.isNotBlank()) Text(message,color=if(error)MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+        }
+    },confirmButton={TextButton(enabled=!busy && selected.isNotEmpty(),onClick={launchJob {
+        val chosen=documents.filter{it.id in selected}
+        val failures=mutableListOf<String>()
+        var pending=0
+        val result=publishMailBatch(chosen,onProgress={ document,index,total ->
+            message="Publicando $index de $total: ${document.filename}…"
+        }) { document ->
+            val analysis=reviews[document.id] ?: error("Leia o documento antes de publicar.")
+            val records=PromotionStores.records(analysis)
+            require(records.isNotEmpty()) {"O documento não contém ofertas válidas."}
+            require(records.all { AcpPromotionsRepository.isoDate(it.from)!=null && AcpPromotionsRepository.isoDate(it.to)!=null }) {"Validade ausente ou inválida. Confira o relatório."}
+            PromotionStores.publish(document.storeCode,analysis)
+            if(analysis.offers.size == records.size) {
+                MailImportRepository.finish(document,true)
+                documents=documents.filterNot {it.id==document.id}
+                reviews=reviews-document.id
+            } else pending++
+            selected=selected-document.id
+        }
+        result.failures.forEach { (document,reason) -> failures.add("${document.filename}: $reason") }
+        error=failures.isNotEmpty()
+        message="${result.published.size} documento(s) publicado(s); $pending com linhas pendentes." +
+            if(failures.isEmpty()) " Publicação concluída. As lojas publicadas foram habilitadas." else " Falharam ${failures.size}:\n"+failures.joinToString("\n")+"\nOs documentos que falharam continuam selecionados para tentar novamente."
+    }}){Text(if(busy) "Publicando…" else if(error) "Tentar novamente" else "Publicar")}},dismissButton={TextButton(enabled=!busy,onClick={publishConfirm=false}){Text("Fechar")}})
     detail?.let { id ->
         val document=documents.firstOrNull{it.id==id}
         val analysis=reviews[id]
