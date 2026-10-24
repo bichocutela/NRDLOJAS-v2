@@ -61,7 +61,9 @@ Deno.serve(async req => {
       value = await task;
     }
     return Response.json({ ...value, offers: activeOffers(value.offers), stale:false }, { headers });
-  } catch {
+  } catch (error) {
+    const reason=error instanceof Error && /^(CONFIG_UNAVAILABLE|CONFIG_INVALID|AUTH_UNAVAILABLE|AUTH_INVALID|STORES_UNAVAILABLE|SOURCE_UNAVAILABLE|INVALID_CATALOG|INVALID_ITEMS|INVALID_DATES|INVALID_ITEM)$/.test(error.message) ? error.message : 'UPSTREAM_REQUEST_FAILED';
+    console.warn('Store offers unavailable:', reason, 'store:', storeId);
     if(value) return Response.json({ ...value, offers:activeOffers(value.offers), stale:true }, { headers });
     return Response.json({ error:'OFFERS_UNAVAILABLE' }, { status:503, headers:{ ...headers, 'Cache-Control':'no-store' } });
   }
