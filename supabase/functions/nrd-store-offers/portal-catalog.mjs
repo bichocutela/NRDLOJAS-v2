@@ -13,7 +13,7 @@ export function portalOfferCatalog(campaigns) {
   ].filter(Boolean).join('\n\n') }));
 }
 
-export function createPortalOffers({ session, lock, now = Date.now, ownerId = () => crypto.randomUUID() }) {
+export function createPortalOffers({ session, lock, beforeQuery = async () => {}, now = Date.now, ownerId = () => crypto.randomUUID() }) {
   return async storeId => {
     const owner = ownerId(), acquired = await lock(owner, 'acquire');
     if (!acquired?.acquired) throw new Error('PORTAL_BUSY');
@@ -45,6 +45,7 @@ export function createPortalOffers({ session, lock, now = Date.now, ownerId = ()
       await clear();
     }
     try {
+      await beforeQuery();
       // Recover an interrupted previous worker before selecting a new store.
       await restore();
       const original = await preferred();

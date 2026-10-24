@@ -87,7 +87,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
   provider = 'legacy', providerSettings = async () => ({}), acpTechClient = null}) {
   const catalogDelivery = {background, budgetMs:catalogSearchBudgetMs};
   // ACP session shared only inside this server instance. Login is serialized, not per product.
-  let session = null, sessionAt = 0, signingIn = null;
+  let session = null, sessionAt = 0, signingIn = null, sessionRevision;
   let dePorCategory = null, dePorCategoryAt = 0;
   let catalogCache = null, catalogCachedAt = 0, catalogLoading = null;
   const loadCatalog = catalogLoader ? async () => {
@@ -100,11 +100,12 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     return catalogLoading;
   } : null;
   async function signIn() {
-    if (session && Date.now() - sessionAt < 10 * 60_000) return session;
+    const secret = await credentials('legacy');
+    if (!secret?.login || !secret?.password) throw Error('NOT_READY');
+    const revision = secret.revision ?? 0;
+    if (session && sessionRevision === revision && Date.now() - sessionAt < 10 * 60_000) return session;
     if (signingIn) return signingIn;
     signingIn = (async () => {
-      const secret = credentials('legacy');
-      if (!secret.login || !secret.password) throw Error('NOT_READY');
       const jar = new Map();
       const json = async (path, options = {}) => {
         const response = await fetcher(TENANT + path, {...options, redirect:'error', signal:AbortSignal.timeout(15000),
@@ -125,7 +126,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
       const result = await json('/api/auth/session');
       if (typeof result.user?.accessToken !== 'string' || !result.user.accessToken) throw Error('UPSTREAM_FAILURE');
       session = {token:result.user.accessToken, proxy:result.user.proxyEnable === true, cookie:[...jar].map(([k,v]) => k+'='+v).join('; ')};
-      sessionAt = Date.now(); return session;
+      sessionAt = Date.now(); sessionRevision = revision; return session;
     })();
     try { return await signingIn; } finally { signingIn = null; }
   }
@@ -202,10 +203,14 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
   async function enabledProviderOrder() {
     let settings = null;
     try { settings = await providerSettings(); } catch { /* Keep the environment default during a control-store outage. */ }
-    return providerOrder(settings, provider).filter(source => {
-      const secret = credentials(source);
-      return Boolean(secret?.login && secret?.password && (source !== 'acptech' || acpTechClient));
-    });
+    const result = [];
+    for (const source of providerOrder(settings, provider)) {
+      try {
+        const secret = await credentials(source);
+        if (secret?.login && secret?.password && (source !== 'acptech' || acpTechClient)) result.push(source);
+      } catch { /* Do not guess old credentials during a credential-store outage. */ }
+    }
+    return result;
   }
   async function consult(input, enrich = true, family = "depor") {
     const order = await enabledProviderOrder();

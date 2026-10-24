@@ -26,3 +26,7 @@ verify_jwt = true
 [functions.nrd-mail-import]
 # Firebase JWT for Mestre; one-time connector capability for ingestion only.
 verify_jwt = false
+
+[functions.nrd-integration-logins]
+# Firebase JWT is verified cryptographically; only the authenticated Mestre can rotate logins.
+verify_jwt = false
