@@ -271,8 +271,11 @@ internal fun AcpProductsPanel(
         detailAttempt++
     }
 
-    fun search(index: Int = 0, interactive: Boolean = true) {
-        val searchText = query.trim()
+    fun search(index: Int = 0, interactive: Boolean = true, queryOverride: String? = null) {
+        // Scanner callbacks can run before Compose recomposes after `query = code`.
+        // Accept the scanned value directly so the explicit search never reads the
+        // previous query from the closure.
+        val searchText = (queryOverride ?: query).trim()
         if (searchText.isBlank()) {
             if (interactive) error = "Digite um código, código de barras ou descrição."
             return
@@ -915,7 +918,7 @@ internal fun AcpProductsPanel(
             onResult = { code ->
                 scanning = false
                 query = code
-                search()
+                search(queryOverride = code)
             }
         )
     }
