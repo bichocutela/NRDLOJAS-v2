@@ -7,7 +7,6 @@ import com.example.data.Promotion
 import com.example.data.promotions.PromotionSyncCoordinator
 import com.example.data.promotions.PromotionSyncState
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 
 internal data class PromotionsUiState(
     val offers: List<Promotion> = emptyList(),
@@ -25,7 +24,6 @@ internal data class PromotionsUiState(
 internal class PromotionsViewModel(application: Application) : AndroidViewModel(application) {
     private val coordinator = PromotionSyncCoordinator.get(application)
     private val opening = MutableStateFlow(true)
-    private var openingJob: kotlinx.coroutines.Job? = null
     val state: StateFlow<PromotionsUiState> = combine(
         coordinator.repository.observeOffers(),
         coordinator.repository.observeLatestAdded(),
@@ -36,20 +34,15 @@ internal class PromotionsViewModel(application: Application) : AndroidViewModel(
         // Recheck validity on each sync transition, even when the saved rows did not change.
         val currentOffers = offers.filter {
             com.example.data.promotions.AcpPromotionsRepository.active(it.validFrom, it.validTo) &&
-                (it.products.none { product -> product.storeCode == "0012" } ||
-                    com.example.data.promotions.acpOffersConfirmed(sync.acpConfirmedAt))
+
         }
         PromotionsUiState(currentOffers, added, initialized.firstOrNull()?.value == "1", sync, opening)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PromotionsUiState(opening = true))
 
+    /** The application monitor refreshes silently before/while users browse; opening the
+     * screen must render the last confirmed City Jardim snapshot without triggering a fetch. */
     fun screenOpened() {
-        if (openingJob?.isActive == true) return
-        opening.value = true
-        val refresh = coordinator.requestSync()
-        openingJob = viewModelScope.launch {
-            try { refresh.join() }
-            finally { opening.value = false }
-        }
+        opening.value = false
     }
     fun refresh() { coordinator.requestSync(interactive = true) }
     fun storesChanged() { coordinator.requestSync() }

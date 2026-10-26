@@ -85,14 +85,21 @@ internal class AcpPromotionsRepository(context: Context) {
                     delta = PromotionDelta.parse(gateway.promotionRefresh(currentRevision, manifest))
                     cityProducts = delta!!.applyTo(previousRows)
                 } else {
-                    val status = gateway.promotionStatus()
-                    val revision = status.getString("revision")
-                    val serverCount = status.getInt("count")
-                    require(Regex("[a-f0-9]{64}").matches(revision) && serverCount in 0..10_000)
-                    if (currentRevision != revision || previousRows.size != serverCount) {
-                        onNetwork(true)
-                        delta = PromotionDelta.parse(gateway.promotionSync(currentRevision, manifest))
-                        cityProducts = delta!!.applyTo(previousRows)
+                    val now = System.currentTimeMillis()
+                    val lastStatusAt = dao.metadata("acp_status_checked_at")?.toLongOrNull() ?: 0L
+                    // Cidade Jardim uses ACP: check its authoritative revision at most every
+                    // five minutes during silent polling. A manual refresh still bypasses this.
+                    if (currentRevision.isBlank() || now - lastStatusAt >= ACP_STATUS_CHECK_INTERVAL_MS) {
+                        val status = gateway.promotionStatus()
+                        val revision = status.getString("revision")
+                        val serverCount = status.getInt("count")
+                        require(Regex("[a-f0-9]{64}").matches(revision) && serverCount in 0..10_000)
+                        dao.put(PromotionMetadata("acp_status_checked_at", now.toString()))
+                        if (currentRevision != revision || previousRows.size != serverCount) {
+                            onNetwork(true)
+                            delta = PromotionDelta.parse(gateway.promotionSync(currentRevision, manifest))
+                            cityProducts = delta!!.applyTo(previousRows)
+                        }
                     }
                 }
                 val uniqueProducts = AcpProductParser.page(JSONObject().put("items",
@@ -190,6 +197,7 @@ internal class AcpPromotionsRepository(context: Context) {
     }
 
     companion object {
+        internal const val ACP_STATUS_CHECK_INTERVAL_MS = 5 * 60 * 1000L
         private val syncMutex = Mutex()
         internal fun isoDate(raw: String?): String? {
             val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
