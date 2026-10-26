@@ -69,6 +69,11 @@ private enum class NrdIdentifier { BARCODE, PRODUCT_CODE }
 
 private const val AUTO_PRICE_REFRESH_MILLIS = 15_000L
 
+/** A scanner sets the search text and starts the explicit request in the same frame.
+ *  The query observer must not cancel that in-flight request. */
+internal fun preserveExplicitAcpSearch(query: String, lastExplicitQuery: String?): Boolean =
+    query.trim().isNotEmpty() && query.trim() == lastExplicitQuery
+
 private enum class AcpFeaturedSort(val label: String) {
     MAIOR_DESCONTO("Maior desconto"),
     MENOS_DESCONTO("Menos desconto"),
@@ -404,6 +409,7 @@ internal fun AcpProductsPanel(
     // Um debounce curto evita uma chamada por tecla, e cada nova digitação cancela a anterior.
     LaunchedEffect(query) {
         val clean = query.trim()
+        if (preserveExplicitAcpSearch(clean, lastExplicitQuery)) return@LaunchedEffect
         searchJob?.cancel()
         generation++
         busy = false
@@ -917,8 +923,10 @@ internal fun AcpProductsPanel(
             onDismiss = { scanning = false },
             onResult = { code ->
                 scanning = false
-                query = code
+                // Start with the decoded value directly, before changing the text field.
+                // This prevents a recomposition from treating the scan as a typed search.
                 search(queryOverride = code)
+                query = code
             }
         )
     }

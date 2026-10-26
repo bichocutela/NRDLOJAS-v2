@@ -4,7 +4,10 @@ import android.content.Context
 import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -38,12 +41,60 @@ internal fun shouldCheckAcpStatus(lastCheckedDay: String?, nowMillis: Long, forc
     return lastCheckedDay != acpStatusDay(nowMillis)
 }
 
+/** Visual Mix only supplies dates for Cidade Jardim. The ACP is always the price source.
+ *  Match using product identity, never a coincidence between imported and ACP prices. */
+internal fun visualMixDatesForAcp(
+    records: List<StorePromotionRecord>,
+    code: String,
+    barcode: String,
+    family: AcpOfferFamily,
+    nowMillis: Long = System.currentTimeMillis()
+): AcpOfferValidity? {
+    if (family != AcpOfferFamily.DE_POR) return null
+    val internalCode = code.trim()
+    val ean = barcode.trim()
+    val matching = records.filter { record ->
+        record.family == "De/Por" &&
+            ((internalCode.isNotEmpty() && record.code.trim() == internalCode) ||
+                (ean.isNotEmpty() && record.barcode.trim() == ean)) &&
+            (!record.from.isNullOrBlank() || !record.to.isNullOrBlank())
+    }
+    val today = acpStatusDay(nowMillis)
+    val current = matching.filter { AcpPromotionsRepository.active(it.from, it.to, nowMillis) }
+        .maxByOrNull { AcpPromotionsRepository.isoDate(it.from).orEmpty() }
+    val upcoming = matching.filter { (AcpPromotionsRepository.isoDate(it.from) ?: "") > today }
+        .minByOrNull { AcpPromotionsRepository.isoDate(it.from).orEmpty() }
+    val chosen = current ?: upcoming ?:
+        matching.maxByOrNull { AcpPromotionsRepository.isoDate(it.from).orEmpty() }
+    return chosen?.let { AcpOfferValidity(it.from.orEmpty(), it.to.orEmpty()) }
+}
+
+/** Recheck offer validity at Fortaleza midnight even without a network/database update. */
+internal fun millisUntilNextPromotionDay(nowMillis: Long): Long {
+    val midnight = java.util.Calendar.getInstance(TimeZone.getTimeZone("America/Fortaleza")).apply {
+        timeInMillis = nowMillis
+        add(java.util.Calendar.DAY_OF_MONTH, 1)
+        set(java.util.Calendar.HOUR_OF_DAY, 0)
+        set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+    }
+    return (midnight.timeInMillis - nowMillis).coerceAtLeast(1L)
+}
+
 internal class AcpPromotionsRepository(context: Context) {
     private val gateway = AcpGatewayClient(promotionsOnly = true)
     internal val database = PromotionDatabase.get(context)
     internal val dao = database.promotions()
-    fun observeOffers() = dao.observeOffers().map { rows -> rows.map { PromotionCodec.decode(it.payload) }
-        .filter { active(it.validFrom, it.validTo) } }.distinctUntilChanged()
+    fun observeOffers() = combine(dao.observeOffers(), flow {
+        while (true) {
+            emit(Unit)
+            delay(millisUntilNextPromotionDay(System.currentTimeMillis()))
+        }
+    }) { rows, _ ->
+        rows.map { PromotionCodec.decode(it.payload) }
+            .filter { active(it.validFrom, it.validTo) }
+    }.distinctUntilChanged()
     fun observeLatestAdded() = dao.observeLatestAdded().map { values ->
         val array = JSONArray(values.firstOrNull()?.value ?: "[]")
         (0 until array.length()).map { array.getString(it) }.toSet()
@@ -77,6 +128,7 @@ internal class AcpPromotionsRepository(context: Context) {
         val previousRows = dao.rows()
         val cachedOffers = dao.offers().associate { it.id to PromotionCodec.decode(it.payload) }
         var delta: PromotionDelta? = null
+        var checkedAcpDay: String? = null
         var cityProducts = previousRows
         if (!isInitialized()) onNetwork(true)
         val stores = PromotionStores.read(forceRefresh).filter { it.enabled }
@@ -107,28 +159,24 @@ internal class AcpPromotionsRepository(context: Context) {
                         val revision = status.getString("revision")
                         val serverCount = status.getInt("count")
                         require(Regex("[a-f0-9]{64}").matches(revision) && serverCount in 0..10_000)
-                        dao.put(PromotionMetadata("acp_status_checked_day", acpStatusDay(now)))
                         if (currentRevision != revision || previousRows.size != serverCount) {
                             onNetwork(true)
                             delta = PromotionDelta.parse(gateway.promotionSync(currentRevision, manifest))
                             cityProducts = delta!!.applyTo(previousRows)
                         }
+                        // Acknowledge the daily check only with the successfully committed offers.
+                        checkedAcpDay = acpStatusDay(now)
                     }
                 }
                 val uniqueProducts = AcpProductParser.page(JSONObject().put("items",
                     JSONArray().apply { cityProducts.forEach { put(JSONObject(it.payload)) } }), 0).items
                 uniqueProducts.forEach { product ->
                   product.offers().filter { it.family in promotionFamilies }.forEach { offer ->
-                    val document = imported.firstOrNull { record ->
-                        offer.family == AcpOfferFamily.DE_POR && offer.price != null && offer.referencePrice != null &&
-                        BigDecimal.valueOf(record.price).setScale(2, RoundingMode.HALF_UP) == offer.price.setScale(2, RoundingMode.HALF_UP) &&
-                        BigDecimal.valueOf(record.previous).setScale(2, RoundingMode.HALF_UP) == offer.referencePrice.setScale(2, RoundingMode.HALF_UP) &&
-                        ((record.code.isNotBlank() && record.code == product.code) ||
-                            (record.barcode.isNotBlank() && record.barcode == product.barcode))
-                    }
+                    // The document can supply validity only; never copy its commercial prices.
+                    val dates = visualMixDatesForAcp(imported, product.code, product.barcode, offer.family)
                     val raw = validity[AcpOfferValidityStore.keyFor(product.description, offer.family)] as? Map<*, *>
-                    val fallback = AcpOfferValidity(document?.from ?: raw?.get("startDate") as? String ?: "",
-                        document?.to ?: raw?.get("endDate") as? String ?: "")
+                    val fallback = AcpOfferValidity(dates?.startDate ?: raw?.get("startDate") as? String ?: "",
+                        dates?.endDate ?: raw?.get("endDate") as? String ?: "")
                     val effective = product.offerValidityOr(fallback)
                     if (active(effective?.startDate, effective?.endDate)) {
                         val id = offerIdentity(store.code, product.code.ifBlank { product.barcode }, offer.family.promotionLabel())
@@ -175,6 +223,7 @@ internal class AcpPromotionsRepository(context: Context) {
                 update.removed.chunked(500).forEach { dao.deleteRows(it) }
                 dao.put(PromotionMetadata("acp_revision", update.revision))
             }
+            checkedAcpDay?.let { day -> dao.put(PromotionMetadata("acp_status_checked_day", day)) }
             dao.upsertOffers(changedOffers)
             removedOffers.chunked(500).forEach { dao.deleteOffers(it) }
             if (!initialized || changedOffers.isNotEmpty() || removedOffers.isNotEmpty()) {
