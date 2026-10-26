@@ -33,8 +33,7 @@ internal class PromotionsViewModel(application: Application) : AndroidViewModel(
     ) { offers, added, initialized, sync, opening ->
         // Recheck validity on each sync transition, even when the saved rows did not change.
         val currentOffers = offers.filter {
-            com.example.data.promotions.AcpPromotionsRepository.active(it.validFrom, it.validTo) &&
-
+            com.example.data.promotions.AcpPromotionsRepository.active(it.validFrom, it.validTo)
         }
         PromotionsUiState(currentOffers, added, initialized.firstOrNull()?.value == "1", sync, opening)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PromotionsUiState(opening = true))
