@@ -54,6 +54,40 @@ class PromotionsUiStateTest {
         assertTrue(shouldCheckAcpStatus(null, beforeWindow))
     }
 
+    @Test fun cityJardimUsesVisualMixOnlyForDatesEvenWhenPricesDiffer() {
+        val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.ROOT).apply {
+            timeZone = java.util.TimeZone.getTimeZone("America/Fortaleza")
+        }.parse("2026-10-26 12:00")!!.time
+        val reports = listOf(
+            StorePromotionRecord("55", "7898065905278", "Produto", 19.99, 29.99, "2026-10-25", "2026-10-27"),
+            StorePromotionRecord("66", "7891111111111", "Outro", 1.99, 3.99, "2026-10-25", "2026-10-27")
+        )
+        val matched = visualMixDatesForAcp(reports, "55", "7898065905278",
+            com.example.data.acp.AcpOfferFamily.DE_POR, now)
+        assertEquals("2026-10-25", matched?.startDate)
+        assertEquals("2026-10-27", matched?.endDate)
+        assertNull(visualMixDatesForAcp(reports, "55", "7898065905278",
+            com.example.data.acp.AcpOfferFamily.CLUB, now))
+        assertNull(visualMixDatesForAcp(reports, "77", "7890000000000",
+            com.example.data.acp.AcpOfferFamily.DE_POR, now))
+    }
+
+    @Test fun expiredDocumentsStopDisplayingAtFortalezaMidnightWithoutNetwork() {
+        val format = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.ROOT).apply {
+            timeZone = java.util.TimeZone.getTimeZone("America/Fortaleza")
+        }
+        val before = format.parse("2026-10-26 23:59")!!.time
+        val after = format.parse("2026-10-27 00:00")!!.time
+        assertEquals(60_000L, millisUntilNextPromotionDay(before))
+        assertTrue(AcpPromotionsRepository.active("2026-10-25", "2026-10-26", before))
+        assertFalse(AcpPromotionsRepository.active("2026-10-25", "2026-10-26", after))
+        val reports = listOf(StorePromotionRecord("55", "", "Produto", 10.0, 15.0,
+            "2026-10-25", "2026-10-26"))
+        val expired = visualMixDatesForAcp(reports, "55", "",
+            com.example.data.acp.AcpOfferFamily.DE_POR, after)
+        assertEquals("2026-10-26", expired?.endDate)
+    }
+
     @Test fun favoritesOnlyReceiveAlertsForTheirOwnStore() {
         assertFalse(matchesFavoriteStore(null, "0012"))
         assertFalse(matchesFavoriteStore("", "0012"))

@@ -17,6 +17,14 @@ class AcpBarcodeGateTest {
         assertEquals("500", gate.accept(listOf("500")))
     }
 
+    @Test fun scanStartsExplicitSearchWithoutQueryObserverCancellingIt() {
+        val code = AcpBarcodeGate().accept(listOf("7898065905278"))
+        assertEquals("7898065905278", code)
+        assertTrue(com.example.ui.preserveExplicitAcpSearch(code!!, code))
+        assertFalse(com.example.ui.preserveExplicitAcpSearch(code, null))
+        assertFalse(com.example.ui.preserveExplicitAcpSearch("7898065905279", code))
+    }
+
     @Test fun rejectsOversizedAndControlCharacters() {
         val gate = AcpBarcodeGate()
         assertNull(gate.accept(listOf("1".repeat(129), "12\n34")))
