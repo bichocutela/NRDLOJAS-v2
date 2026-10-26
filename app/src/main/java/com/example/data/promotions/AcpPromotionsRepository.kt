@@ -25,6 +25,19 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.Date
 
+internal fun acpStatusDay(nowMillis: Long): String =
+    SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("America/Fortaleza")
+    }.format(Date(nowMillis))
+
+internal fun shouldCheckAcpStatus(lastCheckedDay: String?, nowMillis: Long, force: Boolean = false): Boolean {
+    if (force || lastCheckedDay.isNullOrBlank()) return true
+    val zone = TimeZone.getTimeZone("America/Fortaleza")
+    val now = java.util.Calendar.getInstance(zone).apply { timeInMillis = nowMillis }
+    if (now.get(java.util.Calendar.HOUR_OF_DAY) < 4) return false
+    return lastCheckedDay != acpStatusDay(nowMillis)
+}
+
 internal class AcpPromotionsRepository(context: Context) {
     private val gateway = AcpGatewayClient(promotionsOnly = true)
     internal val database = PromotionDatabase.get(context)
@@ -86,15 +99,15 @@ internal class AcpPromotionsRepository(context: Context) {
                     cityProducts = delta!!.applyTo(previousRows)
                 } else {
                     val now = System.currentTimeMillis()
-                    val lastStatusAt = dao.metadata("acp_status_checked_at")?.toLongOrNull() ?: 0L
-                    // Cidade Jardim uses ACP: check its authoritative revision at most every
-                    // five minutes during silent polling. A manual refresh still bypasses this.
-                    if (currentRevision.isBlank() || now - lastStatusAt >= ACP_STATUS_CHECK_INTERVAL_MS) {
+                    val lastStatusDay = dao.metadata("acp_status_checked_day")
+                    // Only City Jardim is ACP-backed. Check once after the daily overnight
+                    // price cycle; first use is immediate and manual refresh always bypasses it.
+                    if (currentRevision.isBlank() || shouldCheckAcpStatus(lastStatusDay, now)) {
                         val status = gateway.promotionStatus()
                         val revision = status.getString("revision")
                         val serverCount = status.getInt("count")
                         require(Regex("[a-f0-9]{64}").matches(revision) && serverCount in 0..10_000)
-                        dao.put(PromotionMetadata("acp_status_checked_at", now.toString()))
+                        dao.put(PromotionMetadata("acp_status_checked_day", acpStatusDay(now)))
                         if (currentRevision != revision || previousRows.size != serverCount) {
                             onNetwork(true)
                             delta = PromotionDelta.parse(gateway.promotionSync(currentRevision, manifest))
@@ -197,7 +210,6 @@ internal class AcpPromotionsRepository(context: Context) {
     }
 
     companion object {
-        internal const val ACP_STATUS_CHECK_INTERVAL_MS = 5 * 60 * 1000L
         private val syncMutex = Mutex()
         internal fun isoDate(raw: String?): String? {
             val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null

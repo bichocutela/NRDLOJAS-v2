@@ -41,6 +41,19 @@ class PromotionsUiStateTest {
         assertEquals(0L,confirmed.afterStoreSync(setOf("0012"),120_000L).acpConfirmedAt)
         assertEquals(120_000L,confirmed.afterStoreSync(setOf("0005"),120_000L).acpConfirmedAt)
     }
+    @Test fun acpRevisionCheckRunsOnceAfterFourAmAndManualRefreshCanForceIt() {
+        val format = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.ROOT).apply {
+            timeZone = java.util.TimeZone.getTimeZone("America/Fortaleza")
+        }
+        val beforeWindow = format.parse("2026-10-26 03:59")!!.time
+        val afterWindow = format.parse("2026-10-26 04:00")!!.time
+        assertFalse(shouldCheckAcpStatus("2026-10-25", beforeWindow))
+        assertTrue(shouldCheckAcpStatus("2026-10-25", afterWindow))
+        assertFalse(shouldCheckAcpStatus("2026-10-26", afterWindow))
+        assertTrue(shouldCheckAcpStatus("2026-10-26", afterWindow, force = true))
+        assertTrue(shouldCheckAcpStatus(null, beforeWindow))
+    }
+
     @Test fun favoritesOnlyReceiveAlertsForTheirOwnStore() {
         assertFalse(matchesFavoriteStore(null, "0012"))
         assertFalse(matchesFavoriteStore("", "0012"))
