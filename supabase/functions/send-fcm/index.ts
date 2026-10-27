@@ -14,7 +14,7 @@ const githubRepositoryId = "1332397983";
 const githubOwnerId = "186314089";
 const githubWorkflowRef = `${githubRepository}/.github/workflows/main.yml@refs/heads/main`;
 const githubJwks = jose.createRemoteJWKSet(new URL(`${githubOidcIssuer}/.well-known/jwks`));
-const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-firebase-token, x-github-oidc-token" };
+const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-firebase-token, x-github-oidc-token, x-nrd-mail-key" };
 const json = (body: Record<string, unknown>, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 const roles = { "admin@nrdlojas.com": "admin", "mestre@nrdlojas.com": "mestre" } as const;
 const categories = ["Açougue", "Cafeteria", "Frios", "Hortifruti", "Mercearia", "Padaria"];
@@ -136,7 +136,7 @@ async function listProductNames(account: Record<string, string>, accountProject:
 async function sendEvent(
   account: Record<string, string>,
   accountProject: string,
-  title: "Produto adicionado" | "Produto alterado" | "Código alterado" | "Sugestão corrigida" | "Atualização disponível" | "Escala inserida" | "Escala alterada",
+  title: "Produto adicionado" | "Produto alterado" | "Código alterado" | "Sugestão corrigida" | "Atualização disponível" | "Novos documentos recebidos" | "Escala inserida" | "Escala alterada",
   messageBody: string,
   uid: string,
   productCode?: string,
@@ -144,9 +144,9 @@ async function sendEvent(
   mirrorToWeb = true,
 ) {
   const fcmToken = await accessToken(account, "https://www.googleapis.com/auth/firebase.messaging");
-  const type = (title === "Código alterado" || title === "Produto alterado") ? "CODE_CHANGED" : title === "Sugestão corrigida" ? "SUGGESTION_FIXED" : title === "Atualização disponível" ? "APP_UPDATE" : title === "Escala inserida" ? "SCHEDULE_INSERTED" : title === "Escala alterada" ? "SCHEDULE_CHANGED" : "NEW_PRODUCT";
+  const type = (title === "Código alterado" || title === "Produto alterado") ? "CODE_CHANGED" : title === "Sugestão corrigida" ? "SUGGESTION_FIXED" : title === "Atualização disponível" ? "APP_UPDATE" : title === "Novos documentos recebidos" ? "NEW_MAIL_DOCUMENTS" : title === "Escala inserida" ? "SCHEDULE_INSERTED" : title === "Escala alterada" ? "SCHEDULE_CHANGED" : "NEW_PRODUCT";
   const webLink = productCode ? "https://bichocutela.github.io/?product=" + encodeURIComponent(productCode) : "https://bichocutela.github.io/";
-  const message = { data: { title, body: messageBody, type, productCode: productCode ?? "", barcode: productCode ?? "", url: webLink } };
+  const message = { data: { title, body: messageBody, type, productCode: productCode ?? "", barcode: productCode ?? "", url: webLink, ...(type === "NEW_MAIL_DOCUMENTS" ? { eventId: crypto.randomUUID() } : {}) } };
   // Android recebe apenas o payload data-only. A notificação visual é criada pelo app,
   // que já escolhe o canal correto por tipo e valida título/corpo antes de exibir.
   // Não inclua android.notification aqui: em alguns aparelhos isso faz o sistema
@@ -164,7 +164,7 @@ serve(async (request) => {
   let body: Record<string, unknown>;
   try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
   const managingWebPushSubscription = body.action === "REGISTER_WEB_TOKEN" || body.action === "UNREGISTER_WEB_TOKEN";
-  const notifyingMasterUpdate = body.action === "NOTIFY_MASTER_UPDATE";
+  const notifyingMasterUpdate = body.action === "NOTIFY_MASTER_UPDATE";\n  const notifyingMailDocuments = body.action === "NOTIFY_MAIL_DOCUMENTS";
   const idToken = request.headers.get("x-firebase-token");
   let identity: Identity | null = null;
   if (notifyingMasterUpdate) {
@@ -175,6 +175,16 @@ serve(async (request) => {
     } catch {
       return json({ ok: false, error: "Invalid or unauthorized GitHub OIDC token" }, 403);
     }
+  } else if (notifyingMailDocuments) {
+    if (Object.keys(body).length !== 1) return json({ ok: false, error: "Invalid request" }, 400);
+    const key = request.headers.get("x-nrd-mail-key") || "";
+    if (!/^[a-f0-9]{64}$/.test(key)) return json({ ok: false, error: "Unauthorized" }, 401);
+    const { url, serviceRoleKey } = webPushMirrorConfig();
+    const settings = await fetch(url + "/rest/v1/nrd_mail_settings?id=eq.true&select=key_hash", {
+      headers: { apikey: serviceRoleKey, Authorization: "Bearer " + serviceRoleKey }
+    });
+    const rows = settings.ok ? await settings.json() : [];
+    if (!rows[0]?.key_hash || await tokenId(key) !== rows[0].key_hash) return json({ ok: false, error: "Unauthorized" }, 401);
   } else if (!managingWebPushSubscription || idToken) {
     if (!idToken) return json({ ok: false, error: "Missing x-firebase-token" }, 401);
     try { identity = await verify(idToken); } catch { return json({ ok: false, error: "Invalid Firebase ID Token" }, 401); }
@@ -184,6 +194,14 @@ serve(async (request) => {
     if (!accountRaw) throw new Error("FIREBASE_SERVICE_ACCOUNT is not configured");
     const account = JSON.parse(accountRaw) as Record<string, string>;
     const accountProject = account.project_id || projectId;
+    if (notifyingMailDocuments) {
+      const notification = await sendEvent(
+        account, accountProject, "Novos documentos recebidos",
+        "Novos relatórios chegaram. Abra Habilitar lojas para revisar e publicar.",
+        "nrd-mail-import", undefined, "master_mail_documents", false,
+      );
+      return json({ ok: true, notification });
+    }
     if (notifyingMasterUpdate) {
       const version = typeof body.version === "string" ? body.version.trim() : "";
       if (!/^v\d+\.\d+\.\d+$/.test(version)) return json({ ok: false, error: "Invalid release version" }, 400);
