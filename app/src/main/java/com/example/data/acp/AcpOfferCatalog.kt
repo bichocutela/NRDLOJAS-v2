@@ -32,7 +32,7 @@ internal suspend fun AcpApi.offerCatalog(
         else -> null
     }
     if (family in setOf(AcpOfferFamily.CLUB, AcpOfferFamily.DE_POR, AcpOfferFamily.TAKE_PAY)) {
-        category ?: throw AcpFailure("A categoria ${family.catalogLabel()} não foi localizada na Sistema.")
+        category ?: throw AcpFailure("A categoria ${family.catalogLabel()} não foi localizada no Sistema.")
         parameters += "productCategoryIds" to category.id
     }
 
