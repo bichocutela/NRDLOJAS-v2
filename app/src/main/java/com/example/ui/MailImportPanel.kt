@@ -63,7 +63,7 @@ internal fun MailImportPanel(onPublished: () -> Unit = {}) {
     OutlinedCard(Modifier.fillMaxWidth().padding(vertical=8.dp)) {
         Column(Modifier.padding(12.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween, verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) { Text("Relatórios por e-mail", style=MaterialTheme.typography.titleLarge); MailImportNotificationBell() }
-            Text("Encaminhe o e-mail com os PDFs CENTRO e CLUBE para o Gmail configurado. Revise e publique as outras lojas sem ACP. Cidade Jardim (0012) permanece no fluxo atual.")
+            Text("Encaminhe o e-mail com os PDFs CENTRO e CLUBE para o Gmail configurado. Revise e publique as outras lojas sem Sistema. Cidade Jardim (0012) permanece no fluxo atual.")
             TextButton(onClick={expanded=!expanded}) { Text(if(expanded) "Ocultar configuração do Gmail" else "Configurar Gmail") }
             if(expanded) {
                 OutlinedTextField(email,{email=it},label={Text("Gmail exclusivo para os relatórios")},singleLine=true,modifier=Modifier.fillMaxWidth())
