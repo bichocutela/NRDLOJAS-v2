@@ -49,7 +49,10 @@ import java.util.Locale
 @Composable
 fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseStore: () -> Unit,
     modifier: Modifier = Modifier,
-    loadOffers: suspend (Long) -> NordestaoStoreOffersSnapshot = { NordestaoStoreOffersRepository.load(it) }) {
+    loadOffers: suspend (Long) -> NordestaoStoreOffersSnapshot = { NordestaoStoreOffersRepository.load(it) },
+    resolveEan: suspend (String, String) -> String? = { code, name ->
+        StoreProductImageRepository.shared.lookup(code, name).ean
+    }) {
     if(store == null) {
         Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Escolha sua loja preferida para consultar as ofertas.")
@@ -124,7 +127,7 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
             horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
             items(shown, key = { it.id }) { offer ->
                 // Only composed/visible cards perform lookup; the existing official cache is shared with detail.
-                val ean by rememberVerifiedStoreOfferEan(offer)
+                val ean by rememberVerifiedStoreOfferEan(offer, resolveEan)
                 val shareLayer = rememberGraphicsLayer()
                 fun openDetail() { detailLayer = shareLayer; detail = offer }
                 OutlinedCard(modifier = Modifier
@@ -159,7 +162,7 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
         }
     }
     detail?.let { offer ->
-        val verifiedEan by rememberVerifiedStoreOfferEan(offer)
+        val verifiedEan by rememberVerifiedStoreOfferEan(offer, resolveEan)
         val offerText = remember(offer, verifiedEan, store.name) {
             storeOfferSharingText(offer, store.name, verifiedEan)
         }
@@ -231,11 +234,13 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
     }
 }
 @Composable
-private fun rememberVerifiedStoreOfferEan(offer: NordestaoStoreOffer): State<String?> =
-    produceState<String?>(initialValue = null, offer.code, offer.description) {
+private fun rememberVerifiedStoreOfferEan(
+    offer: NordestaoStoreOffer,
+    resolveEan: suspend (String, String) -> String?
+): State<String?> = produceState<String?>(initialValue = null, offer.code, offer.description) {
         if(offer.code.isBlank()) return@produceState
         try {
-            value = StoreProductImageRepository.shared.lookup(offer.code, offer.description).ean
+            value = resolveEan(offer.code, offer.description)
         } catch(cancelled: CancellationException) {
             throw cancelled
         } catch(_: Exception) {
