@@ -639,7 +639,7 @@ private fun VisualMixAcpComparisonDialog(
                     CopyableReviewField("Descrição", acp.description, strong = true)
                     CopyableReviewField("Código", acp.code.ifBlank { "não informado" })
                     CopyableReviewField("EAN", acp.barcode.ifBlank { "não informado" })
-                    Text("Preço principal: ${acp.value?.brl() ?: "não informado"}")
+                    Text("Preço principal: ${Sistema.value?.brl() ?: "não informado"}")
                     val expectedFamily = offer.orderAcpFamily()
                     val allOffers = acp.offers()
                     val relevant = allOffers.filter { it.family == expectedFamily }
