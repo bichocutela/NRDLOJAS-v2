@@ -37,3 +37,11 @@ test('preserves every official image in source order for client fallback without
   assert.deepEqual(offer.images,images);
   assert.deepEqual(offerCatalog(campaign([item({images:[]})]))[0].images,[]);
 });
+test('preserves only a source-provided EAN and accepts the source field variants', () => {
+  const [a,b,c]=offerCatalog(campaign([
+    item({barCode:7891234567890}), item({id:3,barcode:'7891234567890'}), item({id:4,ean:'guess-me'})
+  ]));
+  assert.equal(a.barcode,'7891234567890');
+  assert.equal(b.barcode,'7891234567890');
+  assert.equal(c.barcode,'');
+});

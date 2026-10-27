@@ -275,6 +275,8 @@ fun AppNavGraph(
                     showMyProfile = access.profile,
                     showPromotions = access.promotions,
                     showPrices = access.prices,
+                    showFlyers = access.flyers,
+                    showStores = access.stores,
                     showTraining = trainingConfig?.visibleTo(isLoggedIn && userRole == "mestre") == true,
                     onGoToTraining = { navController.navigate("training"); scope.launch { drawerState.close() } },
                     myProfilePhotoModel = drawerProfilePhotoModel,
@@ -483,8 +485,16 @@ fun AppNavGraph(
                         }
                     }
                 }
-                composable("nordestao_stores") { NordestaoStoresScreen(onBack = { navController.popBackStack() }) }
-                composable("encartes") { EncartesScreen(onNavigateBack = { navController.popBackStack() }) }
+                composable("nordestao_stores") {
+                    RestrictedRoute(access.loading, access.stores, { navController.navigateToSearch() }) {
+                        NordestaoStoresScreen(onBack = { navController.popBackStack() })
+                    }
+                }
+                composable("encartes") {
+                    RestrictedRoute(access.loading, access.flyers, { navController.navigateToSearch() }) {
+                        EncartesScreen(onNavigateBack = { navController.popBackStack() })
+                    }
+                }
                 composable("settings") { SettingsScreen(viewModel, onNavigateBack = { navController.popBackStack() }) }
                 composable("acp_consultation") {
                     RestrictedRoute(access.loading, access.prices, { navController.navigateToSearch() }) {
@@ -733,6 +743,8 @@ fun LoginDrawerContent(
     showMyProfile: Boolean,
     showPromotions: Boolean,
     showPrices: Boolean,
+    showFlyers: Boolean,
+    showStores: Boolean,
     myProfilePhotoModel: Any?,
     myProfileName: String?,
     onLoginSuccess: (String) -> Unit,
@@ -1029,7 +1041,7 @@ fun LoginDrawerContent(
             onClick = onGoToPromotions
         )
         Spacer(modifier = Modifier.height(if (expressive) 6.dp else 8.dp))
-        DrawerActionButton(label = "Encartes", icon = Icons.Default.MenuBook, onClick = onGoToEncartes)
+        if (showFlyers) DrawerActionButton(label = "Encartes", icon = Icons.Default.MenuBook, onClick = onGoToEncartes)
         Spacer(modifier = Modifier.height(if (expressive) 6.dp else 8.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1068,7 +1080,7 @@ fun LoginDrawerContent(
             }
         }
         Spacer(modifier = Modifier.height(if (expressive) 6.dp else 8.dp))
-        DrawerActionButton(label = "Nossas Lojas", icon = Icons.Default.LocationOn, onClick = onGoToStores)
+        if (showStores) DrawerActionButton(label = "Nossas Lojas", icon = Icons.Default.LocationOn, onClick = onGoToStores)
         Spacer(modifier = Modifier.height(if (expressive) 6.dp else 8.dp))
         DrawerActionButton(
             label = "Sobre",

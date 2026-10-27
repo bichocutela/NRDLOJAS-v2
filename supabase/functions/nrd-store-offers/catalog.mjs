@@ -28,7 +28,11 @@ export function offerCatalog(source) {
       const images=[...new Set((Array.isArray(item.images) ? item.images : [])
         .filter(url => typeof url === 'string').map(url => url.trim())
         .filter(url => /^https:\/\//.test(url) && !/semImagem/i.test(url)))];
-      offers.push({ id, description:text(item.description), code:String(item.codeErp || item.productId || ''),
+      const barcode = [item.barCode, item.barcode, item.ean, item.gtin, item.codigoBarras, item.codigo_barras,
+        item.product?.barCode, item.product?.barcode, item.product?.ean, item.product?.gtin]
+        .find(value => typeof value === 'string' || typeof value === 'number');
+      const ean = barcode == null ? '' : String(barcode).trim().replace(/\s+/g, '');
+      offers.push({ id, description:text(item.description), code:String(item.codeErp || item.productId || ''), barcode: /^[0-9]{8,14}$/.test(ean) ? ean : '',
         category:text(item.categoryName) || text(item.department) || 'Outras',
         image:images[0] || '', images,
         priceCents:Math.round((price > 0 ? price : original) * 100), originalPriceCents:Math.round(original * 100),

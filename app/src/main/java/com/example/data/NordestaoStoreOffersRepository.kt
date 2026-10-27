@@ -13,6 +13,7 @@ import kotlin.coroutines.resumeWithException
 
 data class NordestaoStoreOffer(
     val id: String, val description: String, val code: String, val category: String, val image: String,
+    val barcode: String,
     val priceCents: Long, val originalPriceCents: Long, val showPrice: Boolean, val discount: Int,
     val cashback: String, val maxAmount: Double, val tag: String, val startsAt: String, val endsAt: String,
     val validity: String, val conditions: String, val activationRequired: Boolean,
@@ -40,7 +41,7 @@ object NordestaoStoreOffersCodec {
             val value = JSONObject()
             value.put("id", item.id).put("description", item.description).put("code", item.code).put("category", item.category)
                 .put("image", item.image).put("priceCents", item.priceCents).put("originalPriceCents", item.originalPriceCents)
-                .put("images", org.json.JSONArray(item.images))
+                .put("images", org.json.JSONArray(item.images)).put("barcode", item.barcode)
                 .put("showPrice", item.showPrice).put("discount", item.discount).put("cashback", item.cashback)
                 .put("maxAmount", item.maxAmount).put("tag", item.tag).put("startsAt", item.startsAt).put("endsAt", item.endsAt)
                 .put("validity", item.validity).put("conditions", item.conditions).put("activationRequired", item.activationRequired)
@@ -60,7 +61,8 @@ object NordestaoStoreOffersCodec {
             val price = item.getLong("priceCents"); val original = item.getLong("originalPriceCents")
             require(price >= 0 && original >= 0)
             NordestaoStoreOffer(id, item.getString("description"), item.optString("code"), item.getString("category"),
-                item.optString("image").takeIf { it.startsWith("https://") }.orEmpty(), price, original,
+                item.optString("image").takeIf { it.startsWith("https://") }.orEmpty(),
+                item.optString("barcode").takeIf { it.matches(Regex("[0-9]{8,14}")) }.orEmpty(), price, original,
                 item.getBoolean("showPrice"), item.optInt("discount"), item.optString("cashback"), item.optDouble("maxAmount", 0.0),
                 item.optString("tag"), item.getString("startsAt"), item.getString("endsAt"), item.optString("validity"),
                 item.optString("conditions"), item.optBoolean("activationRequired"),

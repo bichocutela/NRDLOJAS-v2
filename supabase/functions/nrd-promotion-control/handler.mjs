@@ -10,7 +10,7 @@ export function createControlHandler({verify,authorize,documents}) {
   const master=user?.email==='mestre@nrdlojas.com';
   try {
    if(body.operation==='access'&&Object.keys(body).length===1){
-    if(master)return reply(200,{enabled:true,profile:true,promotions:true,prices:true,publicAccess:false});
+    if(master)return reply(200,{enabled:true,profile:true,promotions:true,flyers:true,prices:true,stores:true,publicAccess:false});
     return reply(200,await authorize(req));
    }
    if(body.operation==='list'&&Object.keys(body).length===1){
@@ -28,14 +28,14 @@ export function createControlHandler({verify,authorize,documents}) {
    }
    if(!master)return reply(403,{error:'ACCESS_DENIED'});
    if(body.operation!=='write'||Object.keys(body).some(k=>!['operation','path','data','merge'].includes(k))||!body.data||Array.isArray(body.data)||typeof body.data!=='object'||typeof body.merge!=='boolean'||path.startsWith('access_sessions/'))return reply(400,{error:'INVALID_REQUEST'});
-   if(path==='config/restricted_access'&&(Object.keys(body.data).join(',')!=='publicAccess'||typeof body.data.publicAccess!=='boolean'))return reply(400,{error:'INVALID_REQUEST'});
+   if(path==='config/restricted_access'&&(Object.keys(body.data).some(k=>!['publicAccess','tabAudience'].includes(k))||Object.keys(body.data).length===0||('publicAccess'in body.data&&typeof body.data.publicAccess!=='boolean')||('tabAudience'in body.data&&(!body.data.tabAudience||typeof body.data.tabAudience!=='object'||Array.isArray(body.data.tabAudience)||Object.entries(body.data.tabAudience).some(([k,v])=>!['profile','promotions','flyers','prices','stores'].includes(k)||!['all','vip'].includes(v))))))return reply(400,{error:'INVALID_REQUEST'});
    if(path==='config/acpProvider'){
     const {legacyEnabled,acpTechEnabled,primary}=body.data;
     if(Object.keys(body.data).sort().join(',')!=='acpTechEnabled,legacyEnabled,primary'||
       typeof legacyEnabled!=='boolean'||typeof acpTechEnabled!=='boolean'||(!legacyEnabled&&!acpTechEnabled)||
       !['legacy','acptech'].includes(primary)||(primary==='legacy'&&!legacyEnabled)||(primary==='acptech'&&!acpTechEnabled))return reply(400,{error:'INVALID_REQUEST'});
    }
-   if(path.startsWith('restricted_access/')&&(Object.keys(body.data).some(k=>!['login','enabled','profile','promotions','prices'].includes(k))||Object.entries(body.data).some(([k,v])=>k==='login'?typeof v!=='string'||! /^[a-z0-9._-]{3,64}$/.test(v):typeof v!=='boolean')))return reply(400,{error:'INVALID_REQUEST'});
+   if(path.startsWith('restricted_access/')&&(Object.keys(body.data).some(k=>!['login','enabled','profile','promotions','flyers','prices','stores'].includes(k))||Object.entries(body.data).some(([k,v])=>k==='login'?typeof v!=='string'||! /^[a-z0-9._-]{3,64}$/.test(v):typeof v!=='boolean')))return reply(400,{error:'INVALID_REQUEST'});
    // CAS makes read-modify-write of store enablement and validity safe across masters/devices.
    for(let attempt=0;attempt<4;attempt++){
     const previous=await documents.get(path);

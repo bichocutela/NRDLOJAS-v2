@@ -237,7 +237,8 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
 private fun rememberVerifiedStoreOfferEan(
     offer: NordestaoStoreOffer,
     resolveEan: suspend (String, String) -> String?
-): State<String?> = produceState<String?>(initialValue = null, offer.code, offer.description) {
+): State<String?> = produceState<String?>(initialValue = offer.barcode.takeIf { it.isNotBlank() }, offer.code, offer.description, offer.barcode) {
+        if(offer.barcode.matches(Regex("[0-9]{8,14}"))) return@produceState
         if(offer.code.isBlank()) return@produceState
         try {
             value = resolveEan(offer.code, offer.description)

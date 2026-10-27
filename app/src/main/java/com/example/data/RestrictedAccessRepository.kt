@@ -25,9 +25,10 @@ import kotlinx.coroutines.sync.withLock
 import java.security.SecureRandom
 import java.io.File
 
-data class RestrictedAccess(val loading: Boolean = false, val enabled: Boolean = false, val profile: Boolean = false, val promotions: Boolean = false, val prices: Boolean = false, val publicAccess: Boolean = false, val publicLoading: Boolean = true)
+data class RestrictedAccess(val loading: Boolean = false, val enabled: Boolean = false, val profile: Boolean = false, val promotions: Boolean = false, val flyers: Boolean = false, val prices: Boolean = false, val stores: Boolean = false, val publicAccess: Boolean = false, val publicLoading: Boolean = true)
 
-data class AccessAccount(val uid: String, val login: String, val enabled: Boolean, val profile: Boolean, val promotions: Boolean, val prices: Boolean)
+data class AccessAccount(val uid: String, val login: String, val enabled: Boolean, val profile: Boolean, val promotions: Boolean, val flyers: Boolean, val prices: Boolean, val stores: Boolean)
+data class TabAudience(val profile: String = "vip", val promotions: String = "vip", val flyers: String = "all", val prices: String = "vip", val stores: String = "all")
 data class AccessHistory(val loading: Boolean = true, val accounts: List<AccessAccount> = emptyList(), val error: String? = null)
 
 object RestrictedAccessRepository {
@@ -102,7 +103,7 @@ object RestrictedAccessRepository {
                 val items = PromotionControlClient.request(JSONObject().put("operation", "list")).getJSONArray("items")
                 emit(AccessHistory(loading = false, accounts = (0 until items.length()).map { index ->
                     val item = items.getJSONObject(index)
-                    AccessAccount(item.getString("uid"), item.optString("login"), item.optBoolean("enabled"), item.optBoolean("profile"), item.optBoolean("promotions"), item.optBoolean("prices"))
+                    AccessAccount(item.getString("uid"), item.optString("login"), item.optBoolean("enabled"), item.optBoolean("profile"), item.optBoolean("promotions"), item.optBoolean("flyers"), item.optBoolean("prices"), item.optBoolean("stores"))
                 }.sortedBy { it.login }))
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { emit(AccessHistory(loading = false, error = "Não foi possível carregar os cadastros. Verifique a conexão.")) }
@@ -110,9 +111,9 @@ object RestrictedAccessRepository {
         }
     }
 
-    suspend fun updatePermissions(uid: String, profile: Boolean, promotions: Boolean, prices: Boolean) {
+    suspend fun updatePermissions(uid: String, profile: Boolean, promotions: Boolean, flyers: Boolean, prices: Boolean, stores: Boolean) {
         check(FirebaseAuth.getInstance().currentUser?.email == "mestre@nrdlojas.com") { "Acesso exclusivo do Mestre." }
-        PromotionControlClient.write("restricted_access/$uid", mapOf("enabled" to (profile || promotions || prices), "profile" to profile, "promotions" to promotions, "prices" to prices), merge = true)
+        PromotionControlClient.write("restricted_access/$uid", mapOf("enabled" to (profile || promotions || flyers || prices || stores), "profile" to profile, "promotions" to promotions, "flyers" to flyers, "prices" to prices, "stores" to stores), merge = true)
     }
 
     suspend fun updateAccount(uid: String, login: String, password: String) {
@@ -185,20 +186,36 @@ object RestrictedAccessRepository {
         check(FirebaseAuth.getInstance().currentUser?.email == "mestre@nrdlojas.com") { "Acesso exclusivo do Mestre." }
         PromotionControlClient.write("config/restricted_access", mapOf("publicAccess" to enabled))
     }
+    suspend fun setTabAudience(audience: TabAudience) {
+        check(FirebaseAuth.getInstance().currentUser?.email == "mestre@nrdlojas.com") { "Acesso exclusivo do Mestre." }
+        val values = listOf(audience.profile, audience.promotions, audience.flyers, audience.prices, audience.stores)
+        require(values.all { it == "all" || it == "vip" })
+        PromotionControlClient.write("config/restricted_access", mapOf("publicAccess" to false, "tabAudience" to mapOf(
+            "profile" to audience.profile, "promotions" to audience.promotions,
+            "flyers" to audience.flyers, "prices" to audience.prices, "stores" to audience.stores
+        )), merge = true)
+    }
+    suspend fun tabAudience(): TabAudience {
+        val data = PromotionControlClient.request(JSONObject().put("operation", "read").put("path", "config/restricted_access")).optJSONObject("data") ?: JSONObject()
+        if (data.optBoolean("publicAccess")) return TabAudience("all", "all", "all", "all", "all")
+        val tabs = data.optJSONObject("tabAudience") ?: JSONObject()
+        fun value(key: String) = if (tabs.has(key)) if (tabs.optString(key) == "all") "all" else "vip" else if (key == "flyers") "all" else "vip"
+        return TabAudience(value("profile"), value("promotions"), value("flyers"), value("prices"), if (tabs.has("stores")) value("stores") else "all")
+    }
     suspend fun current(): RestrictedAccess {
-        if (FirebaseAuth.getInstance().currentUser?.email == "mestre@nrdlojas.com") return RestrictedAccess(enabled = true, profile = true, promotions = true, prices = true)
+        if (FirebaseAuth.getInstance().currentUser?.email == "mestre@nrdlojas.com") return RestrictedAccess(enabled = true, profile = true, promotions = true, flyers = true, prices = true, stores = true)
         return try {
             val data = PromotionControlClient.request(JSONObject().put("operation", "access"))
-            RestrictedAccess(enabled = data.optBoolean("enabled"), profile = data.optBoolean("profile"), promotions = data.optBoolean("promotions"), prices = data.optBoolean("prices"), publicAccess = data.optBoolean("publicAccess"), publicLoading = false)
+            RestrictedAccess(enabled = data.optBoolean("enabled"), profile = data.optBoolean("profile"), promotions = data.optBoolean("promotions"), flyers = data.optBoolean("flyers"), prices = data.optBoolean("prices"), stores = data.optBoolean("stores"), publicAccess = data.optBoolean("publicAccess"), publicLoading = false)
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { RestrictedAccess(publicLoading = false) }
     }
-    suspend fun create(login: String, password: String, profile: Boolean, promotions: Boolean, prices: Boolean) {
+    suspend fun create(login: String, password: String, profile: Boolean, promotions: Boolean, flyers: Boolean, prices: Boolean, stores: Boolean) {
         check(FirebaseAuth.getInstance().currentUser?.email == "mestre@nrdlojas.com") { "Acesso exclusivo do Mestre." }
         val email = loginEmail(login)
         require(!email.endsWith("@nrdlojas.com")) { "Esse login está reservado." }
         require(password.length >= 8) { "A senha deve ter pelo menos 8 caracteres." }
-        require(profile || promotions || prices) { "Selecione pelo menos uma aba." }
+        require(profile || promotions || flyers || prices || stores) { "Selecione pelo menos uma aba." }
         val base = FirebaseApp.getInstance()
         val secondary = FirebaseApp.initializeApp(base.applicationContext, base.options, "account-${UUID.randomUUID()}")
         val auth = FirebaseAuth.getInstance(secondary)
@@ -207,7 +224,7 @@ object RestrictedAccessRepository {
             try {
                 PromotionControlClient.write("restricted_access/${user.uid}", mapOf(
                     "login" to login.trim().lowercase(Locale.ROOT), "enabled" to true,
-                    "profile" to profile, "promotions" to promotions, "prices" to prices
+                    "profile" to profile, "promotions" to promotions, "flyers" to flyers, "prices" to prices, "stores" to stores
                 ))
             } catch (error: Exception) { runCatching { user.delete().await() }; throw error }
         } finally { auth.signOut(); secondary.delete() }

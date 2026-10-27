@@ -20,7 +20,12 @@ internal fun MestreAccessSettings() {
     var password by remember { mutableStateOf("") }
     var profile by remember { mutableStateOf(false) }
     var promotions by remember { mutableStateOf(false) }
+    var flyers by remember { mutableStateOf(false) }
     var prices by remember { mutableStateOf(false) }
+    var stores by remember { mutableStateOf(false) }
+    var audience by remember { mutableStateOf(com.example.data.TabAudience()) }
+    var audienceLoading by remember { mutableStateOf(true) }
+    var audienceLoadFailed by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var expandedUid by remember { mutableStateOf<String?>(null) }
@@ -30,21 +35,27 @@ internal fun MestreAccessSettings() {
     val scope = rememberCoroutineScope()
     val access by remember { RestrictedAccessRepository.observe() }
         .collectAsState(initial = com.example.data.RestrictedAccess())
-    Text("Acesso às três abas", style = MaterialTheme.typography.titleLarge)
-    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-        Switch(checked = access.publicAccess, enabled = !busy && !access.publicLoading, onCheckedChange = { enabled ->
-            busy = true; message = null
-            scope.launch {
-                try {
-                    RestrictedAccessRepository.setPublicAccess(enabled)
-                    message = if (enabled) "As três abas estão liberadas para todos." else "As abas seguem as permissões de cada login."
-                } catch (_: Exception) { message = "Não foi possível salvar. Verifique a conexão." }
-                finally { busy = false }
-            }
-        })
-        Text("Liberar as três abas para todos", modifier = Modifier.padding(start = 8.dp))
+    LaunchedEffect(Unit) {
+        try { audience = RestrictedAccessRepository.tabAudience() }
+        catch (_: Exception) { audienceLoadFailed = true; message = "Não foi possível carregar o público atual das abas. Atualize a tela antes de alterar." }
+        finally { audienceLoading = false }
     }
-    Text("Desligado: acesso apenas do Mestre e dos logins autorizados. Os cadastros continuam salvos ao mudar esta opção.")
+    Text("Acesso às abas", style = MaterialTheme.typography.titleLarge)
+    Text("Escolha o público de cada aba. VIP significa somente o Mestre e os logins cadastrados com aquela permissão.")
+    listOf("Meu Perfil" to "profile", "Promoções" to "promotions", "Encartes" to "flyers", "Consultar Preços" to "prices", "Nossas Lojas" to "stores").forEach { (label, key) ->
+        val selected = when(key) { "profile" -> audience.profile; "promotions" -> audience.promotions; "flyers" -> audience.flyers; "stores" -> audience.stores; else -> audience.prices }
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text(label, modifier = Modifier.weight(1f))
+            listOf("all" to "Todos", "vip" to "VIP").forEach { (value, title) ->
+                FilterChip(selected == value, onClick = {
+                    val previous = audience
+                    val next = when(key) { "profile" -> audience.copy(profile=value); "promotions" -> audience.copy(promotions=value); "flyers" -> audience.copy(flyers=value); "stores" -> audience.copy(stores=value); else -> audience.copy(prices=value) }
+                    audience = next; busy = true
+                    scope.launch { try { RestrictedAccessRepository.setTabAudience(next); message = "Acesso de $label atualizado." } catch (_: Exception) { audience = previous; message = "Não foi possível salvar o público de $label." } finally { busy = false } }
+                }, enabled = !busy && !audienceLoading && !audienceLoadFailed) { Text(title) }
+            }
+        }
+    }
     Spacer(modifier = Modifier.height(16.dp))
     HorizontalDivider()
     Spacer(modifier = Modifier.height(16.dp))
@@ -54,13 +65,15 @@ internal fun MestreAccessSettings() {
     OutlinedTextField(password, { password = it }, label = { Text("Senha (mínimo 8 caracteres)") }, singleLine = true, enabled = !busy, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
     Row { Checkbox(profile, { profile = it }, enabled = !busy); Text("Meu Perfil", modifier = Modifier.padding(top = 12.dp)) }
     Row { Checkbox(promotions, { promotions = it }, enabled = !busy); Text("Promoções", modifier = Modifier.padding(top = 12.dp)) }
+    Row { Checkbox(flyers, { flyers = it }, enabled = !busy); Text("Encartes", modifier = Modifier.padding(top = 12.dp)) }
     Row { Checkbox(prices, { prices = it }, enabled = !busy); Text("Consultar Preços", modifier = Modifier.padding(top = 12.dp)) }
+    Row { Checkbox(stores, { stores = it }, enabled = !busy); Text("Nossas Lojas", modifier = Modifier.padding(top = 12.dp)) }
     Button(enabled = !busy, onClick = {
         busy = true; message = null
         scope.launch {
             try {
-                RestrictedAccessRepository.create(login, password, profile, promotions, prices)
-                login = ""; password = ""; profile = false; promotions = false; prices = false
+                RestrictedAccessRepository.create(login, password, profile, promotions, flyers, prices, stores)
+                login = ""; password = ""; profile = false; promotions = false; flyers = false; prices = false; stores = false
                 message = "Cadastro criado. Informe o login e a senha ao usuário."
             } catch (error: Exception) {
                 message = if (error is IllegalArgumentException || error is IllegalStateException) error.message else "Não foi possível criar. Verifique a conexão ou se o login já existe."
@@ -81,11 +94,11 @@ internal fun MestreAccessSettings() {
             key(account.uid) {
                 AccountHistoryCard(account, expandedUid == account.uid, busy,
                     onToggle = { expandedUid = if (expandedUid == account.uid) null else account.uid },
-                    onSave = { selectedProfile, selectedPromotions, selectedPrices ->
+                    onSave = { selectedProfile, selectedPromotions, selectedFlyers, selectedPrices, selectedStores ->
                         busy = true; message = null
                         scope.launch {
                             try {
-                                RestrictedAccessRepository.updatePermissions(account.uid, selectedProfile, selectedPromotions, selectedPrices)
+                                RestrictedAccessRepository.updatePermissions(account.uid, selectedProfile, selectedPromotions, selectedFlyers, selectedPrices, selectedStores)
                                 expandedUid = null
                                 message = "Permissões de ${account.login} atualizadas."
                             } catch (_: Exception) { message = "Não foi possível salvar as permissões. Tente novamente." }
@@ -238,7 +251,7 @@ private fun AcpProviderSettings() {
 
 @Composable
 private fun AccountHistoryCard(account: AccessAccount, expanded: Boolean, busy: Boolean,
-    onToggle: () -> Unit, onSave: (Boolean, Boolean, Boolean) -> Unit, onDelete: () -> Unit, onEdit: () -> Unit) {
+    onToggle: () -> Unit, onSave: (Boolean, Boolean, Boolean, Boolean, Boolean) -> Unit, onDelete: () -> Unit, onEdit: () -> Unit) {
     OutlinedCard(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(Modifier.fillMaxWidth().clickable(enabled = !busy, onClick = onToggle),
@@ -248,18 +261,23 @@ private fun AccountHistoryCard(account: AccessAccount, expanded: Boolean, busy: 
                 Text(if (expanded) "Fechar ⌃" else "Editar ⌄", color = MaterialTheme.colorScheme.primary)
             }
             val tabs = listOfNotNull(if (account.profile) "Meu Perfil" else null,
-                if (account.promotions) "Promoções" else null, if (account.prices) "Consultar Preços" else null)
+                if (account.promotions) "Promoções" else null, if (account.flyers) "Encartes" else null, if (account.prices) "Consultar Preços" else null,
+                if (account.stores) "Nossas Lojas" else null)
             Text(if (!account.enabled || tabs.isEmpty()) "Sem abas liberadas" else tabs.joinToString(" • "),
                 style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
             if (expanded) {
                 var profile by remember(account.uid) { mutableStateOf(account.profile) }
                 var promotions by remember(account.uid) { mutableStateOf(account.promotions) }
+                var flyers by remember(account.uid) { mutableStateOf(account.flyers) }
                 var prices by remember(account.uid) { mutableStateOf(account.prices) }
+                var stores by remember(account.uid) { mutableStateOf(account.stores) }
                 Spacer(Modifier.height(8.dp))
                 Row { Checkbox(profile, { profile = it }, enabled = !busy); Text("Meu Perfil", Modifier.padding(top = 12.dp)) }
                 Row { Checkbox(promotions, { promotions = it }, enabled = !busy); Text("Promoções", Modifier.padding(top = 12.dp)) }
+                Row { Checkbox(flyers, { flyers = it }, enabled = !busy); Text("Encartes", Modifier.padding(top = 12.dp)) }
                 Row { Checkbox(prices, { prices = it }, enabled = !busy); Text("Consultar Preços", Modifier.padding(top = 12.dp)) }
-                Button(enabled = !busy, onClick = { onSave(profile, promotions, prices) }) { Text("Salvar permissões") }
+                Row { Checkbox(stores, { stores = it }, enabled = !busy); Text("Nossas Lojas", Modifier.padding(top = 12.dp)) }
+                Button(enabled = !busy, onClick = { onSave(profile, promotions, flyers, prices, stores) }) { Text("Salvar permissões") }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(enabled = !busy, onClick = onDelete) { Text("Excluir", color = MaterialTheme.colorScheme.error) }
                     TextButton(enabled = !busy, onClick = onEdit) { Text("Alterar dados") }

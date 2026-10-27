@@ -29,6 +29,20 @@ test('public read is protected by current policy and profile-only access cannot 
  const handler=createControlHandler({verify:async()=>null,authorize:async()=>({enabled:true,profile:true,promotions:false,prices:false}),documents});
  assert.equal((await handler(req({operation:'read',path:'config/promotion_stores'}))).status,403);
 });
+test('tab audience grants only tabs set to all; VIP tabs continue to require a per-account grant',async()=>{
+ const audience=encodeFields({publicAccess:false,tabAudience:{profile:'all',promotions:'vip',flyers:'all',prices:'vip',stores:'all'}});
+ const anon=createControlAuthorizer({verify:async()=>null,document:async()=>audience,hash:async()=>''});
+ const guest=await anon(req({}));
+ assert.equal(guest.profile,true);assert.equal(guest.flyers,true);assert.equal(guest.stores,true);assert.equal(guest.promotions,false);assert.equal(guest.prices,false);
+ const vip=createControlAuthorizer({verify:async()=>({uid:'u1',email:'one@usuarios.nrdlojas.com',authTime:7}),document:async path=>path==='access_sessions/u1'?encodeFields({deviceHash:'digest',authTime:7}):path==='config/restricted_access'?audience:encodeFields({enabled:true,promotions:true,prices:false}),hash:async()=> 'digest'});
+ const account=await vip(req({}, {'x-firebase-token':'valid','x-device-session':'a'.repeat(64)}));
+ assert.equal(account.profile,true);assert.equal(account.promotions,true);assert.equal(account.flyers,true);assert.equal(account.prices,false);
+});
+test('legacy configurations retain public access to Encartes and Nossas Lojas',async()=>{
+ const legacy=createControlAuthorizer({verify:async()=>null,document:async()=>encodeFields({publicAccess:false}),hash:async()=>''});
+ const guest=await legacy(req({}));
+ assert.equal(guest.flyers,true);assert.equal(guest.stores,true);assert.equal(guest.promotions,false);assert.equal(guest.prices,false);
+});
 test('master merges fields with CAS and retries a competing edit',async()=>{
  const documents=new ControlDocuments({});let attempt=0;
  documents.get=async()=>({fields:encodeFields({'0012':{count:4,enabled:true}}),version:5});
@@ -50,5 +64,14 @@ test('provider control accepts only a valid enabled primary and rejects disablin
   {legacyEnabled:true,acpTechEnabled:true,primary:'unknown'},
   {legacyEnabled:true,acpTechEnabled:true,primary:'legacy',extra:true}
  ])assert.equal((await handler(req({...valid,data},headers))).status,400);
+ assert.equal(writes,1);
+});
+test('master can save only supported tab audience values',async()=>{
+ const documents=new ControlDocuments({});let writes=0;documents.get=async()=>null;documents.write=async()=>{writes++;return {version:1};};
+ const handler=createControlHandler({verify:async()=>({email:'mestre@nrdlojas.com'}),authorize,documents});
+ const headers={'x-firebase-token':'master'};
+ const good={operation:'write',path:'config/restricted_access',data:{tabAudience:{profile:'vip',promotions:'all',flyers:'vip',prices:'all',stores:'all'}},merge:true};
+ assert.equal((await handler(req(good,headers))).status,200);
+ for(const tabAudience of [{unknown:'all'},{promotions:'everyone'},{profile:true}])assert.equal((await handler(req({...good,data:{tabAudience}},headers))).status,400);
  assert.equal(writes,1);
 });
