@@ -209,7 +209,7 @@ private fun FlyerImportDialog(onDismiss: () -> Unit) {
 
                     if (busy) {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Text("Lendo páginas, reconhecendo ofertas e cruzando produtos com a ACP…", style = MaterialTheme.typography.bodySmall)
+                        Text("Lendo páginas, reconhecendo ofertas e cruzando produtos com a Sistema…", style = MaterialTheme.typography.bodySmall)
                     }
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     success?.let { Text(it, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
@@ -321,7 +321,7 @@ private fun FlyerImportDialog(onDismiss: () -> Unit) {
                                     }
                                 }
                                 Row {
-                                    TextButton(onClick = { editingOffer = offer }, enabled = !saving) { Text("Revisar / comparar ACP") }
+                                    TextButton(onClick = { editingOffer = offer }, enabled = !saving) { Text("Revisar / comparar Sistema") }
                                     TextButton(onClick = {
                                         val updated = result.copy(offers = result.offers.filterNot { it.id == offer.id })
                                         analysis = updated
@@ -433,7 +433,7 @@ private fun SummaryMetric(label: String, count: Int, modifier: Modifier = Modifi
 @Composable
 private fun DetectedOfferCard(offer: FlyerOffer) {
     val status = when (offer.matchStatus) {
-        FlyerMatchStatus.CONFIRMED -> if (offer.reviewed) "SALVA" else "ACP ENCONTRADO"
+        FlyerMatchStatus.CONFIRMED -> if (offer.reviewed) "SALVA" else "Sistema ENCONTRADO"
         FlyerMatchStatus.REVIEW -> "REVISAR"
         FlyerMatchStatus.UNRESOLVED -> "NÃO RESOLVIDA"
     }
@@ -564,13 +564,13 @@ internal fun ActiveFlyerOffersForAcpProduct(product: AcpProduct) {
     if (matches.isEmpty()) return
     HorizontalDivider()
     Text("OFERTAS DO ENCARTE", style = MaterialTheme.typography.titleMedium)
-    Text("Condições revisadas no NRD. Não substituem o preço ACP e não são somadas automaticamente a outras promoções.", style = MaterialTheme.typography.bodySmall)
+    Text("Condições revisadas no NRD. Não substituem o preço Sistema e não são somadas automaticamente a outras promoções.", style = MaterialTheme.typography.bodySmall)
     matches.forEach { (campaign, offer) ->
         FlyerOfferDisplayCard(campaign, offer)
         val advertised = offer.flyerPrice ?: offer.regularPrice
         val acpPrice = product.value
         if (advertised != null && acpPrice != null && java.math.BigDecimal.valueOf(advertised).compareTo(acpPrice) != 0) {
-            Text("Valores diferentes: ACP ${formatMoney(acpPrice.toDouble())}; encarte ${formatMoney(advertised)}. Confira as condições antes de aplicar a oferta.",
+            Text("Valores diferentes: Sistema ${formatMoney(acpPrice.toDouble())}; encarte ${formatMoney(advertised)}. Confira as condições antes de aplicar a oferta.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
     }
