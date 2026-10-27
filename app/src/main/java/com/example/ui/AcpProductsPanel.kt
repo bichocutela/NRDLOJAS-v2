@@ -371,7 +371,7 @@ internal fun AcpProductsPanel(
                     featuredHasMore = latest.hasMore
                     featuredError = null
                     integration = try { api.integrationInfo() } catch (_: Exception) { null }
-                    refreshMessage = "Ofertas em destaque atualizadas agora pelo ACP."
+                    refreshMessage = "Ofertas em destaque atualizadas agora pelo Sistema."
                 } else {
                     val targetPage = page?.pageIndex ?: 0
                     val fresh = api.searchProductsUnifiedFresh(clean, targetPage, freshStore)
@@ -390,7 +390,7 @@ internal fun AcpProductsPanel(
                     }
                     if (ticket != generation) return@launch
                     previewCampaignOffers = refreshedOffers
-                    refreshMessage = "Preços atualizados agora pelo ACP."
+                    refreshMessage = "Preços atualizados agora pelo Sistema."
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -622,7 +622,7 @@ internal fun AcpProductsPanel(
         }
 
         featuredError?.let { message ->
-            item { Text("Não foi possível atualizar os destaques da ACP: $message", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            item { Text("Não foi possível atualizar os destaques da Sistema: $message", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
 
         if (featuredVisible && (featuredLoading || featuredOffers.isNotEmpty())) {
@@ -665,7 +665,7 @@ internal fun AcpProductsPanel(
         // Ferramenta histórica somente do Mestre. A pesquisa é iniciada manualmente
         // e nunca mistura cartazes já impressos com ofertas vigentes.
         if (canAddToNrd && canCopyDiagnostic) {
-            item(key = "acp-history-evidence") {
+            item(key = "Sistema-history-evidence") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     AcpEvidencePanel(
                         api = api,
@@ -1396,7 +1396,7 @@ private fun AcpFeaturedOffers(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text("Ofertas em destaque", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("Condições promocionais informadas pela ACP", style = MaterialTheme.typography.bodySmall)
+                Text("Condições promocionais informadas pela Sistema", style = MaterialTheme.typography.bodySmall)
             }
             if (offers.isNotEmpty()) {
                 AcpFeaturedOfferActions(
@@ -1417,7 +1417,7 @@ private fun AcpFeaturedOffers(
             ) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("Ofertas em destaque", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Condições promocionais informadas pela ACP", style = MaterialTheme.typography.bodySmall)
+                    Text("Condições promocionais informadas pela Sistema", style = MaterialTheme.typography.bodySmall)
                 }
                 if (offers.isNotEmpty()) {
                     AcpFeaturedOfferActions(
