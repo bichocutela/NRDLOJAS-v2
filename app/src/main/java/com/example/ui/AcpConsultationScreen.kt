@@ -80,7 +80,7 @@ fun AcpConsultationScreen(
         scope.launch {
             try {
                 withContext(Dispatchers.IO) { historyExport.stage(payload) }
-                saveHistory.launch(if (index < 0) "acp-investigacao-produto.json" else "acp-historico-pagina-$index.json")
+                saveHistory.launch(if (index < 0) "Sistema-investigacao-produto.json" else "Sistema-historico-pagina-$index.json")
             } catch (cancelled: CancellationException) {
                 historyExportBusy = false
                 throw cancelled
@@ -294,7 +294,7 @@ fun AcpConsultationScreen(
         var password by remember { mutableStateOf("") }
         var saving by remember { mutableStateOf(false) }
         var saveError by remember { mutableStateOf<String?>(null) }
-        AlertDialog(onDismissRequest = { if (!saving) configure = false }, title = { Text("Configurar acesso ACP") }, text = {
+        AlertDialog(onDismissRequest = { if (!saving) configure = false }, title = { Text("Configurar acesso Sistema") }, text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("O acesso ficará protegido neste aparelho. Na consulta, os campos ficam ocultos e bloqueados.")
                 OutlinedTextField(login, { login = it }, label = { Text("Login") }, singleLine = true, enabled = !saving)
@@ -318,6 +318,6 @@ fun AcpConsultationScreen(
 
 internal fun acpErrorMessage(error: Exception): String = when (error) {
     is AcpUnauthorized -> "Sua sessão terminou. Não foi possível renová-la automaticamente."
-    is AcpFailure -> error.message ?: "Não foi possível consultar a ACP."
-    else -> "Não foi possível conectar à ACP. Verifique a internet e tente novamente."
+    is AcpFailure -> error.message ?: "Não foi possível consultar a Sistema."
+    else -> "Não foi possível conectar à Sistema. Verifique a internet e tente novamente."
 }
