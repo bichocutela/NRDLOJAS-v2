@@ -82,6 +82,7 @@ object NotificationHelper {
                 description = "Avisos exclusivos do Mestre quando alguém instala ou atualiza o NRD V2"
             }
             notificationManager.createNotificationChannel(channelInstallations)
+            notificationManager.createNotificationChannel(NotificationChannel("mail_documents", "Novos documentos por e-mail", NotificationManager.IMPORTANCE_DEFAULT).apply { description = "Avisos exclusivos do Mestre quando relatórios chegam ao NRD" })
             
             notificationManager.createNotificationChannel(NotificationChannel("encartes", "Novos encartes", NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = "Avisos de novos encartes de Natal e região"
@@ -149,6 +150,7 @@ object NotificationHelper {
         "CLOCK_REMINDER", "CLOCK_PENDING" -> "personal_clock_reminders"
         "TODAY_OFF", "TOMORROW_OFF", "SCHEDULE_INSERTED", "SCHEDULE_CHANGED", "CLOCK_TODAY_OFF", "CLOCK_TOMORROW_OFF" -> "schedule_reminders"
         "NEW_INSTALLATION" -> "installation_updates"
+        "NEW_MAIL_DOCUMENTS" -> "mail_documents"
         else -> null
     }
 
