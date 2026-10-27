@@ -77,21 +77,21 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
         busy = true
         error = null
         results = null
-        searchHint = "Buscando pela descrição diretamente na ACP…"
+        searchHint = "Buscando pela descrição diretamente na Sistema…"
         scope.launch {
             try {
                 if (!api.restoreSession()) api.confirmAccess()
                 val ranked = loadDescriptionCandidates(cleanQuery)
                 results = AcpProductPage(ranked, 0, if (ranked.isEmpty()) 0 else 1, ranked.size)
                 searchHint = if (ranked.isEmpty()) {
-                    "A ACP não encontrou produto por essa descrição."
+                    "A Sistema não encontrou produto por essa descrição."
                 } else {
-                    "Confira a descrição e toque no produto ACP correto."
+                    "Confira a descrição e toque no produto Sistema correto."
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                error = "Não foi possível consultar a ACP. Confira o acesso em Consultar Produtos e tente novamente."
+                error = "Não foi possível consultar a Sistema. Confira o acesso em Consultar Produtos e tente novamente."
                 results = null
             } finally {
                 busy = false
@@ -105,7 +105,7 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
         busy = true
         error = null
         results = null
-        searchHint = "EAN $cleanEan encontrado no Google. Conferindo automaticamente na ACP…"
+        searchHint = "EAN $cleanEan encontrado no Google. Conferindo automaticamente na Sistema…"
         scope.launch {
             try {
                 if (!api.restoreSession()) api.confirmAccess()
@@ -116,7 +116,7 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                 if (exact.isNotEmpty()) {
                     results = AcpProductPage(exact, 0, 1, exact.size)
                     searchHint = buildString {
-                        append("EAN $cleanEan encontrado no Google e confirmado na ACP")
+                        append("EAN $cleanEan encontrado no Google e confirmado na Sistema")
                         webName?.takeIf { it.isNotBlank() }?.let { append(" para $it") }
                         append(". Compare as descrições e toque em CONFIRMAR ESTE PRODUTO.")
                     }
@@ -124,15 +124,15 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                     val ranked = loadDescriptionCandidates(description.trim())
                     results = AcpProductPage(ranked, 0, if (ranked.isEmpty()) 0 else 1, ranked.size)
                     searchHint = if (ranked.isEmpty()) {
-                        "O EAN $cleanEan encontrado no Google não apareceu na ACP e também não encontrei candidato pela descrição."
+                        "O EAN $cleanEan encontrado no Google não apareceu na Sistema e também não encontrei candidato pela descrição."
                     } else {
-                        "O EAN $cleanEan encontrado no Google não apareceu na ACP. Mostrando candidatos pela descrição para você conferir."
+                        "O EAN $cleanEan encontrado no Google não apareceu na Sistema. Mostrando candidatos pela descrição para você conferir."
                     }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                error = "Não foi possível consultar a ACP. Confira o acesso em Consultar Produtos e tente novamente."
+                error = "Não foi possível consultar a Sistema. Confira o acesso em Consultar Produtos e tente novamente."
                 results = null
             } finally {
                 busy = false
@@ -150,7 +150,7 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
         ) {
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Revisar oferta do encarte", style = MaterialTheme.typography.titleLarge)
-                Text("Confira a oferta e localize o produto ACP. O vínculo só é salvo depois da sua confirmação.")
+                Text("Confira a oferta e localize o produto Sistema. O vínculo só é salvo depois da sua confirmação.")
                 if (initial.sourceText.isNotBlank()) Text("Texto reconhecido: ${initial.sourceText}", style = MaterialTheme.typography.bodySmall)
                 var typesOpen by remember { mutableStateOf(false) }
                 Box {
@@ -195,9 +195,9 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                     }
                 }
                 HorizontalDivider()
-                Text("Produto ACP", style = MaterialTheme.typography.titleMedium)
+                Text("Produto Sistema", style = MaterialTheme.typography.titleMedium)
                 if (linked.matchedProductName.isNullOrBlank()) {
-                    Text("Nenhum produto ACP confirmado", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Nenhum produto Sistema confirmado", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     Text(linked.matchedProductName.orEmpty(), style = MaterialTheme.typography.titleSmall)
                     Text(
@@ -218,7 +218,7 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
 
                 results?.let { page ->
                     if (page.items.isEmpty()) {
-                        Text("Nenhum produto ACP encontrado.", color = MaterialTheme.colorScheme.tertiary)
+                        Text("Nenhum produto Sistema encontrado.", color = MaterialTheme.colorScheme.tertiary)
                     }
                     page.items.forEach { product ->
                         OutlinedCard(
@@ -226,15 +226,15 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                                 selectProduct(product)
                                 results = null
                                 error = null
-                                searchHint = "Produto ACP confirmado. Agora confira a oferta e salve."
+                                searchHint = "Produto Sistema confirmado. Agora confira a oferta e salve."
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text("ACP", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                Text("Sistema", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                                 Text(product.description, style = MaterialTheme.typography.titleSmall)
                                 Text("Código ${product.code} • EAN ${product.barcode}", style = MaterialTheme.typography.bodySmall)
-                                product.value?.let { Text("Preço ACP: R$ ${it.toPlainString().replace('.', ',')}") }
+                                product.value?.let { Text("Preço Sistema: R$ ${it.toPlainString().replace('.', ',')}") }
                                 Text("Encarte: $description", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("CONFIRMAR ESTE PRODUTO", color = MaterialTheme.colorScheme.primary)
                             }
@@ -247,7 +247,7 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                     enabled = !busy && description.isNotBlank(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Não achou? Buscar pela descrição na ACP")
+                    Text("Não achou? Buscar pela descrição na Sistema")
                 }
 
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
