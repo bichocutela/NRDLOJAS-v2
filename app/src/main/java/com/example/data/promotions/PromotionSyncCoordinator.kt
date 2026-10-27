@@ -32,7 +32,7 @@ internal fun PromotionSyncState.afterStoreSync(unavailable: Set<String>, now: Lo
     lastCompleteSyncAt=if(unavailable.isEmpty()) now else lastCompleteSyncAt,
     acpConfirmedAt=if("0012" !in unavailable) now else 0L,
     error=if(unavailable.isEmpty()) null else "A atualização ficou incompleta em " + unavailable.joinToString { StoreCatalog.nameFor(it) } +
-        ". As ofertas do ACP sem confirmação foram ocultadas. Uma nova tentativa será feita automaticamente."
+        ". As ofertas do Sistema sem confirmação foram ocultadas. Uma nova tentativa será feita automaticamente."
 )
 
 /** One owner for foreground polling, screen refresh and WorkManager; no screen-owned timer. */
@@ -101,7 +101,7 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
                 }
                 is NossaGentePromotionsResult.Error -> {
                     deferRetry()
-                    mutableState.value = mutableState.value.copy(error = "Não foi possível confirmar as ofertas no ACP. As ofertas de Cidade Jardim foram ocultadas. Tente atualizar novamente.", acpConfirmedAt = 0L)
+                    mutableState.value = mutableState.value.copy(error = "Não foi possível confirmar as ofertas no Sistema. As ofertas de Cidade Jardim foram ocultadas. Tente atualizar novamente.", acpConfirmedAt = 0L)
                 }
                 NossaGentePromotionsResult.Unauthorized -> {
                     deferRetry()
@@ -112,7 +112,7 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) {
             deferRetry()
-            val message = "Não foi possível confirmar as ofertas no ACP. As ofertas de Cidade Jardim foram ocultadas."
+            val message = "Não foi possível confirmar as ofertas no Sistema. As ofertas de Cidade Jardim foram ocultadas."
             mutableState.value = mutableState.value.copy(error = message, acpConfirmedAt = 0L)
             NossaGentePromotionsResult.Error(message)
         } finally {
