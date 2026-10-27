@@ -6,8 +6,8 @@ import {createHandler,documentStore,digest} from './handler.mjs';
 const key='a'.repeat(64);
 const pdf=btoa('%PDF-1.4\nfixture');
 const request=(body,headers={})=>new Request('https://test/',{method:'POST',headers,body:JSON.stringify(body)});
-function fixture(){
- const items=new Map(); let hash; let requested=null,finished=null,failed=false,seen=0;
+function fixture({notify=async()=>{}}={}){
+ const items=new Map(); let hash; let notificationClaimed=false; let notifications=0; let requested=null,finished=null,failed=false,seen=0;
  const db={settings:async()=>hash?{key_hash:hash}:null,
  requestScan:async()=>{requested='11111111-1111-4111-8111-111111111111';return requested;},
  scanStatus:async()=>({requestId:requested,finishedId:finished,seenAt:seen?'2026-10-26T00:00:00Z':null,finishedAt:null,failed}),
@@ -15,9 +15,9 @@ function fixture(){
  ack:async(id,error)=>{if(id===requested){finished=id;failed=error;}},
  setup:async(email,value)=>{hash=value;},list:async()=>[...items.values()].map(({pdf_base64,...meta})=>meta),
  get:async id=>items.get(id),enqueue:async value=>{if(items.has(value.id))return false;items.set(value.id,{...value,status:'pending'});return true;},
- finish:async(id,status)=>items.set(id,{...items.get(id),status,pdf_base64:null})};
- const handler=createHandler({db,random:()=>key,verify:async token=>{if(token!=='master')throw Error();return {email:'mestre@nrdlojas.com'};}});
- return {handler,items};
+ finish:async(id,status)=>items.set(id,{...items.get(id),status,pdf_base64:null}),claimMailNotification:async()=>{if(notificationClaimed)return false;notificationClaimed=true;return true;}};
+ const handler=createHandler({db,notifyMailDocuments:async()=>{notifications++;await notify();},random:()=>key,verify:async token=>{if(token!=='master')throw Error();return {email:'mestre@nrdlojas.com'};}});
+ return {handler,items,get notifications(){return notifications;}};
 }
 test('rejects unauthenticated callers and public API keys',async()=>{
  const {handler}=fixture();assert.equal((await handler(request({operation:'list'}))).status,403);
@@ -62,4 +62,14 @@ test('only Mestre requests Gmail scan; script key may poll and acknowledge but n
  assert.equal(state.finishedId,initial.requestId);
  assert.equal(state.failed,false);
  assert.equal((await handler(request({operation:'status'},{'x-nrd-mail-key':key}))).status,403);
+});
+
+test('notifies the Master once for new reports and ignores duplicate attachments',async()=>{
+ const fixtureState=fixture(); const {handler}=fixtureState;
+ await handler(request({operation:'setup',email:'box@gmail.com'},{'x-firebase-token':'master'}));
+ const headers={'x-nrd-mail-key':key}, body={operation:'ingest',filename:'CENTRO_0005.pdf',pdf};
+ await handler(request(body,headers));
+ await handler(request({...body,filename:'CLUBE_0008.pdf'},headers));
+ await handler(request(body,headers));
+ assert.equal(fixtureState.notifications,1);
 });

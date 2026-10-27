@@ -92,6 +92,9 @@ class UserPreferences(private val context: Context) {
     val masterInstallationNotificationsEnabled: Flow<Boolean> = context.dataStore.data.map {
         it[MASTER_INSTALLATION_NOTIFICATIONS_ENABLED] ?: false
     }
+    val masterMailDocumentNotificationsEnabled: Flow<Boolean> = context.dataStore.data.map {
+        it[MASTER_MAIL_DOCUMENT_NOTIFICATIONS_ENABLED] ?: false
+    }
     val masterInstallationNotificationBaseline: Flow<Long> = context.dataStore.data.map {
         it[MASTER_INSTALLATION_NOTIFICATION_BASELINE] ?: 0L
     }
@@ -234,6 +237,10 @@ class UserPreferences(private val context: Context) {
         context.dataStore.edit { it[LAST_NOTIFIED_UPDATE_TAG] = tag }
     }
 
+    suspend fun setMasterMailDocumentNotificationsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[MASTER_MAIL_DOCUMENT_NOTIFICATIONS_ENABLED] = enabled }
+    }
+
     suspend fun setMasterInstallationNotificationsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[MASTER_INSTALLATION_NOTIFICATIONS_ENABLED] = enabled }
     }
@@ -346,6 +353,7 @@ class UserPreferences(private val context: Context) {
         val LAST_NOTIFIED_PRODUCT_CODE = stringPreferencesKey("last_notified_product_code")
         val LAST_NOTIFIED_UPDATE_TAG = stringPreferencesKey("last_notified_update_tag")
         val MASTER_INSTALLATION_NOTIFICATIONS_ENABLED = booleanPreferencesKey("master_installation_notifications_enabled")
+        val MASTER_MAIL_DOCUMENT_NOTIFICATIONS_ENABLED = booleanPreferencesKey("master_mail_document_notifications_enabled")
         val MASTER_INSTALLATION_NOTIFICATION_BASELINE = longPreferencesKey("master_installation_notification_baseline")
         val FAVORITE_STORE_CODE = stringPreferencesKey("favorite_store_code")
         val LAST_NOTIFIED_PROMOTION_FINGERPRINT = stringPreferencesKey("last_notified_promotion_fingerprint")

@@ -38,6 +38,19 @@ internal fun MailImportPanel(onPublished: () -> Unit = {}) {
     var discard by remember { mutableStateOf<MailImportDocument?>(null) }
     var publishConfirm by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
+    val selectableIds = documents.filter { document ->
+        val analysis = reviews[document.id] ?: return@filter false
+        val records = PromotionStores.records(analysis)
+        records.isNotEmpty() && records.all {
+            AcpPromotionsRepository.isoDate(it.from) != null &&
+                AcpPromotionsRepository.isoDate(it.to) != null
+        }
+    }.map { it.id }.toSet()
+    val selectedPublishableIds = selected.intersect(selectableIds)
+    val allPublishableSelected = selectableIds.isNotEmpty() &&
+        selectedPublishableIds.containsAll(selectableIds)
+    val reviewedCount = documents.count { it.id in reviews }
+    val unreadCount = documents.size - reviewedCount
     fun launchJob(job: suspend () -> Unit) {
         scope.launch {
             busy=true; error=false
@@ -49,7 +62,7 @@ internal fun MailImportPanel(onPublished: () -> Unit = {}) {
     }
     OutlinedCard(Modifier.fillMaxWidth().padding(vertical=8.dp)) {
         Column(Modifier.padding(12.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            Text("Relatórios por e-mail", style=MaterialTheme.typography.titleLarge)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween, verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) { Text("Relatórios por e-mail", style=MaterialTheme.typography.titleLarge); MailImportNotificationBell() }
             Text("Encaminhe o e-mail com os PDFs CENTRO e CLUBE para o Gmail configurado. Revise e publique as outras lojas sem ACP. Cidade Jardim (0012) permanece no fluxo atual.")
             TextButton(onClick={expanded=!expanded}) { Text(if(expanded) "Ocultar configuração do Gmail" else "Configurar Gmail") }
             if(expanded) {
@@ -99,8 +112,10 @@ internal fun MailImportPanel(onPublished: () -> Unit = {}) {
             if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if(message.isNotBlank()) Text(message,color=if(error)MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodySmall)
             if(documents.isNotEmpty()) {
-                Text("${documents.size} documento(s) pendente(s). Confira a loja e a validade de cada relatório antes de publicar.")
-                OutlinedButton(enabled=!busy,onClick={launchJob {
+                Text("${documents.size} documento(s) na fila. Confira a loja e a validade antes de publicar.")
+                Text("$reviewedCount de ${documents.size} lido(s) • ${selectableIds.size} com ofertas publicáveis • ${selectedPublishableIds.size} selecionado(s)",style=MaterialTheme.typography.bodySmall)
+                if(busy) Text("Os botões em lote ficam temporariamente indisponíveis enquanto esta operação termina.",style=MaterialTheme.typography.bodySmall)
+                OutlinedButton(enabled=!busy && unreadCount>0,onClick={launchJob {
                     var failures=0
                     documents.forEachIndexed { index, document ->
                         if(document.id !in reviews) {
@@ -112,25 +127,23 @@ internal fun MailImportPanel(onPublished: () -> Unit = {}) {
                     }
                     error=failures>0
                     message="${reviews.size} relatório(s) lido(s); $failures falha(s). Use Revisar para conferir ou tentar novamente."
-                }}) {Text("Ler todos os documentos")}
-                val selectableIds=documents.filter { document ->
-                    reviews[document.id]?.let { PromotionStores.records(it).isNotEmpty() } == true
-                }.map { it.id }.toSet()
-                if(selectableIds.isNotEmpty()) {
-                    val allSelected=selected.containsAll(selectableIds)
-                    OutlinedButton(enabled=!busy,onClick={
-                        selected=if(allSelected) selected-selectableIds else selected+selectableIds
-                    }) {Text(if(allSelected) "Desmarcar todos" else "Selecionar todos")}
-                    Text("${selected.intersect(selectableIds).size} de ${selectableIds.size} documento(s) disponível(is) selecionado(s)",style=MaterialTheme.typography.bodySmall)
-                    Button(enabled=!busy && selected.intersect(selectableIds).isNotEmpty(),onClick={message="";error=false;publishConfirm=true}) {
-                        Text("Publicar e habilitar lojas (${selected.intersect(selectableIds).size})")
-                    }
+                }}) {Text(if(unreadCount>0) "Ler documentos ainda não lidos ($unreadCount)" else "Todos os documentos foram lidos")}
+                OutlinedButton(enabled=!busy && selectableIds.isNotEmpty(),onClick={
+                    selected=if(allPublishableSelected) selected-selectableIds else selected+selectableIds
+                }) {Text(if(allPublishableSelected) "Desmarcar todos" else "Selecionar todos (${selectableIds.size})")}
+                Button(enabled=!busy && selectedPublishableIds.isNotEmpty(),onClick={message="";error=false;publishConfirm=true}) {
+                    Text("Publicar e habilitar lojas (${selectedPublishableIds.size})")
+                }
+                if(selectableIds.isEmpty()) {
+                    val guidance=if(unreadCount>0) "Leia os documentos primeiro; depois você poderá selecionar as ofertas válidas."
+                        else "Nenhuma oferta válida para publicar foi encontrada nos documentos lidos."
+                    Text(guidance,style=MaterialTheme.typography.bodySmall)
                 }
                 documents.forEach { document ->
                     val analysis=reviews[document.id]
                     val records=analysis?.let { PromotionStores.records(it) }.orEmpty()
                     Row(Modifier.fillMaxWidth()) {
-                        Checkbox(checked=document.id in selected,enabled=!busy && records.isNotEmpty(),onCheckedChange={checked->selected=if(checked)selected+document.id else selected-document.id})
+                        Checkbox(checked=document.id in selectedPublishableIds,enabled=!busy && document.id in selectableIds,onCheckedChange={checked->selected=if(checked)selected+document.id else selected-document.id})
                         Column(Modifier.weight(1f)) {
                             Text(document.filename)
                             Text(StoreCatalog.labelFor(document.storeCode),style=MaterialTheme.typography.labelMedium)
@@ -143,8 +156,7 @@ internal fun MailImportPanel(onPublished: () -> Unit = {}) {
                         }
                     }
                 }
-                Text("Marque somente os documentos conferidos. Serão publicadas apenas as ofertas válidas de cada documento; as linhas pendentes não serão publicadas.",style=MaterialTheme.typography.bodySmall)
-                Button(enabled=!busy && selected.isNotEmpty(),onClick={message="";error=false;publishConfirm=true}) {Text("Publicar documentos conferidos (${selected.size})")}
+                Text("Serão publicadas apenas as ofertas válidas. Linhas sem dados ou validade conferidos ficam pendentes.",style=MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -158,14 +170,14 @@ internal fun MailImportPanel(onPublished: () -> Unit = {}) {
             }}){Text("Descartar")}},dismissButton={TextButton(onClick={discard=null}){Text("Voltar")}})
     }
     if(publishConfirm) AlertDialog(onDismissRequest={if(!busy)publishConfirm=false},title={Text("Publicar documentos conferidos?")},text={
-        val chosen=documents.filter{it.id in selected}
+        val chosen=documents.filter{it.id in selectedPublishableIds}
         val omitted=chosen.sumOf{doc->reviews[doc.id]?.let{it.offers.size-PromotionStores.records(it).size} ?: 0}
         Column(Modifier.heightIn(max=420.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Text("${chosen.size} documento(s) selecionado(s). $omitted linha(s) inválida(s) ou não suportada(s) ficarão pendentes. As demais ofertas vigentes serão preservadas. Confira as lojas antes de publicar.")
             if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if(message.isNotBlank()) Text(message,color=if(error)MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
         }
-    },confirmButton={TextButton(enabled=!busy && selected.isNotEmpty(),onClick={launchJob {
+    },confirmButton={TextButton(enabled=!busy && selectedPublishableIds.isNotEmpty(),onClick={launchJob {
         val chosen=documents.filter{it.id in selected}
         val failures=mutableListOf<String>()
         var pending=0

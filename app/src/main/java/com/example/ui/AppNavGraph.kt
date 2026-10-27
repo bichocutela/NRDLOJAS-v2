@@ -149,6 +149,11 @@ fun AppNavGraph(
                 com.example.util.FcmTopicSubscription.reconcileMasterUpdates(
                     isMaster = authenticatedRole == "mestre"
                 )
+                com.example.util.FcmTopicSubscription.reconcileMasterMailDocuments(
+                    isMaster = authenticatedRole == "mestre",
+                    mailNotificationsEnabled = viewModel.userPreferences.masterMailDocumentNotificationsEnabled.first(),
+                    notificationsEnabled = viewModel.userPreferences.notificationsEnabled.first()
+                )
             }
         }
         firebaseAuth.addAuthStateListener(listener)

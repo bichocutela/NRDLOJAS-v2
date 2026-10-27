@@ -9,7 +9,7 @@ export function documentStore(filename) {
 export async function digest(value) {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', typeof value === 'string' ? new TextEncoder().encode(value) : value))].map(x=>x.toString(16).padStart(2,'0')).join('');
 }
-export function createHandler({verify, db, random = () => [...crypto.getRandomValues(new Uint8Array(32))].map(x=>x.toString(16).padStart(2,'0')).join('')}) {
+export function createHandler({verify, db, notifyMailDocuments = async () => {}, random = () => [...crypto.getRandomValues(new Uint8Array(32))].map(x=>x.toString(16).padStart(2,'0')).join('')}) {
   const reply = (status, value) => Response.json(value, {status, headers:{'Cache-Control':'no-store'}});
   return async req => {
     if(req.method !== 'POST') return reply(405,{error:'METHOD_NOT_ALLOWED'});
@@ -49,6 +49,11 @@ export function createHandler({verify, db, random = () => [...crypto.getRandomVa
         const buffer = new Uint8Array(data.length + 4); buffer.set(new TextEncoder().encode(code)); buffer.set(data,4);
         const id = await digest(buffer);
         const result = await db.enqueue({id,filename:body.filename,store_code:code,pdf_base64:body.pdf});
+        if(result && db.claimMailNotification) {
+          try {
+            if(await db.claimMailNotification()) await notifyMailDocuments(key);
+          } catch(error) { console.warn('Aviso de novos documentos não enviado', error?.message || ''); }
+        }
         return reply(200,{ok:true,id,duplicate:!result});
       }
       if(body.operation === 'setup') {

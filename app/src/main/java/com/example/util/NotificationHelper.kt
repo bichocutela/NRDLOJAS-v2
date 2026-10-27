@@ -82,6 +82,7 @@ object NotificationHelper {
                 description = "Avisos exclusivos do Mestre quando alguém instala ou atualiza o NRD V2"
             }
             notificationManager.createNotificationChannel(channelInstallations)
+            notificationManager.createNotificationChannel(NotificationChannel("mail_documents", "Novos documentos por e-mail", NotificationManager.IMPORTANCE_DEFAULT).apply { description = "Avisos exclusivos do Mestre quando relatórios chegam ao NRD" })
             
             notificationManager.createNotificationChannel(NotificationChannel("encartes", "Novos encartes", NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = "Avisos de novos encartes de Natal e região"
@@ -149,6 +150,7 @@ object NotificationHelper {
         "CLOCK_REMINDER", "CLOCK_PENDING" -> "personal_clock_reminders"
         "TODAY_OFF", "TOMORROW_OFF", "SCHEDULE_INSERTED", "SCHEDULE_CHANGED", "CLOCK_TODAY_OFF", "CLOCK_TOMORROW_OFF" -> "schedule_reminders"
         "NEW_INSTALLATION" -> "installation_updates"
+        "NEW_MAIL_DOCUMENTS" -> "mail_documents"
         else -> null
     }
 
@@ -281,6 +283,11 @@ object NotificationHelper {
                 Intent(context, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     putExtra("type", "NEW_ENCARTE")
+                }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+            "NEW_MAIL_DOCUMENTS" -> builder.setContentIntent(PendingIntent.getActivity(context, 3004,
+                Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    putExtra("type", "NEW_MAIL_DOCUMENTS")
                 }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             "APP_UPDATE" -> builder.setContentIntent(appUpdatePendingIntent(context))
             "PROMOTION_UPDATED" -> builder.setContentIntent(promotionsPendingIntent(context))
