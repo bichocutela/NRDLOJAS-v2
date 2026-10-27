@@ -32,7 +32,7 @@ private fun sanitizeUiText(value: String): String {
         .replace("a Sistema", "o sistema", ignoreCase = true)
         .replace("Valores diferentes: Sistema", "Valores diferentes: preço atual", ignoreCase = true)
 
-    text = Regex("(?i)\\bACP\\b").replace(text, "sistema")
+    text = Regex("(?i)\\bACP\\b").replace(text, "Sistema")
     return text
 }
 
