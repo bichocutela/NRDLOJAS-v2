@@ -426,12 +426,12 @@ internal suspend fun AcpApi.refreshProduct(selected: AcpProduct): AcpProduct {
             (selected.code.isBlank() || candidate.code == selected.code) &&
                 (selected.barcode.isBlank() || candidate.barcode == selected.barcode)
         })
-        if (matches.size > 1) throw AcpFailure("A Sistema retornou mais de um cadastro com esses códigos. Confira o produto na Sistema.")
+        if (matches.size > 1) throw AcpFailure("A Sistema retornou mais de um cadastro com esses códigos. Confira o produto no Sistema.")
         if (page.items.isEmpty() || index + 1 >= page.totalPages) {
             return matches.singleOrNull() ?: throw AcpFailure("Produto não encontrado na atualização. Faça uma nova busca.")
         }
     }
-    throw AcpFailure("Não foi possível confirmar o produto entre os resultados da Sistema. Refine a busca.")
+    throw AcpFailure("Não foi possível confirmar o produto entre os resultados do Sistema. Refine a busca.")
 }
 
 internal suspend fun AcpApi.categories(): List<AcpCategory> {
