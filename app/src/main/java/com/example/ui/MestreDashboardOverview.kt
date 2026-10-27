@@ -407,7 +407,7 @@ internal fun MestreSettingsHub(
     Spacer(modifier = Modifier.height(6.dp))
     PanelAreaCard(title = "Cadastros e Acessos", description = "Criar login e escolher as abas permitidas", icon = Icons.Default.Settings, onClick = onOpenAccess)
     Spacer(modifier = Modifier.height(6.dp))
-    PanelAreaCard(title = "Logins", description = "Testar e trocar os acessos de Ofertas, ACP e ACP Tech", icon = Icons.Default.Settings, onClick = onOpenLogins)
+    PanelAreaCard(title = "Logins", description = "Testar e trocar os acessos de Ofertas, Sistema e Sistema Tech", icon = Icons.Default.Settings, onClick = onOpenLogins)
     Spacer(modifier = Modifier.height(6.dp))
     PanelAreaCard(title = "Atualização do aplicativo", description = "Escolher a versão mínima permitida", icon = Icons.Default.Settings, onClick = onOpenUpdates)
     Spacer(modifier = Modifier.height(6.dp))
