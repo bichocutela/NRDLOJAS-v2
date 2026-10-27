@@ -138,8 +138,14 @@ internal class StoreProductImageRepository(
         }.sortedByDescending { it.second }
         val best = ranked.firstOrNull() ?: return Lookup(null, ean = verifiedEan)
         val margin = best.second - (ranked.getOrNull(1)?.second ?: 0.0)
-        return Lookup(if (best.second >= 0.78 && margin >= 0.10) photo(listOf(best.first)) else null,
-            ean = verifiedEan)
+        // If the campaign's internal code is actually a provider product ID (or is
+        // missing), a unique high-confidence name match can still supply its EAN.
+        // Keep the same strict match threshold used for photos so ambiguous names
+        // never attach another product's barcode to an offer.
+        val confidentMatch = best.second >= 0.78 && margin >= 0.10
+        val matchedEan = best.first.optString("codigo_barras").trim().takeIf(Gtin::valid)
+        return Lookup(if (confidentMatch) photo(listOf(best.first)) else null,
+            ean = verifiedEan ?: matchedEan.takeIf { confidentMatch })
     }
 
     private fun exactMatches(code: String, records: List<JSONObject>): List<JSONObject> {

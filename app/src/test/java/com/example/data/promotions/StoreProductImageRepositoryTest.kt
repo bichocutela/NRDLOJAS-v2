@@ -130,6 +130,28 @@ class StoreProductImageRepositoryTest {
         }
     }
 
+    @Test fun descriptionFallbackReturnsEanOnlyForOneConfidentCatalogMatch() = runBlocking {
+        val match = """{"produto_id":3653,"codigo_erp":"2003235","codigo_barras":"7896001045446","descricao":"Esponja Limp Esfrebom Multiuso C/4 Un","imagem":"$photo"}"""
+        val repository = StoreProductImageRepository(client { request ->
+            200 to if (request.method == "POST") """{"data":"$session"}"""
+            else if (request.url.encodedPath.contains("/999999/")) catalog("") else catalog(match)
+        })
+        val result = repository.lookup("999999", "Esponja Limp Esfrebom Multiuso C/4 Un")
+        assertEquals("7896001045446", result.ean)
+    }
+
+    @Test fun descriptionFallbackDoesNotReturnEanForAmbiguousProducts() = runBlocking {
+        val rows = listOf(
+            """{"produto_id":1,"codigo_erp":"2003235","codigo_barras":"7896001045446","descricao":"Esponja Limp Esfrebom Multiuso C/4 Un","imagem":"$photo"}""",
+            """{"produto_id":2,"codigo_erp":"2003236","codigo_barras":"7896001045453","descricao":"Esponja Limp Esfrebom Multiuso C/4 Un","imagem":"$photo"}"""
+        ).joinToString(",")
+        val repository = StoreProductImageRepository(client { request ->
+            200 to if (request.method == "POST") """{"data":"$session"}""" else catalog(rows)
+        })
+        val result = repository.lookup("999999", "Esponja Limp Esfrebom Multiuso C/4 Un")
+        assertNull(result.ean)
+    }
+
     @Test fun barcodeCanDifferFromInternalCodeAndAcceptGtinPadding() = runBlocking {
         val repository = StoreProductImageRepository(client { request ->
             200 to if (request.method == "POST") """{"data":"$session"}"""
