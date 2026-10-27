@@ -180,7 +180,7 @@ internal object NrdProductImportService {
                 }
             }
         } catch (error: Exception) {
-            Log.e(TAG, "Falha ao adicionar produto do Sistema", error)
+            Log.e(TAG, "Falha ao adicionar produto da ACP", error)
             NrdProductImportResult(false, message = "Não foi possível adicionar o produto ao NRD. Verifique a conexão.")
         }
     }

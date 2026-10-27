@@ -8,7 +8,7 @@ import java.io.File
 
 /** Durable staging: the document picker may recreate the activity and its Compose state. */
 internal class AcpHistoryExport(private val context: Context) {
-    private val pending = AtomicFile(File(context.noBackupFilesDir, "Sistema-history-pending.json"))
+    private val pending = AtomicFile(File(context.noBackupFilesDir, "acp-history-pending.json"))
 
     fun stage(payload: String) {
         require(payload.isNotBlank()) { "Diagnóstico vazio" }

@@ -58,13 +58,13 @@ internal suspend fun AcpApi.descriptionSearch(query: String, category: AcpCatego
         receivedCount += result.items.size
         products += result.items.filter { it.matchesAcpSearch(query) }
         if (index + 1 >= result.totalPages) {
-            if (receivedCount != total) throw AcpFailure("A Sistema retornou uma pesquisa incompleta. Tente novamente.")
+            if (receivedCount != total) throw AcpFailure("A ACP retornou uma pesquisa incompleta. Tente novamente.")
             currentCoroutineContext().ensureActive()
             val snapshot = AcpDescriptionSearchSnapshot(query, category?.id, products.orderedSearchMatches(query), queriedAt, source)
             descriptionSearchSnapshot = snapshot
             return snapshot.page(page)
         }
-        if (result.items.isEmpty()) throw AcpFailure("A Sistema retornou uma página incompleta. Tente novamente.")
+        if (result.items.isEmpty()) throw AcpFailure("A ACP retornou uma página incompleta. Tente novamente.")
     }
     throw AcpFailure("A pesquisa tem mais de 10.000 produtos. Acrescente outra palavra ou use # para refinar.")
 }

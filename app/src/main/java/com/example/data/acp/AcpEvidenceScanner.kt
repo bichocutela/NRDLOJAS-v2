@@ -46,7 +46,7 @@ internal class AcpEvidenceScanner(
 
     suspend fun report(target: String): String? = withContext(Dispatchers.IO) {
         load(target)?.let { state ->
-            JSONObject().put("diagnostic", "NRD Sistema read-only targeted evidence")
+            JSONObject().put("diagnostic", "NRD ACP read-only targeted evidence")
                 .put("endpoint", "TemplatePrintLog/all")
                 .put("additionalEndpoint", "ProductGroup/all")
                 .put("format", "Matched product excerpts; not complete HTTP responses or current offers")
@@ -141,14 +141,14 @@ internal class AcpEvidenceScanner(
         val items = root.optJSONArray("items") ?: throw AcpFailure("Formato de paginação não reconhecido. Coleta parcial preservada.")
         if (root.optInt("pageIndex", -1) != index || root.optInt("totalPages", -1) < 0 ||
             root.optInt("pageSize", 0) <= 0 || root.optInt("totalCount", -1) < 0) {
-            throw AcpFailure("A Sistema retornou paginação inesperada. Coleta parcial preservada.")
+            throw AcpFailure("A ACP retornou paginação inesperada. Coleta parcial preservada.")
         }
         val signature = (0 until items.length()).map { items.optJSONObject(it)?.opt("id") }.joinToString(",")
         if (items.length() > 0 && state.optString(signatureKey) == signature) {
-            throw AcpFailure("A Sistema repetiu uma página. Coleta parcial preservada.")
+            throw AcpFailure("A ACP repetiu uma página. Coleta parcial preservada.")
         }
         if (items.length() == 0 && (index < root.getInt("totalPages") - 1 || (index == 0 && root.getInt("totalCount") > 0))) {
-            throw AcpFailure("A Sistema retornou uma página vazia antes do fim. Coleta parcial preservada.")
+            throw AcpFailure("A ACP retornou uma página vazia antes do fim. Coleta parcial preservada.")
         }
         state.put(signatureKey, signature)
     }

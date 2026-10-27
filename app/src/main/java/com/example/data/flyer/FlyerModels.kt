@@ -61,7 +61,7 @@ data class FlyerOffer(
         fun positive(v: Double?) = v != null && v.isFinite() && v > 0
         fun percent(v: Double?) = positive(v) && v!! <= 100
         if (sourceDescription.isBlank()) return "Informe a descrição do encarte."
-        if (productCodes.none { it.isNotBlank() } && barcodes.none { it.isNotBlank() }) return "Selecione o produto correspondente no Sistema."
+        if (productCodes.none { it.isNotBlank() } && barcodes.none { it.isNotBlank() }) return "Selecione o produto correspondente na ACP."
         if (listOf(flyerPrice, regularPrice, cashbackValue).any { it != null && !positive(it) }) return "Confira os preços: devem ser maiores que zero."
         val valid = when (type) {
             FlyerOfferType.SECOND_UNIT_PERCENT -> percent(secondUnitDiscountPercent) && positive(regularPrice)

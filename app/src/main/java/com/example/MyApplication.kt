@@ -75,9 +75,9 @@ class MyApplication : Application() {
             .onFailure { Log.w("MyApplication", "Legacy installation job could not be cancelled", it) }
         try {
             com.example.util.AcpCatalogSyncWorker.schedule(this)
-            Log.d("MyApplication", "Sistema catalog sync scheduled")
+            Log.d("MyApplication", "ACP catalog sync scheduled")
         } catch (e: IllegalStateException) {
-            Log.w("MyApplication", "Sistema catalog sync not scheduled in this process", e)
+            Log.w("MyApplication", "ACP catalog sync not scheduled in this process", e)
         }
         try {
             com.example.util.PersonalClockWorker.schedule(this)
