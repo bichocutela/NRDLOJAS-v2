@@ -26,7 +26,7 @@ import java.security.MessageDigest
 import java.text.Normalizer
 import java.util.concurrent.TimeUnit
 
-internal class AcpUnauthorized : IOException("Confirme novamente seu acesso à ACP.")
+internal class AcpUnauthorized : IOException("Confirme novamente seu acesso à Sistema.")
 internal class AcpFailure(message: String) : IOException(message)
 
 /** Isolated NextAuth session; never changes NRD/Firebase/Nossa Gente authentication. */
@@ -162,7 +162,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         cookies.clear()
         val csrf = requestJson(Request.Builder().url("$ORIGIN/api/auth/csrf").get().build())
             .nonBlankString("csrfToken")
-            ?: throw AcpFailure("A ACP não disponibilizou o formulário de acesso. Tente novamente.")
+            ?: throw AcpFailure("A Sistema não disponibilizou o formulário de acesso. Tente novamente.")
         val form = FormBody.Builder()
             .add("login", access.getString("login"))
             .add("password", access.getString("password"))
@@ -175,7 +175,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         }
         if (!error.isNullOrBlank()) {
             cookies.clear()
-            throw AcpFailure("A ACP não aceitou o acesso. Peça ao administrador para conferir a configuração.")
+            throw AcpFailure("A Sistema não aceitou o acesso. Peça ao administrador para conferir a configuração.")
         }
         session() // A successful callback alone is not proof of authentication.
     }
@@ -211,12 +211,12 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
      * irrelevant pages and the endless loading state seen on the consultation screen.
      */
     internal suspend fun get(path: String, parameters: List<Pair<String, String>>): JSONObject {
-        require(path in READ_ONLY_ENDPOINTS) { "ACP endpoint not allowed: $path" }
+        require(path in READ_ONLY_ENDPOINTS) { "Sistema endpoint not allowed: $path" }
 
         val clubCatalogRequest = isClubCatalogRequest(path, parameters)
         val effectiveParameters = if (clubCatalogRequest) {
             val clubId = resolveClubCategoryId()
-                ?: throw AcpFailure("A categoria Clube de Vantagens não foi localizada na ACP. Tente sincronizar novamente.")
+                ?: throw AcpFailure("A categoria Clube de Vantagens não foi localizada na Sistema. Tente sincronizar novamente.")
             parameters
                 .filterNot { it.first == "pageSize" || it.first == "productCategoryIds" }
                 .plus("pageSize" to CLUB_PAGE_SIZE.toString())
@@ -266,7 +266,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
 
     /** Force a current ACP read for background refreshes of the visible highlights. */
     internal suspend fun getFresh(path: String, parameters: List<Pair<String, String>>): JSONObject {
-        require(path in READ_ONLY_ENDPOINTS) { "ACP endpoint not allowed: $path" }
+        require(path in READ_ONLY_ENDPOINTS) { "Sistema endpoint not allowed: $path" }
         val result = authenticatedRead(path, parameters, record = true)
         if (path in DAILY_CACHE_ENDPOINTS) {
             withContext(Dispatchers.IO) { writeCachedResponse(path, parameters, result) }
@@ -488,7 +488,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
             "orderByDescending" to "false", "profileIdToBeDesconsidered" to "1")
         val response = authenticatedRead("TemplatePrintLog/all", parameters, record = false)
         return JSONObject()
-            .put("diagnostic", "NRD ACP read-only history capture")
+            .put("diagnostic", "NRD Sistema read-only history capture")
             .put("endpoint", "TemplatePrintLog/all")
             .put("parameters", JSONObject(parameters.toMap()))
             .put("response", sanitize(response))
@@ -519,7 +519,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     @Synchronized internal fun diagnosticText(): String? {
         if (diagnostics.isEmpty() && diagnosticRequests.isEmpty()) return null
         val payload = JSONObject()
-            .put("diagnostic", "NRD ACP read-only response capture")
+            .put("diagnostic", "NRD Sistema read-only response capture")
             .put("endpoints", JSONObject())
             .put("requests", JSONArray())
         val endpoints = payload.getJSONObject("endpoints")
@@ -559,14 +559,14 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
                     response.header("Location").orEmpty().contains("/login"))) {
                 cookies.clear()
                 if (request.url.encodedPath == "/api/auth/callback/credentials") {
-                    throw AcpFailure("A ACP não aceitou o acesso. Peça ao administrador para conferir a configuração.")
+                    throw AcpFailure("A Sistema não aceitou o acesso. Peça ao administrador para conferir a configuração.")
                 }
                 throw AcpUnauthorized()
             }
-            if (response.code == 403) throw AcpFailure("A ACP não autorizou esta consulta.")
+            if (response.code == 403) throw AcpFailure("A Sistema não autorizou esta consulta.")
             if (response.code == 429) throw AcpFailure("Muitas consultas. Aguarde um momento e tente novamente.")
-            if (!response.isSuccessful) throw AcpFailure("Não foi possível acessar a ACP agora (${response.code}).")
-            val raw = response.body?.string() ?: throw AcpFailure("A ACP retornou uma resposta vazia.")
+            if (!response.isSuccessful) throw AcpFailure("Não foi possível acessar a Sistema agora (${response.code}).")
+            val raw = response.body?.string() ?: throw AcpFailure("A Sistema retornou uma resposta vazia.")
             return try {
                 JSONObject(raw)
             } catch (_: Exception) {
@@ -577,7 +577,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
                     JSONObject().put("items", items).put("pageIndex", 0)
                         .put("totalPages", 1).put("totalCount", items.length())
                 }.getOrElse {
-                    throw AcpFailure("A resposta da ACP não é compatível com esta consulta.")
+                    throw AcpFailure("A resposta da Sistema não é compatível com esta consulta.")
                 }
             }
         }
@@ -602,8 +602,8 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         private val READ_ONLY_ENDPOINTS = setOf("Product/all", "ProductCategory/all", "Product/integrationInfo", "Campaign/all")
         private val DAILY_CACHE_ENDPOINTS = setOf("Product/all", "ProductCategory/all", "Campaign/all")
         private val SILENT_PAGED_ENDPOINTS = setOf("ProductCategory/all", "Campaign/all")
-        const val ORIGIN = "https://nordestao12.acp.app.br"
-        const val API_ORIGIN = "https://api.acp.app.br"
+        const val ORIGIN = "https://nordestao12.Sistema.app.br"
+        const val API_ORIGIN = "https://api.Sistema.app.br"
     }
 }
 
