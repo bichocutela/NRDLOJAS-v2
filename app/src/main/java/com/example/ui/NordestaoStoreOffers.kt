@@ -1,5 +1,12 @@
 package com.example.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -7,17 +14,25 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -26,13 +41,18 @@ import com.example.data.*
 import com.example.data.promotions.StoreProductImageRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseStore: () -> Unit,
     modifier: Modifier = Modifier,
-    loadOffers: suspend (Long) -> NordestaoStoreOffersSnapshot = { NordestaoStoreOffersRepository.load(it) }) {
+    loadOffers: suspend (Long) -> NordestaoStoreOffersSnapshot = { NordestaoStoreOffersRepository.load(it) },
+    resolveEan: suspend (String, String) -> String? = { code, name ->
+        StoreProductImageRepository.shared.lookup(code, name).ean
+    }) {
     if(store == null) {
         Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Escolha sua loja preferida para consultar as ofertas.")
@@ -53,6 +73,8 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
     var sortName by rememberSaveable { mutableStateOf(OfferSortOption.DISCOUNT_DESC.name) }
     val sortOption = OfferSortOption.values().firstOrNull { it.name == sortName } ?: OfferSortOption.DISCOUNT_DESC
     var detail by remember(store.id) { mutableStateOf<NordestaoStoreOffer?>(null) }
+    var detailLayer by remember(store.id) { mutableStateOf<GraphicsLayer?>(null) }
+    val scope = rememberCoroutineScope()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(store.id, refresh, retry, lifecycle) {
@@ -104,14 +126,35 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
         LazyVerticalGrid(columns = GridCells.Adaptive(150.dp), modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
             items(shown, key = { it.id }) { offer ->
-                OutlinedCard(onClick = { detail = offer }) {
+                // Only composed/visible cards perform lookup; the existing official cache is shared with detail.
+                val ean by rememberVerifiedStoreOfferEan(offer, resolveEan)
+                val shareLayer = rememberGraphicsLayer()
+                fun openDetail() { detailLayer = shareLayer; detail = offer }
+                OutlinedCard(modifier = Modifier
+                    .drawWithContent {
+                        shareLayer.record { this@drawWithContent.drawContent() }
+                        drawLayer(shareLayer)
+                    }
+                    .combinedClickable(
+                        onClick = { openDetail() },
+                        onLongClick = {
+                            scope.launch {
+                                val copied = copyProductCardToClipboard(context, shareLayer, offer.description)
+                                Toast.makeText(context, if(copied) "Quadradinho copiado"
+                                    else "Não foi possível copiar a oferta.", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if(offer.tag.isNotBlank()) SuggestionChip(onClick = { detail = offer }, label = { Text(offer.tag) })
+                        if(offer.tag.isNotBlank()) SuggestionChip(onClick = { openDetail() }, label = { Text(offer.tag) })
                         OfficialOfferPhoto(offer,Modifier.fillMaxWidth().height(130.dp))
                         OfferPrice(offer)
                         Text(offer.description, style = MaterialTheme.typography.bodyMedium)
                         if(offer.maxAmount > 0) Text("Máx. ${NumberFormat.getNumberInstance(Locale.forLanguageTag("pt-BR")).format(offer.maxAmount)} un.", style = MaterialTheme.typography.bodySmall)
                         Text(offer.validity, style = MaterialTheme.typography.bodySmall)
+                        if(offer.code.isNotBlank()) Text("Código: ${offer.code}", style = MaterialTheme.typography.labelSmall)
+                        Text("EAN: ${ean ?: "não disponível"}", style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("Ver condições", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
                     }
                 }
@@ -119,32 +162,142 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
         }
     }
     detail?.let { offer ->
-        val verifiedEan by produceState<String?>(initialValue = null, offer.code, offer.description) {
-            try {
-                // Only a verified exact internal-code association can supply an EAN.
-                // An unavailable catalogue must never display a guessed barcode.
-                value = StoreProductImageRepository.shared.lookup(offer.code, offer.description).ean
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                value = null
+        val verifiedEan by rememberVerifiedStoreOfferEan(offer, resolveEan)
+        val offerText = remember(offer, verifiedEan, store.name) {
+            storeOfferSharingText(offer, store.name, verifiedEan)
+        }
+        // A custom dialog keeps all actions visible instead of letting the default
+        // AlertDialog footer overflow when font/display size is increased.
+        Dialog(onDismissRequest = { detail = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(0.92f).widthIn(max = 560.dp)
+                    .heightIn(max = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.88f).dp),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp
+            ) {
+                Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                    SelectionContainer {
+                        Text(offer.description, style = MaterialTheme.typography.headlineSmall)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    SelectionContainer {
+                        Column(
+                            Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OfficialOfferPhoto(offer, Modifier.fillMaxWidth().height(180.dp))
+                            OfferPrice(offer)
+                            Text(offer.validity)
+                            if(offer.maxAmount > 0) Text("Quantidade máxima: ${NumberFormat.getNumberInstance(Locale.forLanguageTag("pt-BR")).format(offer.maxAmount)} un.")
+                            if(offer.conditions.isNotBlank()) Text(offer.conditions)
+                            if(offer.activationRequired) Text("Ative esta oferta no aplicativo Nordestão Pra Você antes da compra.")
+                            Text("Loja: ${store.name}")
+                            if(offer.code.isNotBlank()) Text("Código: ${offer.code}")
+                            Text("EAN: ${verifiedEan ?: "não disponível"}")
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    // Three always-visible actions, split into two rows only on narrow screens.
+                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        val narrow = maxWidth < 330.dp
+                        val copyAction: () -> Unit = {
+                            copyStoreOfferText(context, offerText)
+                            Toast.makeText(context, "Dados da oferta copiados", Toast.LENGTH_SHORT).show()
+                        }
+                        val shareAction: () -> Unit = {
+                            scope.launch {
+                                val shared = shareStoreOfferCard(context, detailLayer, offer.description, offerText)
+                                if(!shared) Toast.makeText(context, "Não foi possível compartilhar a oferta.", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        if(narrow) {
+                            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                                Row {
+                                    TextButton(onClick = copyAction) { Text("Copiar") }
+                                    TextButton(onClick = shareAction) { Text("Compartilhar") }
+                                }
+                                TextButton(onClick = { detail = null }) { Text("Fechar") }
+                            }
+                        } else {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = copyAction) { Text("Copiar") }
+                                TextButton(onClick = shareAction) { Text("Compartilhar") }
+                                TextButton(onClick = { detail = null }) { Text("Fechar") }
+                            }
+                        }
+                    }
+                }
             }
         }
-        AlertDialog(onDismissRequest = { detail = null }, title = { Text(offer.description) }, text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OfficialOfferPhoto(offer,Modifier.fillMaxWidth().height(180.dp))
-                OfferPrice(offer)
-                Text(offer.validity)
-                if(offer.maxAmount > 0) Text("Quantidade máxima: ${NumberFormat.getNumberInstance(Locale.forLanguageTag("pt-BR")).format(offer.maxAmount)} un.")
-                if(offer.conditions.isNotBlank()) Text(offer.conditions)
-                if(offer.activationRequired) Text("Ative esta oferta no aplicativo Nordestão Pra Você antes da compra.")
-                Text("Loja: ${store.name}")
-                if(offer.code.isNotBlank()) Text("Código: ${offer.code}")
-                if(!verifiedEan.isNullOrBlank()) Text("EAN: $verifiedEan")
-            }
-        }, confirmButton = { TextButton(onClick = { detail = null }) { Text("Fechar") } })
     }
 }
+@Composable
+private fun rememberVerifiedStoreOfferEan(
+    offer: NordestaoStoreOffer,
+    resolveEan: suspend (String, String) -> String?
+): State<String?> = produceState<String?>(initialValue = null, offer.code, offer.description) {
+        if(offer.code.isBlank()) return@produceState
+        try {
+            value = resolveEan(offer.code, offer.description)
+        } catch(cancelled: CancellationException) {
+            throw cancelled
+        } catch(_: Exception) {
+            value = null
+        }
+    }
+
+internal fun storeOfferSharingText(offer: NordestaoStoreOffer, storeName: String, ean: String?): String =
+    buildString {
+        val currency = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("pt-BR"))
+        appendLine(offer.description)
+        appendLine("Loja: $storeName")
+        if(offer.showPrice && offer.priceCents > 0) {
+            if(offer.originalPriceCents > offer.priceCents)
+                appendLine("De: ${currency.format(offer.originalPriceCents / 100.0)}")
+            appendLine("Preço: ${currency.format(offer.priceCents / 100.0)}")
+            if(offer.discount > 0) appendLine("${offer.discount}% de desconto")
+        } else appendLine("Condição especial")
+        if(offer.cashback.isNotBlank()) appendLine(offer.cashback)
+        if(offer.validity.isNotBlank()) appendLine(offer.validity)
+        if(offer.maxAmount > 0) appendLine("Máximo: ${NumberFormat.getNumberInstance(Locale.forLanguageTag("pt-BR")).format(offer.maxAmount)} un.")
+        if(offer.code.isNotBlank()) appendLine("Código: ${offer.code}")
+        if(!ean.isNullOrBlank()) appendLine("EAN: $ean")
+        if(offer.conditions.isNotBlank()) appendLine(offer.conditions)
+        if(offer.activationRequired) appendLine("Ative a oferta no Nordestão Pra Você antes da compra.")
+    }.trim()
+
+private fun copyStoreOfferText(context: Context, text: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("Oferta NRD", text))
+}
+
+/** Shares the same PNG captured for long-press copying; falls back to full text if unavailable. */
+private suspend fun shareStoreOfferCard(
+    context: Context,
+    layer: GraphicsLayer?,
+    name: String,
+    text: String
+): Boolean = runCatching {
+    val imageCopied = layer != null && copyProductCardToClipboard(context, layer, name)
+    val uri = if(imageCopied) {
+        val clip = (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip
+        clip?.getItemAt(0)?.uri
+    } else null
+    val intent = if(uri != null) Intent(Intent.ACTION_SEND).apply {
+        type = "image/png"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_TEXT, text)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    } else Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(intent, "Compartilhar oferta"))
+    true
+}.getOrDefault(false)
+
 @Composable private fun OfferPrice(offer: NordestaoStoreOffer) {
     val currency = remember { NumberFormat.getCurrencyInstance(Locale.forLanguageTag("pt-BR")) }
     if(offer.showPrice && offer.priceCents > 0) {

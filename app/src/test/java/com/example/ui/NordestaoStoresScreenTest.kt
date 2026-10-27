@@ -219,7 +219,7 @@ class NordestaoStoresScreenTest {
     @Test fun offersWithoutFavoriteAskForStoreWithoutFetching() {
         var calls = 0
         compose.setContent { MaterialTheme {
-            NordestaoStoreOffersContent(null, 0, {}, loadOffers = { calls++; error("No store") })
+            NordestaoStoreOffersContent(null, 0, {}, loadOffers = { calls++; error("No store") }, resolveEan = { _, _ -> null })
         } }
         compose.onNodeWithText("Escolher loja").assertExists()
         org.junit.Assert.assertEquals(0, calls)
@@ -236,7 +236,7 @@ class NordestaoStoresScreenTest {
             NordestaoStoreOffersContent(selected.value, 0, {}, loadOffers = { id ->
                 requests.add(id)
                 com.example.data.NordestaoStoreOffersSnapshot(id, listOf(offer.copy(description = "Produto da loja $id")), "2026-10-23T16:00:00.000Z", false)
-            })
+            }, resolveEan = { _, _ -> null })
         } }
         compose.onNodeWithText("Produto da loja ${stores[0].id}").assertExists()
         compose.runOnIdle { selected.value = stores[1] }
@@ -244,6 +244,40 @@ class NordestaoStoresScreenTest {
         compose.onNodeWithText("Produto da loja ${stores[0].id}").assertDoesNotExist()
         org.junit.Assert.assertEquals(stores.map { it.id }, requests.take(2))
     }
+    @Test fun sharedOfferTextContainsExactCodesPriceValidityAndConditions() {
+        val raw = javaClass.classLoader!!.getResourceAsStream("stores/offers-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
+        val offer = com.example.data.NordestaoStoreOffersCodec.decode(raw, 16145121).offers.first()
+        val text = storeOfferSharingText(offer, "Nordestão Cidade Jardim", "7898377663071")
+        org.junit.Assert.assertTrue(text.contains(offer.description))
+        org.junit.Assert.assertTrue(text.contains("Loja: Nordestão Cidade Jardim"))
+        org.junit.Assert.assertTrue(text.contains("Código: 2052914"))
+        org.junit.Assert.assertTrue(text.contains("EAN: 7898377663071"))
+        org.junit.Assert.assertTrue(text.contains("Preço: R$"))
+        org.junit.Assert.assertTrue(text.contains("Válida até 23/10"))
+        org.junit.Assert.assertTrue(text.contains("Ative a oferta"))
+        val unknown = storeOfferSharingText(offer, "Nordestão Cidade Jardim", null)
+        org.junit.Assert.assertFalse(unknown.contains("EAN:"))
+    }
+
+    @Test fun storeOfferDetailsExposeCopyShareAndCloseActions() {
+        val raw = javaClass.classLoader!!.getResourceAsStream("stores/nordestao-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
+        val store = NordestaoStoresCodec.decode(raw).stores.first()
+        val sampleRaw = javaClass.classLoader!!.getResourceAsStream("stores/offers-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
+        val sample = com.example.data.NordestaoStoreOffersCodec.decode(sampleRaw, 16145121).offers.first().copy(
+            startsAt = "2000-01-01T00:00:00.000Z", endsAt = "2100-01-01T00:00:00.000Z", image = "", images = emptyList())
+        compose.setContent { MaterialTheme {
+            NordestaoStoreOffersContent(store, 0, {}, loadOffers = { id ->
+                com.example.data.NordestaoStoreOffersSnapshot(id, listOf(sample), "2026-10-23T16:00:00.000Z", false)
+            }, resolveEan = { _, _ -> "7898377663071" })
+        } }
+        compose.onNodeWithText("Código: 2052914").assertExists()
+        compose.onNodeWithText("EAN: 7898377663071").assertExists()
+        compose.onNodeWithText("Ver condições").performClick()
+        compose.onNodeWithText("Copiar").assertExists()
+        compose.onNodeWithText("Compartilhar").assertExists()
+        compose.onNodeWithText("Fechar").assertExists()
+    }
+
     @Test fun storeOfferSelectorSortsAllFiveWaysAndLeavesUnknownPricesLast() {
         val raw = javaClass.classLoader!!.getResourceAsStream("stores/offers-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
         val base = com.example.data.NordestaoStoreOffersCodec.decode(raw, 16145121).offers.first()

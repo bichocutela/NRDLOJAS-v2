@@ -245,7 +245,7 @@ fun AppNavGraph(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = drawerState.isOpen || activeEntry?.destination?.route != "nordestao_stores",
+        gesturesEnabled = true, // Open Categorias by swiping right in Nossas Lojas too.
         drawerContent = {
             ModalDrawerSheet(
                 modifier = Modifier
