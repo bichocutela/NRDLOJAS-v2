@@ -1879,7 +1879,7 @@ fun MestreScreen(
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                         )
                         Text(
-                            "Cadastre imagens 3:1. O app seleciona automaticamente o banner conforme a oferta confirmada na ACP; sem cadastro, mantém o cartaz atual.",
+                            "Cadastre imagens 3:1. O app seleciona automaticamente o banner conforme a oferta confirmada na Sistema; sem cadastro, mantém o cartaz atual.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
