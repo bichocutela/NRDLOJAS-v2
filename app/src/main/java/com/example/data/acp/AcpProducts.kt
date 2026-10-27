@@ -223,9 +223,9 @@ internal fun AcpOffer.validityFor(product: AcpProduct, fallback: AcpOfferValidit
 
 internal object AcpProductParser {
     fun page(root: JSONObject, requestedPage: Int): AcpProductPage {
-        val array = root.optJSONArray("items") ?: throw AcpFailure("A ACP retornou produtos em um formato não reconhecido.")
+        val array = root.optJSONArray("items") ?: throw AcpFailure("A Sistema retornou produtos em um formato não reconhecido.")
         val provider = root.optString("nrdProvider").takeIf { it.isNotBlank() }
-        val items = (0 until array.length()).map { product(array.optJSONObject(it) ?: throw AcpFailure("A ACP retornou um produto inválido.")).copy(provider = provider) }
+        val items = (0 until array.length()).map { product(array.optJSONObject(it) ?: throw AcpFailure("A Sistema retornou um produto inválido.")).copy(provider = provider) }
         val page = root.optInt("pageIndex", requestedPage).coerceAtLeast(0)
         val totalPages = root.optInt("totalPages", if (items.isEmpty()) 0 else page + 1).coerceAtLeast(0)
         val totalCount = root.optInt("totalCount", items.size).coerceAtLeast(0)
@@ -234,7 +234,7 @@ internal object AcpProductParser {
 
     private fun product(item: JSONObject): AcpProduct {
         val code = item.text("code").orEmpty(); val barcode = item.text("barCode").orEmpty()
-        val description = item.text("description") ?: throw AcpFailure("A ACP retornou um produto sem descrição.")
+        val description = item.text("description") ?: throw AcpFailure("A Sistema retornou um produto sem descrição.")
         val categories = item.optJSONArray("productCategories"); val aux = item.optJSONArray("auxDescriptions")
         return AcpProduct(
             id = item.text("id") ?: "$code|$barcode|$description", code = code, barcode = barcode, description = description,
@@ -426,23 +426,23 @@ internal suspend fun AcpApi.refreshProduct(selected: AcpProduct): AcpProduct {
             (selected.code.isBlank() || candidate.code == selected.code) &&
                 (selected.barcode.isBlank() || candidate.barcode == selected.barcode)
         })
-        if (matches.size > 1) throw AcpFailure("A ACP retornou mais de um cadastro com esses códigos. Confira o produto na ACP.")
+        if (matches.size > 1) throw AcpFailure("A Sistema retornou mais de um cadastro com esses códigos. Confira o produto na Sistema.")
         if (page.items.isEmpty() || index + 1 >= page.totalPages) {
             return matches.singleOrNull() ?: throw AcpFailure("Produto não encontrado na atualização. Faça uma nova busca.")
         }
     }
-    throw AcpFailure("Não foi possível confirmar o produto entre os resultados da ACP. Refine a busca.")
+    throw AcpFailure("Não foi possível confirmar o produto entre os resultados da Sistema. Refine a busca.")
 }
 
 internal suspend fun AcpApi.categories(): List<AcpCategory> {
     val result = mutableListOf<AcpCategory>()
     for (page in 0 until 20) {
         val root = get("ProductCategory/all", listOf("pageSize" to "100", "pageIndex" to page.toString()))
-        val items = root.optJSONArray("items") ?: throw AcpFailure("Não foi possível carregar as categorias ACP.")
+        val items = root.optJSONArray("items") ?: throw AcpFailure("Não foi possível carregar as categorias Sistema.")
         for (index in 0 until items.length()) { val item = items.optJSONObject(index) ?: continue; if (!item.isNull("id") && !item.isNull("description")) result.add(AcpCategory(item.get("id").toString(), item.getString("description"))) }
         if (page + 1 >= root.optInt("totalPages", 1) || items.length() == 0) return result.distinctBy { it.id }
     }
-    throw AcpFailure("A lista de categorias ACP excedeu o limite da consulta.")
+    throw AcpFailure("A lista de categorias Sistema excedeu o limite da consulta.")
 }
 
 /**
