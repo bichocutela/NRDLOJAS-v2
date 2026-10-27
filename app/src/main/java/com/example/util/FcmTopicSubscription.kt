@@ -9,6 +9,7 @@ object FcmTopicSubscription {
     private const val TAG = "FcmTopicSubscription"
     private const val PRODUCTS_TOPIC = "products"
     private const val MASTER_UPDATES_TOPIC = "master_updates"
+    private const val MASTER_MAIL_DOCUMENTS_TOPIC = "master_mail_documents"
     private const val SUGGESTION_TOPIC_PREFIX = "suggestion_"
     private const val WORK_SCHEDULE_TOPIC = "work_schedule_updates"
 
@@ -59,6 +60,16 @@ object FcmTopicSubscription {
         } catch (error: Exception) {
             Log.e(TAG, "Falha na operação $operation no tópico de atualizações do Mestre", error)
         }
+    }
+
+    suspend fun reconcileMasterMailDocuments(isMaster: Boolean, mailNotificationsEnabled: Boolean, notificationsEnabled: Boolean = true) {
+        val shouldSubscribe = isMaster && mailNotificationsEnabled && notificationsEnabled
+        val operation = if (shouldSubscribe) "subscribe" else "unsubscribe"
+        runCatching {
+            if (shouldSubscribe) FirebaseMessaging.getInstance().subscribeToTopic(MASTER_MAIL_DOCUMENTS_TOPIC).await()
+            else FirebaseMessaging.getInstance().unsubscribeFromTopic(MASTER_MAIL_DOCUMENTS_TOPIC).await()
+            Log.d(TAG, "Operação concluída: $operation no tópico de documentos por e-mail")
+        }.onFailure { Log.e(TAG, "Falha ao atualizar inscrições de documentos por e-mail", it) }
     }
 
     suspend fun reconcile(notificationsEnabled: Boolean) {
