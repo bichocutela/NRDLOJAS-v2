@@ -622,7 +622,7 @@ internal fun AcpProductsPanel(
         }
 
         featuredError?.let { message ->
-            item { Text("Não foi possível atualizar os destaques da Sistema: $message", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            item { Text("Não foi possível atualizar os destaques do Sistema: $message", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
 
         if (featuredVisible && (featuredLoading || featuredOffers.isNotEmpty())) {
@@ -1396,7 +1396,7 @@ private fun AcpFeaturedOffers(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text("Ofertas em destaque", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("Condições promocionais informadas pela Sistema", style = MaterialTheme.typography.bodySmall)
+                Text("Condições promocionais informadas pelo Sistema", style = MaterialTheme.typography.bodySmall)
             }
             if (offers.isNotEmpty()) {
                 AcpFeaturedOfferActions(
@@ -1417,7 +1417,7 @@ private fun AcpFeaturedOffers(
             ) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("Ofertas em destaque", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Condições promocionais informadas pela Sistema", style = MaterialTheme.typography.bodySmall)
+                    Text("Condições promocionais informadas pelo Sistema", style = MaterialTheme.typography.bodySmall)
                 }
                 if (offers.isNotEmpty()) {
                     AcpFeaturedOfferActions(
