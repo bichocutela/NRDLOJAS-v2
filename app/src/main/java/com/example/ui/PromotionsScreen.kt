@@ -395,7 +395,7 @@ fun PromotionsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(ui.sync.error, ui.initialized, showSyncDiagnostics) {
         if (ui.initialized && showSyncDiagnostics) {
-            ui.sync.error?.let { snackbarHostState.showSnackbar(it) }
+            ui.visibleSyncError(showDiagnostics = true)?.let { snackbarHostState.showSnackbar(it) }
         }
     }
     LaunchedEffect(showNewOnOpen, newOffersRequestId) {
