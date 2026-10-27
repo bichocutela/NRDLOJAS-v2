@@ -19,7 +19,7 @@ internal interface AcpStorage {
 }
 
 internal class AcpSecureStore(context: Context) : AcpStorage {
-    private val directory = File(context.applicationContext.noBackupFilesDir, "acp").apply { mkdirs() }
+    private val directory = File(context.applicationContext.noBackupFilesDir, "Sistema").apply { mkdirs() }
 
     @Synchronized
     override fun write(name: String, value: String) {
