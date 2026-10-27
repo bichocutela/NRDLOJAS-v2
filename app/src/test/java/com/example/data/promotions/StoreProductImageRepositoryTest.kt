@@ -104,6 +104,32 @@ class StoreProductImageRepositoryTest {
         assertEquals(2, logins)
         assertEquals(2, searches)
     }
+    @Test fun officialEanIsShownOnlyForAnUnambiguousExactInternalCode() = runBlocking {
+        val repository = StoreProductImageRepository(client { request ->
+            200 to if (request.method == "POST") """{"data":"$session"}"""
+            else catalog("""{"produto_id":3653,"codigo_erp":"2003235","codigo_barras":"7896001045446","descricao":"Esponja Limp Esfrebom Multiuso C/4 Un","imagem":"$photo"}""")
+        })
+        val result = repository.lookup("2003235", "Esponja Limp Esfrebom Multiuso C/4 Un")
+        assertEquals("7896001045446", result.ean)
+        assertNotNull(result.url)
+    }
+
+    @Test fun barcodeIsNotGuessedFromOnlyNameWrongCodeOrAmbiguousMatches() = runBlocking {
+        val code = "2003235"
+        val rows = listOf(
+            """{"produto_id":9,"codigo_erp":"9999999","codigo_barras":"7896001045446","descricao":"Esponja Limp Esfrebom Multiuso C/4 Un","imagem":"$photo"}""",
+            """{"produto_id":1,"codigo_erp":"$code","codigo_barras":"7896001045446","imagem":"$photo"},{"produto_id":2,"codigo_erp":"$code","codigo_barras":"7896001045446","imagem":"$photo"}""",
+            """{"produto_id":9,"codigo_erp":"$code","codigo_barras":"invalid","imagem":"$photo"}"""
+        )
+        rows.forEach { candidate ->
+            val repository = StoreProductImageRepository(client { request ->
+                200 to if (request.method == "POST") """{"data":"$session"}"""
+                else catalog(candidate)
+            })
+            assertNull(repository.lookup(code).ean)
+        }
+    }
+
     @Test fun barcodeCanDifferFromInternalCodeAndAcceptGtinPadding() = runBlocking {
         val repository = StoreProductImageRepository(client { request ->
             200 to if (request.method == "POST") """{"data":"$session"}"""

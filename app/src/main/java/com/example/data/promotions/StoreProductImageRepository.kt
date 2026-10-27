@@ -22,7 +22,7 @@ internal class StoreProductImageRepository(
     private val client: OkHttpClient = OkHttpClient.Builder().callTimeout(12, TimeUnit.SECONDS).build(),
     private val now: () -> Long = System::currentTimeMillis
 ) {
-    internal data class Lookup(val url: String?, val retryAt: Long? = null)
+    internal data class Lookup(val url: String?, val retryAt: Long? = null, val ean: String? = null)
     private class Entry {
         val gate = Mutex()
         var result = Lookup(null)
@@ -57,7 +57,7 @@ internal class StoreProductImageRepository(
             val result = slots.withPermit {
                 if (unavailableUntil > now()) Lookup(null, unavailableUntil)
                 else try {
-                    Lookup(resolve(key))
+                    resolve(key)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
@@ -66,7 +66,7 @@ internal class StoreProductImageRepository(
                 }
             }
             entry.result = result
-            entry.until = result.retryAt ?: (now() + if (result.url == null) 3_600_000L else 86_400_000L)
+            entry.until = result.retryAt ?: (now() + if (result.url == null && result.ean == null) 3_600_000L else 86_400_000L)
             result
         }
     }
@@ -96,8 +96,12 @@ internal class StoreProductImageRepository(
     private fun request(url: String) = Request.Builder().url(url)
         .header("Accept", "application/json").header("DomainKey", DOMAIN).header("OrganizationId", "52")
 
-    private suspend fun resolve(identity: Identity): String? {
+    private suspend fun resolve(identity: Identity): Lookup {
         val records = mutableListOf<JSONObject>()
+        var verifiedEan: String? = null
+        fun verifiedBarcode(matches: List<JSONObject>): String? = matches.singleOrNull()
+            ?.takeIf { identity.code.isNotBlank() && it.optString("codigo_erp").trim() == identity.code }
+            ?.optString("codigo_barras")?.trim()?.takeIf(Gtin::valid)
         // Use both identifiers independently: the ACP internal code and the packaging EAN
         // need not be equal. Never assume a substring search is an exact identifier match.
         val identifiers = listOf(identity.code, identity.barcode)
@@ -107,15 +111,18 @@ internal class StoreProductImageRepository(
             records += found
             val exact = exactMatches(identifier, found)
             if (exact.isNotEmpty()) {
-                photo(exact)?.let { return it }
+                verifiedEan = verifiedBarcode(exact) ?: verifiedEan
+                photo(exact)?.let { return Lookup(it, ean = verifiedEan) }
             }
         }
-        if (identity.description.isBlank()) return null
+        if (identity.description.isBlank()) return Lookup(null, ean = verifiedEan)
         records += search(identity.description)
         val unique = records.distinctBy { it.optString("produto_id").ifBlank { it.toString() } }
-        exactMatches(identity.code, unique).takeIf { it.isNotEmpty() }?.let { return photo(it) }
+        exactMatches(identity.code, unique).takeIf { it.isNotEmpty() }?.let {
+            return Lookup(photo(it), ean = verifiedBarcode(it) ?: verifiedEan)
+        }
         val query = nameTokens(identity.description)
-        if (query.isEmpty()) return null
+        if (query.isEmpty()) return Lookup(null, ean = verifiedEan)
         val numbers = query.filter { it.any(Char::isDigit) }.toSet()
         val expectedGtin = listOf(identity.barcode, identity.code).firstOrNull(Gtin::valid)
         val ranked = unique.filter { candidate ->
@@ -129,9 +136,10 @@ internal class StoreProductImageRepository(
             val score = 0.65 * intersection / query.union(tokens).size + 0.35 * intersection / query.size
             candidate to score
         }.sortedByDescending { it.second }
-        val best = ranked.firstOrNull() ?: return null
+        val best = ranked.firstOrNull() ?: return Lookup(null, ean = verifiedEan)
         val margin = best.second - (ranked.getOrNull(1)?.second ?: 0.0)
-        return if (best.second >= 0.78 && margin >= 0.10) photo(listOf(best.first)) else null
+        return Lookup(if (best.second >= 0.78 && margin >= 0.10) photo(listOf(best.first)) else null,
+            ean = verifiedEan)
     }
 
     private fun exactMatches(code: String, records: List<JSONObject>): List<JSONObject> {

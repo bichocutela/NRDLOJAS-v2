@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import coil.compose.AsyncImage
 import com.example.data.*
+import com.example.data.promotions.StoreProductImageRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import java.text.NumberFormat
@@ -118,6 +119,17 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
         }
     }
     detail?.let { offer ->
+        val verifiedEan by produceState<String?>(initialValue = null, offer.code, offer.description) {
+            try {
+                // Only a verified exact internal-code association can supply an EAN.
+                // An unavailable catalogue must never display a guessed barcode.
+                value = StoreProductImageRepository.shared.lookup(offer.code, offer.description).ean
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                value = null
+            }
+        }
         AlertDialog(onDismissRequest = { detail = null }, title = { Text(offer.description) }, text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OfficialOfferPhoto(offer,Modifier.fillMaxWidth().height(180.dp))
@@ -128,6 +140,7 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
                 if(offer.activationRequired) Text("Ative esta oferta no aplicativo Nordestão Pra Você antes da compra.")
                 Text("Loja: ${store.name}")
                 if(offer.code.isNotBlank()) Text("Código: ${offer.code}")
+                if(!verifiedEan.isNullOrBlank()) Text("EAN: $verifiedEan")
             }
         }, confirmButton = { TextButton(onClick = { detail = null }) { Text("Fechar") } })
     }
