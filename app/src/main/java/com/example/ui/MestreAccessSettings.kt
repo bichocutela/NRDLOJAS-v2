@@ -193,31 +193,31 @@ private fun AcpProviderSettings() {
     Spacer(Modifier.height(24.dp))
     HorizontalDivider()
     Spacer(Modifier.height(16.dp))
-    Text("Provedores de preço ACP", style = MaterialTheme.typography.titleLarge)
+    Text("Provedores de preço Sistema", style = MaterialTheme.typography.titleLarge)
     Text("Ative um provedor ou os dois. Com os dois ativos, o secundário só será consultado se o principal falhar; os resultados nunca são misturados.")
     if (loading) Text("Carregando configuração dos provedores...")
     if (loadError != null) Text(loadError!!, color = MaterialTheme.colorScheme.error)
     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Switch(checked = draftLegacy, enabled = !loading && !saving && loadError == null,
             onCheckedChange = { enabled -> draftLegacy = enabled; if (enabled && draftPrimary !in setOf("legacy", "acptech")) draftPrimary = "legacy" })
-        Text("ACP antigo", modifier = Modifier.padding(start = 8.dp))
+        Text("Sistema antigo", modifier = Modifier.padding(start = 8.dp))
     }
     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Switch(checked = draftAcpTech, enabled = !loading && !saving && loadError == null,
             onCheckedChange = { enabled -> draftAcpTech = enabled; if (enabled && draftPrimary !in setOf("legacy", "acptech")) draftPrimary = "acptech" })
-        Text("ACP Tech", modifier = Modifier.padding(start = 8.dp))
+        Text("Sistema Tech", modifier = Modifier.padding(start = 8.dp))
     }
     if (draftLegacy && draftAcpTech) {
         Text("Provedor principal", style = MaterialTheme.typography.titleSmall)
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             RadioButton(selected = draftPrimary == "acptech", enabled = !loading && !saving && loadError == null,
                 onClick = { draftPrimary = "acptech" })
-            Text("ACP Tech", modifier = Modifier.clickable(enabled = !loading && !saving && loadError == null) { draftPrimary = "acptech" })
+            Text("Sistema Tech", modifier = Modifier.clickable(enabled = !loading && !saving && loadError == null) { draftPrimary = "acptech" })
         }
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             RadioButton(selected = draftPrimary == "legacy", enabled = !loading && !saving && loadError == null,
                 onClick = { draftPrimary = "legacy" })
-            Text("ACP antigo", modifier = Modifier.clickable(enabled = !loading && !saving && loadError == null) { draftPrimary = "legacy" })
+            Text("Sistema antigo", modifier = Modifier.clickable(enabled = !loading && !saving && loadError == null) { draftPrimary = "legacy" })
         }
     }
     val noProviderSelected = !draftLegacy && !draftAcpTech
