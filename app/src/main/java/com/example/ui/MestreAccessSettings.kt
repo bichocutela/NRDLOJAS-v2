@@ -193,7 +193,7 @@ private fun AcpProviderSettings() {
     Spacer(Modifier.height(24.dp))
     HorizontalDivider()
     Spacer(Modifier.height(16.dp))
-    Text("Provedores de preço Sistema", style = MaterialTheme.typography.titleLarge)
+    Text("Provedores de preço do sistema", style = MaterialTheme.typography.titleLarge)
     Text("Ative um provedor ou os dois. Com os dois ativos, o secundário só será consultado se o principal falhar; os resultados nunca são misturados.")
     if (loading) Text("Carregando configuração dos provedores...")
     if (loadError != null) Text(loadError!!, color = MaterialTheme.colorScheme.error)
