@@ -5,7 +5,7 @@ alter table public.nrd_mail_settings
 create or replace function public.nrd_mail_claim_notification()
 returns boolean
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 declare
