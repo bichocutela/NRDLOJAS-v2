@@ -58,7 +58,7 @@ internal fun MestrePromotionStores() {
     MailImportPanel(onPublished={refreshKey++})
     Text("Habilitar lojas", style = MaterialTheme.typography.titleLarge)
     Text("Envie o mesmo Relatório de Produtos Alterados do Visual Mix usado em Consultar Preços. Confira a loja, os preços e as validades antes de publicar.")
-    Text("Cidade Jardim atualiza os preços pelo ACP. O documento complementa as validades. Nas outras lojas, as ofertas De/Por e Clube vêm dos documentos publicados.", style = MaterialTheme.typography.bodySmall)
+    Text("Cidade Jardim atualiza os preços pelo Sistema. O documento complementa as validades. Nas outras lojas, as ofertas De/Por e Clube vêm dos documentos publicados.", style = MaterialTheme.typography.bodySmall)
     message?.let { Text(it, color = if (messageIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
     if(messageIsError) TextButton(enabled=!busy,onClick={refreshKey++}) {Text("Tentar carregar lojas novamente")}
     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
