@@ -77,7 +77,7 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
         busy = true
         error = null
         results = null
-        searchHint = "Buscando pela descrição diretamente na Sistema…"
+        searchHint = "Buscando pela descrição diretamente no Sistema…"
         scope.launch {
             try {
                 if (!api.restoreSession()) api.confirmAccess()
@@ -105,7 +105,7 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
         busy = true
         error = null
         results = null
-        searchHint = "EAN $cleanEan encontrado no Google. Conferindo automaticamente na Sistema…"
+        searchHint = "EAN $cleanEan encontrado no Google. Conferindo automaticamente no Sistema…"
         scope.launch {
             try {
                 if (!api.restoreSession()) api.confirmAccess()
@@ -116,7 +116,7 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                 if (exact.isNotEmpty()) {
                     results = AcpProductPage(exact, 0, 1, exact.size)
                     searchHint = buildString {
-                        append("EAN $cleanEan encontrado no Google e confirmado na Sistema")
+                        append("EAN $cleanEan encontrado no Google e confirmado no Sistema")
                         webName?.takeIf { it.isNotBlank() }?.let { append(" para $it") }
                         append(". Compare as descrições e toque em CONFIRMAR ESTE PRODUTO.")
                     }
@@ -124,9 +124,9 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                     val ranked = loadDescriptionCandidates(description.trim())
                     results = AcpProductPage(ranked, 0, if (ranked.isEmpty()) 0 else 1, ranked.size)
                     searchHint = if (ranked.isEmpty()) {
-                        "O EAN $cleanEan encontrado no Google não apareceu na Sistema e também não encontrei candidato pela descrição."
+                        "O EAN $cleanEan encontrado no Google não apareceu no Sistema e também não encontrei candidato pela descrição."
                     } else {
-                        "O EAN $cleanEan encontrado no Google não apareceu na Sistema. Mostrando candidatos pela descrição para você conferir."
+                        "O EAN $cleanEan encontrado no Google não apareceu no Sistema. Mostrando candidatos pela descrição para você conferir."
                     }
                 }
             } catch (cancelled: CancellationException) {
@@ -247,7 +247,7 @@ internal fun FlyerOfferReviewDialog(initial: FlyerOffer, onDismiss: () -> Unit, 
                     enabled = !busy && description.isNotBlank(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Não achou? Buscar pela descrição na Sistema")
+                    Text("Não achou? Buscar pela descrição no Sistema")
                 }
 
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
