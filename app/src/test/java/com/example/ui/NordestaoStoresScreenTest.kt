@@ -219,7 +219,7 @@ class NordestaoStoresScreenTest {
     @Test fun offersWithoutFavoriteAskForStoreWithoutFetching() {
         var calls = 0
         compose.setContent { MaterialTheme {
-            NordestaoStoreOffersContent(null, 0, {}, loadOffers = { calls++; error("No store") })
+            NordestaoStoreOffersContent(null, 0, {}, loadOffers = { calls++; error("No store") }, resolveEan = { _, _ -> null })
         } }
         compose.onNodeWithText("Escolher loja").assertExists()
         org.junit.Assert.assertEquals(0, calls)
@@ -236,7 +236,7 @@ class NordestaoStoresScreenTest {
             NordestaoStoreOffersContent(selected.value, 0, {}, loadOffers = { id ->
                 requests.add(id)
                 com.example.data.NordestaoStoreOffersSnapshot(id, listOf(offer.copy(description = "Produto da loja $id")), "2026-10-23T16:00:00.000Z", false)
-            })
+            }, resolveEan = { _, _ -> null })
         } }
         compose.onNodeWithText("Produto da loja ${stores[0].id}").assertExists()
         compose.runOnIdle { selected.value = stores[1] }
@@ -268,10 +268,10 @@ class NordestaoStoresScreenTest {
         compose.setContent { MaterialTheme {
             NordestaoStoreOffersContent(store, 0, {}, loadOffers = { id ->
                 com.example.data.NordestaoStoreOffersSnapshot(id, listOf(sample), "2026-10-23T16:00:00.000Z", false)
-            })
+            }, resolveEan = { _, _ -> "7898377663071" })
         } }
         compose.onNodeWithText("Código: 2052914").assertExists()
-        compose.onNodeWithText("EAN: não disponível").assertExists()
+        compose.onNodeWithText("EAN: 7898377663071").assertExists()
         compose.onNodeWithText("Ver condições").performClick()
         compose.onNodeWithText("Copiar").assertExists()
         compose.onNodeWithText("Compartilhar").assertExists()
