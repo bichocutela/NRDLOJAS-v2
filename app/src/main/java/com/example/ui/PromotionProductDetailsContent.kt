@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.data.Product
 import com.example.data.acp.*
+import com.google.firebase.auth.FirebaseAuth
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -42,7 +43,8 @@ internal fun PromotionProductDetailsContent(raw: String?, ean: String?, code: St
 internal fun AcpCommercialProductContent(
     item: AcpProduct,
     additionalOffers: List<AcpOffer> = emptyList(),
-    bannerFor: (AcpOffer) -> com.example.data.ThemeBackground? = { null }
+    bannerFor: (AcpOffer) -> com.example.data.ThemeBackground? = { null },
+    showAdminDetails: Boolean = isNrdMasterAccount()
 ) {
     val savedValidity by remember { AcpOfferValidityStore.observeAll() }.collectAsState(initial = emptyMap())
     val offers = item.visibleOffers(additionalOffers, savedValidity = { family ->
@@ -57,23 +59,35 @@ internal fun AcpCommercialProductContent(
     var imageFailed by remember(productPhoto) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Código: ${item.code.ifBlank { "não informado" }} • EAN: ${item.barcode.ifBlank { "não informado" }}")
-        if (offers.none { it.price != null }) Text("Preço: ${item.normalPrice(fallback = savedValidity[AcpOfferValidityStore.keyFor(item.description, AcpOfferFamily.DE_POR)])?.brl() ?: "não informado"}${item.unit?.let { " / $it" } ?: ""}", style = MaterialTheme.typography.titleMedium)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.Top) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Informações do produto", style = MaterialTheme.typography.titleMedium)
-                    item.unit?.let { Text("Unidade: $it") }
-                    item.stockQuantity?.let { Text("Estoque: ${it.quantity()}") }
-                    item.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite por CPF: ${it.quantity()}") }
-                    item.auxDescriptions.forEach { Text(it) }
-                    item.characteristic?.let { Text("Característica: $it") }
-                    if (item.categories.isNotEmpty()) Text("Categorias: ${item.categories.joinToString()}")
-                    item.productFamily?.let { Text("Família: $it") }
-                    item.packageQuantity?.let { Text("Embalagem: ${it.quantity()} ${item.packageType.orEmpty()}") }
-                    item.dueDate?.let { Text("Validade do produto: ${acpDateLabel(it)}") }
-                    item.contentQuantity?.let { Text("Conteúdo: ${it.quantity()} ${item.contentUnit.orEmpty()}") }
+        if (offers.none { it.price != null }) Text("Preço: ${item.normalPrice(fallback = savedValidity[AcpOfferValidityStore.keyFor(item.description, AcpOfferFamily.DE_POR)])?.brl() ?: "não informado"}${item.unit?.takeIf { showAdminDetails }?.let { " / $it" } ?: ""}", style = MaterialTheme.typography.titleMedium)
+            if (showAdminDetails) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.Top) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Informações do produto", style = MaterialTheme.typography.titleMedium)
+                        item.unit?.let { Text("Unidade: $it") }
+                        item.stockQuantity?.let { Text("Estoque: ${it.quantity()}") }
+                        item.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let { Text("Limite por CPF: ${it.quantity()}") }
+                        item.auxDescriptions.forEach { Text(it) }
+                        item.characteristic?.let { Text("Característica: $it") }
+                        if (item.categories.isNotEmpty()) Text("Categorias: ${item.categories.joinToString()}")
+                        item.productFamily?.let { Text("Família: $it") }
+                        item.packageQuantity?.let { Text("Embalagem: ${it.quantity()} ${item.packageType.orEmpty()}") }
+                        item.dueDate?.let { Text("Validade do produto: ${acpDateLabel(it)}") }
+                        item.contentQuantity?.let { Text("Conteúdo: ${it.quantity()} ${item.contentUnit.orEmpty()}") }
+                    }
+                    if (productPhoto != null && !imageFailed) {
+                        AsyncImage(
+                            model = productPhoto,
+                            contentDescription = "Foto de ${item.description}",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.size(116.dp).clip(RoundedCornerShape(12.dp)).expandProductPhoto(productPhoto, item.description),
+                            onError = { imageFailed = true }
+                        )
+                    }
                 }
-                if (productPhoto != null && !imageFailed) {
+            } else if (productPhoto != null && !imageFailed) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     AsyncImage(
                         model = productPhoto,
                         contentDescription = "Foto de ${item.description}",
@@ -88,3 +102,6 @@ internal fun AcpCommercialProductContent(
             offers.forEach { offer -> AcpOfferLandscapePoster(item.description, offer, bannerFor(offer)) }
     }
 }
+
+internal fun isNrdMasterAccount(): Boolean =
+    FirebaseAuth.getInstance().currentUser?.email?.trim()?.equals("mestre@nrdlojas.com", ignoreCase = true) == true
