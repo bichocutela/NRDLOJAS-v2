@@ -50,14 +50,14 @@ internal fun MestreLoginsSettings() {
             var editing by remember { mutableStateOf(false) }
             var login by remember { mutableStateOf("") }
             var password by remember { mutableStateOf("") }
-            val title = when (status.provider) { "offers" -> "Ofertas"; "legacy" -> "ACP"; else -> "ACP Tech" }
+            val title = when (status.provider) { "offers" -> "Ofertas"; "legacy" -> "Sistema"; else -> "Sistema Tech" }
             OutlinedCard(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(title, style = MaterialTheme.typography.titleMedium)
                     Text(when (status.provider) {
                         "offers" -> "Acesso de reserva às ofertas do Nordestão Pra Você."
-                        "legacy" -> "Acesso ao ACP antigo."
-                        else -> "Acesso ao ACP Tech."
+                        "legacy" -> "Acesso ao Sistema antigo."
+                        else -> "Acesso ao Sistema Tech."
                     })
                     Text(if (status.configured) "Acesso configurado" else "Acesso não configurado")
                     status.updatedAt?.let { value ->
