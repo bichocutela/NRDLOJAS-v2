@@ -83,7 +83,6 @@ internal fun MailImportNotificationBell() {
         Icon(
             imageVector = if (enabled) Icons.Default.Notifications else Icons.Default.NotificationsNone,
             contentDescription = "Avisos de novos documentos",
-            tint = MaterialTheme.colorScheme.primary
         )
     }
 
