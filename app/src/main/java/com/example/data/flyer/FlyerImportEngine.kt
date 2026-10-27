@@ -294,7 +294,7 @@ internal object FlyerImportEngine {
             true
         }.getOrElse {
             if (it is CancellationException) throw it
-            warnings += "As ofertas foram lidas, mas a ACP não pôde ser usada para confirmar os produtos agora."
+            warnings += "As ofertas foram lidas, mas a Sistema não pôde ser usada para confirmar os produtos agora."
             false
         }
         if (!authenticated) return offers
