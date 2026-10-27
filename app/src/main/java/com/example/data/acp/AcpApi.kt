@@ -216,7 +216,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         val clubCatalogRequest = isClubCatalogRequest(path, parameters)
         val effectiveParameters = if (clubCatalogRequest) {
             val clubId = resolveClubCategoryId()
-                ?: throw AcpFailure("A categoria Clube de Vantagens não foi localizada na Sistema. Tente sincronizar novamente.")
+                ?: throw AcpFailure("A categoria Clube de Vantagens não foi localizada no Sistema. Tente sincronizar novamente.")
             parameters
                 .filterNot { it.first == "pageSize" || it.first == "productCategoryIds" }
                 .plus("pageSize" to CLUB_PAGE_SIZE.toString())
@@ -577,7 +577,7 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
                     JSONObject().put("items", items).put("pageIndex", 0)
                         .put("totalPages", 1).put("totalCount", items.length())
                 }.getOrElse {
-                    throw AcpFailure("A resposta da Sistema não é compatível com esta consulta.")
+                    throw AcpFailure("A resposta do Sistema não é compatível com esta consulta.")
                 }
             }
         }
