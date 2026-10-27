@@ -284,6 +284,11 @@ object NotificationHelper {
                     flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     putExtra("type", "NEW_ENCARTE")
                 }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+            "NEW_MAIL_DOCUMENTS" -> builder.setContentIntent(PendingIntent.getActivity(context, 3004,
+                Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    putExtra("type", "NEW_MAIL_DOCUMENTS")
+                }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             "APP_UPDATE" -> builder.setContentIntent(appUpdatePendingIntent(context))
             "PROMOTION_UPDATED" -> builder.setContentIntent(promotionsPendingIntent(context))
             else -> ProfileNotificationRouting.profileSection(type)?.let { section ->
