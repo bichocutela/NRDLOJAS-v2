@@ -47,12 +47,12 @@ internal fun MestreAccessSettings() {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Text(label, modifier = Modifier.weight(1f))
             listOf("all" to "Todos", "vip" to "VIP").forEach { (value, title) ->
-                FilterChip(selected == value, onClick = {
+                FilterChip(selected = selected == value, onClick = {
                     val previous = audience
                     val next = when(key) { "profile" -> audience.copy(profile=value); "promotions" -> audience.copy(promotions=value); "flyers" -> audience.copy(flyers=value); "stores" -> audience.copy(stores=value); else -> audience.copy(prices=value) }
                     audience = next; busy = true
                     scope.launch { try { RestrictedAccessRepository.setTabAudience(next); message = "Acesso de $label atualizado." } catch (_: Exception) { audience = previous; message = "Não foi possível salvar o público de $label." } finally { busy = false } }
-                }, enabled = !busy && !audienceLoading && !audienceLoadFailed) { Text(title) }
+                }, label = { Text(title) }, enabled = !busy && !audienceLoading && !audienceLoadFailed)
             }
         }
     }
