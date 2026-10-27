@@ -29,6 +29,17 @@ export function createHandler({verify, db, random = () => [...crypto.getRandomVa
       let body; try { body=JSON.parse(new TextDecoder().decode(raw)); } catch { return reply(400,{error:'INVALID_REQUEST'}); }
       if(!body || Array.isArray(body) || typeof body !== 'object') return reply(400,{error:'INVALID_REQUEST'});
       if(key) {
+        if(body.operation === 'poll') {
+          if(Object.keys(body).length !== 1) return reply(400,{error:'INVALID_REQUEST'});
+          return reply(200,await db.poll());
+        }
+        if(body.operation === 'ack') {
+          if(Object.keys(body).sort().join(',') !== 'failed,operation,requestId' ||
+              typeof body.failed !== 'boolean' || !/^[0-9a-f-]{36}$/i.test(body.requestId || ''))
+            return reply(400,{error:'INVALID_REQUEST'});
+          await db.ack(body.requestId,body.failed);
+          return reply(200,{ok:true});
+        }
         if(body.operation !== 'ingest') return reply(403,{error:'ACCESS_DENIED'});
         const code = documentStore(body.filename);
         if(code === null) return reply(200,{ok:true,ignored:true,reason:'CITY_GARDEN_USES_ACP'});
@@ -45,6 +56,12 @@ export function createHandler({verify, db, random = () => [...crypto.getRandomVa
         if(!/^[a-z0-9._%+-]+@gmail\.com$/.test(email)) return reply(400,{error:'INVALID_EMAIL'});
         const secret = random(); await db.setup(email,await digest(secret));
         return reply(200,{email,key:secret});
+      }
+      if(body.operation === 'scan' && Object.keys(body).length === 1) {
+        return reply(200,{requestId:await db.requestScan()});
+      }
+      if(body.operation === 'status' && Object.keys(body).length === 1) {
+        return reply(200,await db.scanStatus());
       }
       if(body.operation === 'list') return reply(200,{documents:await db.list()});
       if(body.operation === 'download' && /^[a-f0-9]{64}$/.test(body.id || '')) {
