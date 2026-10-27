@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 19597)
-Total output lines: 1641
-
 package com.example.ui
 
 import kotlinx.coroutines.Dispatchers
@@ -545,7 +542,574 @@ internal fun AcpProductsPanel(
         } catch (_: Exception) {
             warnings += "O status de sincronização não pôde ser consultado agora."
         } finally {
-            detailWarning = warnings.takeIf { it.isNotE…7597 tokens truncated… Text("Categorias (${selectedNrdCategories.size})", style = MaterialTheme.typography.titleSmall)
+            detailWarning = warnings.takeIf { it.isNotEmpty() }?.joinToString(" ")
+            detailBusy = false
+        }
+    }
+
+    val result = page
+    val resultsListState = rememberLazyListState()
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = { refreshFromAcp() },
+        modifier = Modifier.fillMaxSize()
+    ) {
+    LazyColumn(
+        state = resultsListState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        item {
+            OutlinedTextField(
+                value = query,
+                onValueChange = {
+                    query = it.take(200)
+                    lastExplicitQuery = null
+                    refreshMessage = null
+                    error = null
+                },
+                placeholder = { Text("Faça sua busca") },
+                supportingText = { Text("Código, código de barras ou descrição do produto") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    IconButton(onClick = { scanning = true }, enabled = !busy) {
+                        Icon(Icons.Default.CameraAlt, contentDescription = "Ler código de barras")
+                    }
+                },
+                singleLine = true,
+                shape = if (isExpressive) RoundedCornerShape(30.dp) else RoundedCornerShape(28.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .glassSoftShadow(
+                        if (isExpressive) RoundedCornerShape(30.dp) else RoundedCornerShape(28.dp),
+                        if (isExpressive) 3.dp else 0.dp
+                    )
+                    .expressiveShadow(
+                        if (isExpressive) RoundedCornerShape(30.dp) else RoundedCornerShape(28.dp),
+                        7.dp
+                    ),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { search() })
+            )
+        }
+
+        item {
+            Button(
+                onClick = { search() },
+                enabled = !busy && query.isNotBlank(),
+                shape = if (isExpressive) RoundedCornerShape(28.dp) else RoundedCornerShape(26.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = if (isExpressive) 58.dp else 54.dp)
+                    .glassSoftShadow(
+                        if (isExpressive) RoundedCornerShape(28.dp) else RoundedCornerShape(26.dp),
+                        if (isExpressive) 4.dp else 0.dp
+                    )
+                    .expressiveShadow(
+                        if (isExpressive) RoundedCornerShape(28.dp) else RoundedCornerShape(26.dp),
+                        8.dp
+                    )
+            ) {
+                Icon(Icons.Default.Search, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (busy) "Pesquisando…" else "Pesquisar produto", fontWeight = FontWeight.Bold)
+            }
+        }
+
+        featuredError?.let { message ->
+            item { Text("Não foi possível atualizar os destaques da ACP: $message", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        }
+
+        if (featuredVisible && (featuredLoading || featuredOffers.isNotEmpty())) {
+            item {
+                AcpFeaturedOffers(
+                    offers = featuredOffers,
+                    loading = featuredLoading,
+                    expanded = featuredExpanded,
+                    sort = featuredSort,
+                    intervalSeconds = featuredIntervalSeconds,
+                    serverPage = featuredServerPage,
+                    hasMore = featuredHasMore,
+                    appearance = appearance,
+                    validityByOffer = offerValidityByKey,
+                    onToggleExpanded = { featuredExpanded = !featuredExpanded },
+                    onHide = { featuredVisible = false },
+                    onSortChanged = { featuredSort = it },
+                    onLoadNextServerPage = { loadFeaturedPage(featuredServerPage + 1, append = true) },
+                    onOpen = { openProduct(it.product) }
+                )
+            }
+        } else if (!featuredVisible) {
+            item {
+                OutlinedButton(
+                    onClick = { featuredVisible = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = if (isExpressive) RoundedCornerShape(26.dp) else RoundedCornerShape(22.dp)
+                ) {
+                    Text("Mostrar ofertas em destaque", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        item {
+            VisualMixOrderImportButton(
+                onClick = { visualMixImportOpen = true }
+            )
+        }
+
+        // Ferramenta histórica somente do Mestre. A pesquisa é iniciada manualmente
+        // e nunca mistura cartazes já impressos com ofertas vigentes.
+        if (canAddToNrd && canCopyDiagnostic) {
+            item(key = "acp-history-evidence") {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AcpEvidencePanel(
+                        api = api,
+                        store = freshStore,
+                        exportBusy = historyExportBusy,
+                        onExport = onExportHistory
+                    )
+                    historyExportMessage?.let { message ->
+                        Text(message, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+
+        if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        refreshMessage?.let { message ->
+            item { Text(message, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
+        }
+        error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
+        if (offersLoading) item { Text("Conferindo ofertas e vigências…", style = MaterialTheme.typography.bodySmall) }
+        offersWarning?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) } }
+
+        if (result != null) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("Consulta: ${acpQueryTime(result.queriedAtMillis)}", style = MaterialTheme.typography.bodySmall)
+                        if (result.items.isNotEmpty()) {
+                            val label = if (result.items.size == 1) "resultado nesta página" else "resultados nesta página"
+                            Text("${result.items.size} $label", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                    TextButton(
+                        onClick = { refreshFromAcp() },
+                        enabled = !busy && !refreshing,
+                        shape = if (isExpressive) RoundedCornerShape(18.dp) else MaterialTheme.shapes.small,
+                        colors = ButtonDefaults.textButtonColors(
+                            containerColor = if (isExpressive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                            contentColor = if (isExpressive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
+                        )
+                    ) { Text("Atualizar") }
+                }
+            }
+        }
+
+        if (result == null && !busy && error == null) {
+            item { Text("Digite ao menos 2 caracteres para ver sugestões, ou pesquise por código/código de barras.") }
+        }
+        if (result != null && result.items.isEmpty() && !busy) {
+            item { Text("Nenhum produto encontrado. Confira o termo e tente novamente.") }
+        }
+
+        itemsIndexed(result?.items.orEmpty(), key = { index, product -> "${product.id}:$index" }) { _, product ->
+            val previewOffers = product.visibleOffers(previewCampaignOffers[product.id].orEmpty(), savedValidity = { family ->
+                offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, family)]
+            })
+            val shareLayer = rememberGraphicsLayer()
+            val resultCardShape = if (isExpressive) {
+                RoundedCornerShape(
+                    when {
+                        screenProfile.veryCompact -> 22.dp
+                        screenProfile.compact -> 24.dp
+                        else -> 30.dp
+                    }
+                )
+            } else {
+                MaterialTheme.shapes.medium
+            }
+            OutlinedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .glassSoftShadow(resultCardShape, if (isExpressive) 3.dp else 0.dp)
+                    .expressiveShadow(resultCardShape, 6.dp)
+                    .drawWithContent {
+                        shareLayer.record {
+                            this@drawWithContent.drawContent()
+                        }
+                        drawLayer(shareLayer)
+                    }
+                    .combinedClickable(
+                        enabled = !busy,
+                        onClick = { openProduct(product) },
+                        onLongClick = {
+                            scope.launch {
+                                val copied = copyProductCardToClipboard(
+                                    context = context,
+                                    layer = shareLayer,
+                                    productName = product.description
+                                )
+                                Toast.makeText(
+                                    context,
+                                    if (copied) "Copiado na Área de Transferência"
+                                    else "Não foi possível copiar o quadradinho.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    ),
+                shape = resultCardShape,
+                colors = CardDefaults.outlinedCardColors(
+                    containerColor = when {
+                        glassStyle.enabled -> MaterialTheme.colorScheme.surface
+                        isExpressive -> MaterialTheme.colorScheme.surfaceContainerLow
+                        else -> MaterialTheme.colorScheme.surface
+                    }
+                )
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = if (isExpressive) {
+                                if (screenProfile.compact) 14.dp else 16.dp
+                            } else {
+                                10.dp
+                            },
+                            vertical = if (isExpressive) {
+                                if (screenProfile.compact) 13.dp else 15.dp
+                            } else {
+                                10.dp
+                            }
+                        ),
+                    verticalArrangement = Arrangement.spacedBy(if (isExpressive) 6.dp else 4.dp)
+                ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        AutomaticProductThumbnail(product.code, product.description, product.barcode, product.imageUrl, Modifier.size(56.dp))
+                        Text(
+                            product.description,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = if (isExpressive) FontWeight.ExtraBold else FontWeight.Normal
+                        )
+                    }
+                    val identifiers = buildString {
+                        append("Código: ${product.code.ifBlank { "não informado" }}")
+                        if (product.barcode.isNotBlank()) append(" • EAN: ${product.barcode}")
+                    }
+                    Text(identifiers, style = MaterialTheme.typography.bodySmall)
+                    if (previewOffers.none { it.price != null }) Surface(
+                        shape = if (isExpressive) {
+                            RoundedCornerShape(if (screenProfile.compact) 14.dp else 18.dp)
+                        } else {
+                            MaterialTheme.shapes.small
+                        },
+                        color = if (isExpressive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                        contentColor = if (isExpressive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                    ) {
+                        Text(
+                            "${if (offersLoading || offersWarning != null) "Preço cadastrado" else "Preço"}: ${product.normalPrice(fallback = offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, AcpOfferFamily.DE_POR)])?.brl() ?: "não informado"}${product.unit?.let { " / $it" } ?: ""}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = if (isExpressive) FontWeight.ExtraBold else FontWeight.Normal,
+                            modifier = Modifier.padding(
+                                horizontal = if (isExpressive) {
+                                    if (screenProfile.compact) 11.dp else 12.dp
+                                } else {
+                                    0.dp
+                                },
+                                vertical = if (isExpressive) {
+                                    if (screenProfile.compact) 8.dp else 9.dp
+                                } else {
+                                    0.dp
+                                }
+                            )
+                        )
+                    }
+                    product.unitLimitPerCPF?.takeIf { it.signum() > 0 }?.let {
+                        Text("Limite: ${it.quantity()} un. por CPF", style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (previewOffers.isNotEmpty()) {
+                        Spacer(Modifier.height(2.dp))
+                        previewOffers.forEach { offer ->
+                            AcpOfferPoster(
+                                offer = offer,
+                                compact = true,
+                                productName = product.description,
+                                banner = appearance.activeOfferBanner(offer.bannerKey),
+                                validityOverride = offer.validityFor(product,
+                                    offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, offer.family)]
+                                )
+                            )
+                        }
+                    } else if (!offersLoading && offersWarning == null) {
+                        val standardBanner = appearance.activeOfferBanner(com.example.data.OFFER_BANNER_STANDARD)
+                        if (standardBanner != null) {
+                            AcpOfferPoster(
+                                offer = AcpOffer(
+                                    "Preço cadastrado",
+                                    "Produto sem promoção especial.",
+                                    product.value
+                                ),
+                                compact = true,
+                                productName = product.description,
+                                banner = standardBanner,
+                                validityOverride = product.offerValidityOr(
+                                    offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, AcpOfferFamily.PRICE)]
+                                )
+                            )
+                        } else {
+                            Text("Sem promoção explícita identificada no cadastro do produto.", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    Text(
+                        "Ver ficha completa",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isExpressive) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
+                        fontWeight = if (isExpressive) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+            }
+        }
+
+        if (result != null && result.totalPages > 1) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = {
+                            search(result.pageIndex - 1)
+                            scope.launch { resultsListState.animateScrollToItem(0) }
+                        },
+                        enabled = !busy && result.pageIndex > 0
+                    ) { Text("Anterior") }
+                    Text("${result.pageIndex + 1} / ${result.totalPages}", style = MaterialTheme.typography.labelLarge)
+                    TextButton(
+                        onClick = {
+                            search(result.pageIndex + 1)
+                            scope.launch { resultsListState.animateScrollToItem(0) }
+                        },
+                        enabled = !busy && result.pageIndex + 1 < result.totalPages
+                    ) { Text("Próxima") }
+                }
+            }
+        }
+    }
+    }
+
+    VisualMixOrderImportHost(
+        api = api,
+        open = visualMixImportOpen,
+        externalPdfUri = externalPdfUri,
+        externalPdfRequestKey = externalPdfRequestKey,
+        onExternalPdfConsumed = onExternalPdfConsumed,
+        onDismiss = { visualMixImportOpen = false }
+    )
+
+    if (scanning) {
+        AcpBarcodeScanner(
+            onDismiss = { scanning = false },
+            onResult = { code ->
+                scanning = false
+                // Start with the decoded value directly, before changing the text field.
+                // This prevents a recomposition from treating the scan as a typed search.
+                search(queryOverride = code)
+                query = code
+            }
+        )
+    }
+
+    selected?.let { requested ->
+        AlertDialog(
+            onDismissRequest = { closeDetail() },
+            modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp),
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+            title = { SelectionContainer { Text(detail?.description ?: requested.description) } },
+            text = {
+                SelectionContainer {
+                Column(
+                    Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (detail == null && detailBusy) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Text("Consultando preços…")
+                    }
+                    detailError?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error)
+                        Text("Não foi possível confirmar os preços agora.")
+                        TextButton(onClick = { openProduct(requested) }) { Text("Tentar novamente") }
+                    }
+                    detail?.let { product ->
+                        detailTime?.let { Text("Consultado em ${acpQueryTime(it)}", style = MaterialTheme.typography.bodySmall) }
+                        NrdTwoActionLayout(
+                            stackOnCompact = true,
+                            first = { actionModifier ->
+                                TextButton(
+                                    onClick = { openProduct(product) },
+                                    enabled = !detailBusy,
+                                    modifier = actionModifier
+                                ) { Text("Atualizar preços", maxLines = 2) }
+                            },
+                            second = { actionModifier ->
+                                OutlinedButton(
+                                    onClick = {
+                                        val barcodeValue = product.barcode.ifBlank { product.code }.trim()
+                                        if (barcodeValue.isNotBlank()) {
+                                            barcodeDialogProduct = com.example.data.Product(
+                                                code = barcodeValue,
+                                                name = product.description,
+                                                searchName = product.description.lowercase(Locale.getDefault()),
+                                                category = product.categories.firstOrNull().orEmpty().ifBlank { "Varejo" },
+                                                unit = product.unit ?: "un"
+                                            )
+                                        }
+                                    },
+                                    enabled = !detailBusy && (product.barcode.isNotBlank() || product.code.isNotBlank()),
+                                    modifier = actionModifier
+                                ) { Text("Ver Cód Barra", maxLines = 2) }
+                            }
+                        )
+                        if (canAddToNrd) {
+                            OutlinedButton(
+                                onClick = { prepareAddToNrd(product) },
+                                enabled = !detailBusy,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Adicionar ao NRD")
+                            }
+                        }
+                        nrdActionMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
+                        AcpCommercialProductContent(
+                            item = product,
+                            additionalOffers = campaigns.flatMap { it.offersFor(product) },
+                            bannerFor = { offer -> appearance.activeOfferBanner(offer.bannerKey) },
+                            showAdminDetails = canCopyDiagnostic
+                        )
+                        HorizontalDivider()
+                        ActiveFlyerOffersForAcpProduct(product)
+                        if (canCopyDiagnostic) OutlinedCard(onClick = { syncExpanded = !syncExpanded }, modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Sincronização", style = MaterialTheme.typography.titleMedium)
+                                    Text(if (syncExpanded) "▲" else "▼")
+                                }
+                                if (syncExpanded) {
+                                    if (detailBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                                    integration?.let { info ->
+                                        Text("Código de status: ${info.status?.toString() ?: "não informado"}")
+                                        Text("Última execução: ${acpDateLabel(info.lastRun, includeTime = true) ?: "não informada"}")
+                                        Text("Última execução completa: ${acpDateLabel(info.lastCompleteRun, includeTime = true) ?: "não informada"}")
+                                        info.message?.let { Text("Mensagem: $it") }
+                                        info.id?.let { Text("ID da integração: $it", style = MaterialTheme.typography.bodySmall) }
+                                    }
+                                    if (!detailBusy && integration == null) Text("Status de sincronização indisponível.")
+                                }
+                            }
+                        }
+
+                        if (campaigns.isNotEmpty()) {
+                            HorizontalDivider()
+                            Text("Campanhas vinculadas", style = MaterialTheme.typography.titleMedium)
+                            campaigns.forEach { campaign ->
+                                ElevatedCard(Modifier.fillMaxWidth()) {
+                                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        Text(campaign.name, style = MaterialTheme.typography.titleSmall)
+                                        campaign.code?.let { Text("Código: $it") }
+                                        campaign.description?.takeIf { it != campaign.name }?.let { Text(it) }
+                                        Text("Início: ${acpDateLabel(campaign.startDate) ?: "não informado"} • Fim: ${acpDateLabel(campaign.endDate) ?: "não informado"}")
+                                        Text("Ativa: ${campaign.active?.let { if (it) "sim" else "não" } ?: "não informado"} • Autoexclusão: ${campaign.autoExclusion?.let { if (it) "sim" else "não informado"} }")
+                                        val rules = campaign.productRules.count { it.matches(product) }
+                                        if (rules > 0) {
+                                            Text("Regras promocionais vinculadas ao produto: $rules", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        detailWarning?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    }
+                }
+                }
+            },
+            confirmButton = { TextButton(onClick = { closeDetail() }) { Text("Fechar") } }
+        )
+    }
+
+    barcodeDialogProduct?.let { barcodeProduct ->
+        ProductBarcodeDialog(
+            product = barcodeProduct,
+            onDismiss = { barcodeDialogProduct = null }
+        )
+    }
+
+    addToNrdProduct?.let { product ->
+        val selectedCode = when (nrdIdentifier) {
+            NrdIdentifier.BARCODE -> product.barcode
+            NrdIdentifier.PRODUCT_CODE -> product.code
+        }.trim()
+        val orderedCategories = activeNrdCategories.filter { it in selectedNrdCategories }
+        AlertDialog(
+            onDismissRequest = { closeAddToNrd() },
+            title = { Text("Adicionar ao NRD") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(product.description, style = MaterialTheme.typography.titleMedium)
+                    Text("Código do produto: ${product.code.ifBlank { "não informado" }}")
+                    Text("Código de barras: ${product.barcode.ifBlank { "não informado" }}")
+                    HorizontalDivider()
+                    Text("Código que será usado no NRD", style = MaterialTheme.typography.titleSmall)
+                    if (product.barcode.isNotBlank()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(
+                                selected = nrdIdentifier == NrdIdentifier.BARCODE,
+                                onClick = { if (!nrdSaving) nrdIdentifier = NrdIdentifier.BARCODE },
+                                enabled = !nrdSaving
+                            )
+                            Text("Código de barras • ${product.barcode}")
+                        }
+                    }
+                    if (product.code.isNotBlank()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(
+                                selected = nrdIdentifier == NrdIdentifier.PRODUCT_CODE,
+                                onClick = { if (!nrdSaving) nrdIdentifier = NrdIdentifier.PRODUCT_CODE },
+                                enabled = !nrdSaving
+                            )
+                            Text("Código do produto • ${product.code}")
+                        }
+                    }
+
+                    OutlinedCard(
+                        onClick = { if (!nrdSaving) nrdCategoriesExpanded = !nrdCategoriesExpanded },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Categorias (${selectedNrdCategories.size})", style = MaterialTheme.typography.titleSmall)
                                 Text(if (nrdCategoriesExpanded) "▲" else "▼")
                             }
                             if (selectedNrdCategories.isNotEmpty() && !nrdCategoriesExpanded) {
