@@ -160,7 +160,7 @@ internal object AcpCampaignParser {
         return AcpCampaign(
             id = item.text("id") ?: item.text("code") ?: item.toString().hashCode().toString(),
             code = item.text("code"),
-            name = item.text("name") ?: item.text("description") ?: "Campanha ACP",
+            name = item.text("name") ?: item.text("description") ?: "Campanha Sistema",
             description = item.text("description"),
             startDate = firstText(item, "startDate", "initialDate", "dateStart", "beginDate", "initialValidity", "validFrom"),
             endDate = firstText(item, "endDate", "finalDate", "dateEnd", "finishDate", "finalValidity", "validTo"),
@@ -228,7 +228,7 @@ private suspend fun AcpApi.allCampaigns(): List<AcpCampaign> {
         val data = root.optJSONObject("data")
         val total = root.optInt("totalPages", data?.optInt("totalPages", 1) ?: 1)
         if (page + 1 >= total) break
-        if (campaigns.isEmpty() || page == 29) throw AcpFailure("A ACP retornou uma lista de campanhas incompleta. Atualize a pesquisa.")
+        if (campaigns.isEmpty() || page == 29) throw AcpFailure("A Sistema retornou uma lista de campanhas incompleta. Atualize a pesquisa.")
     }
     return all.distinctBy { it.id }.also { campaignSnapshot = System.currentTimeMillis() to it }
 }
