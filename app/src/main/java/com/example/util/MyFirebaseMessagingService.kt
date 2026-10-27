@@ -37,6 +37,24 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val preferences = UserPreferences(applicationContext)
 
         runBlocking {
+            if (type == "NEW_MAIL_DOCUMENTS") {
+                if (!FcmTopicSubscription.isMasterAuthenticated() ||
+                    !preferences.masterMailDocumentNotificationsEnabled.first()) return@runBlocking
+                val eventId = message.data["eventId"]?.takeIf { it.isNotBlank() } ?: return@runBlocking
+                val delivered = applicationContext.getSharedPreferences("master_mail_document_events", MODE_PRIVATE)
+                val key = "${com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid}:$eventId"
+                if (delivered.getBoolean(key, false)) return@runBlocking
+                if (!preferences.notificationsEnabled.first()) return@runBlocking
+                val mailRemoteSettings = runCatching { FirebaseService.getNotificationSettings() }.getOrElse { NotificationSettings() }
+                if (!mailRemoteSettings.enabled) return@runBlocking
+                NotificationHelper.showNotification(applicationContext, type, title, body, notificationTag = eventId)
+                preferences.addNotification(com.example.data.AppNotification(
+                    id = System.currentTimeMillis(), type = type, title = title, body = body,
+                    read = false, timestamp = System.currentTimeMillis()))
+                delivered.edit().putBoolean(key, true).apply()
+                return@runBlocking
+            }
+
             if (type == "NEW_INSTALLATION") {
                 val eventId = message.data["eventId"]
                 if (!InstallationNotificationPolicy.shouldDisplay(
@@ -179,6 +197,11 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 isMaster = FcmTopicSubscription.isMasterAuthenticated(),
                 notificationsEnabled = effectiveNotificationsEnabled
             )
+            FcmTopicSubscription.reconcileMasterMailDocuments(
+                isMaster = FcmTopicSubscription.isMasterAuthenticated(),
+                mailNotificationsEnabled = preferences.masterMailDocumentNotificationsEnabled.first(),
+                notificationsEnabled = effectiveNotificationsEnabled
+            )
             val installationId = preferences.getOrCreateInstallationId()
             FcmTopicSubscription.reconcileSuggestionTopic(effectiveNotificationsEnabled, installationId)
             FcmTopicSubscription.reconcileWorkSchedules(effectiveNotificationsEnabled && com.example.data.RestrictedAccessRepository.current().profile && NossaGenteCredentialStore(applicationContext).isScheduleNotificationsEnabled())
@@ -204,6 +227,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             TYPE_SCHEDULE_CHANGED,
             "NEW_INSTALLATION",
             EncarteNotifications.TYPE,
+            "NEW_MAIL_DOCUMENTS",
             TrainingNotifications.TYPE
         )
     }
