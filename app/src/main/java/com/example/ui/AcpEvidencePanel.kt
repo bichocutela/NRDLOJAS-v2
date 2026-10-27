@@ -57,7 +57,7 @@ internal fun AcpEvidencePanel(api: AcpApi, store: AcpStorage, exportBusy: Boolea
                         message = "Coleta pausada. Continuar retoma da última página salva."
                         throw cancelled
                     } catch (failure: AcpFailure) { message = failure.message }
-                    catch (_: AcpUnauthorized) { message = "A sessão ACP precisa ser confirmada novamente. O progresso foi preservado." }
+                    catch (_: AcpUnauthorized) { message = "A sessão Sistema precisa ser confirmada novamente. O progresso foi preservado." }
                     catch (_: Exception) { message = "A coleta foi interrompida. Você pode continuar ou salvar o resultado parcial." }
                     finally { running = false }
                 }
