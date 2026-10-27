@@ -40,6 +40,15 @@ const db={
  list:async()=>rest('nrd_mail_documents?status=eq.pending&select=id,filename,store_code,received_at,status&order=received_at.asc&limit=250'),
  get:async(id:string)=>(await rest('nrd_mail_documents?id=eq.'+id+'&select=id,filename,store_code,pdf_base64,status'))?.[0],
  enqueue:async(value:unknown)=>rest('rpc/nrd_mail_enqueue','POST',{document:value}),
- finish:async(id:string,status:string)=>rest('nrd_mail_documents?id=eq.'+id,'PATCH',{status,pdf_base64:null})
+ finish:async(id:string,status:string)=>rest('nrd_mail_documents?id=eq.'+id,'PATCH',{status,pdf_base64:null}),
+ claimMailNotification:async()=>rest('rpc/nrd_mail_claim_notification','POST',{})
 };
-Deno.serve(createHandler({verify,db}));
+async function notifyMailDocuments(key:string) {
+ const serviceRoleKey=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+ const response=await fetch(Deno.env.get('SUPABASE_URL')+'/functions/v1/send-fcm',{
+  method:'POST',headers:{apikey:serviceRoleKey,Authorization:'Bearer '+serviceRoleKey,'Content-Type':'application/json','x-nrd-mail-key':key},
+  body:JSON.stringify({action:'NOTIFY_MAIL_DOCUMENTS'}),signal:AbortSignal.timeout(12000)
+ });
+ if(!response.ok) throw Error('NOTIFICATION_UNAVAILABLE');
+}
+Deno.serve(createHandler({verify,db,notifyMailDocuments}));
