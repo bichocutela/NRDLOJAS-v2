@@ -39,6 +39,15 @@ internal object MailImportRepository {
         val config = JSONObject().put("email", result.getString("email")).put("key", result.getString("key")).put("url", endpoint)
         return context.assets.open("mail-import/connector.js").bufferedReader().use { it.readText() }.replace("__NRD_CONFIG__", config.toString())
     }
+    internal data class ScanStatus(val requestId: String?, val finishedId: String?,
+        val seenAt: String?, val finishedAt: String?, val failed: Boolean)
+    suspend fun requestScan(): String = request(JSONObject().put("operation", "scan")).getString("requestId")
+    suspend fun scanStatus(): ScanStatus {
+        val response=request(JSONObject().put("operation", "status"))
+        fun value(name: String): String? = response.optString(name).takeIf { it.isNotBlank() && it != "null" }
+        return ScanStatus(value("requestId"),value("finishedId"),
+            value("seenAt"),value("finishedAt"),response.optBoolean("failed",false))
+    }
     suspend fun list(): List<MailImportDocument> {
         val array = request(JSONObject().put("operation", "list")).getJSONArray("documents")
         return (0 until array.length()).map { index -> array.getJSONObject(index).let {

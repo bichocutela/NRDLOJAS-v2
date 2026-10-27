@@ -19,6 +19,7 @@ import com.example.data.flyer.FlyerAnalysisResult
 import com.example.data.promotions.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun MailImportPanel(onPublished: () -> Unit = {}) {
@@ -65,14 +66,35 @@ internal fun MailImportPanel(onPublished: () -> Unit = {}) {
                         clipboard.setText(AnnotatedString(manifest));message="Manifesto copiado. No Google, exiba o arquivo appsscript.json nas configurações do projeto e substitua o conteúdo."
                     }) {Text("2. Copiar manifesto appsscript.json")}
                     TextButton(onClick={runCatching{context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://script.google.com/home/start")))}.onFailure{message="Abra script.google.com no navegador."}}) {Text("Abrir Google Apps Script")}
-                    Text("No projeto privado, cole o código em Código.gs e o manifesto em appsscript.json. Execute ativarNRD e autorize a conta Gmail informada. Depois, o conector verifica novos anexos a cada 15 minutos. A primeira leitura considera os últimos 30 dias. Não publique o projeto como aplicativo Web.",style=MaterialTheme.typography.bodySmall)
+                    Text("No projeto privado, cole o código em Código.gs e o manifesto em appsscript.json. Execute ativarNRD uma vez para instalar/atualizar o acionador de 1 minuto e autorize a conta Gmail informada. Depois, o conector atende solicitações do botão no próximo acionamento (até 1 minuto para começar) e verifica novos anexos automaticamente a cada 15 minutos. A primeira leitura considera os últimos 30 dias. Não publique o projeto como aplicativo Web.",style=MaterialTheme.typography.bodySmall)
                 }
             }
             Button(enabled=!busy,onClick={launchJob {
+                val requestId=MailImportRepository.requestScan()
                 documents=MailImportRepository.list()
                 val currentIds=documents.map { it.id }.toSet()
                 selected=selected.intersect(currentIds); reviews=reviews.filterKeys { it in currentIds }
-                message="${documents.size} documento(s) aguardando revisão."
+                message="${documents.size} documento(s) na fila. Consulta ao Gmail solicitada; aguardando o conector automático."
+                var completed=false
+                repeat(18) {
+                    delay(5000)
+                    val status=MailImportRepository.scanStatus()
+                    if(status.finishedId==requestId) {
+                        completed=true
+                        documents=MailImportRepository.list()
+                        val ids=documents.map { doc -> doc.id }.toSet()
+                        selected=selected.intersect(ids); reviews=reviews.filterKeys { it in ids }
+                        error=status.failed
+                        message=if(status.failed)
+                            "O conector tentou ler o Gmail, mas encontrou falha. Confira as execuções do Apps Script."
+                            else "${documents.size} documento(s) recebido(s) aguardando revisão. Leia e publique as ofertas conferidas."
+                        return@launchJob
+                    }
+                }
+                if(!completed) {
+                    error=true
+                    message="Ainda sem confirmação do Gmail. A fila tem ${documents.size} documento(s). Atualize o código do conector e execute ativarNRD uma vez no Google Apps Script."
+                }
             }}) {Text("Buscar documentos recebidos")}
             if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if(message.isNotBlank()) Text(message,color=if(error)MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodySmall)
