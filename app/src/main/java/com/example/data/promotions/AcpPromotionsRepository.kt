@@ -245,7 +245,7 @@ internal class AcpPromotionsRepository(context: Context) {
        } catch (cancelled: CancellationException) {
         throw cancelled
        } catch (failure: Exception) {
-        NossaGentePromotionsResult.Error(if (failure is java.io.InterruptedIOException) "A sincronização demorou mais que o esperado. A lista salva foi mantida; uma nova tentativa será feita automaticamente." else failure.message ?: "Não foi possível atualizar as ofertas do ACP.")
+        NossaGentePromotionsResult.Error(if (failure is java.io.InterruptedIOException) "A sincronização demorou mais que o esperado. A lista salva foi mantida; uma nova tentativa será feita automaticamente." else failure.message ?: "Não foi possível atualizar as ofertas do Sistema.")
        } finally { onNetwork(false) }
       }
     }
