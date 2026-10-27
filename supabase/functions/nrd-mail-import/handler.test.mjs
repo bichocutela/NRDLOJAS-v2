@@ -65,11 +65,11 @@ test('only Mestre requests Gmail scan; script key may poll and acknowledge but n
 });
 
 test('notifies the Master once for new reports and ignores duplicate attachments',async()=>{
- const {handler,notifications}=fixture();
+ const fixtureState=fixture(); const {handler}=fixtureState;
  await handler(request({operation:'setup',email:'box@gmail.com'},{'x-firebase-token':'master'}));
  const headers={'x-nrd-mail-key':key}, body={operation:'ingest',filename:'CENTRO_0005.pdf',pdf};
  await handler(request(body,headers));
  await handler(request({...body,filename:'CLUBE_0008.pdf'},headers));
  await handler(request(body,headers));
- assert.equal(notifications,1);
+ assert.equal(fixtureState.notifications,1);
 });
