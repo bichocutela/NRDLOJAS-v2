@@ -38,7 +38,7 @@ internal fun FlyerEanLookupSection(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Buscar código de barras na web", style = MaterialTheme.typography.titleSmall)
         Text(
-            "O NRD pesquisa a descrição no Google, pega um EAN válido e já confere o mesmo código na Sistema.",
+            "O NRD pesquisa a descrição no Google, pega um EAN válido e já confere o mesmo código no Sistema.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -56,9 +56,9 @@ internal fun FlyerEanLookupSection(
                             candidate = result
                             val ean = result.ean?.filter(Char::isDigit).orEmpty()
                             if (ean.isBlank()) {
-                                message = "O Google não trouxe um EAN confiável para este produto. Use a busca por descrição na Sistema abaixo."
+                                message = "O Google não trouxe um EAN confiável para este produto. Use a busca por descrição no Sistema abaixo."
                             } else {
-                                message = "EAN $ean encontrado no Google. Conferindo na Sistema…"
+                                message = "EAN $ean encontrado no Google. Conferindo no Sistema…"
                                 onEanFound(ean, result.productName.takeIf { it.isNotBlank() })
                             }
                         }
@@ -71,7 +71,7 @@ internal fun FlyerEanLookupSection(
             enabled = enabled && !busy && description.trim().length >= 3,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (busy) "Pesquisando no Google…" else "Pesquisar EAN no Google e conferir na Sistema")
+            Text(if (busy) "Pesquisando no Google…" else "Pesquisar EAN no Google e conferir no Sistema")
         }
 
         candidate?.let { result ->
