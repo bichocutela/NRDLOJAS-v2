@@ -18,7 +18,7 @@ internal data class PromotionsUiState(
     val loading: Boolean get() = !initialized && (opening || sync.running || !sync.attempted)
     /** Everyone sees an availability warning; technical diagnostics remain Master-only. */
     fun visibleSyncError(showDiagnostics: Boolean): String? =
-        sync.error?.let { if (showDiagnostics) it else "Não foi possível confirmar as ofertas no ACP. Atualize para consultar as ofertas atuais." }
+        sync.error?.let { if (showDiagnostics) it else "Não foi possível confirmar as ofertas no Sistema. Atualize para consultar as ofertas atuais." }
 }
 
 internal class PromotionsViewModel(application: Application) : AndroidViewModel(application) {
