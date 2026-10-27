@@ -164,7 +164,8 @@ serve(async (request) => {
   let body: Record<string, unknown>;
   try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
   const managingWebPushSubscription = body.action === "REGISTER_WEB_TOKEN" || body.action === "UNREGISTER_WEB_TOKEN";
-  const notifyingMasterUpdate = body.action === "NOTIFY_MASTER_UPDATE";\n  const notifyingMailDocuments = body.action === "NOTIFY_MAIL_DOCUMENTS";
+  const notifyingMasterUpdate = body.action === "NOTIFY_MASTER_UPDATE";
+  const notifyingMailDocuments = body.action === "NOTIFY_MAIL_DOCUMENTS";
   const idToken = request.headers.get("x-firebase-token");
   let identity: Identity | null = null;
   if (notifyingMasterUpdate) {
