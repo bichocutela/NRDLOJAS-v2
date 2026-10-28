@@ -81,6 +81,18 @@ test('master, per-account grants, public access and revocation use current docum
   settings={publicAccess:{booleanValue:true}};assert.equal((await auth(req({}))).allowed,true);
   await assert.rejects(()=>auth(req({},'bad')));
 });
+test('per-tab audience "all" grants anonymous and authenticated promotion access only',async()=>{
+  const settings={publicAccess:{booleanValue:false},tabAudience:{mapValue:{fields:{promotions:{stringValue:'all'},prices:{stringValue:'vip'}}}}};
+  const scoped=(scope,token)=>new Request('https://gateway.invalid',{headers:{...(token?{'x-firebase-token':token}:{}),...(scope?{'x-nrd-scope':scope}:{})}});
+  const auth=createAuthorizer({verify:async()=>({uid:'uid',email:'person@example.com'}),document:async path=>path.startsWith('config/')?settings:{enabled:{booleanValue:true},prices:{booleanValue:false},promotions:{booleanValue:false}},hash:async()=>''});
+  const anonymous=createAuthorizer({verify:async()=>null,document:async()=>settings,hash:async()=>''});
+  assert.equal((await anonymous(scoped('promotions'))).allowed,true);
+  assert.equal((await anonymous(scoped(''))).allowed,false);
+  assert.equal((await auth(scoped('promotions','user'))).allowed,true);
+  assert.equal((await auth(scoped('','user'))).allowed,false);
+  settings.tabAudience.mapValue.fields.promotions.stringValue='vip';
+  assert.equal((await anonymous(scoped('promotions'))).allowed,false);
+});
 test('denied, invalid token, unsupported route and non-master diagnostics never contact ACP',async()=>{
   let calls=0;const fetcher=async()=>{calls++;throw Error();};
   for(const [authorize,body,status] of [[async()=>({allowed:false}),input,403],[async()=>{throw Error();},input,401],
