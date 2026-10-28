@@ -13,7 +13,11 @@ export function createAuthorizer({verify, document, hash}) {
       if(session.deviceHash?.stringValue!==await hash(deviceToken) || Number(session.authTime?.integerValue)!==identity.authTime)return result(false,false);
     }
     const settings = await document('config/restricted_access',identity?.token);
-    if (settings.publicAccess?.booleanValue === true) return result(true,false);
+    const tabAudience=settings.tabAudience?.mapValue?.fields ?? {};
+    const tab=promotionsOnly?'promotions':'prices';
+    // Keep PWA and Android aligned: "Todos" is a per-tab public grant, while
+    // "VIP" still requires a signed-in account with an individual permission.
+    if (settings.publicAccess?.booleanValue === true || tabAudience[tab]?.stringValue === 'all') return result(true,false);
     if (!identity?.uid) return result(false,false);
     const access = await document('restricted_access/'+encodeURIComponent(identity.uid),identity.token);
     return result(access.enabled?.booleanValue === true && access[promotionsOnly ? "promotions" : "prices"]?.booleanValue === true,false);
