@@ -1546,7 +1546,7 @@ fun MestreScreen(
                                     val uri = runCatching { java.net.URI(url.trim()) }.getOrNull() ?: return false
                                     val host = uri.host?.lowercase(java.util.Locale.ROOT)
                                     return uri.scheme.equals("https", ignoreCase = true) &&
-                                        (host == "drive.google.com" || host == "docs.google.com" ||
+                                        (host == "drive.google.com" || host == "www.drive.google.com" || host == "docs.google.com" ||
                                             (host == "lh3.googleusercontent.com" && uri.path.orEmpty().startsWith("/d/")))
                                 }
                                 val driveOnly = changed.isNotEmpty() && changed.all { key ->
