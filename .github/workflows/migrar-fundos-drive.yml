@@ -1,0 +1,51 @@
+name: Migrar referências de fundos para Drive
+on:
+  push:
+    branches: [codex/migrar-fundos-drive]
+    paths: ['.github/workflows/migrar-fundos-drive.yml']
+permissions:
+  contents: read
+jobs:
+  migrar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verificar lógica de substituição
+        run: |
+          python -m py_compile scripts/migrar-fundos-drive-temporario.py
+          python - <<'PY'
+          ns={}
+          exec(open('scripts/migrar-fundos-drive-temporario.py').read().split("if sys.argv[1] == 'prepare':")[0],ns)
+          url='https://kkayksyzksexoarpfxyj.supabase.co/storage/v1/object/public/nrdlojas-images/theme_backgrounds/green/test.png'
+          item={'mapValue':{'fields':{'url':{'stringValue':url},'label':{'stringValue':'Banner'},'isActive':{'booleanValue':True}}}}
+          doc={'fields':{'appearanceDefaultThemeBackgrounds':{'mapValue':{'fields':{'green':item}}},'unchanged':{'stringValue':'keep'}}}
+          fields,pairs,count=ns['make_plan'](doc,{'theme_backgrounds/green/test.png':'test-file-id'})
+          assert count==1 and len(pairs)==1
+          assert fields['unchanged']==doc['fields']['unchanged']
+          assert fields['appearanceDefaultThemeBackgrounds']['mapValue']['fields']['green']['mapValue']['fields']['label']['stringValue']=='Banner'
+          assert doc['fields']['appearanceDefaultThemeBackgrounds']['mapValue']['fields']['green']['mapValue']['fields']['url']['stringValue']==url
+          PY
+      - name: Autenticar e preparar cópia anterior
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/migrar-fundos-drive-temporario.py prepare
+      - name: Guardar backup antes da substituição
+        uses: actions/upload-artifact@v4
+        with:
+          name: nrd-fundos-configuracao-antes-da-migracao
+          path: appearance-migration-backup.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Migrar apenas cópias conferidas em transação
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/migrar-fundos-drive-temporario.py apply
