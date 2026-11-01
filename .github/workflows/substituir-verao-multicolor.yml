@@ -1,0 +1,38 @@
+name: Substituir fundo de Verão multicolor
+on:
+  push:
+    branches: [codex/substituir-verao-multicolor]
+    paths: ['.github/workflows/substituir-verao-multicolor.yml']
+permissions:
+  contents: read
+jobs:
+  substituir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conferir script
+        run: python -m py_compile scripts/substituir-verao-multicolor.py
+      - name: Conferir imagem e preparar backup
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/substituir-verao-multicolor.py prepare
+      - name: Guardar configuração anterior
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-verao-multicolor-antes-versao-imersiva
+          path: backup-verao-multicolor.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar referência verificada
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/substituir-verao-multicolor.py apply
