@@ -1,0 +1,38 @@
+name: Substituir fundo de Esquenta Carnaval
+on:
+  push:
+    branches: [codex/substituir-esquenta-carnaval]
+    paths: ['.github/workflows/substituir-esquenta-carnaval.yml']
+permissions:
+  contents: read
+jobs:
+  substituir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conferir script
+        run: python -m py_compile scripts/substituir-esquenta-carnaval.py
+      - name: Conferir imagem e preparar backup
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/substituir-esquenta-carnaval.py prepare
+      - name: Guardar configuração anterior
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-esquenta-carnaval-antes-versao-imersiva
+          path: backup-esquenta-carnaval.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar referência verificada
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/substituir-esquenta-carnaval.py apply
