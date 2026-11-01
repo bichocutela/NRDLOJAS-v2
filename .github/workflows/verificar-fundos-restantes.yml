@@ -16,3 +16,5 @@ jobs:
           if [ "$STATUS" != 200 ]; then
             echo "::warning::Não foi possível baixar os arquivos restantes; a migração deles permanece pendente."
           fi
+
+# Nova verificação após a primeira tentativa.
