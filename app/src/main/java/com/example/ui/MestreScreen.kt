@@ -1550,7 +1550,7 @@ fun MestreScreen(
                                             (host == "lh3.googleusercontent.com" && uri.path.orEmpty().startsWith("/d/")))
                                 }
                                 val driveOnly = changed.isNotEmpty() && changed.all { key ->
-                                    listOfNotNull(previous[key], updated[key]).all { isDriveImage(it.url) }
+                                    (updated[key] ?: previous[key])?.let { isDriveImage(it.url) } == true
                                 }
                                 val saved = FirebaseService.saveAppearanceSettings(settingsToSave, allowDriveFallback = driveOnly)
                                 isSavingThemeBackgrounds = false
