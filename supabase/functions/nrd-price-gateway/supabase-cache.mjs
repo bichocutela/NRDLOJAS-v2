@@ -21,9 +21,10 @@ export class SupabaseCache {
   }
   async get(key) { return (await this.many([key])).get(key) ?? null; }
   async write(key,payload,lease=0,version=undefined) {
-    const response=await this.request('rpc/nrd_cache_write',{method:'POST',body:JSON.stringify({p_key:this.valid(key),
+    const response=await this.request('rpc/nrd_cache_write?select=key,lease,version',{method:'POST',body:JSON.stringify({p_key:this.valid(key),
       p_payload:payload,p_lease:lease,p_mode:version===null?'insert':version===undefined?'upsert':'cas',p_version:version ?? null})});
-    return this.decode((await response.json())[0]);
+    const row=(await response.json())[0];
+    return row ? this.decode({...row,payload}) : null;
   }
   async remove(key) { await this.request('nrd_promotion_cache?'+new URLSearchParams({key:'eq.'+this.valid(key)}),{method:'DELETE'}); }
   async claim(key,seconds=90) {

@@ -1536,7 +1536,23 @@ fun MestreScreen(
                                     defaultThemeBackgrounds = draftDefaultThemeBackgrounds,
                                     themeBackgrounds = draftThemeBackgrounds
                                 )
-                                val saved = FirebaseService.saveAppearanceSettings(settingsToSave)
+                                // A alternativa vale somente quando todas as alterações envolvem imagens do Drive.
+                                val previous = (appearanceSettings.defaultThemeBackgrounds.map { (key, value) -> "default:$key" to value } +
+                                    appearanceSettings.themeBackgrounds.flatMap { (key, values) -> values.map { "theme:$key:${it.id}" to it } }).toMap()
+                                val updated = (draftDefaultThemeBackgrounds.map { (key, value) -> "default:$key" to value } +
+                                    draftThemeBackgrounds.flatMap { (key, values) -> values.map { "theme:$key:${it.id}" to it } }).toMap()
+                                val changed = (previous.keys + updated.keys).filter { previous[it] != updated[it] }
+                                fun isDriveImage(url: String): Boolean {
+                                    val uri = runCatching { java.net.URI(url.trim()) }.getOrNull() ?: return false
+                                    val host = uri.host?.lowercase(java.util.Locale.ROOT)
+                                    return uri.scheme.equals("https", ignoreCase = true) &&
+                                        (host == "drive.google.com" || host == "docs.google.com" ||
+                                            (host == "lh3.googleusercontent.com" && uri.path.orEmpty().startsWith("/d/")))
+                                }
+                                val driveOnly = changed.isNotEmpty() && changed.all { key ->
+                                    (updated[key] ?: previous[key])?.let { isDriveImage(it.url) } == true
+                                }
+                                val saved = FirebaseService.saveAppearanceSettings(settingsToSave, allowDriveFallback = driveOnly)
                                 isSavingThemeBackgrounds = false
                                 snackbarHostState.showSnackbar(
                                     if (saved) "Fundos por tema publicados."
