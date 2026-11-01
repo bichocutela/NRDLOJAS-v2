@@ -46,7 +46,7 @@ jobs:
                   for v in value: walk(theme,v)
           for key in ('appearanceDefaultThemeBackgrounds','appearanceThemeBackgrounds'):
               for theme,value in fields.get(key,{}).get('mapValue',{}).get('fields',{}).items(): walk(theme,value)
-          prefix=base+'/config/banner-mask-'
+          prefix='projects/appcodigo-7f245/databases/(default)/documents/config/banner-mask-'
           names=list({prefix+x for pair in pairs for x in pair})
           found={}
           for start in range(0,len(names),80):
