@@ -1378,7 +1378,7 @@ object FirebaseService {
         }
     }
 
-    suspend fun saveAppearanceSettings(settings: AppearanceSettings): Boolean {
+    suspend fun saveAppearanceSettings(settings: AppearanceSettings, allowDriveFallback: Boolean = false): Boolean {
         lastError = null
         if (!isFirebaseConfigured()) {
             lastError = "Firebase não configurado."
@@ -1562,7 +1562,7 @@ object FirebaseService {
             Log.e("FirebaseService", "Erro ao publicar manifesto público de aparência", error)
         }.getOrDefault(false)
 
-        if (!publicManifestSaved) {
+        if (!publicManifestSaved && !allowDriveFallback) {
             if (lastError.isNullOrBlank()) {
                 lastError = "Não foi possível publicar a aparência para os usuários."
             }
@@ -1606,7 +1606,7 @@ object FirebaseService {
                 )
                 .await()
         } catch (e: Exception) {
-            lastError = "O manifesto foi enviado, mas a atualização em tempo real falhou. Tente novamente."
+            lastError = if (publicManifestSaved) "O manifesto foi enviado, mas a atualização em tempo real falhou. Tente novamente." else "Não foi possível publicar os fundos. Verifique a conexão e tente novamente."
             Log.e("FirebaseService", "Falha ao publicar aparência no Firestore", e)
             return false
         }
