@@ -80,11 +80,12 @@ if sys.argv[1] == 'prepare':
     print('Referências preparadas:', count, 'máscaras existentes:', len(masks))
 elif sys.argv[1] == 'apply':
     backup = json.loads(Path('appearance-migration-backup.json').read_text())
+    files = mapping()
     txn = request(BASE + ':beginTransaction', {'options': {'readWrite': {}}})['transaction']
     try:
         current = batch_get([SETTING], txn).get(SETTING)
         if not current or current['updateTime'] != backup['settingsUpdateTime']: raise ValueError('Appearance changed after backup')
-        fields, pairs, count = make_plan(current, mapping())
+        fields, pairs, count = make_plan(current, files)
         names = sorted({n for pair in pairs for n in pair})
         if names != backup['maskNames']: raise ValueError('Mask mapping changed after backup')
         masks = batch_get(names, txn)
