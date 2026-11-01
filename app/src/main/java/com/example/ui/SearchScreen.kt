@@ -3242,7 +3242,7 @@ fun ThemeBanner(
 
     val imageModel: Any = backgroundUrl?.takeIf {
         it.startsWith("https://") || it.startsWith("http://")
-    } ?: if (normalizedTheme == "multicolor") {
+    }?.let(com.example.data.training.TrainingImageUrl::normalize) ?: if (normalizedTheme == "multicolor") {
         R.drawable.theme_multicolor_header
     } else {
         "file:///android_asset/themes/theme_${normalizedTheme}.jpg"
