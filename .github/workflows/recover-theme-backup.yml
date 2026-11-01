@@ -1,0 +1,62 @@
+name: Recuperar cópias de fundos
+on:
+  push:
+    branches: [codex/recuperar-fundos-backup]
+permissions:
+  actions: read
+  contents: read
+jobs:
+  recuperar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Recuperar backup existente
+        uses: actions/download-artifact@v4
+        with:
+          name: nrd-storage-originals-39645538823
+          run-id: 39645538823
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: backup
+      - name: Separar apenas fundos de tema
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json, shutil
+          root=Path('backup')
+          plan=next(root.rglob('plan.json'))
+          entries=json.loads(plan.read_text())
+          selected=[]
+          for item in entries:
+              name=item['path']
+              if not (name.startswith('theme_backgrounds/') or name.startswith('dynamic-pages/pwa/theme_backgrounds/')):
+                  continue
+              source=root/'originals'/name
+              if not source.is_file():
+                  source=next((p for p in root.rglob(Path(name).name) if p.is_file()), None)
+              if source is None:
+                  continue
+              target=Path('recover')/('a' if len(selected)%2==0 else 'b')/name
+              target.parent.mkdir(parents=True,exist_ok=True)
+              shutil.copyfile(source,target)
+              selected.append(name)
+          Path('recover').mkdir(exist_ok=True)
+          Path('recover/manifest.json').write_text(json.dumps(selected,ensure_ascii=False,indent=2))
+          print('Fundos recuperados:',len(selected))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nrd-fundos-recuperados-a
+          path: recover/a/
+          if-no-files-found: warn
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nrd-fundos-recuperados-b
+          path: recover/b/
+          if-no-files-found: warn
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nrd-fundos-recuperados-manifesto
+          path: recover/manifest.json
+          retention-days: 7
