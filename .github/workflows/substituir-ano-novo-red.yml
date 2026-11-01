@@ -1,0 +1,38 @@
+name: Substituir fundo de Ano Novo red
+on:
+  push:
+    branches: [codex/substituir-ano-novo-red]
+    paths: ['.github/workflows/substituir-ano-novo-red.yml']
+permissions:
+  contents: read
+jobs:
+  substituir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conferir script
+        run: python -m py_compile scripts/substituir-ano-novo-red.py
+      - name: Conferir imagem e preparar backup
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/substituir-ano-novo-red.py prepare
+      - name: Guardar configuração anterior
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-ano-novo-red-antes-versao-imersiva
+          path: backup-ano-novo-red.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar referência verificada
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/substituir-ano-novo-red.py apply
