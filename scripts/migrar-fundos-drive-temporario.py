@@ -108,6 +108,9 @@ elif sys.argv[1] == 'apply':
                        'currentDocument': {'updateTime': current['updateTime']}})
         result = request(BASE + ':commit', {'transaction': txn, 'writes': writes})
         if len(result.get('writeResults', [])) != len(writes): raise ValueError('Unexpected commit response')
+        fresh = request(BASE + '/config/appSettings')
+        _, _, remaining = make_plan(fresh, mapping())
+        if remaining: raise ValueError('Published configuration still contains mapped source links')
         print('Referências atualizadas:', count, 'máscaras preservadas:', len(writes)-1)
     except Exception:
         try: request(BASE + ':rollback', {'transaction': txn})
