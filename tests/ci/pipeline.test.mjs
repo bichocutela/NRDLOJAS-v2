@@ -89,3 +89,14 @@ test('PR validates tests and APK in one invocation; main tests never assemble de
     assert.equal(spawnSync('bash', [join(process.cwd(), 'scripts/ci/android-checks.sh'), 'unknown'], { cwd: root }).status, 2);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('quota outage warns while unexpected notification failures still block publication', () => {
+  const live = jobs.checks.slice(jobs.checks.indexOf('name: Verify live installation notification server'), jobs.checks.indexOf('name: Verify committed Gradle wrapper'));
+  assert.match(live, /\[ "\$STATUS" = "402" \]/);
+  assert.match(live, /if \[ "\$STATUS" != "200" \][\s\S]*?exit 1/);
+  const notify = jobs.build.slice(jobs.build.indexOf('name: Notify Mestre about new release'));
+  assert.match(notify, /\[ "\$STATUS" = "402" \]/);
+  assert.match(notify, /elif \[ "\$STATUS" -lt 200 \][\s\S]*?exit 1/);
+  const security = readFileSync('.github/workflows/acp-security.yml', 'utf8');
+  assert.match(security, /if status == 402:[\s\S]*?raise SystemExit\(0\)[\s\S]*?assert status == 401/);
+});
