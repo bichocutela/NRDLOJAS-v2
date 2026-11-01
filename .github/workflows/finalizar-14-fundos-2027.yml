@@ -1,0 +1,363 @@
+name: Finalizar 14 fundos imersivos
+on:
+  push:
+    branches: [codex/finalizar-14-fundos-2027]
+    paths: ['.github/workflows/finalizar-14-fundos-2027.yml']
+permissions:
+  contents: read
+jobs:
+  substituir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conferir script 0
+        run: python -m py_compile scripts/fundo-final14-0.py
+      - name: Preparar fundo 0
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-0.py prepare
+      - name: Guardar configuração 0
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-final14-0-antes-versao-imersiva
+          path: backup-final14-0.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar fundo 0
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-0.py apply
+      - name: Conferir script 1
+        run: python -m py_compile scripts/fundo-final14-1.py
+      - name: Preparar fundo 1
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-1.py prepare
+      - name: Guardar configuração 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-final14-1-antes-versao-imersiva
+          path: backup-final14-1.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar fundo 1
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-1.py apply
+      - name: Conferir script 2
+        run: python -m py_compile scripts/fundo-final14-2.py
+      - name: Preparar fundo 2
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-2.py prepare
+      - name: Guardar configuração 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-final14-2-antes-versao-imersiva
+          path: backup-final14-2.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar fundo 2
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-2.py apply
+      - name: Conferir script 3
+        run: python -m py_compile scripts/fundo-final14-3.py
+      - name: Preparar fundo 3
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-3.py prepare
+      - name: Guardar configuração 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-final14-3-antes-versao-imersiva
+          path: backup-final14-3.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar fundo 3
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-3.py apply
+      - name: Conferir script 4
+        run: python -m py_compile scripts/fundo-final14-4.py
+      - name: Preparar fundo 4
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-4.py prepare
+      - name: Guardar configuração 4
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-final14-4-antes-versao-imersiva
+          path: backup-final14-4.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar fundo 4
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-4.py apply
+      - name: Conferir script 5
+        run: python -m py_compile scripts/fundo-final14-5.py
+      - name: Preparar fundo 5
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-5.py prepare
+      - name: Guardar configuração 5
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-final14-5-antes-versao-imersiva
+          path: backup-final14-5.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar fundo 5
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-5.py apply
+      - name: Conferir script 6
+        run: python -m py_compile scripts/fundo-final14-6.py
+      - name: Preparar fundo 6
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-6.py prepare
+      - name: Guardar configuração 6
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-final14-6-antes-versao-imersiva
+          path: backup-final14-6.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar fundo 6
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-6.py apply
+      - name: Conferir script 7
+        run: python -m py_compile scripts/fundo-final14-7.py
+      - name: Preparar fundo 7
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-7.py prepare
+      - name: Guardar configuração 7
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-final14-7-antes-versao-imersiva
+          path: backup-final14-7.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar fundo 7
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-7.py apply
+      - name: Conferir script 8
+        run: python -m py_compile scripts/fundo-final14-8.py
+      - name: Preparar fundo 8
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-8.py prepare
+      - name: Guardar configuração 8
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-final14-8-antes-versao-imersiva
+          path: backup-final14-8.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar fundo 8
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-8.py apply
+      - name: Conferir script 9
+        run: python -m py_compile scripts/fundo-final14-9.py
+      - name: Preparar fundo 9
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-9.py prepare
+      - name: Guardar configuração 9
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-final14-9-antes-versao-imersiva
+          path: backup-final14-9.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar fundo 9
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-9.py apply
+      - name: Conferir script 10
+        run: python -m py_compile scripts/fundo-final14-10.py
+      - name: Preparar fundo 10
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-10.py prepare
+      - name: Guardar configuração 10
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-final14-10-antes-versao-imersiva
+          path: backup-final14-10.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar fundo 10
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-10.py apply
+      - name: Conferir script 11
+        run: python -m py_compile scripts/fundo-final14-11.py
+      - name: Preparar fundo 11
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-11.py prepare
+      - name: Guardar configuração 11
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-final14-11-antes-versao-imersiva
+          path: backup-final14-11.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar fundo 11
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-11.py apply
+      - name: Conferir script 12
+        run: python -m py_compile scripts/fundo-final14-12.py
+      - name: Preparar fundo 12
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-12.py prepare
+      - name: Guardar configuração 12
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-final14-12-antes-versao-imersiva
+          path: backup-final14-12.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar fundo 12
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-12.py apply
+      - name: Conferir script 13
+        run: python -m py_compile scripts/fundo-final14-13.py
+      - name: Preparar fundo 13
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-13.py prepare
+      - name: Guardar configuração 13
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-final14-13-antes-versao-imersiva
+          path: backup-final14-13.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar fundo 13
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          TOKEN="$TOKEN" python scripts/fundo-final14-13.py apply
