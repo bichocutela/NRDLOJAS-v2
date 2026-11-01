@@ -91,6 +91,11 @@ jobs:
         echo "::add-mask::$TOKEN"
         RESULT_FILE="$(mktemp)"
         STATUS=$(curl --silent --show-error --max-time 45 -o "$RESULT_FILE" -w '%{http_code}' -X POST "https://kkayksyzksexoarpfxyj.supabase.co/functions/v1/nrd-installation-event" -H "x-github-oidc-token: $TOKEN")
+        if [ "$STATUS" = "402" ]; then
+          echo "::warning::Supabase com cota indisponível (HTTP 402); verificação online pendente. A publicação do APK continua."
+          echo "### Verificação online pendente: Supabase retornou HTTP 402" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
         if [ "$STATUS" = "503" ] && jq -e '.error == "SERVER_NOT_READY"' "$RESULT_FILE" >/dev/null; then
           echo "::warning::Serviço de notificações indisponível. A publicação do APK continuará; notificações de instalação podem atrasar."
           echo "### Aviso: serviço de notificações indisponível (HTTP 503)" >> "$GITHUB_STEP_SUMMARY"
@@ -367,8 +372,16 @@ jobs:
         OIDC_TOKEN=$(jq -er '.value' <<< "$OIDC_RESPONSE")
         REQUEST_BODY=$(jq -nc --arg version "$NEXT_TAG" \
           '{action: "NOTIFY_MASTER_UPDATE", version: $version}')
-        curl --fail --silent --show-error --retry 3 \
+        RESULT_FILE="$(mktemp)"
+        STATUS=$(curl --silent --show-error --retry 3 -o "$RESULT_FILE" -w '%{http_code}' \
           -X POST "${SUPABASE_URL%/}/functions/v1/send-fcm" \
           -H "Content-Type: application/json" \
           -H "x-github-oidc-token: $OIDC_TOKEN" \
-          --data "$REQUEST_BODY"
+          --data "$REQUEST_BODY")
+        if [ "$STATUS" = "402" ]; then
+          echo "::warning::APK publicado; notificação pendente porque o Supabase retornou HTTP 402."
+          echo "### Notificação de atualização pendente: Supabase retornou HTTP 402" >> "$GITHUB_STEP_SUMMARY"
+        elif [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
+          echo "::error::Falha ao enviar notificação de atualização (HTTP $STATUS)."
+          exit 1
+        fi
