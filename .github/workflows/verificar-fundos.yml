@@ -1,0 +1,30 @@
+name: Verificar acesso público aos fundos copiados
+on:
+  push:
+    branches: [codex/auditar-links-fundos]
+permissions:
+  contents: read
+jobs:
+  conferir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Comparar cópias públicas com originais
+        env:
+          SAMPLE_DATA: '[{"theme":"green","id":"1mrKbpJiz-5Yp0hHbWE0CD9otOR88N91I","sha256":"b7883b1892994ad626cbbaf268f1cd4f019a34b06da87f2589d735a038fa8c9b"},{"theme":"glass","id":"18jH3yuBUnM4Lsjjr5lxSZIRC1I2wRQfo","sha256":"401d1ecc4997e6b2f633ff3951d1e37d617e934cc52ca345fa8b1b4867a2a388"},{"theme":"red","id":"1S2lP4G-QM8tU_yVl01-6L8oOQQBW63FN","sha256":"8bc740f6ce13593d10610f0db1e5fcd1a9f14e117410470d6e9f1cdf48ad456d"},{"theme":"blue","id":"1YkREQn0aRnLbYp4HUDiogARhIXQujSME","sha256":"5c530814191a8cde43cac8aa5463467c19b046926e18b40bbff5e4738c1aa0dd"},{"theme":"gold","id":"1DLr2WV1B8a436EwfNsfrxKPZ3qI65-Kc","sha256":"fb479c552756c33f2b88090053da0302fce5116e2128ebddbc1d0e8ba0409d9b"},{"theme":"orange","id":"1A1uCouDhRqcwNS187_u8_Ef0VnQkEFno","sha256":"b94260a52bf4a6192a3c2add66b5c77dcf24aa08bb97a1a86f4672c28e8d5f76"},{"theme":"multicolor","id":"1JTNSnp_J8pJTckCSJuSvhKvBkCm422O1","sha256":"920d603a461aa5e7e0e1f18a5c0d60f91604caca2e3869d7dd2b4c7296555c2b"},{"theme":"expressive","id":"1gjbP0eWoRhOEWbkOqhwstSXbZ8KV-PTy","sha256":"635b715858c57a792abc302784f006d33547f066196c5ff12f0abc45d889ad70"}]'
+        run: |
+          python - <<'PY'
+          import json,os,hashlib,urllib.request
+          for item in json.loads(os.environ['SAMPLE_DATA']):
+              url='https://drive.google.com/uc?export=download&id='+item['id']
+              try:
+                  with urllib.request.urlopen(url,timeout=30) as response:
+                      data=response.read()
+                      actual=hashlib.sha256(data).hexdigest()
+                      if actual!=item['sha256']:
+                          raise ValueError('conteúdo diferente ou resposta não é imagem')
+                      print(item['theme']+': cópia pública idêntica')
+              except Exception as error:
+                  print('::error::'+item['theme']+': '+str(error))
+                  raise
+          PY
