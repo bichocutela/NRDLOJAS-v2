@@ -1,0 +1,39 @@
+name: Auditar referências de fundos
+on:
+  push:
+    branches: [codex/auditar-links-fundos]
+permissions:
+  contents: read
+jobs:
+  auditar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ler configurações de fundos sem alterar dados
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          STATUS=$(curl -sS -o "$RUNNER_TEMP/settings.json" -w '%{http_code}' -H "Authorization: Bearer $TOKEN" 'https://firestore.googleapis.com/v1/projects/appcodigo-7f245/databases/(default)/documents/config/appSettings')
+          if [ "$STATUS" != 200 ]; then
+            echo "::warning::Não foi possível consultar as configurações do Firebase: HTTP $STATUS"
+            exit 0
+          fi
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=json.loads((Path(os.environ['RUNNER_TEMP'])/'settings.json').read_text())
+          keep={k:v for k,v in root.get('fields',{}).items() if k.startswith('appearance')}
+          Path('appearance-audit.json').write_text(json.dumps({'updateTime':root.get('updateTime'),'fields':keep},ensure_ascii=False))
+          print('Campos de aparência encontrados:',len(keep))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nrd-appearance-audit
+          path: appearance-audit.json
+          if-no-files-found: warn
+          retention-days: 2
