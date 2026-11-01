@@ -1,0 +1,61 @@
+name: Auditar máscaras dos fundos
+on:
+  push:
+    branches: [codex/auditar-mascaras-fundos]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verificar máscaras sem alterar dados
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-key.json" --quiet
+          TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$TOKEN"
+          export TOKEN
+          python - <<'PY'
+          import urllib.request, urllib.parse, json, hashlib, os
+          base='https://firestore.googleapis.com/v1/projects/appcodigo-7f245/databases/(default)/documents'
+          def req(url,body=None):
+              headers={'Authorization':'Bearer '+os.environ['TOKEN']}
+              if body is not None: headers['Content-Type']='application/json'
+              with urllib.request.urlopen(urllib.request.Request(url,data=None if body is None else json.dumps(body).encode(),headers=headers),timeout=50) as response:
+                  return json.load(response)
+          with urllib.request.urlopen('https://drive.google.com/uc?export=download&id=1FSjXtxKCZk6uZmNal-W12hbXKXH82yUH',timeout=30) as response:
+              mapping={x['original']:x['driveId'] for x in json.load(response)['items']}
+          doc=req(base+'/config/appSettings'); fields=doc['fields']
+          pairs={}
+          def walk(theme,value):
+              if isinstance(value,dict):
+                  fields0=value.get('mapValue',{}).get('fields',{})
+                  u=fields0.get('url',{}).get('stringValue','')
+                  if '/storage/v1/object/public/nrdlojas-images/' in u:
+                      path=urllib.parse.unquote(u.split('/nrdlojas-images/',1)[1].split('?')[0])
+                      if path in mapping:
+                          new='https://drive.google.com/uc?export=download&id='+mapping[path]
+                          h=lambda s: hashlib.sha256((theme.strip().lower()+'|'+s.strip()).encode()).hexdigest()[:24]
+                          pairs[(h(u),h(new))]=(theme,u,new)
+                  for v in value.values(): walk(theme,v)
+              elif isinstance(value,list):
+                  for v in value: walk(theme,v)
+          for key in ('appearanceDefaultThemeBackgrounds','appearanceThemeBackgrounds'):
+              for theme,value in fields.get(key,{}).get('mapValue',{}).get('fields',{}).items(): walk(theme,value)
+          prefix=base+'/config/banner-mask-'
+          names=list({prefix+x for pair in pairs for x in pair})
+          found={}
+          for start in range(0,len(names),80):
+              results=req(base+':batchGet',{'documents':names[start:start+80]})
+              for entry in results:
+                  if 'found' in entry: found[entry['found']['name']]=entry['found']
+          source=sum(prefix+old in found for old,new in pairs)
+          destination=sum(prefix+new in found for old,new in pairs)
+          print('Fundos com cópia:',len(pairs))
+          print('Máscaras existentes que precisarão ser preservadas:',source)
+          print('Máscaras já existentes no novo endereço:',destination)
+          PY
