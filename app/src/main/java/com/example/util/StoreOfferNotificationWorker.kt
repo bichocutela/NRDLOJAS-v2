@@ -32,7 +32,10 @@ class StoreOfferNotificationWorker(context: Context, parameters: WorkerParameter
         if (storeId <= 0L) return Result.success()
         return try {
             val snapshot = NordestaoStoreOffersRepository.load(storeId)
-            StoreOfferNotifications.notifyIfNew(context, snapshot)
+            // Do not notify for a store that was unselected while the request was in flight.
+            val stillFavorite = context.getSharedPreferences("nrd_store_selection", Context.MODE_PRIVATE)
+                .getLong("favorite", -1L) == storeId
+            if (stillFavorite) StoreOfferNotifications.notifyIfNew(context, snapshot)
             Result.success()
         } catch (cancelled: CancellationException) {
             throw cancelled
