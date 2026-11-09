@@ -8,10 +8,10 @@ const pdf=btoa('%PDF-1.4\nfixture');
 const request=(body,headers={})=>new Request('https://test/',{method:'POST',headers,body:JSON.stringify(body)});
 function fixture({notify=async()=>{}}={}){
  const items=new Map(); let hash; let notificationClaimed=false; let notifications=0; let requested=null,finished=null,failed=false,seen=0;
- const db={settings:async()=>hash?{key_hash:hash}:null,
+ const db={settings:async()=>hash?{key_hash:hash,scan_request_id:requested,scan_finished_id:finished,scan_seen_at:seen?'2026-10-26T00:00:00Z':null}:null,
  requestScan:async()=>{requested='11111111-1111-4111-8111-111111111111';return requested;},
  scanStatus:async()=>({requestId:requested,finishedId:finished,seenAt:seen?'2026-10-26T00:00:00Z':null,finishedAt:null,failed}),
- poll:async()=>{seen++;return {requestId:requested,finishedId:finished};},
+ poll:async(row)=>{assert.equal(row.scan_request_id,requested);assert.equal(row.scan_finished_id,finished);seen++;return {requestId:row.scan_request_id,finishedId:row.scan_finished_id};},
  ack:async(id,error)=>{if(id===requested){finished=id;failed=error;}},
  setup:async(email,value)=>{hash=value;},list:async()=>[...items.values()].map(({pdf_base64,...meta})=>meta),
  get:async id=>items.get(id),enqueue:async value=>{if(items.has(value.id))return false;items.set(value.id,{...value,status:'pending'});return true;},

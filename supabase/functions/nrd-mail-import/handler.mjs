@@ -31,7 +31,7 @@ export function createHandler({verify, db, notifyMailDocuments = async () => {},
       if(key) {
         if(body.operation === 'poll') {
           if(Object.keys(body).length !== 1) return reply(400,{error:'INVALID_REQUEST'});
-          return reply(200,await db.poll());
+          return reply(200,await db.poll(settings));
         }
         if(body.operation === 'ack') {
           if(Object.keys(body).sort().join(',') !== 'failed,operation,requestId' ||
