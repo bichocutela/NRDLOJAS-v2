@@ -15,7 +15,9 @@ async function rest(path:string, method='GET', body?:unknown) {
 }
 const scanFields='scan_request_id,scan_finished_id,scan_finished_at,scan_seen_at,scan_failed';
 const db={
- settings:async()=> (await rest('nrd_mail_settings?id=eq.true&select=key_hash'))?.[0],
+ // The one authentication read also carries the current scan pointer for script polls.
+ // Secrets remain server-side; only the request/finished IDs are returned to the script.
+ settings:async()=> (await rest('nrd_mail_settings?id=eq.true&select=key_hash,'+scanFields))?.[0],
  scanStatus:async()=>{
    const row=(await rest('nrd_mail_settings?id=eq.true&select='+scanFields))?.[0] || {};
    return {requestId:row.scan_request_id || null,finishedId:row.scan_finished_id || null,
@@ -26,10 +28,19 @@ const db={
    await rest('nrd_mail_settings?id=eq.true','PATCH',{scan_request_id:requestId});
    return requestId;
  },
- poll:async()=>{
-   await rest('nrd_mail_settings?id=eq.true','PATCH',{scan_seen_at:new Date().toISOString()});
-   const row=await db.scanStatus();
-   return {requestId:row.requestId,finishedId:row.finishedId};
+ poll:async(row:Record<string,unknown>)=>{
+   // Google Apps Script polls every minute to receive Master-requested scans.
+   // Only update the "last seen" heartbeat when it is actually older than 10m.
+   // PostgREST's conditional filter also prevents competing Edge isolates from
+   // writing an already refreshed heartbeat and incurring excess WAL/IO.
+   const now=Date.now();
+   const seen=Date.parse(String(row?.scan_seen_at ?? ''));
+   if(!Number.isFinite(seen) || now-seen>=10*60_000) {
+     const cutoff=new Date(now-10*60_000).toISOString();
+     const filter=encodeURIComponent('(scan_seen_at.is.null,scan_seen_at.lt.'+cutoff+')');
+     await rest('nrd_mail_settings?id=eq.true&or='+filter,'PATCH',{scan_seen_at:new Date(now).toISOString()});
+   }
+   return {requestId:row.scan_request_id || null,finishedId:row.scan_finished_id || null};
  },
  ack:async(requestId:string,failed:boolean)=>{
    // Late workers cannot acknowledge a newer request from another Master.
