@@ -60,7 +60,9 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
                 monitorJob = scope.launch {
                     while (isActive) {
                         requestSync()
-                        delay(60_000)
+                        // Store configuration is cached for five minutes; polling every
+                        // 60 seconds replays the same data and produces extra reads.
+                        delay(5 * 60_000L)
                     }
                 }
             }
@@ -83,7 +85,7 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
                 mutableState.value = mutableState.value.copy(error = message, acpConfirmedAt = 0L)
                 return@withLock NossaGentePromotionsResult.Unauthorized
             }
-            if (!interactive && System.currentTimeMillis() - lastSuccessAt < 30_000) {
+            if (!interactive && System.currentTimeMillis() - lastSuccessAt < 5 * 60_000L) {
                 deliverPendingNotifications()
                 return@withLock repository.cached() ?: NossaGentePromotionsResult.Error("Aguardando sincronização.")
             }
@@ -179,4 +181,4 @@ internal fun matchesFavoriteStore(favorite: String?, offerStore: String?): Boole
 
 /** Disk rows are a delta baseline, never proof that an ACP offer is still live. */
 internal fun acpOffersConfirmed(confirmedAt: Long, now: Long = System.currentTimeMillis()): Boolean =
-    confirmedAt > 0L && now >= confirmedAt && now - confirmedAt < 60_000L
+    confirmedAt > 0L && now >= confirmedAt && now - confirmedAt < 6 * 60_000L
