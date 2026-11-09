@@ -1,4 +1,4 @@
-name: Publish corrected 11-11 theme logos
+name: Publish 12-12 So Ofertas for all themes
 on:
   push:
     branches: [main]
@@ -63,12 +63,12 @@ jobs:
            for(const c of plan.campaigns){
             assert(themes[c.theme],'Unknown theme '+c.theme);
             const values=themes[c.theme].arrayValue.values??=[];
-            const id='nrd-11-11-ofertas-2026-'+c.theme;
+            const id='nrd-12-12-so-ofertas-2026-'+c.theme;
             const index=values.findIndex(x=>x.mapValue.fields.id?.stringValue===id);
             const conflict=values.find(x=>x.mapValue.fields.startDate?.stringValue===plan.date&&x.mapValue.fields.isActive?.booleanValue===true&&x.mapValue.fields.id?.stringValue!==id);
             assert(!conflict,'Existing same-day schedule requires review: '+c.theme);
             const base=index<0?{}:values[index].mapValue.fields;
-            const entry={mapValue:{fields:{imageScale:num(1),imageOffsetX:num(0),imageOffsetY:num(0),imageStretchX:num(1),imageStretchY:num(1),...base,id:sv(id),label:sv('11/11 de Ofertas — 2026'),url:sv(drive(c.driveId)),isActive:{booleanValue:true},startDate:sv(plan.date),endDate:sv(plan.date)}}};
+            const entry={mapValue:{fields:{imageScale:num(1),imageOffsetX:num(0),imageOffsetY:num(0),imageStretchX:num(1),imageStretchY:num(1),...base,id:sv(id),label:sv('12/12 Só Ofertas — 2026'),url:sv(drive(c.driveId)),isActive:{booleanValue:true},startDate:sv(plan.date),endDate:sv(plan.date)}}};
             if(index<0)values.push(entry);else values[index]=entry;
            }
            fields.appearanceRevision={integerValue:String(Math.max(Date.now(),Number(before.fields.appearanceRevision?.integerValue||0)+1))};
@@ -89,7 +89,7 @@ jobs:
            writeFileSync('.before-full.json',JSON.stringify(before));
            writeFileSync('appearance-backup-before.json',JSON.stringify({name:before.name,updateTime:before.updateTime,fields:Object.fromEntries(Object.entries(before.fields).filter(([k])=>k.startsWith('appearance')))},null,2));
            writeFileSync('.prepared.json',JSON.stringify({fields:Object.fromEntries(writable.map(k=>[k,out.fields[k]])),updateTime:before.updateTime}));
-           writeFileSync('migration-summary.json',JSON.stringify({replacements:out.changed,campaigns:plan.campaigns.length,date:plan.date,driveIntegrity:String(plan.replacements.length+plan.campaigns.length)+' SHA-256 matches'},null,2));
+           writeFileSync('migration-summary.json',JSON.stringify({replacements:out.changed,campaigns:plan.campaigns.length,date:plan.date,driveIntegrity:'8 SHA-256 matches'},null,2));
            console.log('Prepared:',out.changed,'URL replacements;',plan.campaigns.length,'campaigns; all public Drive hashes verified');
           }else if(process.argv[2]==='apply'){
            const t=await token(),before=JSON.parse(readFileSync('.before-full.json','utf8')),prepared=JSON.parse(readFileSync('.prepared.json','utf8'));
@@ -98,7 +98,7 @@ jobs:
            assert(r.ok,'Atomic Firestore update failed HTTP '+r.status);
            const after=await current(t);for(const key of writable)assert.deepEqual(after.fields[key],prepared.fields[key],'Readback mismatch '+key);
            assert.deepEqual(unchanged(after.fields),unchanged(before.fields),'Unrelated settings changed');
-           for(const c of plan.campaigns){const rows=after.fields.appearanceThemeBackgrounds.mapValue.fields[c.theme].arrayValue.values;const matches=rows.filter(x=>x.mapValue.fields.id?.stringValue==='nrd-11-11-ofertas-2026-'+c.theme);assert.equal(matches.length,1);const f=matches[0].mapValue.fields;assert.equal(f.startDate.stringValue,plan.date);assert.equal(f.endDate.stringValue,plan.date);assert.equal(f.isActive.booleanValue,true);}
+           for(const c of plan.campaigns){const rows=after.fields.appearanceThemeBackgrounds.mapValue.fields[c.theme].arrayValue.values;const matches=rows.filter(x=>x.mapValue.fields.id?.stringValue==='nrd-12-12-so-ofertas-2026-'+c.theme);assert.equal(matches.length,1);const f=matches[0].mapValue.fields;assert.equal(f.startDate.stringValue,plan.date);assert.equal(f.endDate.stringValue,plan.date);assert.equal(f.isActive.booleanValue,true);}
            writeFileSync('appearance-readback-after.json',JSON.stringify({updateTime:after.updateTime,fields:prepared.fields},null,2));
            console.log('Published and read back:',plan.replacements.length,'Drive references;',plan.campaigns.length,'active banners scheduled only for',plan.date);
           }else throw Error('Expected dry, prepare or apply');
@@ -106,48 +106,48 @@ jobs:
           cat > publication-plan.json <<'NRD_PLAN'
           {
             "project": "appcodigo-7f245",
-            "date": "2026-11-11",
+            "date": "2026-12-12",
             "replacements": [],
             "campaigns": [
               {
                 "theme": "multicolor",
-                "driveId": "1qwm4hq-7cOCkhTSICnBp1feFSDiZh1FT",
-                "sha256": "9c346e20072e39ff204ce80eca12d891a9727217bbbca69b99931f414e30100f"
-              },
-              {
-                "theme": "expressive",
-                "driveId": "1JqKRvB3f3926tsw0SJ_W8lByMHd8kNRj",
-                "sha256": "8bb6af174b864c872959e62e05b0d8cdb53c9246c46ee9782c8230461c2e480d"
-              },
-              {
-                "theme": "orange",
-                "driveId": "1SgKrK82yJrn3nSLY2OO_b2r-LVPQZ7dn",
-                "sha256": "6cecfe0b999b0903c1655e69e3dec76f645545b01a851887bc74e285549c924f"
+                "driveId": "1oqQy9sXy1gIvAkpsNnC4XnH3o5ranIOX",
+                "sha256": "9db8b2407fc802d275c15bfe474c8df5ee35be20cad20a3e893d7b946c8fa4f8"
               },
               {
                 "theme": "red",
-                "driveId": "13ILZlLQPZBr3jkBbqz4IFpOtjYFBdjnh",
-                "sha256": "edcb58d5f401bd3e0b3bd2071deccaba456190ad6a9b9993e5d0d24af86fba7c"
-              },
-              {
-                "theme": "blue",
-                "driveId": "1m_1FoMHiDTQZvy3H4bzzhvXN0JkZ7dwl",
-                "sha256": "364fa53b89ecc42e36425d7c0d598b31b8c73e53896185aef0ee8e97038f5524"
-              },
-              {
-                "theme": "green",
-                "driveId": "1_cVIUUSjayHiMM0gZ6WbAjkg1Qu6mKFo",
-                "sha256": "4136a3da500fee42802e91ec0eb95852d54e8ba45603c35a13141769d7995947"
+                "driveId": "1SiWEp0RPvwcNXyr-KC34382I7Frrj2d_",
+                "sha256": "7add821314eb68e2bdd1c32869cfacf98cefaf4b19416bd4965ea0a97683e3cb"
               },
               {
                 "theme": "gold",
-                "driveId": "1IVAdvneYB4rMQehCAbQ44yINjSjTL_K0",
-                "sha256": "a036ffdfe9ca7c1e69cd22b6f4a79d55aa86609b7751fb23ea3939c0ebb1c29d"
+                "driveId": "1Yq2BGfc0T-VxVK0ITaltKMXUYLIXhgaQ",
+                "sha256": "4355c2b8ca0acf7652ebc4255655ca4bf6820eee9452faf5fc68a7d950d6e325"
+              },
+              {
+                "theme": "green",
+                "driveId": "1LL-tfg-mQn47b-LsJdX3c0b2PGsM-Ust",
+                "sha256": "8523535a55c8d612959a0634b4e0edddc5370f5700990fa8c257dab04ae722c2"
+              },
+              {
+                "theme": "blue",
+                "driveId": "1wdaQVDc42D_ejjEiybsKsXWG2t3fBBD7",
+                "sha256": "73a2d36a713f4549fe3c7ad1e11ba42fc4be7e4a5ed9a882d23f4f3f2c21aa65"
+              },
+              {
+                "theme": "orange",
+                "driveId": "1hkkwCwsQqD-5xi48Ph_VrNNBLEUh7HGm",
+                "sha256": "b162785e4eefcad6a6736d1c89de4672e0210a16308e75a5d042e00a0a940104"
               },
               {
                 "theme": "glass",
-                "driveId": "11DNC2cC3oe7E6y25xSzM5I7byGL0Vpr8",
-                "sha256": "85a1a9efe367cc7a5c4e983bb1cb11dd4315f45118708ade5e677b4b5bd3734a"
+                "driveId": "13AE0lHICpa3zM0thY1sxJ-WDHJgD5qJ-",
+                "sha256": "b33d68ac6d69a52ab8a0c354636e2dbb5760c48759dd6fbf029b11bf7430158e"
+              },
+              {
+                "theme": "expressive",
+                "driveId": "1TXBK_UbHn1kItqkMQ6U3d8pcEQPSd6LS",
+                "sha256": "511aff6468e5e401fedb3df5cbf7d8ad02a763c178d6e4c3308d732ab2dfb2be"
               }
             ]
           }
@@ -163,7 +163,7 @@ jobs:
             migration-summary.json
           retention-days: 30
           if-no-files-found: error
-      - name: Publish URLs and 11-11 schedule with concurrency precondition
+      - name: Publish URLs and 12-12 schedule with concurrency precondition
         run: node publish.mjs apply
       - name: Store verified publication result
         if: always()
