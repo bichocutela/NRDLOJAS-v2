@@ -42,6 +42,10 @@ export function retainCatalogMetadata(item,previous) {
 }
 /** Shared ACP snapshot, immutable pages and one atomic pointer; saved rows remain only as a delta baseline after failed refresh. */
 export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms))}) {
+  // The commercial ACP snapshot stays current; image/category enrichment is optional.
+  // Do not re-scan thousands of official product associations on every price check.
+  const ENRICH_INTERVAL_MS = 60 * 60_000;
+  const AUTOMATIC_CHECK_INTERVAL_MS = 5 * 60_000;
   let inFlight=null;
   async function refresh(readPage,enrichItems) {
     if (inFlight) return inFlight;
@@ -64,7 +68,9 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
         // All ACP fields are synced together; optional catalog/classification work rotates in bounded batches.
         const enriched=[...products];
         const cursor=products.length ? (claim.payload.enrichCursor ?? 0)%products.length : 0;
-        const batchSize=enrichItems ? Math.min(80,products.length) : 0;
+        const shouldEnrich = Boolean(enrichItems) && now() >= (Number(claim.payload.nextEnrichAt) || 0);
+        const batchSize = shouldEnrich ? Math.min(80,products.length) : 0;
+        const nextEnrichAt = batchSize ? now() + ENRICH_INTERVAL_MS : (Number(claim.payload.nextEnrichAt) || 0);
         if(batchSize) {
           const positions=Array.from({length:batchSize},(_,i)=>(cursor+i)%products.length);
           try {
@@ -79,7 +85,7 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
         const stable=enriched.map(item=>retainCatalogMetadata(item,previousItems.get(String(item.id ?? `${item.code}|${item.barCode}|${item.description}`))));
         const next=await snapshot(stable);
         if(next.revision===claim.payload.revision) {
-          return (await cache.finish('promotion_snapshot_v3',claim,{...claim.payload,enrichCursor,checkedAt:now(),retryAt:0,failureCount:0}))?.payload;
+          return (await cache.finish('promotion_snapshot_v3',claim,{...claim.payload,enrichCursor,nextEnrichAt,checkedAt:now(),retryAt:0,failureCount:0}))?.payload;
         }
         const generation=crypto.randomUUID().replaceAll('-',''); const pages=[]; let chunk=[]; let bytes=0;
         for(const row of next.rows) {
@@ -101,7 +107,7 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
           }
         }
         if(claim.payload.generation) retired.push({generation:claim.payload.generation,pages:claim.payload.pages,deleteAfter:now()+30*60_000});
-        const pointer={retired,enrichCursor,revision:next.revision,generation,pages:pages.length,count:next.rows.length,checkedAt:now()};
+        const pointer={retired,enrichCursor,nextEnrichAt,revision:next.revision,generation,pages:pages.length,count:next.rows.length,checkedAt:now()};
         return (await cache.finish('promotion_snapshot_v3',claim,pointer))?.payload;
       } catch(error) {
         const failureCount=Math.min(5,(Number(claim.payload.failureCount)||0)+1);
@@ -121,7 +127,7 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
         pointer=(await cache.get('promotion_snapshot_v3'))?.payload;
         if(!pointer?.revision) throw Error('INITIAL_SYNC_BUSY');
       }
-    } else if(input.operation==='promotion_refresh' || now()-pointer.checkedAt>=60000 || pointer.failureCount>0) {
+    } else if(input.operation==='promotion_refresh' || now()-pointer.checkedAt>=AUTOMATIC_CHECK_INTERVAL_MS || pointer.failureCount>0) {
       if(input.operation!=='promotion_refresh' && (pointer.retryAt ?? 0)>now())throw Error('SYNC_NOT_CONFIRMED');
       // Another Edge instance may own the lease. Never report the previous page as a successful fresh scan.
       const startedAt=now();
