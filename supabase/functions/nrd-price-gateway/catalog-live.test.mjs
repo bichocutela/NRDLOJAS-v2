@@ -89,3 +89,29 @@ test('official department tree maps every nested section in all sixteen departme
     assert.equal(vipRecord({produto_id:String(i),descricao:'Produto',classificacao_mercadologica_id:i*10+2},map).department,OFFICIAL_DEPARTMENTS[i]);
   }
 });
+
+test('verified catalog metadata persists across cold instances for seven days without changing prices',async()=>{
+  const entries=new Map();let now=Date.parse('2026-11-09T00:00:00Z'),searches=0,writes=0;
+  const store={
+    many:async keys=>new Map(keys.filter(key=>entries.has(key)).map(key=>[key,{payload:entries.get(key)}])),
+    get:async key=>entries.has(key)?{payload:entries.get(key)}:null,
+    write:async(key,value)=>{writes++;entries.set(key,value);}
+  };
+  const fetcher=async url=>{
+    if(url.includes('/auth/'))return login();
+    if(url.includes('/departamentos/arvore'))return Response.json({data:[]});
+    searches++;
+    return Response.json({data:{produtos:[record('123')]}});
+  };
+  const get=()=>createLiveCatalogLookup({boundedJson,fetcher,store,now:()=>now,cacheTtlMs:7*24*60*60_000});
+  assert.equal((await get()([{code:'123'}])).length,1);
+  assert.equal(searches,1);
+  const firstWrites=writes;
+  now+=2*24*60*60_000;
+  assert.equal((await get()([{code:'123'}])).length,1);
+  assert.equal(searches,1);
+  assert.equal(writes,firstWrites);
+  now+=6*24*60*60_000;
+  assert.equal((await get()([{code:'123'}])).length,1);
+  assert.equal(searches,2); // Revalidates after the weekly TTL, never forever.
+});
