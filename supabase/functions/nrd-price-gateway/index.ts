@@ -73,7 +73,10 @@ const appAuthorize = createAuthorizer({document,
 const serverCache = new ReadCache(new SupabaseCache({url:Deno.env.get('SUPABASE_URL'),key:Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}));
 // Enabled for the deployed integration; an explicit false remains an emergency off switch.
 const catalogLookup = Deno.env.get('NORDESTAO_LIVE_LOOKUP') !== 'false'
-  ? createLiveCatalogLookup({boundedJson, store:serverCache, maxItems:Number(Deno.env.get('NORDESTAO_LIVE_MAX_ITEMS') ?? '80')})
+  // Official image/EAN associations are stable metadata, not commercial prices.
+  // Revalidate weekly rather than every day to reduce Supabase cache churn.
+  ? createLiveCatalogLookup({boundedJson, store:serverCache, maxItems:Number(Deno.env.get('NORDESTAO_LIVE_MAX_ITEMS') ?? '80'),
+      cacheTtlMs:7*24*60*60_000})
   : null;
 
 const categorizer = createCategorizer({cache:serverCache, apiKey:Deno.env.get('GEMINI_API_KEY'),
