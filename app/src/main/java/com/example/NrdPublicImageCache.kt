@@ -20,7 +20,7 @@ internal object NrdPublicImageCache {
     fun canKeepForWeek(url: HttpUrl): Boolean {
         if (url.scheme != "https" || url.host != "kkayksyzksexoarpfxyj.supabase.co") return false
         val segments = url.pathSegments
-        if (segments.size < 8 || segments.take(6) != listOf("storage","v1","object","public","nrdlojas-images",segments[5])) return false
+        if (segments.size < 7 || segments.take(5) != listOf("storage","v1","object","public","nrdlojas-images")) return false
         if (segments[5] !in folders) return false
         val file = segments.last()
         if (file.endsWith(".json", true) || file.endsWith(".mp4", true) || file.endsWith(".pdf", true)) return false
