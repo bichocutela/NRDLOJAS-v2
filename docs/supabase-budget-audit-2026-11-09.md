@@ -29,3 +29,14 @@ Os testes do `promotion-sync.test.mjs` passam a cobrir:
 ## Medição recomendada pós-deploy
 
 Comparar por 24h `/rest/v1/rpc/nrd_cache_write`, `/rest/v1/nrd_promotion_cache`, `nrd-price-gateway`, e as métricas oficiais de uso (Edge Function invocations, egress, tamanho do banco). Não atribuir porcentagem final de economia sem observar tráfego após implantação. A etapa opcional tem redução **teórica** de até 12 lotes/hora para 1 lote/hora quando há demanda contínua, sem mudar a busca comercial a cada cinco minutos.
+
+
+## Próxima etapa — aumentar a validade dos metadados oficiais
+
+O cache persistente do catálogo contém 21.574 chaves `catalog_v2_*`; na auditoria anterior 19.945 estavam fora do TTL de 24 h, embora o NRD ainda pudesse usar as associações oficiais antigas para exibir imagens. O gateway recuperava no máximo 80 associações por ciclo de enriquecimento. Retestar diariamente as mesmas combinações de código/EAN/descrição gerava gravações e consultas dispensáveis.
+
+**Mudança:** no `nrd-price-gateway`, novos registros verificados de imagem, seção e associação EAN terão TTL de 7 dias. O cliente de busca direta de imagens permanece com seu padrão independente. Resultados antigos só recebem o novo prazo quando forem revalidados naturalmente, sem varredura maciça ou exclusão de cache.
+
+Preços, campanhas, estoque, validades e promoções **não** usam esse TTL de 7 dias; continuam consultados pelo gateway e sincronização comercial em seu ritmo próprio. Um botão de atualizar promoções continua funcionando independentemente desse prazo de metadados.
+
+A economia exata precisa ser medida; o prazo de 7 dias reduz a frequência de revalidação de associações que já foram verificadas, mas não implica redução proporcional no egress total do projeto.
