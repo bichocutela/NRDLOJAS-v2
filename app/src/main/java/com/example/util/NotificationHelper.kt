@@ -57,6 +57,10 @@ object NotificationHelper {
                 description = "Notificações de novas ofertas da loja favorita"
             }
             notificationManager.createNotificationChannel(channelPromotionUpdates)
+            notificationManager.createNotificationChannel(NotificationChannel(
+                "store_offer_alerts", "Ofertas da loja preferida — descontos",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply { description = "Avisos de descontos e cashback conforme o filtro do sininho em Ofertas" })
 
             val channelBenefitUpdates = NotificationChannel("benefit_updates", "Atualizações do convênio", NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = "Notificações de liberação e compras realizadas no convênio"
@@ -142,6 +146,7 @@ object NotificationHelper {
         "SUGGESTION_FIXED" -> "suggestion_fixed"
         "APP_UPDATE" -> "app_update"
         "PROMOTION_UPDATED" -> "promotion_updates"
+        "STORE_OFFER_ALERT" -> "store_offer_alerts"
         "NEW_TRAINING" -> "training_updates"
         "NEW_ENCARTE" -> "encartes"
         "BENEFIT_RELEASED", "BENEFIT_PURCHASE" -> "benefit_updates"
@@ -202,6 +207,16 @@ object NotificationHelper {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+    }
+
+    private fun storeOffersPendingIntent(context: Context): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_OPEN_STORE_OFFERS, true)
+            putExtra("type", "STORE_OFFER_ALERT")
+        }
+        return PendingIntent.getActivity(context, 3005, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
     private fun productPendingIntent(context: Context, type: String, productCode: String): PendingIntent {
@@ -291,6 +306,7 @@ object NotificationHelper {
                 }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             "APP_UPDATE" -> builder.setContentIntent(appUpdatePendingIntent(context))
             "PROMOTION_UPDATED" -> builder.setContentIntent(promotionsPendingIntent(context))
+            "STORE_OFFER_ALERT" -> builder.setContentIntent(storeOffersPendingIntent(context))
             else -> ProfileNotificationRouting.profileSection(type)?.let { section ->
                 builder.setContentIntent(profileNotificationPendingIntent(context, type, section))
             }
