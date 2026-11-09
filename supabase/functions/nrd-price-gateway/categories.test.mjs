@@ -1,5 +1,18 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+test('local rules avoid cache reads while official categories keep priority',async()=>{
+  const {createCategorizer}=await import('./categories.mjs');
+  const cache={many:async()=>{throw Error('unexpected cache access');}};
+  const enrich=createCategorizer({cache,apiKey:'',background:()=>{}});
+  const result=await enrich([
+    {description:'Detergente liquido',nrdCategory:'Bazar'},
+    {description:'Detergente liquido',nrdCategory:'Alimentos',catalog_category_source:'official'},
+  ]);
+  assert.equal(result[0].nrdCategory,'Limpeza');
+  assert.equal(result[0].catalog_category_source,'inferred');
+  assert.equal(result[1].nrdCategory,'Alimentos');
+  assert.equal(result[1].catalog_category_source,'official');
+});
 import {strongCategory,validateCategories,categoryKey} from './categories.mjs';
 test('full description disambiguates water and milk used as cosmetics or cleaners',()=>{
   assert.equal(strongCategory('ÁGUA MICELAR LOREAL 200ML'),'Higiene e beleza');
