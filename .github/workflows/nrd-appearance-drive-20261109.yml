@@ -1,4 +1,4 @@
-name: Publish 12-12 So Ofertas for all themes
+name: Publish richer 11-11 and 12-12 artwork
 on:
   push:
     branches: [main]
@@ -41,113 +41,185 @@ jobs:
            assert(r.ok,'Firebase OAuth failed HTTP '+r.status);return (await r.json()).access_token;
           }
           async function current(t){const r=await fetch(endpoint,{headers:{Authorization:'Bearer '+t},signal:AbortSignal.timeout(30000)});assert(r.ok,'Firestore read failed HTTP '+r.status);return r.json();}
-          const sv=stringValue=>({stringValue}),num=doubleValue=>({doubleValue});
-          const writable=['appearanceThemeBackgrounds','appearanceCardBackgrounds','appearanceConsultationBackgrounds','appearanceRevision'];
-          function unchanged(fields){return Object.fromEntries(Object.entries(fields).filter(([k])=>!writable.includes(k)));}
+          
+          const writable=['appearanceThemeBackgrounds','appearanceRevision'];
           function transform(before){
-           const fields=structuredClone(before.fields);let changed=0;
-           const counts=new Map(plan.replacements.map(x=>[x.original,0]));
-           function walk(value){
-            if(Array.isArray(value)){value.forEach(walk);return;}
-            if(!value||typeof value!=='object')return;
-            if(typeof value.stringValue==='string'){
-             const x=plan.replacements.find(x=>value.stringValue===prefix+x.original);
-             if(x){value.stringValue=drive(x.driveId);counts.set(x.original,counts.get(x.original)+1);changed++;}
-            } else Object.values(value).forEach(walk);
-           }
-           for(const key of writable.filter(k=>k!=='appearanceRevision'))walk(fields[key]);
-           for(const x of plan.replacements){
-            const present=JSON.stringify(fields).includes(drive(x.driveId));assert(present,'Missing source/reference '+x.original);
-           }
-           const themes=fields.appearanceThemeBackgrounds.mapValue.fields;
-           for(const c of plan.campaigns){
-            assert(themes[c.theme],'Unknown theme '+c.theme);
-            const values=themes[c.theme].arrayValue.values??=[];
-            const id='nrd-12-12-so-ofertas-2026-'+c.theme;
-            const index=values.findIndex(x=>x.mapValue.fields.id?.stringValue===id);
-            const conflict=values.find(x=>x.mapValue.fields.startDate?.stringValue===plan.date&&x.mapValue.fields.isActive?.booleanValue===true&&x.mapValue.fields.id?.stringValue!==id);
-            assert(!conflict,'Existing same-day schedule requires review: '+c.theme);
-            const base=index<0?{}:values[index].mapValue.fields;
-            const entry={mapValue:{fields:{imageScale:num(1),imageOffsetX:num(0),imageOffsetY:num(0),imageStretchX:num(1),imageStretchY:num(1),...base,id:sv(id),label:sv('12/12 Só Ofertas — 2026'),url:sv(drive(c.driveId)),isActive:{booleanValue:true},startDate:sv(plan.date),endDate:sv(plan.date)}}};
-            if(index<0)values.push(entry);else values[index]=entry;
+           const fields=structuredClone(before.fields);
+           assert.equal(plan.entries.length,16);assert.equal(new Set(plan.entries.map(e=>e.id)).size,16);
+           for(const e of plan.entries){
+            const rows=fields.appearanceThemeBackgrounds.mapValue.fields[e.theme].arrayValue.values;
+            const matches=rows.filter(x=>x.mapValue.fields.id?.stringValue===e.id);assert.equal(matches.length,1,'Schedule missing or duplicated '+e.id);
+            const f=matches[0].mapValue.fields;
+            assert.equal(f.startDate.stringValue,e.date);assert.equal(f.endDate.stringValue,e.date);assert.equal(f.isActive.booleanValue,true);
+            assert([e.expectedUrl,drive(e.driveId)].includes(f.url.stringValue),'Unexpected concurrent image change '+e.id);
+            f.url={stringValue:drive(e.driveId)};
            }
            fields.appearanceRevision={integerValue:String(Math.max(Date.now(),Number(before.fields.appearanceRevision?.integerValue||0)+1))};
-           assert.deepEqual(unchanged(fields),unchanged(before.fields));
-           return {fields,changed};
+           // Exact deep equality after undoing only the approved URLs and revision.
+           const restored=structuredClone(fields);
+           for(const e of plan.entries){
+            const old=before.fields.appearanceThemeBackgrounds.mapValue.fields[e.theme].arrayValue.values.find(x=>x.mapValue.fields.id?.stringValue===e.id);
+            restored.appearanceThemeBackgrounds.mapValue.fields[e.theme].arrayValue.values.find(x=>x.mapValue.fields.id?.stringValue===e.id).mapValue.fields.url=structuredClone(old.mapValue.fields.url);
+           }
+           restored.appearanceRevision=structuredClone(before.fields.appearanceRevision);
+           assert.deepEqual(restored,before.fields,'Only approved image URLs may change');
+           return fields;
           }
           if(process.argv[2]==='dry'){
-           const before=JSON.parse(readFileSync(process.argv[3],'utf8'));const out=transform(before);
-           console.log('Validated transformation:',out.changed,'URL replacements and',plan.campaigns.length,'campaigns; other fields preserved');
+           transform(JSON.parse(readFileSync(process.argv[3],'utf8')));console.log('16 URL-only updates validated; all dates and framing preserved');
           }else if(process.argv[2]==='prepare'){
-           const t=await token();const before=await current(t);
-           for(const x of [...plan.replacements,...plan.campaigns]){
-            const r=await fetch(drive(x.driveId),{signal:AbortSignal.timeout(60000)});
-            assert(r.ok,'Drive public download failed '+x.driveId+' HTTP '+r.status);
-            const bytes=Buffer.from(await r.arrayBuffer());assert.equal(createHash('sha256').update(bytes).digest('hex'),x.sha256,'Drive checksum mismatch '+x.driveId);
+           const t=await token(),before=await current(t);
+           for(const e of plan.entries){
+            const r=await fetch(drive(e.driveId),{signal:AbortSignal.timeout(60000)});assert(r.ok,'Public download failed HTTP '+r.status);
+            const b=Buffer.from(await r.arrayBuffer());assert.equal(b.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+            assert.equal(createHash('sha256').update(b).digest('hex'),e.sha256,'Drive integrity failed '+e.id);
            }
-           const out=transform(before);
+           const fields=transform(before);
            writeFileSync('.before-full.json',JSON.stringify(before));
-           writeFileSync('appearance-backup-before.json',JSON.stringify({name:before.name,updateTime:before.updateTime,fields:Object.fromEntries(Object.entries(before.fields).filter(([k])=>k.startsWith('appearance')))},null,2));
-           writeFileSync('.prepared.json',JSON.stringify({fields:Object.fromEntries(writable.map(k=>[k,out.fields[k]])),updateTime:before.updateTime}));
-           writeFileSync('migration-summary.json',JSON.stringify({replacements:out.changed,campaigns:plan.campaigns.length,date:plan.date,driveIntegrity:'8 SHA-256 matches'},null,2));
-           console.log('Prepared:',out.changed,'URL replacements;',plan.campaigns.length,'campaigns; all public Drive hashes verified');
+           writeFileSync('appearance-backup-before.json',JSON.stringify({updateTime:before.updateTime,fields:Object.fromEntries(Object.entries(before.fields).filter(([k])=>k.startsWith('appearance')))},null,2));
+           writeFileSync('.prepared.json',JSON.stringify({fields:Object.fromEntries(writable.map(k=>[k,fields[k]])),updateTime:before.updateTime}));
+           writeFileSync('migration-summary.json',JSON.stringify({images:16,sha256Verified:16,datesPreserved:true,framingPreserved:true},null,2));
+           console.log('16 public PNG hashes verified; appearance backup ready');
           }else if(process.argv[2]==='apply'){
-           const t=await token(),before=JSON.parse(readFileSync('.before-full.json','utf8')),prepared=JSON.parse(readFileSync('.prepared.json','utf8'));
-           const url=new URL(endpoint);for(const key of writable)url.searchParams.append('updateMask.fieldPaths',key);url.searchParams.set('currentDocument.updateTime',prepared.updateTime);
-           const r=await fetch(url,{method:'PATCH',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({fields:prepared.fields}),signal:AbortSignal.timeout(60000)});
-           assert(r.ok,'Atomic Firestore update failed HTTP '+r.status);
-           const after=await current(t);for(const key of writable)assert.deepEqual(after.fields[key],prepared.fields[key],'Readback mismatch '+key);
-           assert.deepEqual(unchanged(after.fields),unchanged(before.fields),'Unrelated settings changed');
-           for(const c of plan.campaigns){const rows=after.fields.appearanceThemeBackgrounds.mapValue.fields[c.theme].arrayValue.values;const matches=rows.filter(x=>x.mapValue.fields.id?.stringValue==='nrd-12-12-so-ofertas-2026-'+c.theme);assert.equal(matches.length,1);const f=matches[0].mapValue.fields;assert.equal(f.startDate.stringValue,plan.date);assert.equal(f.endDate.stringValue,plan.date);assert.equal(f.isActive.booleanValue,true);}
-           writeFileSync('appearance-readback-after.json',JSON.stringify({updateTime:after.updateTime,fields:prepared.fields},null,2));
-           console.log('Published and read back:',plan.replacements.length,'Drive references;',plan.campaigns.length,'active banners scheduled only for',plan.date);
+           const t=await token(),before=JSON.parse(readFileSync('.before-full.json','utf8')),p=JSON.parse(readFileSync('.prepared.json','utf8'));
+           const url=new URL(endpoint);for(const k of writable)url.searchParams.append('updateMask.fieldPaths',k);url.searchParams.set('currentDocument.updateTime',p.updateTime);
+           const r=await fetch(url,{method:'PATCH',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({fields:p.fields}),signal:AbortSignal.timeout(60000)});assert(r.ok,'Atomic publication failed HTTP '+r.status);
+           const after=await current(t);const expected=structuredClone(before.fields);Object.assign(expected,p.fields);assert.deepEqual(after.fields,expected,'Full readback mismatch');
+           writeFileSync('appearance-readback-after.json',JSON.stringify({updateTime:after.updateTime,fields:Object.fromEntries(Object.entries(after.fields).filter(([k])=>k.startsWith('appearance')))},null,2));
+           console.log('Published 16 revised artworks, exact readback verified; dates, framing and other settings preserved');
           }else throw Error('Expected dry, prepare or apply');
           NRD_SCRIPT
           cat > publication-plan.json <<'NRD_PLAN'
           {
             "project": "appcodigo-7f245",
-            "date": "2026-12-12",
-            "replacements": [],
-            "campaigns": [
+            "entries": [
               {
                 "theme": "multicolor",
-                "driveId": "1oqQy9sXy1gIvAkpsNnC4XnH3o5ranIOX",
-                "sha256": "9db8b2407fc802d275c15bfe474c8df5ee35be20cad20a3e893d7b946c8fa4f8"
+                "id": "nrd-11-11-ofertas-2026-multicolor",
+                "date": "2026-11-11",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=1qwm4hq-7cOCkhTSICnBp1feFSDiZh1FT",
+                "driveId": "183N0X2zJJ4Gs5X94qZ3QTJ1wL4dVeedU",
+                "sha256": "6f79c292f8bb2e7a6c40a3cded4eb2087b13b30dde6a4fcf1e15f0fe81bbdd1f"
+              },
+              {
+                "theme": "multicolor",
+                "id": "nrd-12-12-so-ofertas-2026-multicolor",
+                "date": "2026-12-12",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=1oqQy9sXy1gIvAkpsNnC4XnH3o5ranIOX",
+                "driveId": "1mzyCCi9YAeZ_FFTBWXy0Y7pEkin7wXMs",
+                "sha256": "c9e78a89a270161a4e306ae1fce0df9b9f3c124aa16c94087ccddaed46ec739c"
               },
               {
                 "theme": "red",
-                "driveId": "1SiWEp0RPvwcNXyr-KC34382I7Frrj2d_",
-                "sha256": "7add821314eb68e2bdd1c32869cfacf98cefaf4b19416bd4965ea0a97683e3cb"
+                "id": "nrd-11-11-ofertas-2026-red",
+                "date": "2026-11-11",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=13ILZlLQPZBr3jkBbqz4IFpOtjYFBdjnh",
+                "driveId": "1nUARGMrXoIYJ2lLwF3wrZQhLAorb42Kq",
+                "sha256": "9432b6b8ed7aa04e7407dcf7fdad8247ef001ed7797f830e2d2c875fe9e173ee"
+              },
+              {
+                "theme": "red",
+                "id": "nrd-12-12-so-ofertas-2026-red",
+                "date": "2026-12-12",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=1SiWEp0RPvwcNXyr-KC34382I7Frrj2d_",
+                "driveId": "1bYT9mWNqOskrfXUTGWUQsb2W_1uuNHcI",
+                "sha256": "61a4d54348ac4e72a6e507d9858fea517e7f9bf87fa8ba596e2af0ebcf240fa6"
               },
               {
                 "theme": "gold",
-                "driveId": "1Yq2BGfc0T-VxVK0ITaltKMXUYLIXhgaQ",
-                "sha256": "4355c2b8ca0acf7652ebc4255655ca4bf6820eee9452faf5fc68a7d950d6e325"
+                "id": "nrd-11-11-ofertas-2026-gold",
+                "date": "2026-11-11",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=1IVAdvneYB4rMQehCAbQ44yINjSjTL_K0",
+                "driveId": "1HSMIXCnGi8__PIRFTsTf9eBcqsUr2fby",
+                "sha256": "81f2e285f6338dcf596e27e8978b9dda3a39000f92983bc56c429b911184fdeb"
+              },
+              {
+                "theme": "gold",
+                "id": "nrd-12-12-so-ofertas-2026-gold",
+                "date": "2026-12-12",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=1Yq2BGfc0T-VxVK0ITaltKMXUYLIXhgaQ",
+                "driveId": "1uZl3rgeemS_PF0lDhFQz5UrCZX0UbPK8",
+                "sha256": "98e7f38f8c8c0c37207dd266775868041f0e610c0724d631c787bd56e6767b2c"
               },
               {
                 "theme": "green",
-                "driveId": "1LL-tfg-mQn47b-LsJdX3c0b2PGsM-Ust",
-                "sha256": "8523535a55c8d612959a0634b4e0edddc5370f5700990fa8c257dab04ae722c2"
+                "id": "nrd-11-11-ofertas-2026-green",
+                "date": "2026-11-11",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=1_cVIUUSjayHiMM0gZ6WbAjkg1Qu6mKFo",
+                "driveId": "144VWIJQTvqJ6u66UX858pydZGgNFONNo",
+                "sha256": "dfafd0ea2820562e11678a754ff16e6a83eac26d1d645601925847d10ae6e0db"
+              },
+              {
+                "theme": "green",
+                "id": "nrd-12-12-so-ofertas-2026-green",
+                "date": "2026-12-12",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=1LL-tfg-mQn47b-LsJdX3c0b2PGsM-Ust",
+                "driveId": "1720ycDG6I3HPTEXenVjexkCvZ56Nbe0C",
+                "sha256": "02595382352503ef5a58c173ceb2e733edfe5a87f5d86a38d5e88fa3b1576916"
               },
               {
                 "theme": "blue",
-                "driveId": "1wdaQVDc42D_ejjEiybsKsXWG2t3fBBD7",
-                "sha256": "73a2d36a713f4549fe3c7ad1e11ba42fc4be7e4a5ed9a882d23f4f3f2c21aa65"
+                "id": "nrd-11-11-ofertas-2026-blue",
+                "date": "2026-11-11",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=1m_1FoMHiDTQZvy3H4bzzhvXN0JkZ7dwl",
+                "driveId": "1a_pWIyEC1C2lKPA-sawRib4eikSHJc7m",
+                "sha256": "65ac815947e519ea3cfb3038865ca59f997c6ed25de998d6ba8ffe52fe6fbee3"
+              },
+              {
+                "theme": "blue",
+                "id": "nrd-12-12-so-ofertas-2026-blue",
+                "date": "2026-12-12",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=1wdaQVDc42D_ejjEiybsKsXWG2t3fBBD7",
+                "driveId": "1W4B4boNTppyJRwtmUoJmVGLE73hrCqEx",
+                "sha256": "e82cfcc05e59370f4b86f852825f9f40dbc3c8583a3b40239f62f36c51e67847"
               },
               {
                 "theme": "orange",
-                "driveId": "1hkkwCwsQqD-5xi48Ph_VrNNBLEUh7HGm",
-                "sha256": "b162785e4eefcad6a6736d1c89de4672e0210a16308e75a5d042e00a0a940104"
+                "id": "nrd-11-11-ofertas-2026-orange",
+                "date": "2026-11-11",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=1SgKrK82yJrn3nSLY2OO_b2r-LVPQZ7dn",
+                "driveId": "1ENwphMSL1gbZpjAHmbMEYzdVwsalhGdm",
+                "sha256": "110fe6a834f1e0c68814f6c434fd66f80d497f0e57576edbefe9e28856e105ed"
+              },
+              {
+                "theme": "orange",
+                "id": "nrd-12-12-so-ofertas-2026-orange",
+                "date": "2026-12-12",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=1hkkwCwsQqD-5xi48Ph_VrNNBLEUh7HGm",
+                "driveId": "1eWOmbyyQgMoo3fTY9iSO1B1RafDPkrZN",
+                "sha256": "4d3db4992d9ed450351262c07e22290d69332c0d935681624b0448806c55793b"
               },
               {
                 "theme": "glass",
-                "driveId": "13AE0lHICpa3zM0thY1sxJ-WDHJgD5qJ-",
-                "sha256": "b33d68ac6d69a52ab8a0c354636e2dbb5760c48759dd6fbf029b11bf7430158e"
+                "id": "nrd-11-11-ofertas-2026-glass",
+                "date": "2026-11-11",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=11DNC2cC3oe7E6y25xSzM5I7byGL0Vpr8",
+                "driveId": "1_2xByvhmTrSh-rHbxenalAFTuiaVuwfy",
+                "sha256": "da1640d609dc7d6a956337a0655d57b5c977494d27535fabeb04300ea104853a"
+              },
+              {
+                "theme": "glass",
+                "id": "nrd-12-12-so-ofertas-2026-glass",
+                "date": "2026-12-12",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=13AE0lHICpa3zM0thY1sxJ-WDHJgD5qJ-",
+                "driveId": "1Y9SklMmI-B0o1i2XREvG5fHHhsYz9751",
+                "sha256": "ac00a4b1f7106843dac4160f2919c9694701c14c797991779d942999fb29636b"
               },
               {
                 "theme": "expressive",
-                "driveId": "1TXBK_UbHn1kItqkMQ6U3d8pcEQPSd6LS",
-                "sha256": "511aff6468e5e401fedb3df5cbf7d8ad02a763c178d6e4c3308d732ab2dfb2be"
+                "id": "nrd-11-11-ofertas-2026-expressive",
+                "date": "2026-11-11",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=1JqKRvB3f3926tsw0SJ_W8lByMHd8kNRj",
+                "driveId": "1F165--YEyRO561BX6zce0NVNnOTzWPwn",
+                "sha256": "7aa0bb61685849e2f555b4f7f0b20e8c629ecd4dcd945f7b7b405be469f502d2"
+              },
+              {
+                "theme": "expressive",
+                "id": "nrd-12-12-so-ofertas-2026-expressive",
+                "date": "2026-12-12",
+                "expectedUrl": "https://drive.google.com/uc?export=download&id=1TXBK_UbHn1kItqkMQ6U3d8pcEQPSd6LS",
+                "driveId": "1J1JTqMQxGTbbbF9U1iGWjia_IIMJ1Q-O",
+                "sha256": "09afbba5505b0dda2bce54bab4da01aca5dd82f92af176f009b691e1cbbc6c9d"
               }
             ]
           }
@@ -163,7 +235,7 @@ jobs:
             migration-summary.json
           retention-days: 30
           if-no-files-found: error
-      - name: Publish URLs and 12-12 schedule with concurrency precondition
+      - name: Replace approved artwork URLs while preserving schedules with concurrency precondition
         run: node publish.mjs apply
       - name: Store verified publication result
         if: always()
