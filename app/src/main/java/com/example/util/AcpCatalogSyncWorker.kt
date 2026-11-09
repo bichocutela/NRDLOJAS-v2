@@ -14,7 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
-/** Keeps the ACP featured-offer cache current without blocking Consultar Preços. */
+/** Shared hourly cache warmup; ordinary price lookups and manual refresh remain unrestricted. */
 class AcpCatalogSyncWorker(
     appContext: Context,
     workerParams: WorkerParameters,
@@ -41,14 +41,14 @@ class AcpCatalogSyncWorker(
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
-            val request = PeriodicWorkRequestBuilder<AcpCatalogSyncWorker>(15, TimeUnit.MINUTES)
+            val request = PeriodicWorkRequestBuilder<AcpCatalogSyncWorker>(60, TimeUnit.MINUTES)
                 .setConstraints(constraints)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
                 .build()
 
             WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
                 UNIQUE_WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.UPDATE,
                 request,
             )
         }
