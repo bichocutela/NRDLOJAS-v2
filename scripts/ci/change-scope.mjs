@@ -6,6 +6,7 @@ export function classify(paths, force = false) {
   let android = force, rules = force;
   for (const path of paths) {
     if (path.startsWith('app/') || path.startsWith('gradle/')) { android = true; continue; }
+    if (path === '.github/workflows/nrd-appearance-drive-20261109.yml') continue;
     if (path === 'firestore.rules') { rules = true; continue; }
     if (path.startsWith('docs/') || /(^|\/)README(?:\.[^/]*)?$/i.test(path) || /^[^/]+\.md$/i.test(path)) continue;
     if (path.startsWith('supabase/') || path.startsWith('tests/days-off/') || path === 'scripts/check-account-admin-permissions.mjs') continue;

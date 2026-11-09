@@ -5,6 +5,8 @@ on:
   push:
     branches: [ "main", "master", "feat/acp-history-capture-test", "fix/acp-history-empty-json", "feat/acp-targeted-history" ]
     paths-ignore:
+      # Appearance is published remotely; it does not change the installed app.
+      - ".github/workflows/nrd-appearance-drive-20261109.yml"
       - ".github/workflows/add-padaria-products.yml"
       - ".github/data-jobs/**"
   pull_request:

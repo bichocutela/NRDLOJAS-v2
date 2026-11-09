@@ -100,3 +100,18 @@ test('quota outage warns while unexpected notification failures still block publ
   const security = readFileSync('.github/workflows/acp-security.yml', 'utf8');
   assert.match(security, /if status == 402:[\s\S]*?raise SystemExit\(0\)[\s\S]*?assert status == 401/);
 });
+
+test('remote appearance publication never requires an APK by itself', () => {
+  const remote = '.github/workflows/nrd-appearance-drive-20261109.yml';
+  assert.deepEqual(classify([remote]), { android: false, rules: false });
+  assert.deepEqual(classify([remote, 'firestore.rules']), { android: false, rules: true });
+  for (const app of ['app/src/main/java/Home.kt', 'app/src/main/res/drawable/banner.png', '.github/workflows/main.yml', 'unknown/file'])
+    assert.equal(classify([remote, app]).android, true, app);
+  assert.deepEqual(classify([remote], true), { android: true, rules: true });
+  const push = workflow.split('  pull_request:')[0];
+  assert.ok(push.includes('paths-ignore:'));
+  assert.ok(push.includes('      - "' + remote + '"'));
+  const publisher = readFileSync(remote, 'utf8');
+  assert.ok(publisher.includes(remote));
+  assert.doesNotMatch(publisher, /gradlew|assembleRelease|action-gh-release/);
+});
