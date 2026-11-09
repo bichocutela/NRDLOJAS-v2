@@ -38,6 +38,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import coil.compose.AsyncImage
 import com.example.data.*
+import com.example.util.StoreOfferNotifications
 import com.example.data.promotions.StoreProductImageRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -86,6 +87,9 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
                     require(next.storeId == store.id)
                     snapshot = next; failed = false
                     preferences.edit().putString("store_${store.id}", NordestaoStoreOffersCodec.encode(next)).apply()
+                    try { StoreOfferNotifications.notifyIfNew(context, next) }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { /* A notification failure must not affect the offers screen. */ }
                 } catch(cancelled: CancellationException) { throw cancelled }
                 catch(_: Exception) { failed = true }
                 finally { loading = false; now = System.currentTimeMillis() }
@@ -106,7 +110,7 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
         Text("${store.name} ★", fontWeight = FontWeight.Bold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onChooseStore) { Text("Alterar loja") }
-            Spacer(Modifier.width(8.dp))
+            StoreOfferNotificationBell()
             OfferSortSelector(selected = sortOption, onSelected = { sortName = it.name }, options = listOf(
                 OfferSortOption.NAME, OfferSortOption.DISCOUNT_DESC, OfferSortOption.DISCOUNT_ASC,
                 OfferSortOption.PRICE_ASC, OfferSortOption.PRICE_DESC))
