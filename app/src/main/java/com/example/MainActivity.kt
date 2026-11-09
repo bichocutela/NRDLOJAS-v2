@@ -98,6 +98,8 @@ class MainActivity : ComponentActivity() {
     private var openAboutFromNotification by mutableStateOf(false)
     private var openPromotionsFromNotification by mutableStateOf(false)
     private var promotionNotificationNavigationKey by mutableStateOf(0L)
+    private var openStoreOffersFromNotification by mutableStateOf(false)
+    private var storeOffersNotificationNavigationKey by mutableStateOf(0L)
     private var profileSectionFromNotification by mutableStateOf<String?>(null)
     private var profileNotificationNavigationKey by mutableStateOf(0L)
     private var productCodeFromNotification: String? = null
@@ -114,6 +116,8 @@ class MainActivity : ComponentActivity() {
         openAboutFromNotification = shouldOpenAbout(intent)
         openPromotionsFromNotification = shouldOpenPromotions(intent)
         if (openPromotionsFromNotification) promotionNotificationNavigationKey = 1L
+        openStoreOffersFromNotification = shouldOpenStoreOffers(intent)
+        if (openStoreOffersFromNotification) storeOffersNotificationNavigationKey = 1L
         profileSectionFromNotification = extractProfileSection(intent)
         if (profileSectionFromNotification != null) profileNotificationNavigationKey = System.currentTimeMillis()
         productCodeFromNotification = extractProductCode(intent)
@@ -317,6 +321,8 @@ class MainActivity : ComponentActivity() {
                                 openAboutFromNotification = openAboutFromNotification,
                                 openPromotionsFromNotification = openPromotionsFromNotification,
                                 promotionNotificationNavigationKey = promotionNotificationNavigationKey,
+                                openStoreOffersFromNotification = openStoreOffersFromNotification,
+                                storeOffersNotificationNavigationKey = storeOffersNotificationNavigationKey,
                                 profileSectionFromNotification = profileSectionFromNotification,
                                 profileNotificationNavigationKey = profileNotificationNavigationKey,
                                 productCodeFromNotification = productCodeFromNotification,
@@ -374,6 +380,10 @@ class MainActivity : ComponentActivity() {
             openPromotionsFromNotification = true
             promotionNotificationNavigationKey += 1L
         }
+        if (shouldOpenStoreOffers(intent)) {
+            openStoreOffersFromNotification = true
+            storeOffersNotificationNavigationKey += 1L
+        }
         extractProfileSection(intent)?.let { section ->
             profileSectionFromNotification = section
             profileNotificationNavigationKey = maxOf(System.currentTimeMillis(), profileNotificationNavigationKey + 1L)
@@ -425,6 +435,11 @@ class MainActivity : ComponentActivity() {
             intent?.getStringExtra("type") == "PROMOTION_UPDATED"
     }
 
+    private fun shouldOpenStoreOffers(intent: Intent?): Boolean {
+        return intent?.getBooleanExtra(EXTRA_OPEN_STORE_OFFERS, false) == true ||
+            intent?.getStringExtra("type") == "STORE_OFFER_ALERT"
+    }
+
     private fun extractProfileSection(intent: Intent?): String? {
         val section = intent?.getStringExtra(EXTRA_OPEN_PROFILE_SECTION) ?: return null
         intent.removeExtra(EXTRA_OPEN_PROFILE_SECTION)
@@ -449,6 +464,7 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_INSTALL_READY_UPDATE = "install_ready_update"
         const val EXTRA_OPEN_ABOUT = "open_about"
         const val EXTRA_OPEN_PROMOTIONS = "open_promotions"
+        const val EXTRA_OPEN_STORE_OFFERS = "open_store_offers"
         const val EXTRA_OPEN_PROFILE_SECTION = "open_profile_section"
         const val EXTRA_OPEN_PRODUCT_CODE = "open_product_code"
         const val EXTRA_UPDATE_TAG = "update_tag"
