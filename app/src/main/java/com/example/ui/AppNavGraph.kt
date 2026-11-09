@@ -70,6 +70,8 @@ fun AppNavGraph(
     openAboutFromNotification: Boolean = false,
     openPromotionsFromNotification: Boolean = false,
     promotionNotificationNavigationKey: Long = 0L,
+    openStoreOffersFromNotification: Boolean = false,
+    storeOffersNotificationNavigationKey: Long = 0L,
     profileSectionFromNotification: String? = null,
     profileNotificationNavigationKey: Long = 0L,
     productCodeFromNotification: String? = null,
@@ -204,6 +206,14 @@ fun AppNavGraph(
         if (openPromotionsFromNotification && access.promotions) {
             // Launch the new-offers filter, even on a repeated tap while the app is open.
             navController.navigate("promotions?novas=true&request=$promotionNotificationNavigationKey") { launchSingleTop = true }
+        }
+    }
+    var consumedStoreOfferAlert by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(openStoreOffersFromNotification, storeOffersNotificationNavigationKey, access.stores) {
+        if (openStoreOffersFromNotification && access.stores &&
+            storeOffersNotificationNavigationKey > consumedStoreOfferAlert) {
+            consumedStoreOfferAlert = storeOffersNotificationNavigationKey
+            navController.navigate("nordestao_stores_offers") { launchSingleTop = true }
         }
     }
 
@@ -488,6 +498,11 @@ fun AppNavGraph(
                 composable("nordestao_stores") {
                     RestrictedRoute(access.loading, access.stores, { navController.navigateToSearch() }) {
                         NordestaoStoresScreen(onBack = { navController.popBackStack() })
+                    }
+                }
+                composable("nordestao_stores_offers") {
+                    RestrictedRoute(access.loading, access.stores, { navController.navigateToSearch() }) {
+                        NordestaoStoresScreen(onBack = { navController.popBackStack() }, initialOffers = true)
                     }
                 }
                 composable("encartes") {

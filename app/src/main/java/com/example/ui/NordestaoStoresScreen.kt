@@ -35,7 +35,7 @@ import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> NordestaoStoresSnapshot = { NordestaoStoresRepository.load() }) {
+fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> NordestaoStoresSnapshot = { NordestaoStoresRepository.load() }, initialOffers: Boolean = false) {
     var snapshot by remember { mutableStateOf<NordestaoStoresSnapshot?>(null) }
     var loading by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(false) }
@@ -46,7 +46,7 @@ fun NordestaoStoresScreen(onBack: () -> Unit, loadStores: suspend () -> Nordesta
     val context = LocalContext.current
     val preferences = remember(context) { context.getSharedPreferences("nrd_store_selection", android.content.Context.MODE_PRIVATE) }
     var favorite by remember { mutableLongStateOf(preferences.getLong("favorite", -1)) }
-    var offersMode by rememberSaveable { mutableStateOf(false) }
+    var offersMode by rememberSaveable { mutableStateOf(initialOffers) }
     var mapMode by rememberSaveable { mutableStateOf(false) }
     var favoriteOnly by rememberSaveable { mutableStateOf(false) }
     var nearest by remember { mutableStateOf(false) }
