@@ -1,0 +1,258 @@
+name: Publish NRD Drive backgrounds and 11-11 campaign
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/nrd-appearance-drive-20261109.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nrd-appearance-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Prepare publication code and approved image map
+        shell: bash
+        run: |
+          cat > publish.mjs <<'NRD_SCRIPT'
+          import {createSign,createHash} from 'node:crypto';
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          const plan=JSON.parse(readFileSync('publication-plan.json','utf8'));
+          const endpoint='https://firestore.googleapis.com/v1/projects/appcodigo-7f245/databases/(default)/documents/config/appSettings';
+          const prefix='https://kkayksyzksexoarpfxyj.supabase.co/storage/v1/object/public/nrdlojas-images/';
+          const drive=id=>'https://drive.google.com/uc?export=download&id='+id;
+          async function token(){
+           const a=JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT||'{}');
+           assert.equal(a.project_id,plan.project,'Unexpected Firebase project');
+           const now=Math.floor(Date.now()/1000),enc=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
+           const body=enc({alg:'RS256',typ:'JWT'})+'.'+enc({iss:a.client_email,sub:a.client_email,aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+600,scope:'https://www.googleapis.com/auth/datastore'});
+           const signer=createSign('RSA-SHA256');signer.update(body);signer.end();
+           const assertion=body+'.'+signer.sign(a.private_key).toString('base64url');
+           const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion}),signal:AbortSignal.timeout(30000)});
+           assert(r.ok,'Firebase OAuth failed HTTP '+r.status);return (await r.json()).access_token;
+          }
+          async function current(t){const r=await fetch(endpoint,{headers:{Authorization:'Bearer '+t},signal:AbortSignal.timeout(30000)});assert(r.ok,'Firestore read failed HTTP '+r.status);return r.json();}
+          const sv=stringValue=>({stringValue}),num=doubleValue=>({doubleValue});
+          const writable=['appearanceThemeBackgrounds','appearanceCardBackgrounds','appearanceConsultationBackgrounds','appearanceRevision'];
+          function unchanged(fields){return Object.fromEntries(Object.entries(fields).filter(([k])=>!writable.includes(k)));}
+          function transform(before){
+           const fields=structuredClone(before.fields);let changed=0;
+           const counts=new Map(plan.replacements.map(x=>[x.original,0]));
+           function walk(value){
+            if(Array.isArray(value)){value.forEach(walk);return;}
+            if(!value||typeof value!=='object')return;
+            if(typeof value.stringValue==='string'){
+             const x=plan.replacements.find(x=>value.stringValue===prefix+x.original);
+             if(x){value.stringValue=drive(x.driveId);counts.set(x.original,counts.get(x.original)+1);changed++;}
+            } else Object.values(value).forEach(walk);
+           }
+           for(const key of writable.filter(k=>k!=='appearanceRevision'))walk(fields[key]);
+           for(const x of plan.replacements){
+            const present=JSON.stringify(fields).includes(drive(x.driveId));assert(present,'Missing source/reference '+x.original);
+           }
+           const themes=fields.appearanceThemeBackgrounds.mapValue.fields;
+           for(const c of plan.campaigns){
+            assert(themes[c.theme],'Unknown theme '+c.theme);
+            const values=themes[c.theme].arrayValue.values??=[];
+            const id='nrd-11-11-ofertas-2026-'+c.theme;
+            const index=values.findIndex(x=>x.mapValue.fields.id?.stringValue===id);
+            const conflict=values.find(x=>x.mapValue.fields.startDate?.stringValue===plan.date&&x.mapValue.fields.isActive?.booleanValue===true&&x.mapValue.fields.id?.stringValue!==id);
+            assert(!conflict,'Existing same-day schedule requires review: '+c.theme);
+            const base=index<0?{}:values[index].mapValue.fields;
+            const entry={mapValue:{fields:{imageScale:num(1),imageOffsetX:num(0),imageOffsetY:num(0),imageStretchX:num(1),imageStretchY:num(1),...base,id:sv(id),label:sv('11/11 de Ofertas — 2026'),url:sv(drive(c.driveId)),isActive:{booleanValue:true},startDate:sv(plan.date),endDate:sv(plan.date)}}};
+            if(index<0)values.push(entry);else values[index]=entry;
+           }
+           fields.appearanceRevision={integerValue:String(Math.max(Date.now(),Number(before.fields.appearanceRevision?.integerValue||0)+1))};
+           assert.deepEqual(unchanged(fields),unchanged(before.fields));
+           return {fields,changed};
+          }
+          if(process.argv[2]==='dry'){
+           const before=JSON.parse(readFileSync(process.argv[3],'utf8'));const out=transform(before);
+           console.log('Validated transformation:',out.changed,'URL replacements and',plan.campaigns.length,'campaigns; other fields preserved');
+          }else if(process.argv[2]==='prepare'){
+           const t=await token();const before=await current(t);
+           for(const x of [...plan.replacements,...plan.campaigns]){
+            const r=await fetch(drive(x.driveId),{signal:AbortSignal.timeout(60000)});
+            assert(r.ok,'Drive public download failed '+x.driveId+' HTTP '+r.status);
+            const bytes=Buffer.from(await r.arrayBuffer());assert.equal(createHash('sha256').update(bytes).digest('hex'),x.sha256,'Drive checksum mismatch '+x.driveId);
+           }
+           const out=transform(before);
+           writeFileSync('.before-full.json',JSON.stringify(before));
+           writeFileSync('appearance-backup-before.json',JSON.stringify({name:before.name,updateTime:before.updateTime,fields:Object.fromEntries(Object.entries(before.fields).filter(([k])=>k.startsWith('appearance')))},null,2));
+           writeFileSync('.prepared.json',JSON.stringify({fields:Object.fromEntries(writable.map(k=>[k,out.fields[k]])),updateTime:before.updateTime}));
+           writeFileSync('migration-summary.json',JSON.stringify({replacements:out.changed,campaigns:plan.campaigns.length,date:plan.date,driveIntegrity:'24 SHA-256 matches'},null,2));
+           console.log('Prepared:',out.changed,'URL replacements;',plan.campaigns.length,'campaigns; all public Drive hashes verified');
+          }else if(process.argv[2]==='apply'){
+           const t=await token(),before=JSON.parse(readFileSync('.before-full.json','utf8')),prepared=JSON.parse(readFileSync('.prepared.json','utf8'));
+           const url=new URL(endpoint);for(const key of writable)url.searchParams.append('updateMask.fieldPaths',key);url.searchParams.set('currentDocument.updateTime',prepared.updateTime);
+           const r=await fetch(url,{method:'PATCH',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({fields:prepared.fields}),signal:AbortSignal.timeout(60000)});
+           assert(r.ok,'Atomic Firestore update failed HTTP '+r.status);
+           const after=await current(t);for(const key of writable)assert.deepEqual(after.fields[key],prepared.fields[key],'Readback mismatch '+key);
+           assert.deepEqual(unchanged(after.fields),unchanged(before.fields),'Unrelated settings changed');
+           for(const c of plan.campaigns){const rows=after.fields.appearanceThemeBackgrounds.mapValue.fields[c.theme].arrayValue.values;const matches=rows.filter(x=>x.mapValue.fields.id?.stringValue==='nrd-11-11-ofertas-2026-'+c.theme);assert.equal(matches.length,1);const f=matches[0].mapValue.fields;assert.equal(f.startDate.stringValue,plan.date);assert.equal(f.endDate.stringValue,plan.date);assert.equal(f.isActive.booleanValue,true);}
+           writeFileSync('appearance-readback-after.json',JSON.stringify({updateTime:after.updateTime,fields:prepared.fields},null,2));
+           console.log('Published and read back:',plan.replacements.length,'Drive references;',plan.campaigns.length,'active banners scheduled only for',plan.date);
+          }else throw Error('Expected dry, prepare or apply');
+          NRD_SCRIPT
+          cat > publication-plan.json <<'NRD_PLAN'
+          {
+            "project": "appcodigo-7f245",
+            "date": "2026-11-11",
+            "replacements": [
+              {
+                "original": "theme_backgrounds/blue/fc220fd3-04d3-4a76-9107-42354bb2578e.jpg",
+                "driveId": "169Qgk7Sqg_1yMqadhRVOOueblH0fuGb1",
+                "sha256": "394aa5e8dddf9ef23410a4b18d95e6ef5df152a75a5f9bc890a6fbe965247272"
+              },
+              {
+                "original": "theme_backgrounds/gold/f6399a5a-cae2-4dcc-ab37-0d4d9541671b.jpg",
+                "driveId": "1o8AOp-o8VVWBPjMtZqX2CW_eTV_8MoFW",
+                "sha256": "aea19020420bbb9e3eca8e49a703b1846c15eb4100ac15ba610f41902849ebab"
+              },
+              {
+                "original": "theme_backgrounds/green/155f07f3-6307-4289-9ee1-1b7b166f5725.jpg",
+                "driveId": "1NEcb_pKQ3ckjgIHjH-8iD-ldya4VuNhA",
+                "sha256": "6d946c3883d42bee357a0f9146e42daec93d938aeb211597b04eba634e77fd16"
+              },
+              {
+                "original": "theme_backgrounds/orange/52e0a936-d892-468a-ac08-2500a0eccb2c.jpg",
+                "driveId": "1RCunm4CR_rMMKAzQ5S6WlL74FqVggmli",
+                "sha256": "e1544f9da8c41a6c0b95583276a0062fe1f2fef59b63cdca87c3541aa87fef43"
+              },
+              {
+                "original": "theme_backgrounds/red/b40a8f3c-2788-4f7a-9ade-b3053210ddd4.jpg",
+                "driveId": "1xpNsLKl26DdMq7DzSbyEM7WdoMuBJgR3",
+                "sha256": "d067ea5fd0273333912efcdfcf55ea0b6f9381c00c73eb52ed6b0e71576f6de7"
+              },
+              {
+                "original": "theme_backgrounds/red/ff5141b7-a333-4ba7-b415-7a93f7903b09.jpg",
+                "driveId": "1sc9Vs8s8GYO-WSQCJvt2sQzbRIVbFMuh",
+                "sha256": "8654f777ed35c3cd0045125de9d2c3667ff94eb7000febd83691c925f66d5b9a"
+              },
+              {
+                "original": "consultation_backgrounds/e6236286-9645-4d60-b57c-59184cba5512.jpg",
+                "driveId": "1XBNHxgqP5UEt_dD1z2RCNGqTew5T17Vz",
+                "sha256": "8a8002a46b76e464d5686f7391b2bba70c2d721956c859af181005e5332c23dd"
+              },
+              {
+                "original": "benefit_card_backgrounds/red/bd318246-992e-483d-8769-a0269d186452.jpg",
+                "driveId": "1g5BCWL8EmdYxdkQyyKMWm_tovrdru01x",
+                "sha256": "a74a3a68709313c70afac24f3b10d9cbf237086f45f8cabb561238a5cf21c9a6"
+              },
+              {
+                "original": "consultation_backgrounds/3361f045-c670-4a8c-8faa-5fe246112a29.jpg",
+                "driveId": "19qPWGZLSeNooYHkr9YpUpl7ITrmCGfLX",
+                "sha256": "f9dc30b121f873c8c9b8a1258fdb7a31a6f065effead53209b84f716b0b33c6d"
+              },
+              {
+                "original": "benefit_card_backgrounds/glass/17d90636-32cb-4761-9ba7-b24c088c3857.jpg",
+                "driveId": "1ejLoJpy7FPd1e5AXKNP0ms4jQO7bMSBZ",
+                "sha256": "86c29698cda59d4c93005cf81eaa6b07548564517b6da2cf6e3ded99fadef091"
+              },
+              {
+                "original": "benefit_card_backgrounds/green/1b64c0ec-0a7e-45ec-bb94-751864c94833.jpg",
+                "driveId": "1YpcjFp1ySE5XBIrCfuAu7OG6Glex9Eom",
+                "sha256": "541b94c6d78f795255aa1e1b1c9847f7463d17d373ec5bc10bc22d80540ddf6d"
+              },
+              {
+                "original": "benefit_card_backgrounds/orange/11c01765-02de-4757-999b-f6015cb59ebf.jpg",
+                "driveId": "1zGZUPEXlZLgfBUL1EJxrWSusY7CV5tGv",
+                "sha256": "20156b87b6b260ad7fb0e5c8e85461ea4a43cf48442d1f3e5974972edbe135e9"
+              },
+              {
+                "original": "benefit_card_backgrounds/blue/69351023-7e1d-4ca3-bcd9-81389b53c5ae.jpg",
+                "driveId": "1X4mPPe31fOt7x5qPnV5EtITX_C49v2_Y",
+                "sha256": "aef9fa1d42d6757821faa7504e3686475caf7ab35a32d13b1db558aa64280a23"
+              },
+              {
+                "original": "benefit_card_backgrounds/multicolor/dbce6dc7-49d4-4dfa-89f1-3e1feffc90f4.jpg",
+                "driveId": "1ojiaEwOXq07KxAc-puN7YQGy6QwNyC-J",
+                "sha256": "49bc941ec63f7d81f893c44a4e3e1db3a95c48d91bb9212e7b7c2b9e66ab20a4"
+              },
+              {
+                "original": "benefit_card_backgrounds/expressive/f7586481-0d99-486f-9172-d602824155e5.jpg",
+                "driveId": "1yVQz5fIa75SHfn5lzXa_XdF-X_mLvTUh",
+                "sha256": "f341c03ff803ad481645aa27b7e48bbd72e8062abe083ec313208f210228e753"
+              },
+              {
+                "original": "benefit_card_backgrounds/gold/7e5b4e5f-d4c3-4320-8852-cc28c16af41e.jpg",
+                "driveId": "1rRkdpNOew6ShwPpQ9NyyUOoGykgznPTj",
+                "sha256": "38d98d1cbc7fe9c07fd8c8f1a3cbdf632a8dacdc4484c86f6946644cafb5430e"
+              }
+            ],
+            "campaigns": [
+              {
+                "theme": "multicolor",
+                "driveId": "1N_MSFql8SngBCefDGg4KBTZTtr6UMlNZ",
+                "sha256": "e9f7f2635c180ffd55e5a35c3fdd30292f5eb33b00d4d32aa4d53315e27f095a"
+              },
+              {
+                "theme": "gold",
+                "driveId": "15IWkn2HwJSnmm3q7w2-k-7c8QZ-rZlui",
+                "sha256": "670c804a0b19b2514c23e449e76da3514e65ad8e5a01cebe097c4cc51a3b4aa2"
+              },
+              {
+                "theme": "expressive",
+                "driveId": "1H0Uigv7TP1pGerC0E53MD2RHevVKfDvj",
+                "sha256": "7089deff2ad649d6fa939921cd7ba069850c2d968367a549233d0f3471097097"
+              },
+              {
+                "theme": "green",
+                "driveId": "1MZbhvYVdXVWkzdtg0gwShTIh3mWNswCk",
+                "sha256": "a825b5d3fa46247f73857e2b14e2574fec7857477016a4b930c9a44d669d4273"
+              },
+              {
+                "theme": "red",
+                "driveId": "11WcLOpetIZw648w0jEL21Ws6CxJHzJbr",
+                "sha256": "9822ae2335609861ceb0dec60c426fbd606462467406eef4e2bf004cec80a98e"
+              },
+              {
+                "theme": "blue",
+                "driveId": "1ZYPdMcrE4zj0uUPqWPiG43jGKH3BcBDL",
+                "sha256": "de7344005e0f10617b3e11eb4be2a89c9e0bdd2710eba4c9e1f5856e729af08e"
+              },
+              {
+                "theme": "orange",
+                "driveId": "1p-BniJyvW1fO4OkZp1HcUuG457jS0d_a",
+                "sha256": "f1630b5a9c9c668eb485cd529da7328932f2ee85f3281c81512cae59efe87366"
+              },
+              {
+                "theme": "glass",
+                "driveId": "1D6YHe7w3-rFwGgs4xKodAWCKVLqVV_CE",
+                "sha256": "ad90a8cbf924faba87b106b56aff9ad48c6360f88ec735ac321824c4e75210c5"
+              }
+            ]
+          }
+          NRD_PLAN
+      - name: Verify public Drive images and prepare appearance backup
+        run: node publish.mjs prepare
+      - name: Store appearance backup before changing live settings
+        uses: actions/upload-artifact@v4
+        with:
+          name: appearance-before-publication
+          path: |
+            appearance-backup-before.json
+            migration-summary.json
+          retention-days: 30
+          if-no-files-found: error
+      - name: Publish URLs and 11-11 schedule with concurrency precondition
+        run: node publish.mjs apply
+      - name: Store verified publication result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appearance-publication-result
+          path: |
+            appearance-readback-after.json
+            migration-summary.json
+          retention-days: 30
+          if-no-files-found: ignore
