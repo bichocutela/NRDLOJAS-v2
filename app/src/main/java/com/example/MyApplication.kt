@@ -1,6 +1,10 @@
 package com.example
 
 import android.app.Application
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.disk.DiskCache
+import okhttp3.OkHttpClient
 import android.util.Log
 import com.example.data.CatalogCodeMigration
 import com.google.firebase.auth.FirebaseAuth
@@ -11,7 +15,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import java.util.Locale
 
-class MyApplication : Application() {
+class MyApplication : Application(), ImageLoaderFactory {
+    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
+        .diskCache {
+            DiskCache.Builder().directory(cacheDir.resolve("nrd_public_images"))
+                .maxSizeBytes(96L * 1024L * 1024L).build()
+        }
+        .okHttpClient {
+            OkHttpClient.Builder()
+                .addNetworkInterceptor(NrdPublicImageCacheInterceptor())
+                .build()
+        }
+        .build()
+
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var catalogCodeMigrationStarted = false
 
