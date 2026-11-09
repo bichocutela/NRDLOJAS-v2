@@ -83,7 +83,7 @@ internal fun StoreOfferNotificationBell() {
         onDismissRequest = { if (!busy) dialog = false },
         title = { Text("Notificações de Ofertas") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Escolha o tipo de oferta para receber avisos no seu aparelho. O padrão é acima de 50%.")
                 StoreOfferNotifications.Mode.entries.forEach { option ->
                     Row(
