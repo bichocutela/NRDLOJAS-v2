@@ -25,7 +25,7 @@ object ProfileNotificationRouting {
         "NEW_PRODUCT" -> R.drawable.ic_notification_product_added
         "CODE_CHANGED" -> R.drawable.ic_notification_code_changed
         "SUGGESTION_FIXED" -> R.drawable.ic_notification_suggestion_fixed
-        "PROMOTION_UPDATED" -> R.drawable.ic_notification_promotion
+        "PROMOTION_UPDATED", "STORE_OFFER_ALERT" -> R.drawable.ic_notification_promotion
         "APP_UPDATE" -> R.drawable.ic_notification_app_update
         "PROFILE_UPDATED" -> R.drawable.ic_notification_profile
         "HOURS_UPDATED" -> R.drawable.ic_notification_hours
