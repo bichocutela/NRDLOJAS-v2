@@ -44,6 +44,12 @@ class MyApplication : Application() {
             Log.w("MyApplication", "Favorite store promotion check not scheduled in this process", e)
         }
         try {
+            com.example.util.StoreOfferNotificationWorker.schedule(this)
+            Log.d("MyApplication", "Store offer discount alert check scheduled")
+        } catch (e: IllegalStateException) {
+            Log.w("MyApplication", "Store offer alert check unavailable in this process", e)
+        }
+        try {
             val benefitNotificationsEnabled = com.example.data.NossaGenteCredentialStore(this)
                 .isBenefitNotificationsEnabled()
             if (benefitNotificationsEnabled) {
