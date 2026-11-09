@@ -31,7 +31,7 @@ test('shared snapshot avoids duplicate reads, survives failure and forced refres
   const first=await sync({input:{operation:'promotion_sync',manifest:[]},readPage});
   assert.equal(first.items.length,1); assert.equal(calls,1);
   await sync({input:{operation:'promotion_status'},readPage}); assert.equal(calls,1);
-  time+=61000;
+  time+=5*60_000+1000;
   await assert.rejects(()=>sync({input:{operation:'promotion_status'},readPage:async()=>{throw Error('offline');}}),/offline/);
   await Promise.all(jobs);
   current={id:1,value:3};
@@ -86,7 +86,7 @@ test('an expired status waits for ACP removal even if validity is still in the f
  write:async(k,payload)=>{const row={payload,version:++version};docs.set(k,row);return row;},claim:async k=>cache.write(k,docs.get(k)?.payload??{}),finish:async(k,c,p)=>cache.write(k,p)};
  const sync=createPromotionSync({cache,now:()=>time});
  const before=await sync({input:{operation:'promotion_sync',manifest:[]},readPage:async()=>({items:[{id:'adria',endDate:'2099-12-31',quantityTake:3,quantityPay:2}],pageIndex:0,totalCount:1,totalPages:1})});
- time+=60000;
+ time+=5*60_000;
  const after=await sync({input:{operation:'promotion_sync',manifest:before.items},readPage:async()=>({items:[],pageIndex:0,totalCount:0,totalPages:0}),enrichItems:async()=>{throw Error('image service offline');}});
  assert.equal(after.count,0);assert.deepEqual(after.removedIds,['adria']);assert.equal(after.checkedAt,time);
 });
@@ -104,9 +104,10 @@ test('optional enrichment failure cannot hold a withdrawn promotion in the publi
 test('large snapshots keep all ACP products and rotate bounded enrichment batches',async()=>{
  const docs=new Map();let version=0;const seen=new Set();const products=Array.from({length:503},(_,id)=>({id,value:2}));
  const cache={get:async k=>docs.get(k),many:async keys=>new Map(keys.map(k=>[k,docs.get(k)])),write:async(k,payload)=>{const row={payload,version:++version};docs.set(k,row);return row;},claim:async k=>cache.write(k,docs.get(k)?.payload ?? {}),finish:async(k,c,p)=>cache.write(k,p),remove:async k=>docs.delete(k)};
- const sync=createPromotionSync({cache});
+ let time=1000;
+ const sync=createPromotionSync({cache,now:()=>time});
  const args={readPage:async page=>({items:products.slice(page*250,(page+1)*250),pageIndex:page,totalPages:3,totalCount:503}),enrichItems:async batch=>{assert.equal(batch.length,80);batch.forEach(item=>seen.add(item.id));return batch;}};
- for(let i=0;i<7;i++){const result=await sync({...args,input:{operation:'promotion_refresh',manifest:[]}});assert.equal(result.count,503);assert.equal(result.items.length,503);}
+ for(let i=0;i<7;i++){const result=await sync({...args,input:{operation:'promotion_refresh',manifest:[]}});assert.equal(result.count,503);assert.equal(result.items.length,503);time+=60*60_000;}
  assert.equal(seen.size,503);
 });
 
@@ -119,7 +120,7 @@ test('official images survive refresh for De/Por, Clube and Leve e Pague product
 });
 
 test('repeated upstream failures back off, preserve the snapshot, and manual recovery resets the delay',async()=>{
- const before=await snapshot([{id:1,value:2}]);let time=100000,calls=0;
+ const before=await snapshot([{id:1,value:2}]);let time=400000,calls=0;
  const docs=new Map([['promotion_snapshot_v3',{payload:{revision:before.revision,checkedAt:1,count:1,pages:1,generation:'old'}}],['snapshot_old_0',{payload:{rows:before.rows}}]]);
  const cache={get:async k=>docs.get(k),many:async keys=>new Map(keys.map(k=>[k,docs.get(k)])),
   claim:async k=>docs.get(k),finish:async(k,c,payload)=>{const row={payload};docs.set(k,row);return row;}};
@@ -136,4 +137,52 @@ test('repeated upstream failures back off, preserve the snapshot, and manual rec
  await sync({input:{operation:'promotion_refresh',manifest:[]},readPage:async()=>({items:[{id:1,value:2}],pageIndex:0,totalCount:1,totalPages:1})});
  assert.equal(docs.get('promotion_snapshot_v3').payload.retryAt,0);
  assert.equal(docs.get('promotion_snapshot_v3').payload.failureCount,0);
+});
+
+test('routine price refresh does not repeatedly enrich catalog records within one hour',async()=>{
+ const docs=new Map();let time=1_000_000, version=0, enrichCalls=0, pageReads=0;
+ let value=5;
+ const cache={
+  get:async key=>docs.get(key),
+  many:async keys=>new Map(keys.map(key=>[key,docs.get(key)])),
+  write:async(key,payload)=>{const row={payload,version:++version};docs.set(key,row);return row;},
+  claim:async key=>cache.write(key,docs.get(key)?.payload??{}),
+  finish:async(key,claim,payload)=>cache.write(key,payload),
+  remove:async key=>docs.delete(key)
+ };
+ const sync=createPromotionSync({cache,now:()=>time});
+ const readPage=async()=>{pageReads++;return {items:[{id:1,value}],pageIndex:0,totalPages:1,totalCount:1};};
+ const enrichItems=async items=>{enrichCalls++;return items.map(item=>({...item,nrdCategory:'Alimentos'}));};
+ const params={input:{operation:'promotion_refresh',revision:'',manifest:[]},readPage,enrichItems};
+ await sync(params); assert.equal(enrichCalls,1);
+ value=4; time+=5*60_000;
+ const result=await sync(params);
+ assert.equal(enrichCalls,1);
+ assert.equal(result.items[0].item.value,4); // Commercial changes bypass the enrichment throttle.
+ time+=5*60_000;
+ await sync(params); assert.equal(enrichCalls,1);
+ time+=50*60_000;
+ await sync(params); assert.equal(enrichCalls,2);
+ assert.equal(pageReads,4);
+});
+
+test('automatic refresh is coalesced to five minutes while manual refresh is immediate',async()=>{
+ const docs=new Map();let time=2_000_000,version=0,reads=0;
+ const cache={
+  get:async key=>docs.get(key),
+  many:async keys=>new Map(keys.map(key=>[key,docs.get(key)])),
+  write:async(key,payload)=>{const row={payload,version:++version};docs.set(key,row);return row;},
+  claim:async key=>cache.write(key,docs.get(key)?.payload??{}),
+  finish:async(key,claim,payload)=>cache.write(key,payload),
+  remove:async key=>docs.delete(key)
+ };
+ const sync=createPromotionSync({cache,now:()=>time});
+ const readPage=async()=>{reads++;return {items:[{id:1,value:reads}],pageIndex:0,totalPages:1,totalCount:1};};
+ const input={operation:'promotion_status'};
+ await sync({input,readPage});assert.equal(reads,1);
+ time+=60_000;
+ await sync({input,readPage});assert.equal(reads,1);
+ await sync({input:{operation:'promotion_refresh',manifest:[]},readPage});assert.equal(reads,2);
+ time+=5*60_000;
+ await sync({input,readPage});assert.equal(reads,3);
 });
