@@ -127,16 +127,22 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
     internal fun backgroundSyncEnabled(): Boolean =
         store.read(BACKGROUND_SYNC_ENABLED_KEY) == "true"
 
-    internal suspend fun refreshFeaturedCatalogOnce(maxPages: Int = MAX_FEATURED_WARMUP_PAGES) {
-        var page = 0
-        var hasMore: Boolean
-        do {
-            val result = featuredOffersPage(page)
-            hasMore = result.hasMore
-            page++
-            if (hasMore && page < maxPages) delay(FEATURED_WARMUP_PAGE_DELAY_MILLIS)
-        } while (hasMore && page < maxPages)
-    }
+    /** Screen warmup and periodic worker share a device-local refresh budget.
+     * Explicit search/getFresh and the manual Atualizar action are NOT throttled.
+     */
+    internal suspend fun refreshFeaturedCatalogOnce(maxPages: Int = MAX_FEATURED_WARMUP_PAGES) =
+        featuredSyncMutex.withLock {
+            if (!shouldRefreshFeaturedCatalog(store.read(FEATURED_LAST_REFRESH_KEY), System.currentTimeMillis())) return@withLock
+            var page = 0
+            var hasMore: Boolean
+            do {
+                val result = featuredOffersPage(page)
+                hasMore = result.hasMore
+                page++
+                if (hasMore && page < maxPages) delay(FEATURED_WARMUP_PAGE_DELAY_MILLIS)
+            } while (hasMore && page < maxPages)
+            store.write(FEATURED_LAST_REFRESH_KEY, System.currentTimeMillis().toString())
+        }
 
     internal fun stopBackgroundSync() {
         synchronized(this) {
@@ -595,7 +601,9 @@ internal class AcpApi(private val store: AcpStorage, clientBuilder: OkHttpClient
         private const val MAX_FEATURED_WARMUP_PAGES = 6
         private const val FEATURED_WARMUP_PAGE_DELAY_MILLIS = 100L
         private const val FEATURED_WARMUP_INITIAL_DELAY_MILLIS = 2_500L
-        private const val FEATURED_WARMUP_INTERVAL_MILLIS = 10L * 60L * 1000L
+        private const val FEATURED_WARMUP_INTERVAL_MILLIS = 60L * 60L * 1000L
+        private const val FEATURED_LAST_REFRESH_KEY = "acp_featured_cache_checked_at"
+        private val featuredSyncMutex = Mutex()
         private const val BACKGROUND_SYNC_ENABLED_KEY = "acp_background_sync_enabled"
         private const val MAX_CLUB_CATEGORY_PAGES = 10
         private const val CLUB_PAGE_SIZE = 250
@@ -637,4 +645,11 @@ internal class AcpCookieJar(saved: String?, private val persist: (String) -> Uni
 
     @Synchronized
     fun clear() { values.clear(); persist("[]") }
+}
+
+/** A bounded on-device budget for optional featured pages, separate from the active-price requests. */
+internal fun shouldRefreshFeaturedCatalog(lastMillis: String?, nowMillis: Long,
+    intervalMillis: Long = 60L * 60L * 1000L): Boolean {
+    val previous=lastMillis?.toLongOrNull() ?: return true
+    return nowMillis < previous || nowMillis - previous >= intervalMillis
 }
