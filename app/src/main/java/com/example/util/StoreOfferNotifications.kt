@@ -66,7 +66,7 @@ object StoreOfferNotifications {
             val offers = snapshot.offers.filter { it.active() && matches(it, selected) }
             val firstObservation = !storage.getBoolean(initializedKey, false)
             val fresh = if (firstObservation) emptyList() else offers.filter { fingerprint(it) !in previous }
-            val updated = (previous + offers.map(::fingerprint)).takeLast(2048).toSet()
+            val updated = (previous + offers.map(::fingerprint)).toList().takeLast(2048).toSet()
             storage.edit().putStringSet(key, updated).putBoolean(initializedKey, true).commit()
             fresh
         }
