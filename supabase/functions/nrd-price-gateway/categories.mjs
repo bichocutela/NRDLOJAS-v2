@@ -75,9 +75,15 @@ export function createCategorizer({cache, apiKey, model = 'gemini-3.5-flash-lite
   }
   const enrich = async items => {
     // Verified site departments must survive every fallback/cache path unchanged.
-    const entries = await Promise.all(items.filter(item => !(item.catalog_category_source === 'official' &&
-      OFFICIAL_DEPARTMENTS.includes(item.nrdCategory))).map(async item=>({item,key:await categoryKey(item)})));
-    if (!entries.length) return items.map(item => ({...item}));
+    const local = new Map();
+    const pending = items.filter(item => {
+      if (item.catalog_category_source === 'official' && OFFICIAL_DEPARTMENTS.includes(item.nrdCategory)) return false;
+      const category = strongCategory(item.description);
+      if (category) { local.set(item, {...item,nrdCategory:category,catalog_category_source:'inferred'}); return false; }
+      return true;
+    });
+    const entries = await Promise.all(pending.map(async item=>({item,key:await categoryKey(item)})));
+    if (!entries.length) return items.map(item => local.get(item) ?? {...item});
     // A persistent page summary costs one shared cache read instead of one per product,
     // including cold Edge starts. Individual records remain the source of truth.
     const keys = [...new Set(entries.map(e=>e.key))].sort();
@@ -106,7 +112,7 @@ export function createCategorizer({cache, apiKey, model = 'gemini-3.5-flash-lite
     });
     background(classify(missing).catch(()=>{}));
     const byItem = new Map(entries.map((entry,index) => [entry.item,enriched[index]]));
-    return items.map(item => byItem.get(item) ?? {...item});
+    return items.map(item => local.get(item) ?? byItem.get(item) ?? {...item});
   };
   enrich.verify = async items => {
     if (!items.length) throw Error('CLASSIFICATION_NOT_READY');
