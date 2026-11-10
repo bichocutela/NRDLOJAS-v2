@@ -83,9 +83,31 @@ service cloud.firestore {
       allow delete: if isMaster();
     }
     match /training_announcements/{id} { allow read, write: if false; }
+    // Snapshots públicos pequenos: a publicação requer identidade Mestre.
+    // Documentos contêm apenas metadados, nunca credenciais ou arquivos.
+    match /config/nordestao_stores {
+      allow get: if true;
+      allow list, delete: if false;
+      allow create, update: if isMaster() &&
+        request.resource.data.keys().hasOnly(['payload', 'revision']) &&
+        request.resource.data.payload is string &&
+        request.resource.data.payload.size() <= 250000 &&
+        request.resource.data.revision is int &&
+        request.resource.data.revision > 0;
+    }
+    match /config/encartes_public {
+      allow get: if true;
+      allow list, delete: if false;
+      allow create, update: if isMaster() &&
+        request.resource.data.keys().hasOnly(['payload', 'revision']) &&
+        request.resource.data.payload is string &&
+        request.resource.data.payload.size() <= 250000 &&
+        request.resource.data.revision is int &&
+        request.resource.data.revision > 0;
+    }
     match /config/{document} {
       allow read: if document != 'training';
-      allow write: if document != 'training_access' && document != 'training' && document != 'restricted_access' && document != 'update_policy' && isManager();
+      allow write: if document != 'training_access' && document != 'training' && document != 'restricted_access' && document != 'update_policy' && document != 'nordestao_stores' && document != 'encartes_public' && isManager();
       allow create, update: if document == 'restricted_access' && isMaster() &&
         request.resource.data.keys().hasOnly(['publicAccess']) && request.resource.data.publicAccess is bool;
       allow delete: if document == 'restricted_access' && isMaster();
