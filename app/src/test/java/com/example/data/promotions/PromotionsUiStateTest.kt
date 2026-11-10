@@ -33,8 +33,8 @@ class PromotionsUiStateTest {
     }
     @Test fun diskOffersRequireRecentAcpConfirmationAndFailuresRevokeIt() {
         assertFalse(acpOffersConfirmed(0L, 100_000L))
-        assertTrue(acpOffersConfirmed(100_000L, 459_999L))
-        assertFalse(acpOffersConfirmed(100_000L, 460_000L))
+        assertTrue(acpOffersConfirmed(100_000L, 25_299_999L))
+        assertFalse(acpOffersConfirmed(100_000L, 25_300_000L))
         assertFalse(acpOffersConfirmed(100_000L, 99_999L))
         val confirmed=PromotionSyncState().afterStoreSync(emptySet(),100_000L)
         assertEquals(100_000L,confirmed.acpConfirmedAt)
