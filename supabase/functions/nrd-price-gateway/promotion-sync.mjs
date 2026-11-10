@@ -45,7 +45,7 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
   // The commercial ACP snapshot stays current; image/category enrichment is optional.
   // Do not re-scan thousands of official product associations on every price check.
   const ENRICH_INTERVAL_MS = 60 * 60_000;
-  const AUTOMATIC_CHECK_INTERVAL_MS = 5 * 60_000;
+  const AUTOMATIC_CHECK_INTERVAL_MS = 7 * 60 * 60_000;
   let inFlight=null;
   async function refresh(readPage,enrichItems) {
     if (inFlight) return inFlight;
