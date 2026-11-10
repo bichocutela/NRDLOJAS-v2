@@ -1,4 +1,4 @@
-name: Publish richer 11-11 and 12-12 artwork
+name: Publish Show de Selos original artwork 12-22 November
 on:
   push:
     branches: [main]
@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Prepare publication code and approved image map
+      - name: Prepare original-artwork publication
         shell: bash
         run: |
           cat > publish.mjs <<'NRD_SCRIPT'
@@ -28,66 +28,43 @@ jobs:
           import assert from 'node:assert/strict';
           const plan=JSON.parse(readFileSync('publication-plan.json','utf8'));
           const endpoint='https://firestore.googleapis.com/v1/projects/appcodigo-7f245/databases/(default)/documents/config/appSettings';
-          const prefix='https://kkayksyzksexoarpfxyj.supabase.co/storage/v1/object/public/nrdlojas-images/';
-          const drive=id=>'https://drive.google.com/uc?export=download&id='+id;
-          async function token(){
-           const a=JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT||'{}');
-           assert.equal(a.project_id,plan.project,'Unexpected Firebase project');
-           const now=Math.floor(Date.now()/1000),enc=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
-           const body=enc({alg:'RS256',typ:'JWT'})+'.'+enc({iss:a.client_email,sub:a.client_email,aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+600,scope:'https://www.googleapis.com/auth/datastore'});
-           const signer=createSign('RSA-SHA256');signer.update(body);signer.end();
-           const assertion=body+'.'+signer.sign(a.private_key).toString('base64url');
-           const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion}),signal:AbortSignal.timeout(30000)});
-           assert(r.ok,'Firebase OAuth failed HTTP '+r.status);return (await r.json()).access_token;
-          }
-          async function current(t){const r=await fetch(endpoint,{headers:{Authorization:'Bearer '+t},signal:AbortSignal.timeout(30000)});assert(r.ok,'Firestore read failed HTTP '+r.status);return r.json();}
-          
-          const writable=['appearanceThemeBackgrounds','appearanceRevision'];
+          const START='2026-11-12',END='2026-11-22';
+          const str=x=>({stringValue:x}),get=(row,k)=>row.mapValue.fields[k]?.stringValue;
+          const active=(row,d)=>row.mapValue.fields.isActive?.booleanValue&&get(row,'startDate')<=d&&(!get(row,'endDate')||get(row,'endDate')>=d);
+          const winner=(rows,d)=>rows.filter(r=>active(r,d)).sort((a,b)=>get(b,'startDate').localeCompare(get(a,'startDate')))[0];
           function transform(before){
-           const fields=structuredClone(before.fields);
-           assert.equal(plan.entries.length,16);assert.equal(new Set(plan.entries.map(e=>e.id)).size,16);
+           const fields=structuredClone(before.fields),map=fields.appearanceThemeBackgrounds.mapValue.fields;
+           assert.equal(plan.entries.length,8);assert.equal(new Set(plan.entries.map(e=>e.theme)).size,8);
            for(const e of plan.entries){
-            const rows=fields.appearanceThemeBackgrounds.mapValue.fields[e.theme].arrayValue.values;
-            const matches=rows.filter(x=>x.mapValue.fields.id?.stringValue===e.id);assert.equal(matches.length,1,'Schedule missing or duplicated '+e.id);
-            const f=matches[0].mapValue.fields;
-            assert.equal(f.startDate.stringValue,e.date);assert.equal(f.endDate.stringValue,e.date);assert.equal(f.isActive.booleanValue,true);
-            assert([e.expectedUrl,drive(e.driveId)].includes(f.url.stringValue),'Unexpected concurrent image change '+e.id);
-            f.url={stringValue:drive(e.driveId)};
+            const old=map[e.theme]?.arrayValue.values||[],rows=[];
+            for(const row of old){
+             const f=row.mapValue.fields,s=get(row,'startDate'),end=get(row,'endDate');
+             if(get(row,'id')===e.id) continue;
+             if(!f.isActive?.booleanValue||!s||s>END||(end&&end<START)){rows.push(row);continue;}
+             if(s<START){const a=structuredClone(row);a.mapValue.fields.endDate=str('2026-11-11');rows.push(a);}
+             if(!end||end>END){const a=structuredClone(row);a.mapValue.fields.startDate=str('2026-11-23');a.mapValue.fields.id=str(get(row,'id')+'-after-show-selos-20261122');rows.push(a);}
+            }
+            rows.push({mapValue:{fields:{id:str(e.id),label:str('Show de Selos — '+e.label+' — 12 a 22/11/2026'),url:str('https://drive.google.com/uc?export=download&id='+e.driveId),isActive:{booleanValue:true},startDate:str(START),endDate:str(END),imageScale:{doubleValue:1},imageOffsetX:{doubleValue:0},imageOffsetY:{doubleValue:0},imageStretchX:{doubleValue:1},imageStretchY:{doubleValue:1}}}});
+            for(let day=12;day<=22;day++)assert.equal(get(winner(rows,'2026-11-'+day),'id'),e.id);
+            for(const day of ['2026-11-11','2026-11-23'])assert.equal(get(winner(rows,day)||{mapValue:{fields:{}}},'url'),get(winner(old,day)||{mapValue:{fields:{}}},'url'),'Adjacent campaign changed');
+            map[e.theme]={arrayValue:{values:rows}};
            }
            fields.appearanceRevision={integerValue:String(Math.max(Date.now(),Number(before.fields.appearanceRevision?.integerValue||0)+1))};
-           // Exact deep equality after undoing only the approved URLs and revision.
-           const restored=structuredClone(fields);
-           for(const e of plan.entries){
-            const old=before.fields.appearanceThemeBackgrounds.mapValue.fields[e.theme].arrayValue.values.find(x=>x.mapValue.fields.id?.stringValue===e.id);
-            restored.appearanceThemeBackgrounds.mapValue.fields[e.theme].arrayValue.values.find(x=>x.mapValue.fields.id?.stringValue===e.id).mapValue.fields.url=structuredClone(old.mapValue.fields.url);
-           }
-           restored.appearanceRevision=structuredClone(before.fields.appearanceRevision);
-           assert.deepEqual(restored,before.fields,'Only approved image URLs may change');
+           const restored=structuredClone(fields);restored.appearanceThemeBackgrounds=before.fields.appearanceThemeBackgrounds;restored.appearanceRevision=before.fields.appearanceRevision;assert.deepEqual(restored,before.fields);
            return fields;
           }
+          async function token(){const a=JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT||'{}');assert.equal(a.project_id,'appcodigo-7f245');const now=Math.floor(Date.now()/1000),enc=x=>Buffer.from(JSON.stringify(x)).toString('base64url');const b=enc({alg:'RS256',typ:'JWT'})+'.'+enc({iss:a.client_email,sub:a.client_email,aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+600,scope:'https://www.googleapis.com/auth/datastore'});const s=createSign('RSA-SHA256');s.update(b);s.end();const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:b+'.'+s.sign(a.private_key).toString('base64url')}),signal:AbortSignal.timeout(30000)});assert(r.ok,'OAuth HTTP '+r.status);return(await r.json()).access_token;}
+          async function current(t){const r=await fetch(endpoint,{headers:{Authorization:'Bearer '+t},signal:AbortSignal.timeout(30000)});assert(r.ok,'Read HTTP '+r.status);return r.json();}
           if(process.argv[2]==='dry'){
-           transform(JSON.parse(readFileSync(process.argv[3],'utf8')));console.log('16 URL-only updates validated; all dates and framing preserved');
+           const x=JSON.parse(readFileSync(process.argv[3],'utf8'));transform(x);console.log('8 themes and all 88 campaign-day selections validated; adjacent schedules preserved');
           }else if(process.argv[2]==='prepare'){
            const t=await token(),before=await current(t);
-           for(const e of plan.entries){
-            const r=await fetch(drive(e.driveId),{signal:AbortSignal.timeout(60000)});assert(r.ok,'Public download failed HTTP '+r.status);
-            const b=Buffer.from(await r.arrayBuffer());assert.equal(b.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
-            assert.equal(createHash('sha256').update(b).digest('hex'),e.sha256,'Drive integrity failed '+e.id);
-           }
-           const fields=transform(before);
-           writeFileSync('.before-full.json',JSON.stringify(before));
-           writeFileSync('appearance-backup-before.json',JSON.stringify({updateTime:before.updateTime,fields:Object.fromEntries(Object.entries(before.fields).filter(([k])=>k.startsWith('appearance')))},null,2));
-           writeFileSync('.prepared.json',JSON.stringify({fields:Object.fromEntries(writable.map(k=>[k,fields[k]])),updateTime:before.updateTime}));
-           writeFileSync('migration-summary.json',JSON.stringify({images:16,sha256Verified:16,datesPreserved:true,framingPreserved:true},null,2));
-           console.log('16 public PNG hashes verified; appearance backup ready');
+           for(const e of plan.entries){const r=await fetch('https://drive.google.com/uc?export=download&id='+e.driveId,{signal:AbortSignal.timeout(60000)});assert(r.ok,'Drive HTTP '+r.status);const b=Buffer.from(await r.arrayBuffer());assert.equal(b.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert.equal(createHash('sha256').update(b).digest('hex'),e.sha256,'Image integrity '+e.theme);}
+           const fields=transform(before);writeFileSync('.before-full.json',JSON.stringify(before));writeFileSync('appearance-backup-before.json',JSON.stringify({updateTime:before.updateTime,fields:Object.fromEntries(Object.entries(before.fields).filter(([k])=>k.startsWith('appearance')))}));writeFileSync('.prepared.json',JSON.stringify({fields:{appearanceThemeBackgrounds:fields.appearanceThemeBackgrounds,appearanceRevision:fields.appearanceRevision},updateTime:before.updateTime}));console.log('8 public original-logo artwork files verified and dated schedules prepared');
           }else if(process.argv[2]==='apply'){
-           const t=await token(),before=JSON.parse(readFileSync('.before-full.json','utf8')),p=JSON.parse(readFileSync('.prepared.json','utf8'));
-           const url=new URL(endpoint);for(const k of writable)url.searchParams.append('updateMask.fieldPaths',k);url.searchParams.set('currentDocument.updateTime',p.updateTime);
-           const r=await fetch(url,{method:'PATCH',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({fields:p.fields}),signal:AbortSignal.timeout(60000)});assert(r.ok,'Atomic publication failed HTTP '+r.status);
-           const after=await current(t);const expected=structuredClone(before.fields);Object.assign(expected,p.fields);assert.deepEqual(after.fields,expected,'Full readback mismatch');
-           writeFileSync('appearance-readback-after.json',JSON.stringify({updateTime:after.updateTime,fields:Object.fromEntries(Object.entries(after.fields).filter(([k])=>k.startsWith('appearance')))},null,2));
-           console.log('Published 16 revised artworks, exact readback verified; dates, framing and other settings preserved');
-          }else throw Error('Expected dry, prepare or apply');
+           const t=await token(),before=JSON.parse(readFileSync('.before-full.json','utf8')),p=JSON.parse(readFileSync('.prepared.json','utf8'));const url=new URL(endpoint);for(const k of Object.keys(p.fields))url.searchParams.append('updateMask.fieldPaths',k);url.searchParams.set('currentDocument.updateTime',p.updateTime);
+           const r=await fetch(url,{method:'PATCH',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({fields:p.fields}),signal:AbortSignal.timeout(60000)});assert(r.ok,'Publish HTTP '+r.status);const after=await current(t);const expected=structuredClone(before.fields);Object.assign(expected,p.fields);assert.deepEqual(after.fields,expected);writeFileSync('appearance-readback-after.json',JSON.stringify({updateTime:after.updateTime,fields:Object.fromEntries(Object.entries(after.fields).filter(([k])=>k.startsWith('appearance')))}));console.log('Published 8 themes from 2026-11-12 through 2026-11-22 inclusive; exact readback verified');
+          }else throw Error('Expected dry/prepare/apply');
           NRD_SCRIPT
           cat > publication-plan.json <<'NRD_PLAN'
           {
@@ -95,155 +72,79 @@ jobs:
             "entries": [
               {
                 "theme": "multicolor",
-                "id": "nrd-11-11-ofertas-2026-multicolor",
-                "date": "2026-11-11",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=1qwm4hq-7cOCkhTSICnBp1feFSDiZh1FT",
-                "driveId": "183N0X2zJJ4Gs5X94qZ3QTJ1wL4dVeedU",
-                "sha256": "6f79c292f8bb2e7a6c40a3cded4eb2087b13b30dde6a4fcf1e15f0fe81bbdd1f"
-              },
-              {
-                "theme": "multicolor",
-                "id": "nrd-12-12-so-ofertas-2026-multicolor",
-                "date": "2026-12-12",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=1oqQy9sXy1gIvAkpsNnC4XnH3o5ranIOX",
-                "driveId": "1mzyCCi9YAeZ_FFTBWXy0Y7pEkin7wXMs",
-                "sha256": "c9e78a89a270161a4e306ae1fce0df9b9f3c124aa16c94087ccddaed46ec739c"
+                "driveId": "1zP3Uzmu1fzLz325lc_QNG77u0tEmjZKa",
+                "id": "nrd-show-selos-20261112-multicolor",
+                "label": "Multicolorido",
+                "sha256": "2550ab48cf3a441c7ef5dce29f585f4d43605b318bab78b29b78b0e0eeea06d7"
               },
               {
                 "theme": "red",
-                "id": "nrd-11-11-ofertas-2026-red",
-                "date": "2026-11-11",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=13ILZlLQPZBr3jkBbqz4IFpOtjYFBdjnh",
-                "driveId": "1nUARGMrXoIYJ2lLwF3wrZQhLAorb42Kq",
-                "sha256": "9432b6b8ed7aa04e7407dcf7fdad8247ef001ed7797f830e2d2c875fe9e173ee"
-              },
-              {
-                "theme": "red",
-                "id": "nrd-12-12-so-ofertas-2026-red",
-                "date": "2026-12-12",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=1SiWEp0RPvwcNXyr-KC34382I7Frrj2d_",
-                "driveId": "1bYT9mWNqOskrfXUTGWUQsb2W_1uuNHcI",
-                "sha256": "61a4d54348ac4e72a6e507d9858fea517e7f9bf87fa8ba596e2af0ebcf240fa6"
-              },
-              {
-                "theme": "gold",
-                "id": "nrd-11-11-ofertas-2026-gold",
-                "date": "2026-11-11",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=1IVAdvneYB4rMQehCAbQ44yINjSjTL_K0",
-                "driveId": "1HSMIXCnGi8__PIRFTsTf9eBcqsUr2fby",
-                "sha256": "81f2e285f6338dcf596e27e8978b9dda3a39000f92983bc56c429b911184fdeb"
-              },
-              {
-                "theme": "gold",
-                "id": "nrd-12-12-so-ofertas-2026-gold",
-                "date": "2026-12-12",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=1Yq2BGfc0T-VxVK0ITaltKMXUYLIXhgaQ",
-                "driveId": "1uZl3rgeemS_PF0lDhFQz5UrCZX0UbPK8",
-                "sha256": "98e7f38f8c8c0c37207dd266775868041f0e610c0724d631c787bd56e6767b2c"
+                "driveId": "1gLC930zkyThCoN1SAClqU0wZMdEmoEpU",
+                "id": "nrd-show-selos-20261112-red",
+                "label": "Vermelho",
+                "sha256": "77f79aab0dda846db5ebf1005a48576a2875dc9d7b0c5e6a50756fc9c0b09389"
               },
               {
                 "theme": "green",
-                "id": "nrd-11-11-ofertas-2026-green",
-                "date": "2026-11-11",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=1_cVIUUSjayHiMM0gZ6WbAjkg1Qu6mKFo",
-                "driveId": "144VWIJQTvqJ6u66UX858pydZGgNFONNo",
-                "sha256": "dfafd0ea2820562e11678a754ff16e6a83eac26d1d645601925847d10ae6e0db"
-              },
-              {
-                "theme": "green",
-                "id": "nrd-12-12-so-ofertas-2026-green",
-                "date": "2026-12-12",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=1LL-tfg-mQn47b-LsJdX3c0b2PGsM-Ust",
-                "driveId": "1720ycDG6I3HPTEXenVjexkCvZ56Nbe0C",
-                "sha256": "02595382352503ef5a58c173ceb2e733edfe5a87f5d86a38d5e88fa3b1576916"
-              },
-              {
-                "theme": "blue",
-                "id": "nrd-11-11-ofertas-2026-blue",
-                "date": "2026-11-11",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=1m_1FoMHiDTQZvy3H4bzzhvXN0JkZ7dwl",
-                "driveId": "1a_pWIyEC1C2lKPA-sawRib4eikSHJc7m",
-                "sha256": "65ac815947e519ea3cfb3038865ca59f997c6ed25de998d6ba8ffe52fe6fbee3"
-              },
-              {
-                "theme": "blue",
-                "id": "nrd-12-12-so-ofertas-2026-blue",
-                "date": "2026-12-12",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=1wdaQVDc42D_ejjEiybsKsXWG2t3fBBD7",
-                "driveId": "1W4B4boNTppyJRwtmUoJmVGLE73hrCqEx",
-                "sha256": "e82cfcc05e59370f4b86f852825f9f40dbc3c8583a3b40239f62f36c51e67847"
+                "driveId": "1B20nOo5EgM-IT-WFesyfQi6VVXxfUw0f",
+                "id": "nrd-show-selos-20261112-green",
+                "label": "Verde",
+                "sha256": "bc95645aadcbeb23e82c557fe640fdb011cdeed5d6116a32411d926b87a95ff2"
               },
               {
                 "theme": "orange",
-                "id": "nrd-11-11-ofertas-2026-orange",
-                "date": "2026-11-11",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=1SgKrK82yJrn3nSLY2OO_b2r-LVPQZ7dn",
-                "driveId": "1ENwphMSL1gbZpjAHmbMEYzdVwsalhGdm",
-                "sha256": "110fe6a834f1e0c68814f6c434fd66f80d497f0e57576edbefe9e28856e105ed"
+                "driveId": "1KijFgiN7Tdi42UtKS5ZWZBcUYr0idL86",
+                "id": "nrd-show-selos-20261112-orange",
+                "label": "Laranja",
+                "sha256": "a4329779cf1d5b7805201070da67e6a800a134db0f52e72fdbebfd039ce34ace"
               },
               {
-                "theme": "orange",
-                "id": "nrd-12-12-so-ofertas-2026-orange",
-                "date": "2026-12-12",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=1hkkwCwsQqD-5xi48Ph_VrNNBLEUh7HGm",
-                "driveId": "1eWOmbyyQgMoo3fTY9iSO1B1RafDPkrZN",
-                "sha256": "4d3db4992d9ed450351262c07e22290d69332c0d935681624b0448806c55793b"
+                "theme": "blue",
+                "driveId": "1i6fS_-RgjsjmC324ZboJH42evrTW3c4o",
+                "id": "nrd-show-selos-20261112-blue",
+                "label": "Azul",
+                "sha256": "d36d3f9e91b8139501237a961190970873e369fdbb841521c7c11ca4640f3252"
               },
               {
-                "theme": "glass",
-                "id": "nrd-11-11-ofertas-2026-glass",
-                "date": "2026-11-11",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=11DNC2cC3oe7E6y25xSzM5I7byGL0Vpr8",
-                "driveId": "1_2xByvhmTrSh-rHbxenalAFTuiaVuwfy",
-                "sha256": "da1640d609dc7d6a956337a0655d57b5c977494d27535fabeb04300ea104853a"
-              },
-              {
-                "theme": "glass",
-                "id": "nrd-12-12-so-ofertas-2026-glass",
-                "date": "2026-12-12",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=13AE0lHICpa3zM0thY1sxJ-WDHJgD5qJ-",
-                "driveId": "1Y9SklMmI-B0o1i2XREvG5fHHhsYz9751",
-                "sha256": "ac00a4b1f7106843dac4160f2919c9694701c14c797991779d942999fb29636b"
+                "theme": "gold",
+                "driveId": "1BzN1Sr2v5lQu1MCmxZ1vYHxL_cmdtH6L",
+                "id": "nrd-show-selos-20261112-gold",
+                "label": "Dourado",
+                "sha256": "4ffb4ff888f1b5988a427c6acadcb93bf74b44be967313e0e200884675fc0400"
               },
               {
                 "theme": "expressive",
-                "id": "nrd-11-11-ofertas-2026-expressive",
-                "date": "2026-11-11",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=1JqKRvB3f3926tsw0SJ_W8lByMHd8kNRj",
-                "driveId": "1F165--YEyRO561BX6zce0NVNnOTzWPwn",
-                "sha256": "7aa0bb61685849e2f555b4f7f0b20e8c629ecd4dcd945f7b7b405be469f502d2"
+                "driveId": "1RPlX2slFbXBJ9_eOlrSnPzCL8sxM5nlY",
+                "id": "nrd-show-selos-20261112-expressive",
+                "label": "Glass Expressivo",
+                "sha256": "c4bbcb4ed0170177aa2703ac1aef5ab3f06bec9889a8bb6fe2bdfcb6d8b3c286"
               },
               {
-                "theme": "expressive",
-                "id": "nrd-12-12-so-ofertas-2026-expressive",
-                "date": "2026-12-12",
-                "expectedUrl": "https://drive.google.com/uc?export=download&id=1TXBK_UbHn1kItqkMQ6U3d8pcEQPSd6LS",
-                "driveId": "1J1JTqMQxGTbbbF9U1iGWjia_IIMJ1Q-O",
-                "sha256": "09afbba5505b0dda2bce54bab4da01aca5dd82f92af176f009b691e1cbbc6c9d"
+                "theme": "glass",
+                "driveId": "1fXkI-5fT9dlFQgLxhBxh9f0wa5zm2MF3",
+                "id": "nrd-show-selos-20261112-glass",
+                "label": "Glass Soft",
+                "sha256": "041a92712994473d95dddbfe682a16a36d4c4ffd1964b4ac6638a7b61d9f8349"
               }
             ]
           }
           NRD_PLAN
-      - name: Verify public Drive images and prepare appearance backup
+      - name: Verify eight public files and prepare dated schedules
         run: node publish.mjs prepare
-      - name: Store appearance backup before changing live settings
+      - name: Store appearance backup before publication
         uses: actions/upload-artifact@v4
         with:
-          name: appearance-before-publication
-          path: |
-            appearance-backup-before.json
-            migration-summary.json
+          name: appearance-before-show-selos
+          path: appearance-backup-before.json
           retention-days: 30
           if-no-files-found: error
-      - name: Replace approved artwork URLs while preserving schedules with concurrency precondition
+      - name: Publish 12 through 22 November with concurrency guard and exact readback
         run: node publish.mjs apply
       - name: Store verified publication result
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: appearance-publication-result
-          path: |
-            appearance-readback-after.json
-            migration-summary.json
+          name: appearance-show-selos-result
+          path: appearance-readback-after.json
           retention-days: 30
           if-no-files-found: ignore
