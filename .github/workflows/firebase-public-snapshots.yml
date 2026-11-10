@@ -25,8 +25,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: scripts/firebase/package-lock.json
       - name: Check configuration
         id: configured
         env:
@@ -40,7 +38,7 @@ jobs:
           fi
       - name: Install dependencies
         if: steps.configured.outputs.ready == 'true'
-        run: npm ci --prefix scripts/firebase
+        run: npm install --prefix scripts/firebase --no-audit --no-fund
       - name: Write ephemeral service account
         if: steps.configured.outputs.ready == 'true'
         env:
