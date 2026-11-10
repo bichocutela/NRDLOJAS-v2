@@ -14,7 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
-/** Shared hourly cache warmup; ordinary price lookups and manual refresh remain unrestricted. */
+/** Shared seven-hour cache warmup; ordinary price lookups and manual refresh remain unrestricted. */
 class AcpCatalogSyncWorker(
     appContext: Context,
     workerParams: WorkerParameters,
@@ -41,7 +41,7 @@ class AcpCatalogSyncWorker(
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
-            val request = PeriodicWorkRequestBuilder<AcpCatalogSyncWorker>(60, TimeUnit.MINUTES)
+            val request = PeriodicWorkRequestBuilder<AcpCatalogSyncWorker>(7, TimeUnit.HOURS)
                 .setConstraints(constraints)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
                 .build()
