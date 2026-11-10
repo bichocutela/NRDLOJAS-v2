@@ -1,0 +1,56 @@
+name: Firebase public metadata snapshots
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 */6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-public-snapshots
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NRD_LEGACY_PUBLIC_URL: ${{ vars.NRD_LEGACY_PUBLIC_URL }}
+      NRD_LEGACY_ANON_KEY: ${{ secrets.NRD_LEGACY_ANON_KEY }}
+      GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/firebase-service-account.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: scripts/firebase/package-lock.json
+      - name: Check configuration
+        id: configured
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT_JSON" ] && [ -n "$NRD_LEGACY_PUBLIC_URL" ] && [ -n "$NRD_LEGACY_ANON_KEY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Firebase bridge disabled: configure FIREBASE_SERVICE_ACCOUNT_JSON, NRD_LEGACY_ANON_KEY and NRD_LEGACY_PUBLIC_URL"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install dependencies
+        if: steps.configured.outputs.ready == 'true'
+        run: npm ci --prefix scripts/firebase
+      - name: Write ephemeral service account
+        if: steps.configured.outputs.ready == 'true'
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$GOOGLE_APPLICATION_CREDENTIALS"
+      - name: Synchronize public snapshots
+        if: steps.configured.outputs.ready == 'true'
+        run: node scripts/firebase/sync-public-snapshots.mjs
+      - name: Remove temporary credential
+        if: always()
+        run: rm -f "$GOOGLE_APPLICATION_CREDENTIALS"
