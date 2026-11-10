@@ -72,59 +72,59 @@ jobs:
             "entries": [
               {
                 "theme": "multicolor",
-                "driveId": "1zP3Uzmu1fzLz325lc_QNG77u0tEmjZKa",
+                "driveId": "1uTik9fyrhLdIkkee0JfqF8kwZMNPD6dc",
                 "id": "nrd-show-selos-20261112-multicolor",
                 "label": "Multicolorido",
-                "sha256": "2550ab48cf3a441c7ef5dce29f585f4d43605b318bab78b29b78b0e0eeea06d7"
+                "sha256": "b993b1e06cd254f3e0ff9252f5f8e95139a19073ec58d165ce6f31371c20a78b"
               },
               {
                 "theme": "red",
-                "driveId": "1gLC930zkyThCoN1SAClqU0wZMdEmoEpU",
+                "driveId": "1ek_K2I2_DVK-41v_A7UN0x4gsW-s2shD",
                 "id": "nrd-show-selos-20261112-red",
                 "label": "Vermelho",
-                "sha256": "77f79aab0dda846db5ebf1005a48576a2875dc9d7b0c5e6a50756fc9c0b09389"
+                "sha256": "5740abda4b5f5cf8dddb18995bece39de25880ae3af8d44748859ace0fa88650"
               },
               {
                 "theme": "green",
-                "driveId": "1B20nOo5EgM-IT-WFesyfQi6VVXxfUw0f",
+                "driveId": "1k0fhD1QVOYrFPQ3RFzypOQAOC0PjivXz",
                 "id": "nrd-show-selos-20261112-green",
                 "label": "Verde",
-                "sha256": "bc95645aadcbeb23e82c557fe640fdb011cdeed5d6116a32411d926b87a95ff2"
+                "sha256": "9a4d748f95275602005bf1cc2e592d7fab950753fe9e933f88ab08c5a2bac537"
               },
               {
                 "theme": "orange",
-                "driveId": "1KijFgiN7Tdi42UtKS5ZWZBcUYr0idL86",
+                "driveId": "1dHSvN-jDSVL9ojeBkbcY__k_kX9nkp_y",
                 "id": "nrd-show-selos-20261112-orange",
                 "label": "Laranja",
-                "sha256": "a4329779cf1d5b7805201070da67e6a800a134db0f52e72fdbebfd039ce34ace"
+                "sha256": "50dc5af7192ede446a72e685b5cf912cbe5e40f11a62154c9017a75ad0c9aa61"
               },
               {
                 "theme": "blue",
-                "driveId": "1i6fS_-RgjsjmC324ZboJH42evrTW3c4o",
+                "driveId": "1EGaZmAoP6SzlkidXTbXZAVNO8JaMHmag",
                 "id": "nrd-show-selos-20261112-blue",
                 "label": "Azul",
-                "sha256": "d36d3f9e91b8139501237a961190970873e369fdbb841521c7c11ca4640f3252"
+                "sha256": "7cfd7d0f6826c183bfa6c5aaefb0f27f4c1e7d4ffcb657271b1e95855c1952e4"
               },
               {
                 "theme": "gold",
-                "driveId": "1BzN1Sr2v5lQu1MCmxZ1vYHxL_cmdtH6L",
+                "driveId": "1NbNeaMZ_mDMm3db4dGZQaYtLCusm0RXi",
                 "id": "nrd-show-selos-20261112-gold",
                 "label": "Dourado",
-                "sha256": "4ffb4ff888f1b5988a427c6acadcb93bf74b44be967313e0e200884675fc0400"
+                "sha256": "30cdc292ef6400ff5eef4cdd980fd8bed3cea22bd4f8a0b58967b303aa1de985"
               },
               {
                 "theme": "expressive",
-                "driveId": "1RPlX2slFbXBJ9_eOlrSnPzCL8sxM5nlY",
+                "driveId": "1ABv_ioyzLi61Jcbh3W9ZXwsd1eQolX33",
                 "id": "nrd-show-selos-20261112-expressive",
                 "label": "Glass Expressivo",
-                "sha256": "c4bbcb4ed0170177aa2703ac1aef5ab3f06bec9889a8bb6fe2bdfcb6d8b3c286"
+                "sha256": "9b482853af87ad1e7f7966d3814bdb1fc6b00a5d3c472e2623ae937d45d67fe2"
               },
               {
                 "theme": "glass",
-                "driveId": "1fXkI-5fT9dlFQgLxhBxh9f0wa5zm2MF3",
+                "driveId": "1lBjTToXLeYpAYAMn4OO65GCHwAs3OC-S",
                 "id": "nrd-show-selos-20261112-glass",
                 "label": "Glass Soft",
-                "sha256": "041a92712994473d95dddbfe682a16a36d4c4ffd1964b4ac6638a7b61d9f8349"
+                "sha256": "24c70ad8d84a98657761165b8873c340ebb6065516d9e4dc60821073f9077bdb"
               }
             ]
           }
