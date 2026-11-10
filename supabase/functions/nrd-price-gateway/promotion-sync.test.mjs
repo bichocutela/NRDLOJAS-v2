@@ -166,7 +166,7 @@ test('routine price refresh does not repeatedly enrich catalog records within on
  assert.equal(pageReads,4);
 });
 
-test('automatic refresh is coalesced to five minutes while manual refresh is immediate',async()=>{
+test('automatic refresh is coalesced to seven hours while manual refresh is immediate',async()=>{
  const docs=new Map();let time=2_000_000,version=0,reads=0;
  const cache={
   get:async key=>docs.get(key),
