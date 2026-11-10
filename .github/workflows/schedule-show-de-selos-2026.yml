@@ -1,0 +1,54 @@
+name: Schedule Show de Selos immersive backgrounds (NRD)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Review without writes or publish the 8 theme backgrounds'
+        type: choice
+        required: true
+        default: dry-run
+        options:
+          - dry-run
+          - publish
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nrd-show-de-selos-theme-20261112
+  cancel-in-progress: false
+
+jobs:
+  schedule:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/firebase-service-account.json
+      DRY_RUN: ${{ inputs.mode != 'publish' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify credentials
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
+            echo "::error::Missing FIREBASE_SERVICE_ACCOUNT_JSON; nothing published"
+            exit 1
+          fi
+      - name: Install Firebase Admin SDK
+        run: npm install --prefix scripts/firebase --no-audit --no-fund
+      - name: Prepare temporary credentials
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$GOOGLE_APPLICATION_CREDENTIALS"
+      - name: Check/publish theme schedules
+        run: node scripts/firebase/schedule-show-de-selos-2026.mjs
+      - name: Remove temporary credentials
+        if: always()
+        run: rm -f "$GOOGLE_APPLICATION_CREDENTIALS"
