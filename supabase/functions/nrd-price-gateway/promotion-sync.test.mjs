@@ -183,6 +183,8 @@ test('automatic refresh is coalesced to seven hours while manual refresh is imme
  time+=60_000;
  await sync({input,readPage});assert.equal(reads,1);
  await sync({input:{operation:'promotion_refresh',manifest:[]},readPage});assert.equal(reads,2);
- time+=5*60_000;
+ time+=6*60*60_000;
+ await sync({input,readPage});assert.equal(reads,2);
+ time+=60*60_000;
  await sync({input,readPage});assert.equal(reads,3);
 });
