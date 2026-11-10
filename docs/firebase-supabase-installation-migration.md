@@ -1,8 +1,8 @@
 # Plano de separação Firebase / Supabase por instalação
 
 ## Contrato exigido
-- **Supabase para todos os aparelhos:** somente Consultar Preços e Promoções comerciais (incluindo cache e sincronização ACP).
-- **Firebase para instalações novas:** Painel Mestre, metadados de Encartes, Nossas Lojas, preferências, Treinamento e notificações.
+- **Supabase para todos os aparelhos:** Consultar Preços, Promoções comerciais (incluindo cache e sincronização ACP), login de Ofertas, credenciais ACP/ACP Tech e processamento de notificações comerciais. A entrega push continua via Firebase Cloud Messaging (FCM).
+- **Firebase para instalações novas:** configurações não comerciais do Painel Mestre, metadados de Encartes, Nossas Lojas, preferências e Treinamento. Notificações comerciais continuam processadas no Supabase.
 - **Instalações anteriores à migração:** conservar o caminho legado para serviços ainda hospedados no Supabase; não remover endpoints ou dados enquanto existirem clientes dependentes.
 - Não duplicar PDFs/imagens no Firestore. Manter URLs HTTPS da fonte/Drive e validar domínios.
 - Credenciais de fornecedores e funções administrativas nunca devem ser expostas em documentos públicos ou no APK.
@@ -17,7 +17,7 @@
 ## Etapas antes de ativar o roteamento
 1. Definir um instante de corte **no servidor** e congelar a lista de instalações legadas identificáveis; instalações sem prova confiável devem usar fallback conservador, não ser migradas silenciosamente.
 2. Implementar documento de capacidade/roteamento por instalação, assinado/validado no servidor, com versão e fallback; **não confiar em uma flag escrita pelo próprio cliente**.
-3. Migrar publicações do Painel Mestre para Firebase com regras de administrador e histórico/revisões; separar segredos em backend privado.
+3. Preservar as publicações não comerciais do Painel Mestre já no Firebase (Home, aparência, temas, fundos, treinamento e políticas globais). Não migrar os logins de Ofertas, ACP ou ACP Tech nem o Vault comercial; revisar somente configurações ainda não migradas.
 4. Publicar snapshots pequenos e versionados de Encartes e Nossas Lojas no Firebase. Uma função backend protegida continua consultando Idever; distribuir dados públicos via CDN/Hosting ou documentos pequenos e cache local. Usar refresh incremental e limites de leitura.
 5. Implementar Android dual-read por serviço: legado para instalações confirmadas, Firebase para novas; fallback explícito sem sobrescrever dados ou misturar tenants.
 6. Testar regras Firestore (usuário, mestre, público), compatibilidade com APK antigo, novas instalações, reinstalação, ausência de rede, expiração/remoção de encartes, troca de loja e rollback.
