@@ -13,6 +13,10 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import java.util.UUID
 import org.json.JSONObject
@@ -30,6 +34,12 @@ data class AppNotification(
 )
 
 class UserPreferences(private val context: Context) {
+    private fun syncAccountPreferences() {
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            UserPreferenceCloudSync.upload(context)
+        }
+    }
+
     val vibrateOnClick: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[VIBRATE_ON_CLICK] ?: true
     }
@@ -220,6 +230,7 @@ class UserPreferences(private val context: Context) {
     }
     suspend fun setNotificationsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[NOTIFICATIONS_ENABLED] = enabled }
+        syncAccountPreferences()
     }
     suspend fun setNotificationsProductAddedEnabled(enabled: Boolean) {
         context.dataStore.edit { it[NOTIFICATIONS_PRODUCT_ADDED_ENABLED] = enabled }
@@ -260,6 +271,7 @@ class UserPreferences(private val context: Context) {
             }
             preferences.remove(LAST_NOTIFIED_PROMOTION_FINGERPRINT)
         }
+        syncAccountPreferences()
     }
 
     suspend fun setLastNotifiedPromotionFingerprint(fingerprint: String) {
@@ -271,6 +283,7 @@ class UserPreferences(private val context: Context) {
     suspend fun setAppTheme(theme: String) {
         LocalAppearanceChoiceState.themeChosen = true
         context.dataStore.edit { it[APP_THEME] = theme }
+        syncAccountPreferences()
     }
 
     suspend fun setAppearanceMode(mode: String) {

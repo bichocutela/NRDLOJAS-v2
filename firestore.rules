@@ -248,6 +248,20 @@ service cloud.firestore {
         request.resource.data.updatedAt is int;
     }
 
+    // Preferências leves por conta; nunca públicas nem enumeráveis.
+    match /user_preferences/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow list, delete: if false;
+      allow create, update: if isSignedIn() && request.auth.uid == uid &&
+        request.resource.data.keys().hasOnly(['favoriteStoreCode', 'appTheme', 'notificationsEnabled', 'updatedAt']) &&
+        request.resource.data.favoriteStoreCode is string &&
+        request.resource.data.favoriteStoreCode.size() <= 12 &&
+        request.resource.data.appTheme is string &&
+        request.resource.data.appTheme.size() <= 40 &&
+        request.resource.data.notificationsEnabled is bool &&
+        request.resource.data.updatedAt == request.time;
+    }
+
     // Qualquer coleção não declarada acima permanece bloqueada por padrão.
     match /{document=**} {
       allow read, write: if false;
