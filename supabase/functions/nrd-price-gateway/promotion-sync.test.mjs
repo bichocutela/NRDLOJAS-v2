@@ -31,7 +31,7 @@ test('shared snapshot avoids duplicate reads, survives failure and forced refres
   const first=await sync({input:{operation:'promotion_sync',manifest:[]},readPage});
   assert.equal(first.items.length,1); assert.equal(calls,1);
   await sync({input:{operation:'promotion_status'},readPage}); assert.equal(calls,1);
-  time+=5*60_000+1000;
+  time+=7*60*60_000+1000;
   await assert.rejects(()=>sync({input:{operation:'promotion_status'},readPage:async()=>{throw Error('offline');}}),/offline/);
   await Promise.all(jobs);
   current={id:1,value:3};
