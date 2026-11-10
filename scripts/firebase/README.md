@@ -21,3 +21,15 @@ uma função de backend segura e ainda **não está implementada**.
 
 Os APKs atuais continuam lendo Supabase. Não altere o roteamento até testar
 instalações antigas, reinstalação, falha de rede e rollback.
+
+## Ponte de sincronização temporária
+
+`sync-public-snapshots.mjs` lê somente os endpoints públicos existentes
+`nrd-stores` e `nrd-encartes` e grava os metadados no Firestore com
+revisão incremental. Configure `NRD_LEGACY_PUBLIC_URL` (origem HTTPS do
+Supabase), `NRD_LEGACY_ANON_KEY` e Firebase ADC em um servidor confiável.
+Execute `node scripts/firebase/sync-public-snapshots.mjs` a partir da raiz.
+A chave anon não concede acesso ao Vault; não configure service_role aqui.
+O script não altera endpoints, não habilita leitura nos APKs e não executa
+automaticamente. Uma vez que o Firebase buscar diretamente a fonte oficial,
+a ponte poderá ser retirada sem afetar clientes legados.
