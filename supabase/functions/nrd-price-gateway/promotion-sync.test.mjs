@@ -86,7 +86,7 @@ test('an expired status waits for ACP removal even if validity is still in the f
  write:async(k,payload)=>{const row={payload,version:++version};docs.set(k,row);return row;},claim:async k=>cache.write(k,docs.get(k)?.payload??{}),finish:async(k,c,p)=>cache.write(k,p)};
  const sync=createPromotionSync({cache,now:()=>time});
  const before=await sync({input:{operation:'promotion_sync',manifest:[]},readPage:async()=>({items:[{id:'adria',endDate:'2099-12-31',quantityTake:3,quantityPay:2}],pageIndex:0,totalCount:1,totalPages:1})});
- time+=5*60_000;
+ time+=7*60*60_000;
  const after=await sync({input:{operation:'promotion_sync',manifest:before.items},readPage:async()=>({items:[],pageIndex:0,totalCount:0,totalPages:0}),enrichItems:async()=>{throw Error('image service offline');}});
  assert.equal(after.count,0);assert.deepEqual(after.removedIds,['adria']);assert.equal(after.checkedAt,time);
 });
@@ -120,7 +120,7 @@ test('official images survive refresh for De/Por, Clube and Leve e Pague product
 });
 
 test('repeated upstream failures back off, preserve the snapshot, and manual recovery resets the delay',async()=>{
- const before=await snapshot([{id:1,value:2}]);let time=400000,calls=0;
+ const before=await snapshot([{id:1,value:2}]);let time=8*60*60_000,calls=0;
  const docs=new Map([['promotion_snapshot_v3',{payload:{revision:before.revision,checkedAt:1,count:1,pages:1,generation:'old'}}],['snapshot_old_0',{payload:{rows:before.rows}}]]);
  const cache={get:async k=>docs.get(k),many:async keys=>new Map(keys.map(k=>[k,docs.get(k)])),
   claim:async k=>docs.get(k),finish:async(k,c,payload)=>{const row={payload};docs.set(k,row);return row;}};
