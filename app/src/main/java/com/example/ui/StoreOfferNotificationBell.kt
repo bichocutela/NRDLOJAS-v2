@@ -75,14 +75,9 @@ internal fun StoreOfferNotificationBell() {
         }
     }
 
-    OutlinedButton(onClick = { selected = current; error = null; showAndroidSettings = false; dialog = true },
-        modifier = Modifier.heightIn(min = 48.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {
+    IconButton(onClick = { selected = current; error = null; showAndroidSettings = false; dialog = true }) {
         Icon(if (current == StoreOfferNotifications.Mode.OFF) Icons.Default.NotificationsNone
-            else Icons.Default.Notifications, contentDescription = "Configurar notificações de ofertas",
-            modifier = Modifier.size(24.dp))
-        Spacer(Modifier.width(6.dp))
-        Text("Alertas")
+            else Icons.Default.Notifications, contentDescription = "Configurar notificações de ofertas")
     }
     if (dialog) AlertDialog(
         onDismissRequest = { if (!busy) dialog = false },

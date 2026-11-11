@@ -240,7 +240,7 @@ class NordestaoStoresScreenTest {
         compose.onNodeWithText("Alterar loja").assertIsDisplayed()
         compose.onNodeWithContentDescription("Configurar notificações de ofertas").assertIsDisplayed()
         compose.onNodeWithText("Ordenar").assertIsDisplayed()
-        compose.onNodeWithText("Alertas").performClick()
+        compose.onNodeWithContentDescription("Configurar notificações de ofertas").performClick()
         compose.onNodeWithText("Notificações de Ofertas").assertIsDisplayed()
     }
 
