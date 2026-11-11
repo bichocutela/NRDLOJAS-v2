@@ -1,4 +1,4 @@
-name: Publish Friday 13 immersive horror artwork 13 November
+name: Publish selected Friday 13 backgrounds
 on:
   push:
     branches: [main]
@@ -28,103 +28,142 @@ jobs:
           import assert from 'node:assert/strict';
           const plan=JSON.parse(readFileSync('publication-plan.json','utf8'));
           const endpoint='https://firestore.googleapis.com/v1/projects/appcodigo-7f245/databases/(default)/documents/config/appSettings';
-          const START='2026-11-13',END='2026-11-13';
-          const str=x=>({stringValue:x}),get=(row,k)=>row.mapValue.fields[k]?.stringValue;
-          const active=(row,d)=>row.mapValue.fields.isActive?.booleanValue&&get(row,'startDate')<=d&&(!get(row,'endDate')||get(row,'endDate')>=d);
-          const winner=(rows,d)=>rows.filter(r=>active(r,d)).sort((a,b)=>get(b,'startDate').localeCompare(get(a,'startDate')))[0];
+          const prefix='https://kkayksyzksexoarpfxyj.supabase.co/storage/v1/object/public/nrdlojas-images/';
+          const drive=id=>'https://drive.google.com/uc?export=download&id='+id;
+          async function token(){
+           const a=JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT||'{}');
+           assert.equal(a.project_id,plan.project,'Unexpected Firebase project');
+           const now=Math.floor(Date.now()/1000),enc=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
+           const body=enc({alg:'RS256',typ:'JWT'})+'.'+enc({iss:a.client_email,sub:a.client_email,aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+600,scope:'https://www.googleapis.com/auth/datastore'});
+           const signer=createSign('RSA-SHA256');signer.update(body);signer.end();
+           const assertion=body+'.'+signer.sign(a.private_key).toString('base64url');
+           const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion}),signal:AbortSignal.timeout(30000)});
+           assert(r.ok,'Firebase OAuth failed HTTP '+r.status);return (await r.json()).access_token;
+          }
+          async function current(t){const r=await fetch(endpoint,{headers:{Authorization:'Bearer '+t},signal:AbortSignal.timeout(30000)});assert(r.ok,'Firestore read failed HTTP '+r.status);return r.json();}
+          const sv=stringValue=>({stringValue}),num=doubleValue=>({doubleValue});
+          const writable=['appearanceThemeBackgrounds','appearanceCardBackgrounds','appearanceConsultationBackgrounds','appearanceRevision'];
+          function unchanged(fields){return Object.fromEntries(Object.entries(fields).filter(([k])=>!writable.includes(k)));}
           function transform(before){
-           const fields=structuredClone(before.fields),map=fields.appearanceThemeBackgrounds.mapValue.fields;
-           assert.equal(plan.entries.length,8);assert.equal(new Set(plan.entries.map(e=>e.theme)).size,8);
-           for(const e of plan.entries){
-            const old=map[e.theme]?.arrayValue.values||[],rows=[];
-            for(const row of old){
-             const f=row.mapValue.fields,s=get(row,'startDate'),end=get(row,'endDate');
-             if(get(row,'id')===e.id) continue;
-             if(!f.isActive?.booleanValue||!s||s>END||(end&&end<START)){rows.push(row);continue;}
-             if(s<START){const a=structuredClone(row);a.mapValue.fields.endDate=str('2026-11-12');rows.push(a);}
-             if(!end||end>END){const a=structuredClone(row);a.mapValue.fields.startDate=str('2026-11-14');a.mapValue.fields.id=str(get(row,'id')+'-after-friday13-20261113');rows.push(a);}
-            }
-            rows.push({mapValue:{fields:{id:str(e.id),label:str('Sexta-feira 13 — '+e.label+' — 13/11/2026'),url:str('https://drive.google.com/uc?export=download&id='+e.driveId),isActive:{booleanValue:true},startDate:str(START),endDate:str(END),imageScale:{doubleValue:1},imageOffsetX:{doubleValue:0},imageOffsetY:{doubleValue:0},imageStretchX:{doubleValue:1},imageStretchY:{doubleValue:1}}}});
-            for(let day=13;day<=13;day++)assert.equal(get(winner(rows,'2026-11-'+day),'id'),e.id);
-            for(const day of ['2026-11-12','2026-11-14'])assert.equal(get(winner(rows,day)||{mapValue:{fields:{}}},'url'),get(winner(old,day)||{mapValue:{fields:{}}},'url'),'Adjacent campaign changed');
-            map[e.theme]={arrayValue:{values:rows}};
+           const fields=structuredClone(before.fields);let changed=0;
+           const counts=new Map(plan.replacements.map(x=>[x.original,0]));
+           function walk(value){
+            if(Array.isArray(value)){value.forEach(walk);return;}
+            if(!value||typeof value!=='object')return;
+            if(typeof value.stringValue==='string'){
+             const x=plan.replacements.find(x=>value.stringValue===prefix+x.original);
+             if(x){value.stringValue=drive(x.driveId);counts.set(x.original,counts.get(x.original)+1);changed++;}
+            } else Object.values(value).forEach(walk);
+           }
+           for(const key of writable.filter(k=>k!=='appearanceRevision'))walk(fields[key]);
+           for(const x of plan.replacements){
+            const present=JSON.stringify(fields).includes(drive(x.driveId));assert(present,'Missing source/reference '+x.original);
+           }
+           const themes=fields.appearanceThemeBackgrounds.mapValue.fields;
+           for(const c of plan.campaigns){
+            assert(themes[c.theme],'Unknown theme '+c.theme);
+            const values=themes[c.theme].arrayValue.values??=[];
+            const id=c.id;
+            const index=values.findIndex(x=>x.mapValue.fields.id?.stringValue===id);
+            const conflict=values.find(x=>x.mapValue.fields.startDate?.stringValue===plan.date&&x.mapValue.fields.isActive?.booleanValue===true&&x.mapValue.fields.id?.stringValue!==id);
+            assert(!conflict,'Existing same-day schedule requires review: '+c.theme);
+            const base=index<0?{}:values[index].mapValue.fields;
+            const entry={mapValue:{fields:{imageScale:num(1),imageOffsetX:num(0),imageOffsetY:num(0),imageStretchX:num(1),imageStretchY:num(1),...base,id:sv(id),label:sv('Sexta-feira 13 de Ofertas — 2026'),url:sv(drive(c.driveId)),isActive:{booleanValue:true},startDate:sv(plan.date),endDate:sv(plan.date)}}};
+            if(index<0)values.push(entry);else values[index]=entry;
            }
            fields.appearanceRevision={integerValue:String(Math.max(Date.now(),Number(before.fields.appearanceRevision?.integerValue||0)+1))};
-           const restored=structuredClone(fields);restored.appearanceThemeBackgrounds=before.fields.appearanceThemeBackgrounds;restored.appearanceRevision=before.fields.appearanceRevision;assert.deepEqual(restored,before.fields);
-           return fields;
+           assert.deepEqual(unchanged(fields),unchanged(before.fields));
+           return {fields,changed};
           }
-          async function token(){const a=JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT||'{}');assert.equal(a.project_id,'appcodigo-7f245');const now=Math.floor(Date.now()/1000),enc=x=>Buffer.from(JSON.stringify(x)).toString('base64url');const b=enc({alg:'RS256',typ:'JWT'})+'.'+enc({iss:a.client_email,sub:a.client_email,aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+600,scope:'https://www.googleapis.com/auth/datastore'});const s=createSign('RSA-SHA256');s.update(b);s.end();const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:b+'.'+s.sign(a.private_key).toString('base64url')}),signal:AbortSignal.timeout(30000)});assert(r.ok,'OAuth HTTP '+r.status);return(await r.json()).access_token;}
-          async function current(t){const r=await fetch(endpoint,{headers:{Authorization:'Bearer '+t},signal:AbortSignal.timeout(30000)});assert(r.ok,'Read HTTP '+r.status);return r.json();}
           if(process.argv[2]==='dry'){
-           const x=JSON.parse(readFileSync(process.argv[3],'utf8'));transform(x);console.log('8 themes and 8 Friday-13 campaign-day selections validated; November 12 and 14 schedules preserved');
+           const before=JSON.parse(readFileSync(process.argv[3],'utf8'));const out=transform(before);
+           console.log('Validated transformation:',out.changed,'URL replacements and',plan.campaigns.length,'campaigns; other fields preserved');
           }else if(process.argv[2]==='prepare'){
-           const t=await token(),before=await current(t);
-           for(const e of plan.entries){const r=await fetch('https://drive.google.com/uc?export=download&id='+e.driveId,{signal:AbortSignal.timeout(60000)});assert(r.ok,'Drive HTTP '+r.status);const b=Buffer.from(await r.arrayBuffer());assert.equal(b.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert.equal(createHash('sha256').update(b).digest('hex'),e.sha256,'Image integrity '+e.theme);}
-           const fields=transform(before);writeFileSync('.before-full.json',JSON.stringify(before));writeFileSync('appearance-backup-before.json',JSON.stringify({updateTime:before.updateTime,fields:Object.fromEntries(Object.entries(before.fields).filter(([k])=>k.startsWith('appearance')))}));writeFileSync('.prepared.json',JSON.stringify({fields:{appearanceThemeBackgrounds:fields.appearanceThemeBackgrounds,appearanceRevision:fields.appearanceRevision},updateTime:before.updateTime}));console.log('8 public official-logo horror artworks verified for 2026-11-13');
+           const t=await token();const before=await current(t);
+           for(const x of [...plan.replacements,...plan.campaigns]){
+            const r=await fetch(drive(x.driveId),{signal:AbortSignal.timeout(60000)});
+            assert(r.ok,'Drive public download failed '+x.driveId+' HTTP '+r.status);
+            const bytes=Buffer.from(await r.arrayBuffer());assert.equal(createHash('sha256').update(bytes).digest('hex'),x.sha256,'Drive checksum mismatch '+x.driveId);
+           }
+           const out=transform(before);
+           writeFileSync('.before-full.json',JSON.stringify(before));
+           writeFileSync('appearance-backup-before.json',JSON.stringify({name:before.name,updateTime:before.updateTime,fields:Object.fromEntries(Object.entries(before.fields).filter(([k])=>k.startsWith('appearance')))},null,2));
+           writeFileSync('.prepared.json',JSON.stringify({fields:Object.fromEntries(writable.map(k=>[k,out.fields[k]])),updateTime:before.updateTime}));
+           writeFileSync('migration-summary.json',JSON.stringify({replacements:out.changed,campaigns:plan.campaigns.length,date:plan.date,driveIntegrity:'24 SHA-256 matches'},null,2));
+           console.log('Prepared:',out.changed,'URL replacements;',plan.campaigns.length,'campaigns; all public Drive hashes verified');
           }else if(process.argv[2]==='apply'){
-           const t=await token(),before=JSON.parse(readFileSync('.before-full.json','utf8')),p=JSON.parse(readFileSync('.prepared.json','utf8'));const url=new URL(endpoint);for(const k of Object.keys(p.fields))url.searchParams.append('updateMask.fieldPaths',k);url.searchParams.set('currentDocument.updateTime',p.updateTime);
-           const r=await fetch(url,{method:'PATCH',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({fields:p.fields}),signal:AbortSignal.timeout(60000)});assert(r.ok,'Publish HTTP '+r.status);const after=await current(t);const expected=structuredClone(before.fields);Object.assign(expected,p.fields);assert.deepEqual(after.fields,expected);writeFileSync('appearance-readback-after.json',JSON.stringify({updateTime:after.updateTime,fields:Object.fromEntries(Object.entries(after.fields).filter(([k])=>k.startsWith('appearance')))}));console.log('Published 8 Friday-13 themes for 2026-11-13 only; adjacent campaigns preserved and exact readback verified');
-          }else throw Error('Expected dry/prepare/apply');
+           const t=await token(),before=JSON.parse(readFileSync('.before-full.json','utf8')),prepared=JSON.parse(readFileSync('.prepared.json','utf8'));
+           const url=new URL(endpoint);for(const key of writable)url.searchParams.append('updateMask.fieldPaths',key);url.searchParams.set('currentDocument.updateTime',prepared.updateTime);
+           const r=await fetch(url,{method:'PATCH',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({fields:prepared.fields}),signal:AbortSignal.timeout(60000)});
+           assert(r.ok,'Atomic Firestore update failed HTTP '+r.status);
+           const after=await current(t);for(const key of writable)assert.deepEqual(after.fields[key],prepared.fields[key],'Readback mismatch '+key);
+           assert.deepEqual(unchanged(after.fields),unchanged(before.fields),'Unrelated settings changed');
+           for(const c of plan.campaigns){const rows=after.fields.appearanceThemeBackgrounds.mapValue.fields[c.theme].arrayValue.values;const matches=rows.filter(x=>x.mapValue.fields.id?.stringValue===c.id);assert.equal(matches.length,1);const f=matches[0].mapValue.fields;assert.equal(f.startDate.stringValue,plan.date);assert.equal(f.endDate.stringValue,plan.date);assert.equal(f.isActive.booleanValue,true);}
+           writeFileSync('appearance-readback-after.json',JSON.stringify({updateTime:after.updateTime,fields:prepared.fields},null,2));
+           console.log('Published and read back:',plan.replacements.length,'Drive references;',plan.campaigns.length,'active banners scheduled only for',plan.date);
+          }else throw Error('Expected dry, prepare or apply');
           NRD_SCRIPT
           cat > publication-plan.json <<'NRD_PLAN'
           {
             "project": "appcodigo-7f245",
-            "entries": [
-              {
-                "theme": "multicolor",
-                "driveId": "1d_qdYH6qmXItgMkoiCTPTAtlwP3jkEKc",
-                "id": "nrd-friday13-20261113-multicolor",
-                "label": "Multicolorido",
-                "sha256": "5d71d4e4583f44bfd50f20e0ce1a472139ac6709faaba7d6baf257ed59a09414"
-              },
-              {
-                "theme": "red",
-                "driveId": "1OcZ3EnFoOZG-NkVfNUNtvpoB7_Vzx7WX",
-                "id": "nrd-friday13-20261113-red",
-                "label": "Vermelho",
-                "sha256": "48dfad467bd3338dc73fc5985be23bfd5860dcbc09f62c5f16d73b4053388e1b"
-              },
-              {
-                "theme": "green",
-                "driveId": "1CrN4xO49MtSyC8airLuvU7jT-67qVUVo",
-                "id": "nrd-friday13-20261113-green",
-                "label": "Verde",
-                "sha256": "0472ae538ea6462e86b14f616020b4f614224c2fa4e54ecb582b12ad77b113a5"
-              },
-              {
-                "theme": "orange",
-                "driveId": "1d2DUzNyzNhPgOWa6nJnx6eE2u5eUDR7R",
-                "id": "nrd-friday13-20261113-orange",
-                "label": "Laranja",
-                "sha256": "8455d61c7c5b9f836fe06ea57d6bbb0a89f5b5b12a19a0cb2638b1ba80065d45"
-              },
-              {
-                "theme": "blue",
-                "driveId": "1Uqx-2cCxPBhMvVmu9hw3x1XuNWbLi-8C",
-                "id": "nrd-friday13-20261113-blue",
-                "label": "Azul",
-                "sha256": "d01b968c3a64e52dce51fe26b61b3150f308aae24ccf6bb307ee22564cdff6d6"
-              },
-              {
-                "theme": "gold",
-                "driveId": "1hkFoDsrVAM5EZ4eB3Fup8yqPbsGbbTEi",
-                "id": "nrd-friday13-20261113-gold",
-                "label": "Dourado",
-                "sha256": "7a535777e49529eb060c0a5371743036897016e55851916d9f0f1d31fa1c8ad9"
-              },
+            "date": "2026-11-13",
+            "replacements": [],
+            "campaigns": [
               {
                 "theme": "expressive",
-                "driveId": "1GW3lSOvioQUufvs4xvxe2Rnqazta-ohn",
-                "id": "nrd-friday13-20261113-expressive",
-                "label": "Glass Expressivo",
-                "sha256": "cabe3cdd51cc6dbb8086b0c01a1b4464e34970920d0a5343365cae462a79d90a"
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-33ee59a8-35a8-4754-b23a-23d0d10892ce.png",
+                "driveId": "11TNgf8JC2hKI7Be5qzYAOTgeTAwW-QzJ",
+                "sha256": "a78b261d72e08441a1b700af81bb506b3407a765eef8721f96334a6209abe23f",
+                "id": "nrd-friday13-20261113-expressive"
               },
               {
                 "theme": "glass",
-                "driveId": "1H-xY6IyG9iiyS47idPazCDQnfJ-SZIrB",
-                "id": "nrd-friday13-20261113-glass",
-                "label": "Glass Soft",
-                "sha256": "3846ad8b922085825ac5c63d052bc2525506a27ebc8c3b2989c64c36c337f35b"
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-9e0c7493-1e31-4045-8364-cf31723dd8cb.png",
+                "driveId": "1tuC90OFQ3VNwLdB6A86IX87_MqT1T9Hr",
+                "sha256": "e895ef30a401587e5c7317d4c5d05945885a6842de7599b9ee47eea124f6dff0",
+                "id": "nrd-friday13-20261113-glass"
+              },
+              {
+                "theme": "orange",
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-78df595e-32f1-473a-83ca-556954290651.png",
+                "driveId": "1dzsi85tOKji2rQT4oLvW_rVqc_BmdnZ2",
+                "sha256": "db108d66edcac9d238b61442e95520ece3f9601da76bcbd2dd4ceb2d39bdfa2a",
+                "id": "nrd-friday13-20261113-orange"
+              },
+              {
+                "theme": "gold",
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-43441234-7dc2-4480-a74d-bf341091113c.png",
+                "driveId": "1-2EC5qttqzEhfBwlrvpL-Vi7Au9x0tMh",
+                "sha256": "c375efc01ad23ce29d0c5ffafd9bd12369a083c1bf66cc0567c255f1194c5d87",
+                "id": "nrd-friday13-20261113-gold"
+              },
+              {
+                "theme": "green",
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-9dade20d-115a-4f6c-b39d-dcc45eda675b.png",
+                "driveId": "1bMIfe2ViwAxsV5J4Co0VSYB1qjh6gzGb",
+                "sha256": "d6f00468f4a503f29c0e5dcc9125b21c1c82a61dc14a84c93343b047403aed95",
+                "id": "nrd-friday13-20261113-green"
+              },
+              {
+                "theme": "blue",
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-385a401f-9b23-49b5-ac30-061645a2a1df.png",
+                "driveId": "1PSjaNwiMLSewXhPQZZ7MKE4xhJB0ckke",
+                "sha256": "f961b66b1f799177b997c34058b82ed5ad811d6def0943f92931f891e5d2755e",
+                "id": "nrd-friday13-20261113-blue"
+              },
+              {
+                "theme": "multicolor",
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-7ca6b083-7060-4446-b40e-70c381b5aa94.png",
+                "driveId": "1Kjs9ueZms6m3S3UakbCw4_a35P24vzZk",
+                "sha256": "b7787423a76921eaaa14a9eefce32e67bee811f8dd417691deedb346bd92321f",
+                "id": "nrd-friday13-20261113-multicolor"
+              },
+              {
+                "theme": "red",
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-2332cdfd-b7ca-46c9-bccc-7909b0ff6a18.png",
+                "driveId": "1VPTFGBLn-S-uiGBvV-3WCQGQeyM2KYrS",
+                "sha256": "2fe9af329f93d51474a272e4312e386faa7250445df8db2feb7ca05e040c9cd5",
+                "id": "nrd-friday13-20261113-red"
               }
             ]
           }
