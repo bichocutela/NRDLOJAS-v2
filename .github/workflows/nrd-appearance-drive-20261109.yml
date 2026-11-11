@@ -1,4 +1,4 @@
-name: Publish Show de Selos original artwork 12-22 November
+name: Publish Friday 13 immersive horror artwork 13 November
 on:
   push:
     branches: [main]
@@ -28,7 +28,7 @@ jobs:
           import assert from 'node:assert/strict';
           const plan=JSON.parse(readFileSync('publication-plan.json','utf8'));
           const endpoint='https://firestore.googleapis.com/v1/projects/appcodigo-7f245/databases/(default)/documents/config/appSettings';
-          const START='2026-11-12',END='2026-11-22';
+          const START='2026-11-13',END='2026-11-13';
           const str=x=>({stringValue:x}),get=(row,k)=>row.mapValue.fields[k]?.stringValue;
           const active=(row,d)=>row.mapValue.fields.isActive?.booleanValue&&get(row,'startDate')<=d&&(!get(row,'endDate')||get(row,'endDate')>=d);
           const winner=(rows,d)=>rows.filter(r=>active(r,d)).sort((a,b)=>get(b,'startDate').localeCompare(get(a,'startDate')))[0];
@@ -41,12 +41,12 @@ jobs:
              const f=row.mapValue.fields,s=get(row,'startDate'),end=get(row,'endDate');
              if(get(row,'id')===e.id) continue;
              if(!f.isActive?.booleanValue||!s||s>END||(end&&end<START)){rows.push(row);continue;}
-             if(s<START){const a=structuredClone(row);a.mapValue.fields.endDate=str('2026-11-11');rows.push(a);}
-             if(!end||end>END){const a=structuredClone(row);a.mapValue.fields.startDate=str('2026-11-23');a.mapValue.fields.id=str(get(row,'id')+'-after-show-selos-20261122');rows.push(a);}
+             if(s<START){const a=structuredClone(row);a.mapValue.fields.endDate=str('2026-11-12');rows.push(a);}
+             if(!end||end>END){const a=structuredClone(row);a.mapValue.fields.startDate=str('2026-11-14');a.mapValue.fields.id=str(get(row,'id')+'-after-friday13-20261113');rows.push(a);}
             }
-            rows.push({mapValue:{fields:{id:str(e.id),label:str('Show de Selos — '+e.label+' — 12 a 22/11/2026'),url:str('https://drive.google.com/uc?export=download&id='+e.driveId),isActive:{booleanValue:true},startDate:str(START),endDate:str(END),imageScale:{doubleValue:1},imageOffsetX:{doubleValue:0},imageOffsetY:{doubleValue:0},imageStretchX:{doubleValue:1},imageStretchY:{doubleValue:1}}}});
-            for(let day=12;day<=22;day++)assert.equal(get(winner(rows,'2026-11-'+day),'id'),e.id);
-            for(const day of ['2026-11-11','2026-11-23'])assert.equal(get(winner(rows,day)||{mapValue:{fields:{}}},'url'),get(winner(old,day)||{mapValue:{fields:{}}},'url'),'Adjacent campaign changed');
+            rows.push({mapValue:{fields:{id:str(e.id),label:str('Sexta-feira 13 — '+e.label+' — 13/11/2026'),url:str('https://drive.google.com/uc?export=download&id='+e.driveId),isActive:{booleanValue:true},startDate:str(START),endDate:str(END),imageScale:{doubleValue:1},imageOffsetX:{doubleValue:0},imageOffsetY:{doubleValue:0},imageStretchX:{doubleValue:1},imageStretchY:{doubleValue:1}}}});
+            for(let day=13;day<=13;day++)assert.equal(get(winner(rows,'2026-11-'+day),'id'),e.id);
+            for(const day of ['2026-11-12','2026-11-14'])assert.equal(get(winner(rows,day)||{mapValue:{fields:{}}},'url'),get(winner(old,day)||{mapValue:{fields:{}}},'url'),'Adjacent campaign changed');
             map[e.theme]={arrayValue:{values:rows}};
            }
            fields.appearanceRevision={integerValue:String(Math.max(Date.now(),Number(before.fields.appearanceRevision?.integerValue||0)+1))};
@@ -56,14 +56,14 @@ jobs:
           async function token(){const a=JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT||'{}');assert.equal(a.project_id,'appcodigo-7f245');const now=Math.floor(Date.now()/1000),enc=x=>Buffer.from(JSON.stringify(x)).toString('base64url');const b=enc({alg:'RS256',typ:'JWT'})+'.'+enc({iss:a.client_email,sub:a.client_email,aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+600,scope:'https://www.googleapis.com/auth/datastore'});const s=createSign('RSA-SHA256');s.update(b);s.end();const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:b+'.'+s.sign(a.private_key).toString('base64url')}),signal:AbortSignal.timeout(30000)});assert(r.ok,'OAuth HTTP '+r.status);return(await r.json()).access_token;}
           async function current(t){const r=await fetch(endpoint,{headers:{Authorization:'Bearer '+t},signal:AbortSignal.timeout(30000)});assert(r.ok,'Read HTTP '+r.status);return r.json();}
           if(process.argv[2]==='dry'){
-           const x=JSON.parse(readFileSync(process.argv[3],'utf8'));transform(x);console.log('8 themes and all 88 campaign-day selections validated; adjacent schedules preserved');
+           const x=JSON.parse(readFileSync(process.argv[3],'utf8'));transform(x);console.log('8 themes and 8 Friday-13 campaign-day selections validated; November 12 and 14 schedules preserved');
           }else if(process.argv[2]==='prepare'){
            const t=await token(),before=await current(t);
            for(const e of plan.entries){const r=await fetch('https://drive.google.com/uc?export=download&id='+e.driveId,{signal:AbortSignal.timeout(60000)});assert(r.ok,'Drive HTTP '+r.status);const b=Buffer.from(await r.arrayBuffer());assert.equal(b.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert.equal(createHash('sha256').update(b).digest('hex'),e.sha256,'Image integrity '+e.theme);}
-           const fields=transform(before);writeFileSync('.before-full.json',JSON.stringify(before));writeFileSync('appearance-backup-before.json',JSON.stringify({updateTime:before.updateTime,fields:Object.fromEntries(Object.entries(before.fields).filter(([k])=>k.startsWith('appearance')))}));writeFileSync('.prepared.json',JSON.stringify({fields:{appearanceThemeBackgrounds:fields.appearanceThemeBackgrounds,appearanceRevision:fields.appearanceRevision},updateTime:before.updateTime}));console.log('8 public original-logo artwork files verified and dated schedules prepared');
+           const fields=transform(before);writeFileSync('.before-full.json',JSON.stringify(before));writeFileSync('appearance-backup-before.json',JSON.stringify({updateTime:before.updateTime,fields:Object.fromEntries(Object.entries(before.fields).filter(([k])=>k.startsWith('appearance')))}));writeFileSync('.prepared.json',JSON.stringify({fields:{appearanceThemeBackgrounds:fields.appearanceThemeBackgrounds,appearanceRevision:fields.appearanceRevision},updateTime:before.updateTime}));console.log('8 public official-logo horror artworks verified for 2026-11-13');
           }else if(process.argv[2]==='apply'){
            const t=await token(),before=JSON.parse(readFileSync('.before-full.json','utf8')),p=JSON.parse(readFileSync('.prepared.json','utf8'));const url=new URL(endpoint);for(const k of Object.keys(p.fields))url.searchParams.append('updateMask.fieldPaths',k);url.searchParams.set('currentDocument.updateTime',p.updateTime);
-           const r=await fetch(url,{method:'PATCH',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({fields:p.fields}),signal:AbortSignal.timeout(60000)});assert(r.ok,'Publish HTTP '+r.status);const after=await current(t);const expected=structuredClone(before.fields);Object.assign(expected,p.fields);assert.deepEqual(after.fields,expected);writeFileSync('appearance-readback-after.json',JSON.stringify({updateTime:after.updateTime,fields:Object.fromEntries(Object.entries(after.fields).filter(([k])=>k.startsWith('appearance')))}));console.log('Published 8 themes from 2026-11-12 through 2026-11-22 inclusive; exact readback verified');
+           const r=await fetch(url,{method:'PATCH',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({fields:p.fields}),signal:AbortSignal.timeout(60000)});assert(r.ok,'Publish HTTP '+r.status);const after=await current(t);const expected=structuredClone(before.fields);Object.assign(expected,p.fields);assert.deepEqual(after.fields,expected);writeFileSync('appearance-readback-after.json',JSON.stringify({updateTime:after.updateTime,fields:Object.fromEntries(Object.entries(after.fields).filter(([k])=>k.startsWith('appearance')))}));console.log('Published 8 Friday-13 themes for 2026-11-13 only; adjacent campaigns preserved and exact readback verified');
           }else throw Error('Expected dry/prepare/apply');
           NRD_SCRIPT
           cat > publication-plan.json <<'NRD_PLAN'
@@ -72,79 +72,79 @@ jobs:
             "entries": [
               {
                 "theme": "multicolor",
-                "driveId": "1uTik9fyrhLdIkkee0JfqF8kwZMNPD6dc",
-                "id": "nrd-show-selos-20261112-multicolor",
+                "driveId": "1d_qdYH6qmXItgMkoiCTPTAtlwP3jkEKc",
+                "id": "nrd-friday13-20261113-multicolor",
                 "label": "Multicolorido",
-                "sha256": "b993b1e06cd254f3e0ff9252f5f8e95139a19073ec58d165ce6f31371c20a78b"
+                "sha256": "5d71d4e4583f44bfd50f20e0ce1a472139ac6709faaba7d6baf257ed59a09414"
               },
               {
                 "theme": "red",
-                "driveId": "1ek_K2I2_DVK-41v_A7UN0x4gsW-s2shD",
-                "id": "nrd-show-selos-20261112-red",
+                "driveId": "1OcZ3EnFoOZG-NkVfNUNtvpoB7_Vzx7WX",
+                "id": "nrd-friday13-20261113-red",
                 "label": "Vermelho",
-                "sha256": "5740abda4b5f5cf8dddb18995bece39de25880ae3af8d44748859ace0fa88650"
+                "sha256": "48dfad467bd3338dc73fc5985be23bfd5860dcbc09f62c5f16d73b4053388e1b"
               },
               {
                 "theme": "green",
-                "driveId": "1k0fhD1QVOYrFPQ3RFzypOQAOC0PjivXz",
-                "id": "nrd-show-selos-20261112-green",
+                "driveId": "1CrN4xO49MtSyC8airLuvU7jT-67qVUVo",
+                "id": "nrd-friday13-20261113-green",
                 "label": "Verde",
-                "sha256": "9a4d748f95275602005bf1cc2e592d7fab950753fe9e933f88ab08c5a2bac537"
+                "sha256": "0472ae538ea6462e86b14f616020b4f614224c2fa4e54ecb582b12ad77b113a5"
               },
               {
                 "theme": "orange",
-                "driveId": "1dHSvN-jDSVL9ojeBkbcY__k_kX9nkp_y",
-                "id": "nrd-show-selos-20261112-orange",
+                "driveId": "1d2DUzNyzNhPgOWa6nJnx6eE2u5eUDR7R",
+                "id": "nrd-friday13-20261113-orange",
                 "label": "Laranja",
-                "sha256": "50dc5af7192ede446a72e685b5cf912cbe5e40f11a62154c9017a75ad0c9aa61"
+                "sha256": "8455d61c7c5b9f836fe06ea57d6bbb0a89f5b5b12a19a0cb2638b1ba80065d45"
               },
               {
                 "theme": "blue",
-                "driveId": "1EGaZmAoP6SzlkidXTbXZAVNO8JaMHmag",
-                "id": "nrd-show-selos-20261112-blue",
+                "driveId": "1Uqx-2cCxPBhMvVmu9hw3x1XuNWbLi-8C",
+                "id": "nrd-friday13-20261113-blue",
                 "label": "Azul",
-                "sha256": "7cfd7d0f6826c183bfa6c5aaefb0f27f4c1e7d4ffcb657271b1e95855c1952e4"
+                "sha256": "d01b968c3a64e52dce51fe26b61b3150f308aae24ccf6bb307ee22564cdff6d6"
               },
               {
                 "theme": "gold",
-                "driveId": "1NbNeaMZ_mDMm3db4dGZQaYtLCusm0RXi",
-                "id": "nrd-show-selos-20261112-gold",
+                "driveId": "1hkFoDsrVAM5EZ4eB3Fup8yqPbsGbbTEi",
+                "id": "nrd-friday13-20261113-gold",
                 "label": "Dourado",
-                "sha256": "30cdc292ef6400ff5eef4cdd980fd8bed3cea22bd4f8a0b58967b303aa1de985"
+                "sha256": "7a535777e49529eb060c0a5371743036897016e55851916d9f0f1d31fa1c8ad9"
               },
               {
                 "theme": "expressive",
-                "driveId": "1ABv_ioyzLi61Jcbh3W9ZXwsd1eQolX33",
-                "id": "nrd-show-selos-20261112-expressive",
+                "driveId": "1GW3lSOvioQUufvs4xvxe2Rnqazta-ohn",
+                "id": "nrd-friday13-20261113-expressive",
                 "label": "Glass Expressivo",
-                "sha256": "9b482853af87ad1e7f7966d3814bdb1fc6b00a5d3c472e2623ae937d45d67fe2"
+                "sha256": "cabe3cdd51cc6dbb8086b0c01a1b4464e34970920d0a5343365cae462a79d90a"
               },
               {
                 "theme": "glass",
-                "driveId": "1lBjTToXLeYpAYAMn4OO65GCHwAs3OC-S",
-                "id": "nrd-show-selos-20261112-glass",
+                "driveId": "1H-xY6IyG9iiyS47idPazCDQnfJ-SZIrB",
+                "id": "nrd-friday13-20261113-glass",
                 "label": "Glass Soft",
-                "sha256": "24c70ad8d84a98657761165b8873c340ebb6065516d9e4dc60821073f9077bdb"
+                "sha256": "3846ad8b922085825ac5c63d052bc2525506a27ebc8c3b2989c64c36c337f35b"
               }
             ]
           }
           NRD_PLAN
-      - name: Verify eight public files and prepare dated schedules
+      - name: Verify 8 public Friday-13 horror images and prepare dated schedules
         run: node publish.mjs prepare
       - name: Store appearance backup before publication
         uses: actions/upload-artifact@v4
         with:
-          name: appearance-before-show-selos
+          name: appearance-before-friday13
           path: appearance-backup-before.json
           retention-days: 30
           if-no-files-found: error
-      - name: Publish 12 through 22 November with concurrency guard and exact readback
+      - name: Publish Friday 13 November only, with concurrency guard and exact readback
         run: node publish.mjs apply
       - name: Store verified publication result
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: appearance-show-selos-result
+          name: appearance-friday13-result
           path: appearance-readback-after.json
           retention-days: 30
           if-no-files-found: ignore
