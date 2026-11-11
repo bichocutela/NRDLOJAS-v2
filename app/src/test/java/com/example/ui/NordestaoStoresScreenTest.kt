@@ -1,6 +1,8 @@
 package com.example.ui
 
 import android.app.Application
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.runCurrent
@@ -214,6 +216,32 @@ class NordestaoStoresScreenTest {
         runCurrent(); source.callbacks.values.toList().forEach { it(null) }
         org.junit.Assert.assertEquals(StoreLocationResult.Error(StoreLocationFailure.UNAVAILABLE),result.await())
         org.junit.Assert.assertEquals(2,source.cancelled.size)
+    }
+
+    @Test fun offerActionsRemainVisibleWithLargeTextOnNarrowScreens() {
+        val raw = javaClass.classLoader!!.getResourceAsStream("stores/nordestao-observed-2026-10-23.json")!!.bufferedReader().use { it.readText() }
+        val store = NordestaoStoresCodec.decode(raw).stores.first()
+        compose.setContent {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, 1.5f)
+            ) {
+                MaterialTheme {
+                    androidx.compose.foundation.layout.Box(
+                        androidx.compose.ui.Modifier.width(300.dp)
+                    ) {
+                        NordestaoStoreOffersContent(store, 0, {}, loadOffers = { id ->
+                            com.example.data.NordestaoStoreOffersSnapshot(id, emptyList(), "2026-11-11T16:00:00.000Z", false)
+                        }, resolveEan = { _, _ -> null })
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("Alterar loja").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Configurar notificações de ofertas").assertIsDisplayed()
+        compose.onNodeWithText("Ordenar").assertIsDisplayed()
+        compose.onNodeWithText("Alertas").performClick()
+        compose.onNodeWithText("Notificações de Ofertas").assertIsDisplayed()
     }
 
     @Test fun offersWithoutFavoriteAskForStoreWithoutFetching() {
