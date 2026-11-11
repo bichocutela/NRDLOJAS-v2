@@ -46,7 +46,7 @@ import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseStore: () -> Unit,
     modifier: Modifier = Modifier,
@@ -108,8 +108,7 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
         .let { sortStoreOffers(it, sortOption) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("${store.name} ★", fontWeight = FontWeight.Bold)
-        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        WrappingActions(Modifier.fillMaxWidth(), alignEnd = true) {
             TextButton(onClick = onChooseStore) { Text("Alterar loja") }
             StoreOfferNotificationBell()
             OfferSortSelector(selected = sortOption, onSelected = { sortName = it.name }, options = listOf(

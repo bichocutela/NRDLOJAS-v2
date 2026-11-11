@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -349,7 +347,7 @@ fun PromotionsLoginScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PromotionsScreen(
     api: NossaGenteApi,
@@ -483,8 +481,7 @@ fun PromotionsScreen(
         containerColor = if (glassStyle.enabled || expressive) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
           Column {
-            FlowRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            WrappingActions(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                 listOf("De/Por", "Leve e pague", "Clube").forEach { family ->
                     androidx.compose.material3.FilterChip(
                         selected = selectedFamily == family,
