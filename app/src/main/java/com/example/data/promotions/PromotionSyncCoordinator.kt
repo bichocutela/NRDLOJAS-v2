@@ -136,6 +136,11 @@ internal class PromotionSyncCoordinator private constructor(context: Context) {
             pending.forEach { repository.dao.deleteMetadata(it.key) }
             return
         }
+        val optedIn = preferences.promotionNewOffersNotificationsEnabled.first()
+        if (!optedIn) {
+            pending.forEach { repository.dao.deleteMetadata(it.key) }
+            return
+        }
         val favorite = preferences.favoriteStoreCode.first()?.trim().orEmpty()
         if (favorite.isBlank()) {
             // No chosen store: do not notify about unrelated stores.
