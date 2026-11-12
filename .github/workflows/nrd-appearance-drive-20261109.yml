@@ -1,4 +1,4 @@
-name: Publish Hortifruti November 11-12 themes
+name: Publish Friday 13 August 2027 backgrounds
 on:
   push:
     branches: [main]
@@ -63,14 +63,12 @@ jobs:
            for(const c of plan.campaigns){
             assert(themes[c.theme],'Unknown theme '+c.theme);
             const values=themes[c.theme].arrayValue.values??=[];
-            const id='nrd-hortifruti-20261111-'+c.theme;
-            for(const row of values){const f=row.mapValue.fields;const oldId=f.id?.stringValue;if(oldId==='nrd-11-11-ofertas-2026-'+c.theme||oldId==='nrd-show-selos-20261112-'+c.theme) f.isActive={booleanValue:false};}
-          
+            const id='nrd-sexta13-20270813-'+c.theme;
             const index=values.findIndex(x=>x.mapValue.fields.id?.stringValue===id);
             const conflict=values.find(x=>x.mapValue.fields.startDate?.stringValue===plan.date&&x.mapValue.fields.isActive?.booleanValue===true&&x.mapValue.fields.id?.stringValue!==id);
             assert(!conflict,'Existing same-day schedule requires review: '+c.theme);
             const base=index<0?{}:values[index].mapValue.fields;
-            const entry={mapValue:{fields:{imageScale:num(1),imageOffsetX:num(0),imageOffsetY:num(0),imageStretchX:num(1),imageStretchY:num(1),...base,id:sv(id),label:sv('Quarta e Quinta Hortifruti — 11 a 12/11/2026'),url:sv(drive(c.driveId)),isActive:{booleanValue:true},startDate:sv(plan.date),endDate:sv(plan.endDate)}}};
+            const entry={mapValue:{fields:{imageScale:num(1),imageOffsetX:num(0),imageOffsetY:num(0),imageStretchX:num(1),imageStretchY:num(1),...base,id:sv(id),label:sv('Sexta-feira 13 de Ofertas — Agosto 2027'),url:sv(drive(c.driveId)),isActive:{booleanValue:true},startDate:sv(plan.date),endDate:sv(plan.date)}}};
             if(index<0)values.push(entry);else values[index]=entry;
            }
            fields.appearanceRevision={integerValue:String(Math.max(Date.now(),Number(before.fields.appearanceRevision?.integerValue||0)+1))};
@@ -100,7 +98,7 @@ jobs:
            assert(r.ok,'Atomic Firestore update failed HTTP '+r.status);
            const after=await current(t);for(const key of writable)assert.deepEqual(after.fields[key],prepared.fields[key],'Readback mismatch '+key);
            assert.deepEqual(unchanged(after.fields),unchanged(before.fields),'Unrelated settings changed');
-           for(const c of plan.campaigns){const rows=after.fields.appearanceThemeBackgrounds.mapValue.fields[c.theme].arrayValue.values;const matches=rows.filter(x=>x.mapValue.fields.id?.stringValue==='nrd-hortifruti-20261111-'+c.theme);assert.equal(matches.length,1);const f=matches[0].mapValue.fields;assert.equal(f.startDate.stringValue,plan.date);assert.equal(f.endDate.stringValue,plan.endDate);assert.equal(f.isActive.booleanValue,true);}
+           for(const c of plan.campaigns){const rows=after.fields.appearanceThemeBackgrounds.mapValue.fields[c.theme].arrayValue.values;const matches=rows.filter(x=>x.mapValue.fields.id?.stringValue==='nrd-sexta13-20270813-'+c.theme);assert.equal(matches.length,1);const f=matches[0].mapValue.fields;assert.equal(f.startDate.stringValue,plan.date);assert.equal(f.endDate.stringValue,plan.date);assert.equal(f.isActive.booleanValue,true);}
            writeFileSync('appearance-readback-after.json',JSON.stringify({updateTime:after.updateTime,fields:prepared.fields},null,2));
            console.log('Published and read back:',plan.replacements.length,'Drive references;',plan.campaigns.length,'active banners scheduled only for',plan.date);
           }else throw Error('Expected dry, prepare or apply');
@@ -108,57 +106,64 @@ jobs:
           cat > publication-plan.json <<'NRD_PLAN'
           {
             "project": "appcodigo-7f245",
-            "date": "2026-11-11",
-            "endDate": "2026-11-12",
+            "date": "2027-08-13",
             "replacements": [],
             "campaigns": [
               {
                 "theme": "multicolor",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-bd7216f5-00bf-433e-9363-54d2ce61aad8.png",
-                "driveId": "12syn-X1eci8xWSLNROGWXHAMbjMmF_Gy",
-                "sha256": "984f09c6b28c82330786502b0a2acd48cfa5cb706179efd6cd5d516cd628682a"
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-a9326301-084e-4ec3-af75-f5597d2591bd.png",
+                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-multicolor.png",
+                "driveId": "1AjnKE7qkxLStr9WIByfyqQyeh3RmDuZ0",
+                "sha256": "1facefdbea2f0198343d940db8ba64e0bb174515745b85f0aaebe3e7759ff7cc"
               },
               {
                 "theme": "red",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-57a6c45a-eb10-4bcf-a6f3-d1c9a50e4d0c.png",
-                "driveId": "1C1PM4_Uk4G93qfAhCM19OV_jzZ-i443A",
-                "sha256": "073ddbb566d836d51af274362a55ecfbea682b905956abe6bc17ecb388822ba2"
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-1fbab9f6-7319-48fb-a5dc-1a678e064565.png",
+                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-red.png",
+                "driveId": "1mjJgcw7Gi7PQGnu6S9q4m9wmJFyyNjkl",
+                "sha256": "ae07935e07a1c150b13e1df02a6e0fa00a789920a99cef0092e516cc9b128a9e"
               },
               {
                 "theme": "gold",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-53c8c4a8-991c-466b-999f-094ad2f9eea1.png",
-                "driveId": "1eWS5WHY0po1nEGXOv9W2crO_-9nzmGeS",
-                "sha256": "29182fd800bd869c773b7bfe372db1a20b6cc50a8e6e10a065bab9dc4963426a"
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-2ac473df-91f0-455a-8fe8-7a538f5db74f.png",
+                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-gold.png",
+                "driveId": "1nftqh9GCLQtDIs1YxDZhFkZgOzb4Es3b",
+                "sha256": "720018a5311069b4f711de52806de874b36e7fa1fabd9ad556d7479173ce15b8"
               },
               {
                 "theme": "green",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-9bb70921-6a87-4e81-94aa-7961d2b9ef90.png",
-                "driveId": "1nA7r5qIorrakzX7lHZtyB1YZ4IjDhlFG",
-                "sha256": "8576b0cff702d5d9e3504196dbc6d2270c203f73f3be36e3cb1826abaaccd761"
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-77cb2001-8365-44ad-b9b7-d01a9ba51ea4.png",
+                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-green.png",
+                "driveId": "1mhg9Yzibfg_fuoXArJCSlrXHEp2Z8Kas",
+                "sha256": "46971fc1e8a717b21123f482a250aa9faa254efb51386955fbfedb81d7c32fd5"
               },
               {
                 "theme": "blue",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-3699ca06-562f-42f5-a1a7-32df3ee9eed6.png",
-                "driveId": "14vEzkMbaVSfRQeOrZ4Dnw6LymvG9sW78",
-                "sha256": "3d7d3e8df64d6feb4c5c4b0ab9bc92b62261fcd23393be28262f478955c73cdc"
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-522ecee6-7699-4a54-a030-9c4dbf616d5f.png",
+                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-blue.png",
+                "driveId": "1_8x1BV9j-cRuXCP_PnCrlMtrhWZuBYrm",
+                "sha256": "1bb63e8880c125ff997ebea428dd23ce691c35c58111f8c89e41f8c677392e3c"
               },
               {
                 "theme": "orange",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-78ca66c3-7ae0-49f9-9eef-2c45179105b9.png",
-                "driveId": "1DWYCsTEy18I8dJLUSMukfCM6tNYb727o",
-                "sha256": "28a31e1b23d7bc6514d820a6b8d09f2fed2816d51765b979cb7b1d8ca7fa1b31"
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-76a5c8bf-4909-4d82-8a8c-10b83836eb30.png",
+                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-orange.png",
+                "driveId": "1Oojusm3Q-ZC4B-BQ5pr0zhXnnVVKH6GY",
+                "sha256": "348a88f46d8c49a372738f7670fdd09c716bdc00d373206ee5ef4f23a2e0a11f"
               },
               {
                 "theme": "glass",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-9357f256-634e-4860-b243-657a699f91a4.png",
-                "driveId": "1m_VOYcHz-bPemPqZ6mla5NmKYnRADuBO",
-                "sha256": "893506beb96c2b2096b27f785cd1b6ace4fe3f09ca33d4b09cba4e98d9f7b6e6"
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-f141c04f-4656-4435-ac8a-730eb570e7b2.png",
+                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-glass.png",
+                "driveId": "1sYQkrelWSZ43noS1MIMgz0LeKRBIXjVs",
+                "sha256": "fc5282014a9aef3c6e311c6d14b64a6e8720c4410c2e23f19ed06248ab6d1556"
               },
               {
                 "theme": "expressive",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-c02fa407-6387-491f-aa9c-0a729d591fcb.png",
-                "driveId": "1YfXt58-02OeFhHM7RmIiCFr3JjN6OyW2",
-                "sha256": "2073e2a5046d9e00227a1863593e4b9c1e89fb8134a2e1fbc502f26be47502e5"
+                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-d757c749-ba86-4a05-b5d5-c22de4d0262c.png",
+                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-expressive.png",
+                "driveId": "19Y5fAgNR7u3SDjAuea-3FDn2KUi3u7UL",
+                "sha256": "ad5dbb4769b56f3165b0b611950ddf59c0cb7b4671adb614a2a38a01d3e86047"
               }
             ]
           }
