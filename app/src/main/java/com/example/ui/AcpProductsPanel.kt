@@ -863,9 +863,8 @@ internal fun AcpProductsPanel(
                                 compact = true,
                                 productName = product.description,
                                 banner = standardBanner,
-                                validityOverride = product.offerValidityOr(
-                                    offerValidityByKey[AcpOfferValidityStore.keyFor(product.description, AcpOfferFamily.PRICE)]
-                                )
+                                // Regular price is not a promotion: never show expired manual offer dates.
+                                validityOverride = null
                             )
                         } else {
                             Text("Sem promoção explícita identificada no cadastro do produto.", style = MaterialTheme.typography.labelSmall)
