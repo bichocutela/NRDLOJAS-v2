@@ -99,6 +99,7 @@ class UserPreferences(private val context: Context) {
     val lastNotifiedProductCode: Flow<String?> = context.dataStore.data.map { it[LAST_NOTIFIED_PRODUCT_CODE] }
     val lastNotifiedUpdateTag: Flow<String?> = context.dataStore.data.map { it[LAST_NOTIFIED_UPDATE_TAG] }
     val favoriteStoreCode: Flow<String?> = context.dataStore.data.map { it[FAVORITE_STORE_CODE] }
+    val promotionNewOffersNotificationsEnabled: Flow<Boolean> = context.dataStore.data.map { it[PROMOTION_NEW_OFFERS_NOTIFICATIONS_ENABLED] ?: false }
     val masterInstallationNotificationsEnabled: Flow<Boolean> = context.dataStore.data.map {
         it[MASTER_INSTALLATION_NOTIFICATIONS_ENABLED] ?: false
     }
@@ -236,6 +237,10 @@ class UserPreferences(private val context: Context) {
         context.dataStore.edit { it[NOTIFICATIONS_PRODUCT_ADDED_ENABLED] = enabled }
     }
 
+    suspend fun setPromotionNewOffersNotificationsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[PROMOTION_NEW_OFFERS_NOTIFICATIONS_ENABLED] = enabled }
+    }
+
     suspend fun setNotificationsCodeChangedEnabled(enabled: Boolean) {
         context.dataStore.edit { it[NOTIFICATIONS_CODE_CHANGED_ENABLED] = enabled }
     }
@@ -369,6 +374,7 @@ class UserPreferences(private val context: Context) {
         val MASTER_MAIL_DOCUMENT_NOTIFICATIONS_ENABLED = booleanPreferencesKey("master_mail_document_notifications_enabled")
         val MASTER_INSTALLATION_NOTIFICATION_BASELINE = longPreferencesKey("master_installation_notification_baseline")
         val FAVORITE_STORE_CODE = stringPreferencesKey("favorite_store_code")
+        val PROMOTION_NEW_OFFERS_NOTIFICATIONS_ENABLED = booleanPreferencesKey("promotion_new_offers_notifications_enabled")
         val LAST_NOTIFIED_PROMOTION_FINGERPRINT = stringPreferencesKey("last_notified_promotion_fingerprint")
         val APP_THEME = stringPreferencesKey("app_theme")
         val APPEARANCE_MODE = stringPreferencesKey("appearance_mode")
