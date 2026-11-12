@@ -530,7 +530,6 @@ fun PromotionsScreen(
                     }
                 },
                 actions = {
-                    StoreOfferNotificationBell()
                     IconButton(
                         onClick = ::handleRefreshClick,
                         enabled = !isLoading && !isChecking,
