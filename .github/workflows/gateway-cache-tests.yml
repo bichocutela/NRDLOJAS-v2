@@ -1,0 +1,24 @@
+name: Gateway cache tests
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/nrd-price-gateway/**'
+      - 'supabase/functions/nordestao-catalog-resolver/**'
+      - '.github/workflows/gateway-cache-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/nrd-price-gateway/**'
+      - 'supabase/functions/nordestao-catalog-resolver/**'
+      - '.github/workflows/gateway-cache-tests.yml'
+  workflow_dispatch:
+jobs:
+  cache-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test gateway cache and catalog revalidation
+        run: node --test supabase/functions/nrd-price-gateway/supabase-cache.test.mjs supabase/functions/nrd-price-gateway/catalog-live.test.mjs
