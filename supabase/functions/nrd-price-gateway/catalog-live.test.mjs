@@ -115,3 +115,22 @@ test('verified catalog metadata persists across cold instances for seven days wi
   assert.equal((await get()([{code:'123'}])).length,1);
   assert.equal(searches,2); // Revalidates after the weekly TTL, never forever.
 });
+
+test('unmatched catalog results back off for two hours across cold starts',async()=>{
+ const saved=new Map();let now=1000,searches=0;
+ const store={many:async keys=>new Map(keys.filter(k=>saved.has(k)).map(k=>[k,{payload:saved.get(k)}])),get:async k=>saved.has(k)?{payload:saved.get(k)}:null,write:async(k,v)=>{saved.set(k,v);}};
+ const fetcher=async url=>{if(url.includes('/auth/'))return login();if(url.includes('/departamentos/arvore'))return Response.json({data:[]});searches++;return Response.json({data:{produtos:[]}});};
+ const run=()=>createLiveCatalogLookup({boundedJson,fetcher,store,now:()=>now})([{code:'not-found'}]);
+ await run();assert.equal(searches,1);
+ now+=60*60_000;await run();assert.equal(searches,1);
+ now+=61*60_000;await run();assert.equal(searches,2);
+});
+test('temporary catalog errors back off five minutes without retaining errors forever',async()=>{
+ const saved=new Map();let now=1000,searches=0;
+ const store={many:async keys=>new Map(keys.filter(k=>saved.has(k)).map(k=>[k,{payload:saved.get(k)}])),get:async k=>saved.has(k)?{payload:saved.get(k)}:null,write:async(k,v)=>{saved.set(k,v);}};
+ const fetcher=async url=>{if(url.includes('/auth/'))return login();if(url.includes('/departamentos/arvore'))return Response.json({data:[]});searches++;throw Error('offline');};
+ const run=()=>createLiveCatalogLookup({boundedJson,fetcher,store,now:()=>now})([{code:'offline'}]);
+ await run();assert.equal(searches,1);
+ now+=2*60_000;await run();assert.equal(searches,1);
+ now+=4*60_000;await run();assert.equal(searches,2);
+});
