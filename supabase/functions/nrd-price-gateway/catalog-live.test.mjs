@@ -134,3 +134,18 @@ test('temporary catalog errors back off five minutes without retaining errors fo
  now+=2*60_000;await run();assert.equal(searches,1);
  now+=4*60_000;await run();assert.equal(searches,2);
 });
+
+
+test('expired negative backlog is bounded while verified image associations revalidate',async()=>{
+ const saved=new Map();let now=1000,searches=0;
+ const store={many:async keys=>new Map(keys.filter(k=>saved.has(k)).map(k=>[k,{payload:saved.get(k)}])),get:async k=>saved.has(k)?{payload:saved.get(k)}:null,write:async(k,v)=>{saved.set(k,v);}};
+ const fetcher=async url=>{if(url.includes('/auth/'))return login();if(url.includes('/departamentos/arvore'))return Response.json({data:[]});searches++;const term=decodeURIComponent(new URL(url).pathname.split('/termo/')[1].split('/rapida')[0]);return Response.json({data:{produtos:term==='verified'?[{...record('verified'),descricao:'Produto verified'}]:[]}});};
+ const items=[...Array.from({length:30},(_,i)=>({code:'missing-'+i})),{code:'verified'}];
+ const run=()=>createLiveCatalogLookup({boundedJson,fetcher,store,now:()=>now,maxItems:80})(items);
+ assert.equal((await run()).length,1);assert.equal(searches,21);
+ // Populate remaining negatives on a second invocation while the first batch is fresh.
+ await run();assert.equal(searches,31);
+ now+=8*24*60*60_000;
+ assert.equal((await run()).length,1);
+ assert.equal(searches,52); // 1 verified + at most 20 expired negatives.
+});
