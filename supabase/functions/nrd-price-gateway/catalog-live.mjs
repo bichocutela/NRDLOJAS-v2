@@ -115,7 +115,7 @@ export function createLiveCatalogLookup({boundedJson,fetcher=fetch,now=Date.now,
           job=(async()=>{
             let product=null,failed=false;
             try{product=await resolve(identity,signal);}catch{failed=true;}
-            const value={product:product ?? previous ?? null,failed,until:now()+(product?cacheTtlMs:failed?60000:60*60_000)};
+            const value={product:product ?? previous ?? null,failed,until:now()+(product?cacheTtlMs:failed?5*60_000:2*60*60_000)};
             cache.delete(key);while(cache.size>=5000)cache.delete(cache.keys().next().value);cache.set(key,value);
             await store?.write(key,value).catch(()=>{});if(strict && failed && !value.product)throw Error('CATALOG_TEMPORARILY_UNAVAILABLE');return value.product;
           })().finally(()=>pending.delete(key));
