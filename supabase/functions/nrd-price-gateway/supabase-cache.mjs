@@ -1,6 +1,6 @@
 /** Server-only Supabase cache; SQL versions fence shared leases and stale writes. */
 export class SupabaseCache {
-  constructor({url,key,fetcher=fetch}) { this.url=url?.replace(/\/$/,'');this.key=key;this.fetcher=fetcher; }
+  constructor({url,key,fetcher=fetch}) { this.url=url?.replace(/\/$/,'');this.key=key;this.fetcher=fetcher;this.pendingReads=new Map(); }
   valid(key) { if(!/^[a-zA-Z0-9_-]{1,160}$/.test(key))throw Error('INVALID_CACHE_KEY');return key; }
   async request(path,options={}) {
     if(!this.url || !this.key)throw Error('CACHE_UNAVAILABLE');
@@ -19,7 +19,14 @@ export class SupabaseCache {
     }
     return result;
   }
-  async get(key) { return (await this.many([key])).get(key) ?? null; }
+  async get(key) {
+    this.valid(key);
+    const pending=this.pendingReads.get(key);
+    if(pending)return pending;
+    const task=this.many([key]).then(rows=>rows.get(key) ?? null);
+    this.pendingReads.set(key,task);
+    try{return await task;}finally{if(this.pendingReads.get(key)===task)this.pendingReads.delete(key);}
+  }
   async write(key,payload,lease=0,version=undefined) {
     const response=await this.request('rpc/nrd_cache_write?select=key,lease,version',{method:'POST',body:JSON.stringify({p_key:this.valid(key),
       p_payload:payload,p_lease:lease,p_mode:version===null?'insert':version===undefined?'upsert':'cas',p_version:version ?? null})});
