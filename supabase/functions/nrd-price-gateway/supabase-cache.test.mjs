@@ -19,3 +19,14 @@ test('Supabase cache batches reads and fences leases and stale writes',async()=>
  const before=reads;await cache.many(Array.from({length:201},(_,i)=>'key_'+i));assert.equal(reads-before,3);
  await assert.rejects(()=>cache.get('invalid/key'),/INVALID_CACHE_KEY/);
 });
+
+test('concurrent reads of the same key share one request without retaining stale values',async()=>{
+ let calls=0,value=1;
+ const cache=new SupabaseCache({url:'https://example.test',key:'server-test-key',fetcher:async()=>{
+  calls++;await new Promise(resolve=>setTimeout(resolve,5));
+  return Response.json([{key:'shared',payload:{value},lease:0,version:value}]);
+ }});
+ const [a,b,c]=await Promise.all([cache.get('shared'),cache.get('shared'),cache.get('shared')]);
+ assert.equal(calls,1);assert.equal(a.payload.value,1);assert.deepEqual(a,b);assert.deepEqual(b,c);
+ value=2;assert.equal((await cache.get('shared')).payload.value,2);assert.equal(calls,2);
+});
