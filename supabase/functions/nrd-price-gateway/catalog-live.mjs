@@ -103,13 +103,17 @@ export function createLiveCatalogLookup({boundedJson,fetcher=fetch,now=Date.now,
       if(association?.product)results.set(association.product.produto_id,association.product);
       if(!association || association.until<=now())queue.push({...entry,previous:association?.product});
     }
-    // Missing products first; stale verified associations continue to render while revalidated.
-    queue.sort((a,b)=>Number(Boolean(a.previous))-Number(Boolean(b.previous)));
-    if(queue.length)await loadDepartments(signal);
+    // Prioritize verified associations; limit the backlog of expired negative entries
+    // per invocation so a cold catalog does not trigger a large retry burst.
+    queue.sort((a,b)=>Number(Boolean(b.previous))-Number(Boolean(a.previous)));
+    const negativeBudget=Math.min(20,maxItems);
+    let negativeCount=0;
+    const scheduled=queue.filter(entry=>entry.previous || negativeCount++<negativeBudget).slice(0,maxItems);
+    if(scheduled.length)await loadDepartments(signal);
     let cursor=0;
-    await Promise.all(Array.from({length:Math.min(concurrency,queue.length,maxItems)},async()=>{
-      while(cursor<Math.min(queue.length,maxItems) && !signal.aborted){
-        const {identity,key,previous}=queue[cursor++];
+    await Promise.all(Array.from({length:Math.min(concurrency,scheduled.length)},async()=>{
+      while(cursor<scheduled.length && !signal.aborted){
+        const {identity,key,previous}=scheduled[cursor++];
         let job=pending.get(key);
         if(!job){
           job=(async()=>{
