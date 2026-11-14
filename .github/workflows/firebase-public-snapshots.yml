@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      NRD_LEGACY_PUBLIC_URL: ${{ vars.NRD_LEGACY_PUBLIC_URL }}
-      NRD_LEGACY_ANON_KEY: ${{ secrets.NRD_LEGACY_ANON_KEY }}
+      NRD_LEGACY_PUBLIC_URL: ${{ secrets.SUPABASE_URL }}
+      NRD_LEGACY_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/firebase-service-account.json
     steps:
       - uses: actions/checkout@v4
@@ -28,12 +28,12 @@ jobs:
       - name: Check configuration
         id: configured
         env:
-          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           if [ -n "$FIREBASE_SERVICE_ACCOUNT_JSON" ] && [ -n "$NRD_LEGACY_PUBLIC_URL" ] && [ -n "$NRD_LEGACY_ANON_KEY" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::Firebase bridge disabled: configure FIREBASE_SERVICE_ACCOUNT_JSON, NRD_LEGACY_ANON_KEY and NRD_LEGACY_PUBLIC_URL"
+            echo "::notice::Firebase bridge disabled: configure FIREBASE_SERVICE_ACCOUNT, SUPABASE_ANON_KEY and SUPABASE_URL"
             echo "ready=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Install dependencies
@@ -42,7 +42,7 @@ jobs:
       - name: Write ephemeral service account
         if: steps.configured.outputs.ready == 'true'
         env:
-          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           umask 077
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$GOOGLE_APPLICATION_CREDENTIALS"
