@@ -1,0 +1,151 @@
+name: Publish corrected Show de Selos backgrounds
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/revise-show-de-selos-20261114.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nrd-appearance-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Prepare scoped publication
+        shell: bash
+        run: |
+          cat > publish.mjs <<'NRD_SCRIPT'
+          import {createSign,createHash} from 'node:crypto';
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          const plan=JSON.parse(readFileSync('selos-manifest.json','utf8'));
+          const endpoint='https://firestore.googleapis.com/v1/projects/appcodigo-7f245/databases/(default)/documents/config/appSettings';
+          const version='selos-20261114-v2';
+          const expectedId=theme=>'nrd-show-selos-20261112-'+theme+'-after-friday13-20261113';
+          const urlFor=x=>'https://lh3.googleusercontent.com/d/'+x.driveId+'=s0?v='+version+'-'+x.sha256.slice(0,12);
+          const sv=stringValue=>({stringValue});
+          function transform(before){
+           const fields=structuredClone(before.fields);
+           const themes=fields.appearanceThemeBackgrounds.mapValue.fields;
+           for(const x of plan){
+            const rows=themes[x.theme].arrayValue.values;
+            const matches=rows.filter(r=>r.mapValue.fields.id?.stringValue===expectedId(x.theme));
+            assert.equal(matches.length,1,'Expected one existing Show de Selos entry: '+x.theme);
+            const f=matches[0].mapValue.fields;
+            assert(f.url.stringValue.includes(x.driveId),'Unexpected asset for '+x.theme);
+            assert.equal(f.startDate.stringValue,'2026-11-14');
+            assert.equal(f.endDate.stringValue,'2026-11-22');
+            f.url=sv(urlFor(x));f.isActive={booleanValue:true};
+           }
+           fields.appearanceRevision={integerValue:String(Math.max(Date.now(),Number(before.fields.appearanceRevision?.integerValue||0)+1))};
+           const untouched=j=>Object.fromEntries(Object.entries(j).filter(([k])=>!['appearanceThemeBackgrounds','appearanceRevision'].includes(k)));
+           assert.deepEqual(untouched(fields),untouched(before.fields));
+           // Assert every theme and every unrelated schedule stays byte-for-byte equivalent.
+           for(const [theme,value] of Object.entries(before.fields.appearanceThemeBackgrounds.mapValue.fields)){
+            const prev=value.arrayValue.values??[],next=themes[theme].arrayValue.values??[];
+            assert.equal(next.length,prev.length);
+            for(let i=0;i<prev.length;i++){
+             if(prev[i].mapValue.fields.id?.stringValue!==expectedId(theme))assert.deepEqual(next[i],prev[i]);
+             else{
+              const omit=j=>Object.fromEntries(Object.entries(j.mapValue.fields).filter(([k])=>!['url','isActive'].includes(k)));
+              assert.deepEqual(omit(prev[i]),omit(next[i]));
+             }
+            }
+           }
+           return {fields:{appearanceThemeBackgrounds:fields.appearanceThemeBackgrounds,appearanceRevision:fields.appearanceRevision}};
+          }
+          if(process.argv[2]==='dry'){
+           transform(JSON.parse(readFileSync(process.argv[3],'utf8')));
+           console.log('DRY RUN PASS: 8 existing entries; dates, all other schedules and settings preserved.');
+           process.exit(0);
+          }
+          const account=JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT||process.env.FIREBASE_SERVICE_ACCOUNT_JSON||'{}');
+          assert.equal(account.project_id,'appcodigo-7f245');
+          const now=Math.floor(Date.now()/1000),enc=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
+          const body=enc({alg:'RS256',typ:'JWT'})+'.'+enc({iss:account.client_email,sub:account.client_email,aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+600,scope:'https://www.googleapis.com/auth/datastore'});
+          const signer=createSign('RSA-SHA256');signer.update(body);signer.end();
+          const response=await fetch('https://oauth2.googleapis.com/token',{method:'POST',body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:body+'.'+signer.sign(account.private_key).toString('base64url')}),signal:AbortSignal.timeout(30000)});
+          assert(response.ok,'OAuth HTTP '+response.status);
+          const token=(await response.json()).access_token;
+          const headers={Authorization:'Bearer '+token,'Content-Type':'application/json'};
+          async function read(){const r=await fetch(endpoint,{headers,signal:AbortSignal.timeout(30000)});assert(r.ok,'Read HTTP '+r.status);return r.json();}
+          await Promise.all(plan.map(async x=>{
+           const r=await fetch('https://drive.google.com/uc?export=download&id='+x.driveId,{signal:AbortSignal.timeout(60000)});
+           assert(r.ok,'Drive download failed '+x.theme);
+           const b=Buffer.from(await r.arrayBuffer());assert.equal(createHash('sha256').update(b).digest('hex'),x.sha256,'Drive content mismatch '+x.theme);
+           const image=await fetch(urlFor(x),{signal:AbortSignal.timeout(60000)});assert(image.ok,'Public image failed '+x.theme);
+           const bytes=Buffer.from(await image.arrayBuffer());assert.equal(bytes.subarray(1,4).toString(),'PNG');
+           assert.equal(bytes.readUInt32BE(16),2172);assert.equal(bytes.readUInt32BE(20),724);
+           console.log('VERIFIED DRIVE AND PUBLIC IMAGE',x.theme);
+          }));
+          const before=await read(),prepared=transform(before);
+          writeFileSync('selos-before.json',JSON.stringify({updateTime:before.updateTime,fields:{appearanceThemeBackgrounds:before.fields.appearanceThemeBackgrounds,appearanceRevision:before.fields.appearanceRevision}},null,2));
+          const target=new URL(endpoint);target.searchParams.append('updateMask.fieldPaths','appearanceThemeBackgrounds');target.searchParams.append('updateMask.fieldPaths','appearanceRevision');target.searchParams.set('currentDocument.updateTime',before.updateTime);
+          const patch=await fetch(target,{method:'PATCH',headers,body:JSON.stringify(prepared),signal:AbortSignal.timeout(30000)});assert(patch.ok,'Atomic update HTTP '+patch.status);
+          const after=await read();for(const [key,value] of Object.entries(prepared.fields))assert.deepEqual(after.fields[key],value,'Readback '+key);
+          for(const [key,value] of Object.entries(before.fields))if(!(key in prepared.fields))assert.deepEqual(after.fields[key],value,'Unrelated setting '+key);
+          writeFileSync('selos-result.json',JSON.stringify({updateTime:after.updateTime,revision:after.fields.appearanceRevision,verifiedThemes:plan.map(x=>({theme:x.theme,url:urlFor(x),startDate:'2026-11-14',endDate:'2026-11-22'}))},null,2));
+          console.log('PUBLISHED AND READ BACK: 8 revised themes active 14–22 November 2026; all other schedules/settings preserved.');
+          NRD_SCRIPT
+          cat > selos-manifest.json <<'NRD_MANIFEST'
+          [
+            {
+              "theme": "expressive",
+              "driveId": "1ABv_ioyzLi61Jcbh3W9ZXwsd1eQolX33",
+              "sha256": "edcf77c57806216dfee4d235deeebd4b70196dc559808a5b11d4f5cc2aa9702a"
+            },
+            {
+              "theme": "glass",
+              "driveId": "1lBjTToXLeYpAYAMn4OO65GCHwAs3OC-S",
+              "sha256": "1c61c71bc40baf4e121b66dc2b865895ef25d43dde5291727d05ebfd34f475df"
+            },
+            {
+              "theme": "orange",
+              "driveId": "1dHSvN-jDSVL9ojeBkbcY__k_kX9nkp_y",
+              "sha256": "30be32bd8cf5888993f1ced62a4df5ef59305cfb7170970974fe7dc0afb637df"
+            },
+            {
+              "theme": "blue",
+              "driveId": "1EGaZmAoP6SzlkidXTbXZAVNO8JaMHmag",
+              "sha256": "aa502b9b3f5a5cedd5bd5941dbd86a14c11030b2cb85c4a2dec99f097cc36446"
+            },
+            {
+              "theme": "green",
+              "driveId": "1k0fhD1QVOYrFPQ3RFzypOQAOC0PjivXz",
+              "sha256": "14a1c513ed457eeb01c12408fb00a190b0a65506e100b3592d91247c5f2001f4"
+            },
+            {
+              "theme": "gold",
+              "driveId": "1NbNeaMZ_mDMm3db4dGZQaYtLCusm0RXi",
+              "sha256": "6f55e73a5d8299cd42826fcfa569b410faa20994a9cd0ad997a21f0913f0de7b"
+            },
+            {
+              "theme": "red",
+              "driveId": "1ek_K2I2_DVK-41v_A7UN0x4gsW-s2shD",
+              "sha256": "a410733dcb2f6e984b30111539c37c7a80455db94eb88024de650a92176cd80f"
+            },
+            {
+              "theme": "multicolor",
+              "driveId": "1uTik9fyrhLdIkkee0JfqF8kwZMNPD6dc",
+              "sha256": "e00d2728763ab9b805dead7633cdd299b9577579c1afa6edc7a71e130117bb95"
+            }
+          ]
+          NRD_MANIFEST
+      - name: Verify Drive files, update eight schedules and read back
+        run: node publish.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: show-de-selos-revision-20261114
+          path: |
+            selos-before.json
+            selos-result.json
