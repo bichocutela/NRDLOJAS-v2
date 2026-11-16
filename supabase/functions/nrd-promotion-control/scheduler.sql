@@ -9,8 +9,9 @@ begin
  end if;
  perform public.nrd_cache_write('promotion_scheduler',jsonb_build_object('hash',encode(extensions.digest(capability,'sha256'),'hex')),0,'upsert',null);
 end;$$;
+-- Daily 06:00 UTC = 03:00 America/Fortaleza. Manual promotion actions remain available.
 -- Enable only after the new gateway is deployed and migration has completed.
-select cron.schedule('nrd-promotion-sync','*/5 * * * *',$job$
+select cron.schedule('nrd-promotion-sync','0 6 * * *',$job$
  select net.http_post(
   url:='https://kkayksyzksexoarpfxyj.supabase.co/functions/v1/nrd-price-gateway',
   headers:=jsonb_build_object('Content-Type','application/json','x-nrd-scheduler-token',
