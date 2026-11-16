@@ -7,9 +7,14 @@
 const NRD = __NRD_CONFIG__;
 function ativarNRD() {
   if(Gmail.Users.getProfile('me').emailAddress.toLowerCase() !== NRD.email) throw Error('Abra o projeto na conta Gmail configurada no NRD.');
-  // Replace old 15-minute triggers; Google may keep the old cadence after a code update.
+  // Replace pre-existing 1-minute triggers. Daily ~03:00 (America/Fortaleza).
   ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='receberRelatoriosNRD').forEach(t=>ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('receberRelatoriosNRD').timeBased().everyMinutes(1).create();
+  ScriptApp.newTrigger('receberRelatoriosNRD').timeBased()
+    .atHour(3).nearMinute(0).everyDays(1).inTimezone('America/Fortaleza').create();
+}
+// Manually run this from the private Apps Script editor whenever an immediate scan is needed.
+function buscarAgoraNRD() {
+  PropertiesService.getScriptProperties().setProperty('NRD_FORCE_SCAN','1');
   receberRelatoriosNRD();
 }
 function desativarNRD() {
@@ -32,9 +37,11 @@ function receberRelatoriosNRD() {
     const properties = PropertiesService.getScriptProperties();
     const status=nrDcall('poll');
     requestId=status.requestId && status.requestId !== status.finishedId ? status.requestId : '';
-    // Normal mail checks every 15 min; the Master button requests the next 1-minute tick.
+    // Scheduled execution is daily; a Master request is processed on the next run.
+    const forceScan=properties.getProperty('NRD_FORCE_SCAN') === '1';
+    properties.deleteProperty('NRD_FORCE_SCAN');
     const last=Number(properties.getProperty('NRD_LAST_SCAN') || 0);
-    if(!requestId && Date.now()-last<15*60*1000 && !properties.getProperty('NRD_PAGE'))return;
+    if(!requestId && !forceScan && Date.now()-last<15*60*1000 && !properties.getProperty('NRD_PAGE'))return;
     const done = JSON.parse(properties.getProperty('NRD_DONE') || '[]');
     const params = {q:'has:attachment filename:pdf newer_than:30d',maxResults:10};
     const page = properties.getProperty('NRD_PAGE'); if(page) params.pageToken=page;
