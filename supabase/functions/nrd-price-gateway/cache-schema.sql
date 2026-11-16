@@ -18,9 +18,19 @@ begin
     return query update public.nrd_promotion_cache set payload=p_payload,lease=p_lease,
       version=version+1,updated_at=now() where key=p_key and version=p_version returning *;
   elsif p_mode = 'upsert' then
+    -- Avoid identical UPSERTs: unchanged rows should not generate WAL, TOAST or index churn.
+    -- Preserve the row response for existing callers; CAS remains untouched for concurrency.
     return query insert into public.nrd_promotion_cache(key,payload,lease) values(p_key,p_payload,p_lease)
       on conflict(key) do update set payload=excluded.payload,lease=excluded.lease,
-      version=nrd_promotion_cache.version+1,updated_at=now() returning *;
+      version=nrd_promotion_cache.version+1,updated_at=now()
+      where nrd_promotion_cache.payload is distinct from excluded.payload
+         or nrd_promotion_cache.lease is distinct from excluded.lease
+      returning *;
+    if not found then
+      return query select * from public.nrd_promotion_cache
+        where key=p_key and payload is not distinct from p_payload
+          and lease is not distinct from p_lease;
+    end if;
   else raise exception 'Invalid cache write mode';
   end if;
 end;
