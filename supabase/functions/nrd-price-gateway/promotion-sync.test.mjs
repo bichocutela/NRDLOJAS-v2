@@ -31,7 +31,7 @@ test('shared snapshot avoids duplicate reads, survives failure and forced refres
   const first=await sync({input:{operation:'promotion_sync',manifest:[]},readPage});
   assert.equal(first.items.length,1); assert.equal(calls,1);
   await sync({input:{operation:'promotion_status'},readPage}); assert.equal(calls,1);
-  time+=7*60*60_000+1000;
+  time+=24*60*60_000+1000;
   await assert.rejects(()=>sync({input:{operation:'promotion_status'},readPage:async()=>{throw Error('offline');}}),/offline/);
   await Promise.all(jobs);
   current={id:1,value:3};
@@ -86,7 +86,7 @@ test('an expired status waits for ACP removal even if validity is still in the f
  write:async(k,payload)=>{const row={payload,version:++version};docs.set(k,row);return row;},claim:async k=>cache.write(k,docs.get(k)?.payload??{}),finish:async(k,c,p)=>cache.write(k,p)};
  const sync=createPromotionSync({cache,now:()=>time});
  const before=await sync({input:{operation:'promotion_sync',manifest:[]},readPage:async()=>({items:[{id:'adria',endDate:'2099-12-31',quantityTake:3,quantityPay:2}],pageIndex:0,totalCount:1,totalPages:1})});
- time+=7*60*60_000;
+ time+=24*60*60_000;
  const after=await sync({input:{operation:'promotion_sync',manifest:before.items},readPage:async()=>({items:[],pageIndex:0,totalCount:0,totalPages:0}),enrichItems:async()=>{throw Error('image service offline');}});
  assert.equal(after.count,0);assert.deepEqual(after.removedIds,['adria']);assert.equal(after.checkedAt,time);
 });
@@ -166,7 +166,7 @@ test('routine price refresh does not repeatedly enrich catalog records within on
  assert.equal(pageReads,4);
 });
 
-test('automatic refresh is coalesced to seven hours while manual refresh is immediate',async()=>{
+test('automatic refresh waits 24 hours while manual refresh is immediate',async()=>{
  const docs=new Map();let time=2_000_000,version=0,reads=0;
  const cache={
   get:async key=>docs.get(key),
@@ -183,7 +183,7 @@ test('automatic refresh is coalesced to seven hours while manual refresh is imme
  time+=60_000;
  await sync({input,readPage});assert.equal(reads,1);
  await sync({input:{operation:'promotion_refresh',manifest:[]},readPage});assert.equal(reads,2);
- time+=6*60*60_000;
+ time+=23*60*60_000;
  await sync({input,readPage});assert.equal(reads,2);
  time+=60*60_000;
  await sync({input,readPage});assert.equal(reads,3);
