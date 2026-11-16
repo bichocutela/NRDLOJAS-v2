@@ -9,7 +9,12 @@ test('private Gmail connector imports all nested PDFs, skips 0012 and does not r
  const context={Date,JSON,Error,console:{log(){}},LockService:{getScriptLock:()=>({tryLock:()=>true,releaseLock(){}})},
  PropertiesService:{getScriptProperties:()=>({getProperty:k=>props.get(k),setProperty:(k,v)=>props.set(k,v),deleteProperty:k=>props.delete(k)})},
  Utilities:{base64DecodeWebSafe:x=>Array.from(Buffer.from(x,'base64url')),base64Encode:x=>Buffer.from(x).toString('base64')},
- ScriptApp:{getProjectTriggers:()=>[],newTrigger:()=>({timeBased:()=>({everyMinutes:(minutes)=>({create(){assert.equal(minutes,1);authorized=true;}})})})},
+ ScriptApp:{getProjectTriggers:()=>[],newTrigger:()=>({timeBased:()=>{
+    const plan={atHour:(v)=>{assert.equal(v,3);return plan;},nearMinute:(v)=>{assert.equal(v,0);return plan;},
+      everyDays:(v)=>{assert.equal(v,1);return plan;},inTimezone:(v)=>{assert.equal(v,'America/Fortaleza');return plan;},
+      create:()=>{authorized=true;}};
+    return plan;
+  }})},
  Gmail:{Users:{getProfile:()=>({emailAddress:'box@gmail.com'}),Messages:{list:()=>({messages:[{id:'1'}]}),get:()=>({payload:{parts:[
  {filename:'CENTRO_0005.pdf',body:{data:Array.from(Buffer.from('%PDF-1.4 byte attachment'))}},{parts:[{filename:'CLUBE_0005.pdf',body:{data:Buffer.from('%PDF-1.4 encoded attachment').toString('base64url')}}]},
  {filename:'CENTRO_0012.pdf',body:{data:'CITY'}},{filename:'other.txt',body:{data:'x'}}]}})}}},
@@ -20,7 +25,7 @@ test('private Gmail connector imports all nested PDFs, skips 0012 and does not r
        ? '{"requestId":"scan-1","finishedId":null}' : '{"ok":true}'};
  }}};
  vm.createContext(context);vm.runInContext(code.replace('__NRD_CONFIG__',JSON.stringify({email:'box@gmail.com',key:'secret',url:'https://test'})),context);
- vm.runInContext('ativarNRD(); receberRelatoriosNRD();',context);
+ vm.runInContext('ativarNRD(); buscarAgoraNRD();',context);
  assert.equal(authorized,true);assert.deepEqual(sent.map(x=>x.filename),['CENTRO_0005.pdf','CLUBE_0005.pdf']);
  assert.equal(Buffer.from(sent[0].pdf,'base64').toString(),'%PDF-1.4 byte attachment');
  assert.equal(Buffer.from(sent[1].pdf,'base64').toString(),'%PDF-1.4 encoded attachment');
@@ -28,7 +33,7 @@ test('private Gmail connector imports all nested PDFs, skips 0012 and does not r
  assert.equal(manifest.oauthScopes.filter(x=>x.includes('gmail')).join(''),'https://www.googleapis.com/auth/gmail.readonly');
 });
 
-test('button scan is acknowledged only after a complete mail pass; later minute ticks skip unnecessary Gmail searches',()=>{
+test('button scan is acknowledged after complete mail pass; manual re-runs force a scan',()=>{
  const calls=[], properties=new Map();let now=2000000, polls=0, lists=0;
  const fakeDate={now:()=>now};
  const context={Date:fakeDate,JSON,Error,console:{log(){}},
@@ -49,4 +54,6 @@ test('button scan is acknowledged only after a complete mail pass; later minute 
  assert.equal(lists,2);
  assert.equal(calls.filter(x=>x.operation==='ack').length,2);
  assert.equal(calls.filter(x=>x.operation==='ack').every(x=>x.failed===false),true);
+ vm.runInContext('buscarAgoraNRD()',context);
+ assert.equal(lists,3); // immediate manual operation bypasses the 15-minute minimum
 });
