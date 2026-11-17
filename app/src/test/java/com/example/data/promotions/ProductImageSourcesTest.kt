@@ -5,18 +5,18 @@ import org.junit.Test
 
 class ProductImageSourcesTest {
     @Test fun defaultsPreserveRequestedOrder() {
-        assertEquals(listOf("promofarma", "raia", "mercadolivre", "cosmos"), ProductImageSources.Policy().order)
+        assertEquals(listOf("promofarma", "raia", "mercadolivre", "cosmos", "carone", "mateus"), ProductImageSources.Policy().order)
         assertEquals(ProductImageSources.defaults.toSet(), ProductImageSources.Policy().enabled)
     }
     @Test fun remoteOrderAndDisabledSourcesAreRespected() {
         val policy = ProductImageSources.parse(listOf("mercadolivre", "raia", "promofarma"), listOf("raia", "promofarma"))
-        assertEquals(listOf("raia", "promofarma"), policy.order.filter { it in policy.enabled })
+        assertEquals(listOf("raia", "promofarma", "carone", "mateus"), policy.order.filter { it in policy.enabled })
         assertTrue(ProductImageSources.parse(null, emptyList<String>()).enabled.isEmpty())
     }
     @Test fun unknownProvidersAndDuplicateEntriesCannotChangeLookupStrategy() {
         val policy = ProductImageSources.parse(listOf("raia", "raia", "https://example.com"), listOf("raia", "untrusted"))
-        assertEquals(listOf("raia"), policy.order)
-        assertEquals(setOf("raia"), policy.enabled)
+        assertEquals(listOf("raia", "carone", "mateus"), policy.order)
+        assertEquals(setOf("raia", "carone", "mateus"), policy.enabled)
         assertEquals(ProductImageSources.Policy(), ProductImageSources.parse("malformed", "malformed"))
     }
     @Test fun absentProductsAndBlockedMarketContinueToCosmosInOrder() = kotlinx.coroutines.runBlocking {
@@ -31,7 +31,7 @@ class ProductImageSourcesTest {
                 else -> PromofarmaImageRepository.Lookup(null)
             }
         }, display = { shown += it; true })
-        assertEquals(ProductImageSources.defaults, requests)
+        assertEquals(ProductImageSources.defaults.take(4), requests)
         assertEquals(listOf("https://cdn-cosmos.bluesoft.com.br/products/7891033777358"), shown)
         assertTrue(result.displayed)
     }
@@ -63,6 +63,25 @@ class ProductImageSourcesTest {
         }, display = { true })
         assertFalse(invalid.displayed)
         assertTrue(requests.isEmpty())
+    }
+
+    @Test fun oldPolicyAddsNewSourcesWithoutReenablingOldDisabledProviders() {
+        val oldOrder = listOf("cosmos", "promofarma", "raia", "mercadolivre")
+        val migrated = ProductImageSources.parse(oldOrder, listOf("cosmos"))
+        assertEquals(oldOrder + listOf("carone", "mateus"), migrated.order)
+        assertEquals(setOf("cosmos", "carone", "mateus"), migrated.enabled)
+        val explicit = ProductImageSources.parse(ProductImageSources.defaults, listOf("cosmos"))
+        assertEquals(setOf("cosmos"), explicit.enabled)
+    }
+
+    @Test fun missingCaroneProductContinuesToExactMateusImageAfterAllEarlierSources() = kotlinx.coroutines.runBlocking {
+        val requests = mutableListOf<String>()
+        val result = ProductImageSources.select(ProductImageSources.Policy(), "7891910000197", lookup = { source, _ ->
+            requests += source
+            PromofarmaImageRepository.Lookup(if (source == "mateus") "https://ik.imagekit.io/glm5kjz1tud/products/None/7891910000197.png" else null)
+        }, display = { true })
+        assertTrue(result.displayed)
+        assertEquals(ProductImageSources.defaults, requests)
     }
 
 }

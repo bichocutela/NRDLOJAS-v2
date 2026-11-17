@@ -12,13 +12,17 @@ import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.tasks.await
 
 internal object ProductImageSources {
-    val defaults = listOf("promofarma", "raia", "mercadolivre", "cosmos")
-    val labels = mapOf("promofarma" to "PromoFarma", "raia" to "Droga Raia", "mercadolivre" to "Mercado Livre", "cosmos" to "Cosmos")
+    val defaults = listOf("promofarma", "raia", "mercadolivre", "cosmos", "carone", "mateus")
+    val labels = mapOf("promofarma" to "PromoFarma", "raia" to "Droga Raia", "mercadolivre" to "Mercado Livre", "cosmos" to "Cosmos", "carone" to "Carone", "mateus" to "Mateus Mais")
     data class Policy(val order: List<String> = defaults, val enabled: Set<String> = defaults.toSet())
     fun parse(order: Any?, enabled: Any?): Policy {
         val list = (order as? List<*>)?.filterIsInstance<String>()?.filter { it in defaults }?.distinct()
         val active = (enabled as? List<*>)?.filterIsInstance<String>()?.filter { it in defaults }?.toSet()
-        return Policy(list?.takeIf { it.isNotEmpty() } ?: defaults, active ?: defaults.toSet())
+        // Old saved policies predate these integrations. Append new sources while
+        // retaining the existing order and explicit disabled choices.
+        val additions = if (list != null && list.isNotEmpty()) listOf("carone", "mateus").filter { it !in list } else emptyList()
+        return Policy((list?.takeIf { it.isNotEmpty() } ?: defaults) + additions,
+            (active ?: defaults.toSet()) + additions)
     }
     data class Selection(val displayed: Boolean, val retryAt: Long? = null)
     suspend fun select(
