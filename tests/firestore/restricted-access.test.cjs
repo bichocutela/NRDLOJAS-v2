@@ -44,7 +44,7 @@ const { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc, writeBat
     await assertSucceeds(setDoc(doc(master, 'config/restricted_access'), { publicAccess: false }));
     await assertFails(getDoc(doc(publicDb, 'work_schedules/2026-10')));
     await assertFails(getDoc(doc(ana, 'work_schedules/2026-10')));
-    const imageSources = { order: ['promofarma', 'raia', 'mercadolivre'], enabled: ['promofarma', 'raia', 'mercadolivre'] };
+    const imageSources = { order: ['promofarma', 'raia', 'mercadolivre', 'cosmos'], enabled: ['promofarma', 'raia', 'mercadolivre', 'cosmos'] };
     await assertFails(setDoc(doc(publicDb, 'config/product_image_sources'), imageSources));
     await assertFails(setDoc(doc(admin, 'config/product_image_sources'), imageSources));
     await assertSucceeds(setDoc(doc(master, 'config/product_image_sources'), imageSources));

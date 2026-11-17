@@ -31,7 +31,7 @@ internal class StructuredEanImageRepository(
 
     suspend fun lookup(source: String, ean: String?): PromofarmaImageRepository.Lookup = withContext(Dispatchers.IO) {
         val code = ean?.trim().orEmpty()
-        if (source !in listOf("raia", "mercadolivre") || !Gtin.valid(code)) return@withContext PromofarmaImageRepository.Lookup(null)
+        if (source !in listOf("raia", "mercadolivre", "cosmos") || !Gtin.valid(code)) return@withContext PromofarmaImageRepository.Lookup(null)
         val key = "$source:$code"
         locks[(key.hashCode() and Int.MAX_VALUE) % locks.size].withLock {
             val entry = cache.getString(key, null)?.let { runCatching { JSONObject(it) }.getOrNull() }
@@ -56,21 +56,40 @@ internal class StructuredEanImageRepository(
             if (!allowedPage(source, response.request.url.host)) throw IOException("Unexpected redirect")
             val body = response.body ?: throw IOException("Empty page")
             // Bound page memory; blocked or truncated pages are retried, not cached as misses.
-            val output = java.io.ByteArrayOutputStream()
-            val buffer = ByteArray(8192)
-            val stream = body.byteStream()
-            while (output.size() <= 2_000_000) {
-                val read = stream.read(buffer, 0, minOf(buffer.size, 2_000_001 - output.size()))
-                if (read < 0) break
-                output.write(buffer, 0, read)
-            }
-            val bytes = output.toByteArray()
-            if (bytes.size > 2_000_000) throw IOException("Product page too large")
+            val bytes = boundedBytes(body)
             return bytes.toString(Charsets.UTF_8)
         }
     }
 
+    private fun cosmosImage(ean: String): String? {
+        val url = "https://cdn-cosmos.bluesoft.com.br/products/$ean"
+        client.newCall(Request.Builder().url(url).build()).execute().use { response ->
+            if (response.code == 404) return null
+            if (!response.isSuccessful || response.request.url.toString() != url) throw IOException("Image source unavailable")
+            val body = response.body ?: throw IOException("Empty image")
+            val bytes = boundedBytes(body)
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            if (bounds.outWidth !in 1..10000 || bounds.outHeight !in 1..10000) throw IOException("Invalid image")
+            return url
+        }
+    }
+
+    private fun boundedBytes(body: okhttp3.ResponseBody): ByteArray {
+        val output = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        val stream = body.byteStream()
+        while (output.size() <= 2_000_000) {
+            val read = stream.read(buffer, 0, minOf(buffer.size, 2_000_001 - output.size()))
+            if (read < 0) break
+            output.write(buffer, 0, read)
+        }
+        if (output.size() > 2_000_000) throw IOException("Product response too large")
+        return output.toByteArray()
+    }
+
     private fun fetch(source: String, ean: String): String? {
+        if (source == "cosmos") return cosmosImage(ean)
         val search = if (source == "raia") "https://www.drogaraia.com.br/search?w=$ean"
             else "https://lista.mercadolivre.com.br/$ean"
         val html = page(search, source)

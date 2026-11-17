@@ -82,4 +82,41 @@ class StructuredEanImageRepositoryTest {
         repository.lookup("mercadolivre", ean)
         assertEquals(2, requests)
     }
+    @Test fun cosmosUsesOnlyTheExactEanImageAddressAndCachesDecodedImages() = runBlocking {
+        var requests = 0
+        val png = java.util.Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGMMqFjAwMDAxMDAwMDAAAAQugFsZnyF3gAAAABJRU5ErkJggg==")
+        val http = OkHttpClient.Builder().addInterceptor { chain ->
+            requests++
+            assertEquals("https://cdn-cosmos.bluesoft.com.br/products/$ean", chain.request().url.toString())
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("fixture")
+                .body(png.toResponseBody(null)).build()
+        }.build()
+        val expected = "https://cdn-cosmos.bluesoft.com.br/products/$ean"
+        assertEquals(expected, StructuredEanImageRepository(context, http).lookup("cosmos", ean).url)
+        assertEquals(expected, StructuredEanImageRepository(context, http).lookup("cosmos", ean).url)
+        assertEquals(1, requests)
+    }
+
+    @Test fun missingCosmosImageIsCachedAndHtmlIsNeverAcceptedAsAPhoto() = runBlocking {
+        var requests = 0
+        val missing = StructuredEanImageRepository(context, client { requests++; 404 to "not found" })
+        assertNull(missing.lookup("cosmos", ean).url)
+        assertNull(missing.lookup("cosmos", ean).retryAt)
+        assertEquals(1, requests)
+        clear()
+        val blocked = StructuredEanImageRepository(context, client { 200 to "<html>Blocked</html>" })
+        val result = blocked.lookup("cosmos", ean)
+        assertNull(result.url)
+        assertNotNull(result.retryAt)
+    }
+
+    @Test fun cosmosRejectsNamesAndInternalCodesWithoutContactingTheSource() = runBlocking {
+        var requests = 0
+        val repository = StructuredEanImageRepository(context, client { requests++; 200 to "invalid" })
+        for (code in listOf(null, "", "250090", "Australian Gold", "7891033777359")) {
+            assertNull(repository.lookup("cosmos", code).url)
+        }
+        assertEquals(0, requests)
+    }
+
 }

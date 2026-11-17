@@ -12,8 +12,8 @@ import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.tasks.await
 
 internal object ProductImageSources {
-    val defaults = listOf("promofarma", "raia", "mercadolivre")
-    val labels = mapOf("promofarma" to "PromoFarma", "raia" to "Droga Raia", "mercadolivre" to "Mercado Livre")
+    val defaults = listOf("promofarma", "raia", "mercadolivre", "cosmos")
+    val labels = mapOf("promofarma" to "PromoFarma", "raia" to "Droga Raia", "mercadolivre" to "Mercado Livre", "cosmos" to "Cosmos")
     data class Policy(val order: List<String> = defaults, val enabled: Set<String> = defaults.toSet())
     fun parse(order: Any?, enabled: Any?): Policy {
         val list = (order as? List<*>)?.filterIsInstance<String>()?.filter { it in defaults }?.distinct()

@@ -5,7 +5,7 @@ import org.junit.Test
 
 class ProductImageSourcesTest {
     @Test fun defaultsPreserveRequestedOrder() {
-        assertEquals(listOf("promofarma", "raia", "mercadolivre"), ProductImageSources.Policy().order)
+        assertEquals(listOf("promofarma", "raia", "mercadolivre", "cosmos"), ProductImageSources.Policy().order)
         assertEquals(ProductImageSources.defaults.toSet(), ProductImageSources.Policy().enabled)
     }
     @Test fun remoteOrderAndDisabledSourcesAreRespected() {
