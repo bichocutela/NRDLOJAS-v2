@@ -105,6 +105,16 @@ service cloud.firestore {
         request.resource.data.revision is int &&
         request.resource.data.revision > 0;
     }
+    match /config/product_image_sources {
+      allow read: if true;
+      allow create, update: if isMaster() &&
+        request.resource.data.keys().hasOnly(['order', 'enabled']) &&
+        request.resource.data.order is list && request.resource.data.order.size() <= 4 &&
+        request.resource.data.enabled is list && request.resource.data.enabled.size() <= 4 &&
+        request.resource.data.order.hasOnly(['promofarma', 'raia', 'mercadolivre', 'cosmos']) &&
+        request.resource.data.enabled.hasOnly(['promofarma', 'raia', 'mercadolivre', 'cosmos']);
+      allow delete: if isMaster();
+    }
     match /config/product_photos {
       allow read: if true;
       allow create, update: if isMaster() &&
@@ -113,7 +123,7 @@ service cloud.firestore {
     }
     match /config/{document} {
       allow read: if document != 'training';
-      allow write: if document != 'product_photos' && document != 'training_access' && document != 'training' && document != 'restricted_access' && document != 'update_policy' && document != 'nordestao_stores' && document != 'encartes_public' && isManager();
+      allow write: if document != 'product_image_sources' && document != 'product_photos' && document != 'training_access' && document != 'training' && document != 'restricted_access' && document != 'update_policy' && document != 'nordestao_stores' && document != 'encartes_public' && isManager();
       allow create, update: if document == 'restricted_access' && isMaster() &&
         request.resource.data.keys().hasOnly(['publicAccess']) && request.resource.data.publicAccess is bool;
       allow delete: if document == 'restricted_access' && isMaster();

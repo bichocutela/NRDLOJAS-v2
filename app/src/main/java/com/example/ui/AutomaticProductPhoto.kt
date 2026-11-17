@@ -32,6 +32,7 @@ internal fun rememberOfficialProductImage(
 ): String? {
     val context = LocalContext.current
     val photos by remember { ManualProductPhotos.updates }.collectAsState(initial = emptyMap())
+    val policy by remember { com.example.data.promotions.ProductImageSources.updates }.collectAsState(initial = com.example.data.promotions.ProductImageSources.Policy(enabled = emptySet()))
     var resolvedEan by remember(code, barcode) { mutableStateOf(barcode) }
     val manual = ManualProductPhotos.selected(photos, code, resolvedEan)
     LaunchedEffect(code, name, barcode, manual) {
@@ -48,8 +49,8 @@ internal fun rememberOfficialProductImage(
             ?.let(ImageUrlHelper::normalizeUrl)
             ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
     }
-    var imageUrl by remember(code, barcode, name, registered) { mutableStateOf(registered) }
-    LaunchedEffect(code, barcode, name, registered) {
+    var imageUrl by remember(code, barcode, name, registered, policy) { mutableStateOf(registered) }
+    LaunchedEffect(code, barcode, name, registered, policy) {
         if (registered != null) return@LaunchedEffect
         while (isActive) {
             try {
@@ -67,11 +68,20 @@ internal fun rememberOfficialProductImage(
                 if (display(result.url)) break
                 val ean = listOf(barcode, result.ean.orEmpty(), code)
                     .firstOrNull(com.example.data.promotions.Gtin::valid)
-                val secondary = com.example.data.promotions.PromofarmaImageRepository.get(context).lookup(ean)
-                if (display(secondary.url)) break
-                val retryAt = listOfNotNull(result.retryAt, secondary.retryAt,
-                    if (result.url != null || secondary.url != null) System.currentTimeMillis() + 60_000 else null)
-                    .minOrNull() ?: break
+                val retries = mutableListOf<Long>()
+                result.retryAt?.let(retries::add)
+                if (result.url != null) retries += System.currentTimeMillis() + 60_000
+                val secondary = com.example.data.promotions.ProductImageSources.select(
+                    policy, ean,
+                    lookup = { source, exactEan ->
+                        if (source == "promofarma") com.example.data.promotions.PromofarmaImageRepository.get(context).lookup(exactEan)
+                        else com.example.data.promotions.StructuredEanImageRepository.get(context).lookup(source, exactEan)
+                    },
+                    display = { display(it) }
+                )
+                if (secondary.displayed) break
+                secondary.retryAt?.let(retries::add)
+                val retryAt = retries.minOrNull() ?: break
                 delay((retryAt - System.currentTimeMillis()).coerceIn(1_000L, 60_000L))
             } catch (cancelled: CancellationException) {
                 throw cancelled

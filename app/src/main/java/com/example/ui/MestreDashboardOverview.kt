@@ -349,6 +349,8 @@ internal fun MestreSettingsHub(
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
     Spacer(modifier = Modifier.height(8.dp))
+    MestreProductImageSources()
+    Spacer(modifier = Modifier.height(8.dp))
     PanelAreaCard(
         title = "Tela Home",
         description = "Seções, quantidade de produtos e carrossel",
