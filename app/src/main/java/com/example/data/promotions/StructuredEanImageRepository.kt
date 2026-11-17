@@ -69,11 +69,21 @@ internal class StructuredEanImageRepository(
             if (!response.isSuccessful || response.request.url.toString() != url) throw IOException("Image source unavailable")
             val body = response.body ?: throw IOException("Empty image")
             val bytes = boundedBytes(body)
+            if (!rasterSignature(bytes)) throw IOException("Response is not a product image")
             val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
             android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
             if (bounds.outWidth !in 1..10000 || bounds.outHeight !in 1..10000) throw IOException("Invalid image")
             return url
         }
+    }
+
+    private fun rasterSignature(bytes: ByteArray): Boolean {
+        if (bytes.size < 12) return false
+        val jpeg = bytes[0] == 0xff.toByte() && bytes[1] == 0xd8.toByte() && bytes[2] == 0xff.toByte()
+        val png = bytes.copyOfRange(0, 8).contentEquals(byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a))
+        val gif = String(bytes, 0, 6, Charsets.US_ASCII) in setOf("GIF87a", "GIF89a")
+        val webp = String(bytes, 0, 4, Charsets.US_ASCII) == "RIFF" && String(bytes, 8, 4, Charsets.US_ASCII) == "WEBP"
+        return jpeg || png || gif || webp
     }
 
     private fun boundedBytes(body: okhttp3.ResponseBody): ByteArray {
