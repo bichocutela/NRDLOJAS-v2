@@ -89,8 +89,8 @@ internal fun MailImportPanel(onPublished: () -> Unit = {}) {
                 message="${documents.size} documento(s) na fila. Confira os relatórios recebidos e publique somente os aprovados."
             }}) {Text("Atualizar fila de documentos")}
             OutlinedButton(enabled=!busy,onClick={launchJob {
-                MailImportRepository.requestScan()
-                message="Leitura solicitada ao Gmail. Toque em Buscar para acompanhar e trazer os documentos para a fila."
+                MailImportRepository.requestScan(startNow=false)
+                message="Solicitação criada. Toque em Buscar para ler o Gmail e trazer os documentos para a fila."
             }}) {Text("Solicitar nova leitura do Gmail")}
             Button(enabled=!busy,onClick={launchJob {
                 message="Buscando documentos no Gmail… Aguarde a conclusão."

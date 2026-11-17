@@ -23,6 +23,18 @@ test('rejects unauthenticated callers and public API keys',async()=>{
  const {handler}=fixture();assert.equal((await handler(request({operation:'list'}))).status,403);
  assert.equal((await handler(request({operation:'setup',email:'x@gmail.com'},{apikey:'public'}))).status,403);
 });
+test('request button only queues a scan; Buscar starts it and both require Mestre',async()=>{
+ const starts=[];
+ const handler=createHandler({verify:async token=>{if(token!=='master')throw Error('denied');return {email:'mestre@nrdlojas.com'};},
+  db:{requestScan:async start=>{starts.push(start);return '11111111-1111-4111-8111-111111111111';}}});
+ const headers={'x-firebase-token':'master'};
+ assert.equal((await handler(request({operation:'request_scan'},headers))).status,200);
+ assert.deepEqual(starts,[false]);
+ assert.equal((await handler(request({operation:'scan'},headers))).status,200);
+ assert.deepEqual(starts,[false,true]);
+ assert.equal((await handler(request({operation:'request_scan'}))).status,403);
+ assert.equal(starts.length,2);
+});
 test('only Mestre provisions connector; capability only ingests and duplicates are idempotent',async()=>{
  const {handler,items}=fixture();
  assert.equal((await handler(request({operation:'setup',email:'box@gmail.com'},{'x-firebase-token':'master'}))).status,200);

@@ -24,12 +24,12 @@ const db={
    return {requestId:row.scan_request_id || null,finishedId:row.scan_finished_id || null,
      finishedAt:row.scan_finished_at || null,seenAt:row.scan_seen_at || null,failed:row.scan_failed === true};
  },
- requestScan:async()=>{
+ requestScan:async(startNow=true)=>{
    const connector=(await rest('nrd_mail_settings?id=eq.true&select=connector_url,key_hash,scan_request_id,scan_finished_id'))?.[0];
    const pending=connector?.scan_request_id && connector.scan_request_id!==connector.scan_finished_id;
    const requestId=pending ? connector.scan_request_id : crypto.randomUUID();
    if(!pending) await rest('nrd_mail_settings?id=eq.true','PATCH',{scan_request_id:requestId,scan_failed:false});
-   if(connector?.connector_url) EdgeRuntime.waitUntil(dispatchScan({url:connector.connector_url,
+   if(startNow && connector?.connector_url) EdgeRuntime.waitUntil(dispatchScan({url:connector.connector_url,
      token:connector.key_hash,requestId}).catch(async()=>{
        console.warn('MAIL_CONNECTOR_DISPATCH_FAILED');
        await db.ack(requestId,true);

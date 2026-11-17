@@ -62,8 +62,8 @@ export function createHandler({verify, db, notifyMailDocuments = async () => {},
         const secret = random(); await db.setup(email,await digest(secret));
         return reply(200,{email,key:secret});
       }
-      if(body.operation === 'scan' && Object.keys(body).length === 1) {
-        return reply(200,{requestId:await db.requestScan()});
+      if(['scan','request_scan'].includes(body.operation) && Object.keys(body).length === 1) {
+        return reply(200,{requestId:await db.requestScan(body.operation === 'scan')});
       }
       if(body.operation === 'status' && Object.keys(body).length === 1) {
         return reply(200,await db.scanStatus());

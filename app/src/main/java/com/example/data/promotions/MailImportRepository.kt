@@ -41,7 +41,8 @@ internal object MailImportRepository {
     }
     internal data class ScanStatus(val requestId: String?, val finishedId: String?,
         val seenAt: String?, val finishedAt: String?, val failed: Boolean)
-    suspend fun requestScan(): String = request(JSONObject().put("operation", "scan")).getString("requestId")
+    suspend fun requestScan(startNow: Boolean = true): String =
+        request(JSONObject().put("operation", if(startNow) "scan" else "request_scan")).getString("requestId")
     suspend fun scanStatus(): ScanStatus {
         val response=request(JSONObject().put("operation", "status"))
         fun value(name: String): String? = response.optString(name).takeIf { it.isNotBlank() && it != "null" }
