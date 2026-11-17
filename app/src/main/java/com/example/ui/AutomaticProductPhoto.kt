@@ -1,5 +1,7 @@
 package com.example.ui
 
+import androidx.compose.runtime.collectAsState
+import com.example.data.promotions.ManualProductPhotos
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,8 +31,12 @@ internal fun rememberOfficialProductImage(
     existingUrl: String? = null
 ): String? {
     val context = LocalContext.current
-    val registered = remember(existingUrl) {
-        existingUrl?.trim()?.takeIf { it.isNotBlank() }
+    val photos by remember { ManualProductPhotos.updates }.collectAsState(initial = emptyMap())
+    var resolvedEan by remember(code, barcode) { mutableStateOf(barcode) }
+    val manual = ManualProductPhotos.selected(photos, code, resolvedEan)
+    val candidate = if (manual != null) manual else existingUrl
+    val registered = remember(candidate) {
+        candidate?.trim()?.takeIf { it.isNotBlank() }
             ?.let(ImageUrlHelper::normalizeUrl)
             ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
     }
@@ -40,6 +46,7 @@ internal fun rememberOfficialProductImage(
         while (isActive) {
             try {
                 val result = StoreProductImageRepository.shared.lookup(code, name, barcode)
+                if (!result.ean.isNullOrBlank()) resolvedEan = result.ean
                 val found = result.url
                 if (found != null) {
                     val loaded = context.imageLoader.execute(

@@ -79,28 +79,10 @@ fun ProductBarcodeDialog(
     val expressiveGlassStyle = LocalExpressiveGlassStyle.current
     val expressiveStyle = LocalExpressiveStyle.current
     val isExpressive = expressiveStyle.enabled
-    var photoUrl by remember(product.code, product.name, product.imageUrl) {
-        mutableStateOf(
-            product.imageUrl
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
-                ?.let(ImageUrlHelper::normalizeUrl)
-                ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
-        )
-    }
-    // Keep manual photos authoritative; automatic photos are display-only and never saved to Firebase.
-    LaunchedEffect(product.code, product.name, product.imageUrl) {
-        if (photoUrl == null) {
-            val found = com.example.data.promotions.StoreProductImageRepository.shared.find(product.code, product.name)
-            if (found != null) {
-                val result = context.imageLoader.execute(
-                    coil.request.ImageRequest.Builder(context).data(found).size(720, 720).build()
-                )
-                // Hide the action for missing/broken store photos, without adding any status message.
-                if (result is coil.request.SuccessResult && photoUrl == null) photoUrl = found
-            }
-        }
-    }
+    val photos by remember { com.example.data.promotions.ManualProductPhotos.updates }.collectAsState(initial = emptyMap())
+    val manualPhoto = com.example.data.promotions.ManualProductPhotos.selected(photos, product.code)
+    val resolvedPhoto = rememberOfficialProductImage(product.code, product.name, existingUrl = product.imageUrl)
+    var photoUrl by remember(resolvedPhoto) { mutableStateOf(resolvedPhoto) }
     var showPhotoDialog by remember { mutableStateOf(false) }
     val isMaster = managementRoleForEmail(
         com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
@@ -179,9 +161,7 @@ fun ProductBarcodeDialog(
                     if (uploadedUrl == null) {
                         photoEditMessage = "Não foi possível enviar a nova foto. Tente novamente."
                     } else {
-                        val saved = com.example.data.FirebaseService.saveProduct(
-                            product.copy(imageUrl = uploadedUrl)
-                        )
+                        val saved = com.example.data.promotions.ManualProductPhotos.save(product.code, product.name, uploadedUrl)
                         if (saved) {
                             val updatedProduct = product.copy(imageUrl = uploadedUrl)
                             photoUrl = uploadedUrl
@@ -831,7 +811,7 @@ fun ProductBarcodeDialog(
                                         coroutineScope.launch {
                                             try {
                                                 val updatedProduct = product.copy(imageUrl = urlToSave)
-                                                val saved = com.example.data.FirebaseService.saveProduct(updatedProduct)
+                                                val saved = com.example.data.promotions.ManualProductPhotos.save(product.code, product.name, urlToSave)
                                                 if (saved) {
                                                     photoUrl = urlToSave
                                                     pendingPhotoUrl = null
@@ -891,6 +871,21 @@ fun ProductBarcodeDialog(
                             ) {
                                 Text("Colar Link")
                             }
+                        }
+                        if (isMaster && (manualPhoto?.isNotBlank() == true || (manualPhoto == null && !product.imageUrl.isNullOrBlank()))) {
+                            TextButton(enabled = !isPhotoSaving, onClick = {
+                                isPhotoSaving = true
+                                coroutineScope.launch {
+                                    try {
+                                        if (com.example.data.promotions.ManualProductPhotos.save(product.code, product.name, null)) {
+                                            pendingPhotoUrl = null
+                                            photoUrl = null
+                                            onProductUpdated(product.copy(imageUrl = null))
+                                            photoEditMessage = "Foto removida. Usando a imagem oficial do Nordestão."
+                                        } else photoEditMessage = "Não foi possível excluir a foto. Tente novamente."
+                                    } finally { isPhotoSaving = false }
+                                }
+                            }) { Text("Excluir foto salva") }
                         }
                         TextButton(
                             onClick = {
