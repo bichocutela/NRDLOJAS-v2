@@ -16,7 +16,7 @@ select cron.schedule('nrd-promotion-sync','0 6 * * *',$job$
   url:='https://kkayksyzksexoarpfxyj.supabase.co/functions/v1/nrd-price-gateway',
   headers:=jsonb_build_object('Content-Type','application/json','x-nrd-scheduler-token',
     (select decrypted_secret from vault.decrypted_secrets where name='nrd_promotion_scheduler_token')),
-  body:='{"operation":"promotion_tick"}'::jsonb,timeout_milliseconds:=10000
+  body:='{"operation":"promotion_tick"}'::jsonb,timeout_milliseconds:=120000
  );
 $job$);
 
