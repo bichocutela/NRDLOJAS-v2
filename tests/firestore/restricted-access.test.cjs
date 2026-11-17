@@ -44,6 +44,13 @@ const { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc, writeBat
     await assertSucceeds(setDoc(doc(master, 'config/restricted_access'), { publicAccess: false }));
     await assertFails(getDoc(doc(publicDb, 'work_schedules/2026-10')));
     await assertFails(getDoc(doc(ana, 'work_schedules/2026-10')));
+    const photos = { photos: { '7891033777358': 'https://example.com/product.jpg' } };
+    await assertFails(setDoc(doc(publicDb, 'config/product_photos'), photos));
+    await assertFails(setDoc(doc(admin, 'config/product_photos'), photos));
+    await assertSucceeds(setDoc(doc(master, 'config/product_photos'), photos));
+    await assertSucceeds(getDoc(doc(publicDb, 'config/product_photos')));
+    await assertSucceeds(setDoc(doc(master, 'config/product_photos'), { photos: { '7891033777358': '' } }));
+    await assertFails(setDoc(doc(master, 'config/product_photos'), { photos: 'invalid' }));
     const policy = { enabled: true, minimumVersion: 'v1.0.705' };
     await assertFails(setDoc(doc(publicDb, 'config/update_policy'), policy));
     await assertFails(setDoc(doc(admin, 'config/update_policy'), policy));

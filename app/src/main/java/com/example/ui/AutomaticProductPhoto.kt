@@ -34,6 +34,14 @@ internal fun rememberOfficialProductImage(
     val photos by remember { ManualProductPhotos.updates }.collectAsState(initial = emptyMap())
     var resolvedEan by remember(code, barcode) { mutableStateOf(barcode) }
     val manual = ManualProductPhotos.selected(photos, code, resolvedEan)
+    LaunchedEffect(code, name, barcode, manual) {
+        if (manual == null && barcode.isBlank()) {
+            try {
+                StoreProductImageRepository.shared.lookup(code, name).ean?.let { resolvedEan = it }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* The image resolver retains its own retry policy. */ }
+        }
+    }
     val candidate = if (manual != null) manual else existingUrl
     val registered = remember(candidate) {
         candidate?.trim()?.takeIf { it.isNotBlank() }
