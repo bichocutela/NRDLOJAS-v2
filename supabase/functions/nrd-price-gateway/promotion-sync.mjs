@@ -118,17 +118,19 @@ export function createPromotionSync({cache,background,now=()=>Date.now(),sleep=m
     })();
     try {return await inFlight;} finally {inFlight=null;}
   }
-  return async ({input,readPage,enrichItems})=>{
+  return async ({input,readPage,enrichItems,forceRefresh=false})=>{
+    // Only the authenticated scheduler sets this internal option; client status reads keep their TTL.
+    const refreshRequested=forceRefresh || input.operation==='promotion_refresh';
     let pointer=(await cache.get('promotion_snapshot_v3'))?.payload;
     if(!pointer?.revision) {
-      if(input.operation!=='promotion_refresh' && (pointer?.retryAt ?? 0)>now())throw Error('INITIAL_SYNC_BUSY');
+      if(!refreshRequested && (pointer?.retryAt ?? 0)>now())throw Error('INITIAL_SYNC_BUSY');
       pointer=await refresh(readPage,enrichItems);
       if(!pointer?.revision) {
         pointer=(await cache.get('promotion_snapshot_v3'))?.payload;
         if(!pointer?.revision) throw Error('INITIAL_SYNC_BUSY');
       }
-    } else if(input.operation==='promotion_refresh' || now()-pointer.checkedAt>=AUTOMATIC_CHECK_INTERVAL_MS || pointer.failureCount>0) {
-      if(input.operation!=='promotion_refresh' && (pointer.retryAt ?? 0)>now())throw Error('SYNC_NOT_CONFIRMED');
+    } else if(refreshRequested || now()-pointer.checkedAt>=AUTOMATIC_CHECK_INTERVAL_MS || pointer.failureCount>0) {
+      if(!refreshRequested && (pointer.retryAt ?? 0)>now())throw Error('SYNC_NOT_CONFIRMED');
       // Another Edge instance may own the lease. Never report the previous page as a successful fresh scan.
       const startedAt=now();
       const previousCheck=pointer.checkedAt;

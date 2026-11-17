@@ -362,7 +362,7 @@ export function createHandler({authorize, credentials, fetcher = fetch, enrichPr
     if (health) input = {path:input.operation === 'health_promotions' ? 'Promotion/all' : 'ProductCategory/all',parameters:[['pageSize','1'],['pageIndex','0']]};
     try {
       if (input.operation === 'promotion_tick') {
-        await promotionSync({input:{operation:'promotion_status'},enrichItems,readPage:snapshotReader()});
+        await promotionSync({input:{operation:'promotion_status'},forceRefresh:true,enrichItems,readPage:snapshotReader()});
         return reply(202,{ok:true});
       }
       if (['promotion_status','promotion_sync','promotion_refresh'].includes(input.operation)) {

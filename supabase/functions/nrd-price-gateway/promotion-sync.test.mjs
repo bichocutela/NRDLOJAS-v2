@@ -120,7 +120,7 @@ test('official images survive refresh for De/Por, Clube and Leve e Pague product
 });
 
 test('repeated upstream failures back off, preserve the snapshot, and manual recovery resets the delay',async()=>{
- const before=await snapshot([{id:1,value:2}]);let time=8*60*60_000,calls=0;
+ const before=await snapshot([{id:1,value:2}]);let time=25*60*60_000,calls=0;
  const docs=new Map([['promotion_snapshot_v3',{payload:{revision:before.revision,checkedAt:1,count:1,pages:1,generation:'old'}}],['snapshot_old_0',{payload:{rows:before.rows}}]]);
  const cache={get:async k=>docs.get(k),many:async keys=>new Map(keys.map(k=>[k,docs.get(k)])),
   claim:async k=>docs.get(k),finish:async(k,c,payload)=>{const row={payload};docs.set(k,row);return row;}};
@@ -187,4 +187,27 @@ test('automatic refresh waits 24 hours while manual refresh is immediate',async(
  await sync({input,readPage});assert.equal(reads,2);
  time+=60*60_000;
  await sync({input,readPage});assert.equal(reads,3);
+});
+
+test('nightly scheduler refreshes after an afternoon manual scan without returning the catalogue',async()=>{
+ const docs=new Map();let time=Date.UTC(2026,10,16,19),reads=0,version=0;
+ const cache={
+  get:async key=>docs.get(key),
+  many:async keys=>new Map(keys.map(key=>[key,docs.get(key)])),
+  write:async(key,payload)=>{const row={payload,version:++version};docs.set(key,row);return row;},
+  claim:async key=>cache.write(key,docs.get(key)?.payload??{}),
+  finish:async(key,claim,payload)=>cache.write(key,payload),
+  remove:async key=>docs.delete(key)
+ };
+ const sync=createPromotionSync({cache,now:()=>time});
+ const readPage=async()=>{reads++;return {items:[{id:1,value:reads}],pageIndex:0,totalPages:1,totalCount:1};};
+ await sync({input:{operation:'promotion_refresh',manifest:[]},readPage});
+ const afternoon=docs.get('promotion_snapshot_v3').payload.checkedAt;
+ time=Date.UTC(2026,10,17,6); // 03:00 Fortaleza, only 11 hours since the manual scan.
+ const input={operation:'promotion_status'};
+ await sync({input,readPage});assert.equal(reads,1);
+ const status=await sync({input,readPage,forceRefresh:true});
+ assert.equal(reads,2);assert.equal(status.checkedAt,time);assert.ok(status.checkedAt>afternoon);
+ assert.deepEqual(Object.keys(status).sort(),['checkedAt','count','revision']);
+ await sync({input,readPage});assert.equal(reads,2); // Ordinary clients still reuse the snapshot.
 });
