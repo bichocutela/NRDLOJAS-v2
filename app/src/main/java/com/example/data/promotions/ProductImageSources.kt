@@ -20,6 +20,28 @@ internal object ProductImageSources {
         val active = (enabled as? List<*>)?.filterIsInstance<String>()?.filter { it in defaults }?.toSet()
         return Policy(list?.takeIf { it.isNotEmpty() } ?: defaults, active ?: defaults.toSet())
     }
+    data class Selection(val displayed: Boolean, val retryAt: Long? = null)
+    suspend fun select(
+        policy: Policy,
+        ean: String?,
+        lookup: suspend (String, String) -> PromofarmaImageRepository.Lookup,
+        display: suspend (String) -> Boolean,
+        now: () -> Long = System::currentTimeMillis
+    ): Selection {
+        if (ean == null || !Gtin.valid(ean)) return Selection(false)
+        val retries = mutableListOf<Long>()
+        for (source in policy.order.filter { it in policy.enabled && it in defaults }) {
+            try {
+                val result = lookup(source, ean)
+                val url = result.url
+                if (url != null && display(url)) return Selection(true)
+                result.retryAt?.let(retries::add)
+                if (url != null) retries += now() + 60_000
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { retries += now() + 300_000 }
+        }
+        return Selection(false, retries.minOrNull())
+    }
     private fun document() = FirebaseFirestore.getInstance().collection("config").document("product_image_sources")
     val updates = callbackFlow {
         if (!FirebaseService.isFirebaseConfigured()) { trySend(Policy()); close(); return@callbackFlow }

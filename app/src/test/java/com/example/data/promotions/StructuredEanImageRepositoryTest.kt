@@ -119,4 +119,23 @@ class StructuredEanImageRepositoryTest {
         assertEquals(0, requests)
     }
 
+    @Test fun absentRaiaProductDoesNotBlockTheNextCandidateOrOtherEans() = runBlocking {
+        val requests = mutableListOf<Request>()
+        val repository = StructuredEanImageRepository(context, client { request ->
+            requests += request
+            when (request.url.encodedPath) {
+                "/search" -> if (request.url.queryParameter("w") == ean) 200 to
+                    """<script id="__NEXT_DATA__">{"props":{"pageProps":{"pageProps":{"results":{"products":[{"url":"/removed.html"},{"url":"/correct.html"}]}}}}}</script>"""
+                    else 200 to """<script id="__NEXT_DATA__">{"props":{"pageProps":{"pageProps":{"results":{"products":[]}}}}}</script>"""
+                "/removed.html" -> 404 to "not found"
+                else -> 200 to product()
+            }
+        })
+        assertEquals(raia, repository.lookup("raia", ean).url)
+        val missing = repository.lookup("raia", "7891910000197")
+        assertNull(missing.url)
+        assertNull(missing.retryAt)
+        assertEquals(4, requests.size)
+    }
+
 }

@@ -49,9 +49,10 @@ internal class StructuredEanImageRepository(
         }
     }
 
-    private fun page(url: String, source: String): String {
+    private fun page(url: String, source: String): String? {
         client.newCall(Request.Builder().url(url).header("Accept", "text/html")
             .header("User-Agent", "Mozilla/5.0 (compatible; NRDProductImages/1.0)").build()).execute().use { response ->
+            if (response.code == 404) return null
             if (!response.isSuccessful) throw IOException("Product source unavailable")
             if (!allowedPage(source, response.request.url.host)) throw IOException("Unexpected redirect")
             val body = response.body ?: throw IOException("Empty page")
@@ -92,13 +93,14 @@ internal class StructuredEanImageRepository(
         if (source == "cosmos") return cosmosImage(ean)
         val search = if (source == "raia") "https://www.drogaraia.com.br/search?w=$ean"
             else "https://lista.mercadolivre.com.br/$ean"
-        val html = page(search, source)
+        val html = page(search, source) ?: return null
         exactImage(html, ean, source)?.let { return it }
         val links = if (source == "raia") raiaLinks(html) else marketLinks(html)
         if (links.isEmpty() && (source == "mercadolivre" || !html.contains("__NEXT_DATA__")))
             throw IOException("No verifiable search response")
         for (link in links.take(4)) {
-            val found = exactImage(page(link, source), ean, source)
+            val detail = page(link, source) ?: continue
+            val found = exactImage(detail, ean, source)
             if (found != null) return found
         }
         return null

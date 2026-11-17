@@ -71,15 +71,16 @@ internal fun rememberOfficialProductImage(
                 val retries = mutableListOf<Long>()
                 result.retryAt?.let(retries::add)
                 if (result.url != null) retries += System.currentTimeMillis() + 60_000
-                var displayed = false
-                for (source in policy.order.filter { it in policy.enabled }) {
-                    val lookup = if (source == "promofarma") com.example.data.promotions.PromofarmaImageRepository.get(context).lookup(ean)
-                        else com.example.data.promotions.StructuredEanImageRepository.get(context).lookup(source, ean)
-                    if (display(lookup.url)) { displayed = true; break }
-                    lookup.retryAt?.let(retries::add)
-                    if (lookup.url != null) retries += System.currentTimeMillis() + 60_000
-                }
-                if (displayed) break
+                val secondary = com.example.data.promotions.ProductImageSources.select(
+                    policy, ean,
+                    lookup = { source, exactEan ->
+                        if (source == "promofarma") com.example.data.promotions.PromofarmaImageRepository.get(context).lookup(exactEan)
+                        else com.example.data.promotions.StructuredEanImageRepository.get(context).lookup(source, exactEan)
+                    },
+                    display = { display(it) }
+                )
+                if (secondary.displayed) break
+                secondary.retryAt?.let(retries::add)
                 val retryAt = retries.minOrNull() ?: break
                 delay((retryAt - System.currentTimeMillis()).coerceIn(1_000L, 60_000L))
             } catch (cancelled: CancellationException) {
