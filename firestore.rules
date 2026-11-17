@@ -105,9 +105,15 @@ service cloud.firestore {
         request.resource.data.revision is int &&
         request.resource.data.revision > 0;
     }
+    match /config/product_photos {
+      allow read: if true;
+      allow create, update: if isMaster() &&
+        request.resource.data.keys().hasOnly(['photos']) && request.resource.data.photos is map;
+      allow delete: if isMaster();
+    }
     match /config/{document} {
       allow read: if document != 'training';
-      allow write: if document != 'training_access' && document != 'training' && document != 'restricted_access' && document != 'update_policy' && document != 'nordestao_stores' && document != 'encartes_public' && isManager();
+      allow write: if document != 'product_photos' && document != 'training_access' && document != 'training' && document != 'restricted_access' && document != 'update_policy' && document != 'nordestao_stores' && document != 'encartes_public' && isManager();
       allow create, update: if document == 'restricted_access' && isMaster() &&
         request.resource.data.keys().hasOnly(['publicAccess']) && request.resource.data.publicAccess is bool;
       allow delete: if document == 'restricted_access' && isMaster();

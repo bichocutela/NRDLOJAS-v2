@@ -1,5 +1,7 @@
 package com.example.ui
 
+import androidx.compose.runtime.collectAsState
+import com.example.data.promotions.ManualProductPhotos
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,8 +31,20 @@ internal fun rememberOfficialProductImage(
     existingUrl: String? = null
 ): String? {
     val context = LocalContext.current
-    val registered = remember(existingUrl) {
-        existingUrl?.trim()?.takeIf { it.isNotBlank() }
+    val photos by remember { ManualProductPhotos.updates }.collectAsState(initial = emptyMap())
+    var resolvedEan by remember(code, barcode) { mutableStateOf(barcode) }
+    val manual = ManualProductPhotos.selected(photos, code, resolvedEan)
+    LaunchedEffect(code, name, barcode, manual) {
+        if (manual == null && barcode.isBlank()) {
+            try {
+                StoreProductImageRepository.shared.lookup(code, name).ean?.let { resolvedEan = it }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* The image resolver retains its own retry policy. */ }
+        }
+    }
+    val candidate = if (manual != null) manual else existingUrl
+    val registered = remember(candidate) {
+        candidate?.trim()?.takeIf { it.isNotBlank() }
             ?.let(ImageUrlHelper::normalizeUrl)
             ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
     }
@@ -40,21 +54,25 @@ internal fun rememberOfficialProductImage(
         while (isActive) {
             try {
                 val result = StoreProductImageRepository.shared.lookup(code, name, barcode)
-                val found = result.url
-                if (found != null) {
+                if (!result.ean.isNullOrBlank()) resolvedEan = result.ean
+                suspend fun display(url: String?): Boolean {
+                    if (url == null) return false
                     val loaded = context.imageLoader.execute(
-                        ImageRequest.Builder(context).data(found).size(512, 512).build()
+                        ImageRequest.Builder(context).data(url).size(512, 512).build()
                     )
-                    if (loaded is SuccessResult) {
-                        imageUrl = found
-                        break
-                    }
-                    // Retry an interrupted image download while this card stays visible.
-                    delay(60_000)
-                } else {
-                    val retryAt = result.retryAt ?: break // A confirmed miss needs no polling.
-                    delay((retryAt - System.currentTimeMillis()).coerceIn(1_000L, 60_000L))
+                    if (loaded !is SuccessResult) return false
+                    imageUrl = url
+                    return true
                 }
+                if (display(result.url)) break
+                val ean = listOf(barcode, result.ean.orEmpty(), code)
+                    .firstOrNull(com.example.data.promotions.Gtin::valid)
+                val secondary = com.example.data.promotions.PromofarmaImageRepository.get(context).lookup(ean)
+                if (display(secondary.url)) break
+                val retryAt = listOfNotNull(result.retryAt, secondary.retryAt,
+                    if (result.url != null || secondary.url != null) System.currentTimeMillis() + 60_000 else null)
+                    .minOrNull() ?: break
+                delay((retryAt - System.currentTimeMillis()).coerceIn(1_000L, 60_000L))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
