@@ -1,16 +1,15 @@
-/* NRD — conector privado desta caixa Gmail. Não publique este projeto como aplicativo Web.
+/* Versão interna de manutenção; não requer atualização do APK.
+ * NRD — conector privado desta caixa Gmail. Não publique este projeto como aplicativo Web.
  * 1. Cole este código em um projeto privado no script.google.com.
  * 2. Substitua appsscript.json pelo manifesto fornecido pelo NRD.
- * 3. Execute ativarNRD, confira a conta e autorize o Google.
+ * 3. Execute ativarNRD para remover o acionador antigo; a busca passa a depender do pedido no app.
  * O conector somente lê mensagens; não envia, apaga nem publica promoções.
  */
 const NRD = __NRD_CONFIG__;
 function ativarNRD() {
   if(Gmail.Users.getProfile('me').emailAddress.toLowerCase() !== NRD.email) throw Error('Abra o projeto na conta Gmail configurada no NRD.');
-  // Replace pre-existing 1-minute triggers. Daily ~03:00 (America/Fortaleza).
+  // Manual-only connector: remove old periodic mail scans.
   ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='receberRelatoriosNRD').forEach(t=>ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('receberRelatoriosNRD').timeBased()
-    .atHour(3).nearMinute(0).everyDays(1).inTimezone('America/Fortaleza').create();
 }
 // Manually run this from the private Apps Script editor whenever an immediate scan is needed.
 function buscarAgoraNRD() {
@@ -29,7 +28,23 @@ function nrDcall(operation, fields) {
   if(status!==200)throw Error('NRD não respondeu à sincronização ('+status+').');
   return data;
 }
-function receberRelatoriosNRD() {
+function doPost(event) {
+  try {
+    const text=event && event.postData && event.postData.contents;
+    if(typeof text!=='string' || text.length>512) throw Error('ACCESS_DENIED');
+    const body=JSON.parse(text);
+    if(!body || Object.keys(body).sort().join(',')!=='requestId,token' ||
+       !/^[a-f0-9]{64}$/.test(body.token || '') || !/^[a-f0-9-]{36}$/.test(body.requestId || '')) throw Error('ACCESS_DENIED');
+    const expected=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,NRD.key)
+      .map(value=>(value & 255).toString(16).padStart(2,'0')).join('');
+    if(body.token!==expected) throw Error('ACCESS_DENIED');
+    receberRelatoriosNRD(body.requestId);
+    return ContentService.createTextOutput('{"ok":true}').setMimeType(ContentService.MimeType.JSON);
+  } catch(error) {
+    return ContentService.createTextOutput('{"ok":false}').setMimeType(ContentService.MimeType.JSON);
+  }
+}
+function receberRelatoriosNRD(expectedRequestId) {
   const lock = LockService.getScriptLock(); if(!lock.tryLock(1000)) return;
   let requestId='';
   try {
@@ -37,52 +52,56 @@ function receberRelatoriosNRD() {
     const properties = PropertiesService.getScriptProperties();
     const status=nrDcall('poll');
     requestId=status.requestId && status.requestId !== status.finishedId ? status.requestId : '';
-    // Scheduled execution is daily; a Master request is processed on the next run.
+    if(typeof expectedRequestId==='string' && requestId!==expectedRequestId) {requestId='';throw Error('REQUEST_CHANGED');}
+    // Only a Master request or an explicit maintenance action may open Gmail.
     const forceScan=properties.getProperty('NRD_FORCE_SCAN') === '1';
     properties.deleteProperty('NRD_FORCE_SCAN');
-    const last=Number(properties.getProperty('NRD_LAST_SCAN') || 0);
-    if(!requestId && !forceScan && Date.now()-last<15*60*1000 && !properties.getProperty('NRD_PAGE'))return;
+    // A timer or an unfinished page must never open Gmail without an explicit request.
+    if(!requestId && !forceScan)return;
     const done = JSON.parse(properties.getProperty('NRD_DONE') || '[]');
-    const params = {q:'has:attachment filename:pdf newer_than:30d',maxResults:10};
-    const page = properties.getProperty('NRD_PAGE'); if(page) params.pageToken=page;
-    let result;
-    try {result=Gmail.Users.Messages.list('me',params);} catch(error) {properties.deleteProperty('NRD_PAGE');throw error;}
-    const deadline = Date.now()+240000;
-    let complete=true, sent=0; const failures=[];
-    for(const entry of result.messages || []) {
-      if(done.indexOf(entry.id)>=0) continue;
-      if(Date.now()>deadline){complete=false;break;}
-      const message = Gmail.Users.Messages.get('me',entry.id,{format:'full'});
-      const attachments=[];
-      function visit(part) {
-        if(/^(CENTRO|CLUBE)_[0-9]{4}\.pdf$/i.test(part.filename || '')) attachments.push(part);
-        (part.parts || []).forEach(visit);
+    const deadline = Date.now()+90000;
+    let complete=true, sent=0, more=true; const failures=[];
+    while(Date.now()<=deadline) {
+      const params = {q:'has:attachment filename:pdf newer_than:30d',maxResults:10};
+      const page = properties.getProperty('NRD_PAGE'); if(page) params.pageToken=page;
+      let result;
+      try {result=Gmail.Users.Messages.list('me',params);} catch(error) {properties.deleteProperty('NRD_PAGE');throw error;}
+      for(const entry of result.messages || []) {
+        if(done.indexOf(entry.id)>=0) continue;
+        if(Date.now()>deadline){complete=false;break;}
+        const message = Gmail.Users.Messages.get('me',entry.id,{format:'full'});
+        const attachments=[];
+        function visit(part) {
+          if(/^(CENTRO|CLUBE)_[0-9]{4}\.pdf$/i.test(part.filename || '')) attachments.push(part);
+          (part.parts || []).forEach(visit);
+        }
+        visit(message.payload || {});
+        let all=true;
+        for(const part of attachments) {
+          if(/_0012\.pdf$/i.test(part.filename)) continue; // Cidade Jardim permanece ACP.
+          if(Date.now()>deadline){all=false;complete=false;break;}
+          const body = part.body || {};
+          if(body.size>3145728){failures.push('PDF excede 3 MB: '+part.filename);all=false;continue;}
+          const encoded = body.attachmentId ? Gmail.Users.Messages.Attachments.get('me',entry.id,body.attachmentId).data : body.data;
+          if(!encoded) throw Error('Anexo indisponível: '+part.filename);
+          const pdf = Array.isArray(encoded) ? Utilities.base64Encode(encoded)
+            : Utilities.base64Encode(Utilities.base64DecodeWebSafe(encoded));
+          const response = UrlFetchApp.fetch(NRD.url,{method:'post',contentType:'application/json',
+            headers:{'x-nrd-mail-key':NRD.key},payload:JSON.stringify({operation:'ingest',filename:part.filename,pdf:pdf}),muteHttpExceptions:true});
+          const status=response.getResponseCode();
+          let reply; try {reply=JSON.parse(response.getContentText());} catch(error){throw Error('Resposta inválida do NRD.');}
+          if(status===400 || status===413){failures.push(part.filename+': '+(reply.error || status));all=false;continue;}
+          if(status!==200 || reply.ok!==true) throw Error('NRD recusou '+part.filename+' ('+status+'). Confira a conexão, o limite da fila ou reconfigure o conector.');
+          sent++;
+        }
+        if(all){done.push(entry.id);properties.setProperty('NRD_DONE',JSON.stringify(done.slice(-2000)));}
+        if(!complete)break;
       }
-      visit(message.payload || {});
-      let all=true;
-      for(const part of attachments) {
-        if(/_0012\.pdf$/i.test(part.filename)) continue; // Cidade Jardim permanece ACP.
-        if(Date.now()>deadline){all=false;complete=false;break;}
-        const body = part.body || {};
-        if(body.size>3145728){failures.push('PDF excede 3 MB: '+part.filename);all=false;continue;}
-        const encoded = body.attachmentId ? Gmail.Users.Messages.Attachments.get('me',entry.id,body.attachmentId).data : body.data;
-        if(!encoded) throw Error('Anexo indisponível: '+part.filename);
-        const pdf = Array.isArray(encoded) ? Utilities.base64Encode(encoded)
-          : Utilities.base64Encode(Utilities.base64DecodeWebSafe(encoded));
-        const response = UrlFetchApp.fetch(NRD.url,{method:'post',contentType:'application/json',
-          headers:{'x-nrd-mail-key':NRD.key},payload:JSON.stringify({operation:'ingest',filename:part.filename,pdf:pdf}),muteHttpExceptions:true});
-        const status=response.getResponseCode();
-        let reply; try {reply=JSON.parse(response.getContentText());} catch(error){throw Error('Resposta inválida do NRD.');}
-        if(status===400 || status===413){failures.push(part.filename+': '+(reply.error || status));all=false;continue;}
-        if(status!==200 || reply.ok!==true) throw Error('NRD recusou '+part.filename+' ('+status+'). Confira a conexão, o limite da fila ou reconfigure o conector.');
-        sent++;
-      }
-      if(all){done.push(entry.id);properties.setProperty('NRD_DONE',JSON.stringify(done.slice(-2000)));}
-      if(!complete)break;
+      // Keep the current page on interruption or rejected attachments so a retry cannot skip them.
+      if(!complete || failures.length) break;
+      if(result.nextPageToken) properties.setProperty('NRD_PAGE',result.nextPageToken);
+      else {properties.deleteProperty('NRD_PAGE');more=false;break;}
     }
-    const more=!!result.nextPageToken || !complete;
-    if(complete && result.nextPageToken) properties.setProperty('NRD_PAGE',result.nextPageToken);
-    else if(complete) properties.deleteProperty('NRD_PAGE');
     console.log(sent+' anexo(s) recebido(s) ou já existente(s). Confira a fila no painel Mestre.');
     if(failures.length) throw Error('Há anexos pendentes: '+failures.join('; '));
     if(!more) {

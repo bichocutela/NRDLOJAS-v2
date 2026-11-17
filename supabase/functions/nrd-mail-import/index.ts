@@ -25,9 +25,10 @@ const db={
      finishedAt:row.scan_finished_at || null,seenAt:row.scan_seen_at || null,failed:row.scan_failed === true};
  },
  requestScan:async()=>{
-   const requestId=crypto.randomUUID();
-   await rest('nrd_mail_settings?id=eq.true','PATCH',{scan_request_id:requestId});
-   const connector=(await rest('nrd_mail_settings?id=eq.true&select=connector_url,key_hash'))?.[0];
+   const connector=(await rest('nrd_mail_settings?id=eq.true&select=connector_url,key_hash,scan_request_id,scan_finished_id'))?.[0];
+   const pending=connector?.scan_request_id && connector.scan_request_id!==connector.scan_finished_id;
+   const requestId=pending ? connector.scan_request_id : crypto.randomUUID();
+   if(!pending) await rest('nrd_mail_settings?id=eq.true','PATCH',{scan_request_id:requestId,scan_failed:false});
    if(connector?.connector_url) EdgeRuntime.waitUntil(dispatchScan({url:connector.connector_url,
      token:connector.key_hash,requestId}).catch(async()=>{
        console.warn('MAIL_CONNECTOR_DISPATCH_FAILED');
@@ -51,7 +52,9 @@ const db={
  },
  ack:async(requestId:string,failed:boolean)=>{
    // Late workers cannot acknowledge a newer request from another Master.
-   await rest('nrd_mail_settings?id=eq.true&scan_request_id=eq.'+requestId,'PATCH',{
+   // A duplicate dispatch failure must not overwrite an already completed scan.
+   const unfinished=failed ? '&or='+encodeURIComponent('(scan_finished_id.is.null,scan_finished_id.neq.'+requestId+')') : '';
+   await rest('nrd_mail_settings?id=eq.true&scan_request_id=eq.'+requestId+unfinished,'PATCH',{
      scan_finished_id:requestId,scan_finished_at:new Date().toISOString(),scan_failed:failed});
  },
  setup:async(email:string,key_hash:string)=>rest('nrd_mail_settings?on_conflict=id','POST',{id:true,email,key_hash}),

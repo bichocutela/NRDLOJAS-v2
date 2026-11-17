@@ -79,7 +79,7 @@ internal fun MailImportPanel(onPublished: () -> Unit = {}) {
                         clipboard.setText(AnnotatedString(manifest));message="Manifesto copiado. No Google, exiba o arquivo appsscript.json nas configurações do projeto e substitua o conteúdo."
                     }) {Text("2. Copiar manifesto appsscript.json")}
                     TextButton(onClick={runCatching{context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://script.google.com/home/start")))}.onFailure{message="Abra script.google.com no navegador."}}) {Text("Abrir Google Apps Script")}
-                    Text("No projeto privado, cole o código em Código.gs e o manifesto em appsscript.json. Execute ativarNRD uma vez para instalar o acionador diário, por volta das 3h (Natal). Para fazer uma leitura imediata fora desse horário, execute buscarAgoraNRD no Google Apps Script. As solicitações feitas no aplicativo ficam pendentes até uma dessas execuções. A leitura considera os últimos 30 dias. Não publique o projeto como aplicativo Web.",style=MaterialTheme.typography.bodySmall)
+                    Text("A busca dos relatórios é manual: use Buscar para ler os PDFs dos últimos 30 dias e trazer os documentos para a fila. O conector deve estar publicado e conectado ao servidor NRD. Não é necessário instalar acionadores automáticos. Se substituir o código do conector, atualize também sua implantação no Google.",style=MaterialTheme.typography.bodySmall)
                 }
             }
             Button(enabled=!busy,onClick={launchJob {
@@ -90,8 +90,18 @@ internal fun MailImportPanel(onPublished: () -> Unit = {}) {
             }}) {Text("Atualizar fila de documentos")}
             OutlinedButton(enabled=!busy,onClick={launchJob {
                 MailImportRepository.requestScan()
-                message="Leitura solicitada. O conector buscará novos PDFs na próxima execução diária às 3h (Natal). Para ler agora, execute buscarAgoraNRD no Apps Script privado."
+                message="Leitura solicitada ao Gmail. Toque em Buscar para acompanhar e trazer os documentos para a fila."
             }}) {Text("Solicitar nova leitura do Gmail")}
+            Button(enabled=!busy,onClick={launchJob {
+                message="Buscando documentos no Gmail… Aguarde a conclusão."
+                val requestId=MailImportRepository.requestScan()
+                awaitMailScan(requestId, readStatus={MailImportRepository.scanStatus()})
+                documents=MailImportRepository.list()
+                val ids=documents.map {it.id}.toSet()
+                selected=selected.intersect(ids); reviews=reviews.filterKeys {it in ids}
+                message=if(documents.isEmpty()) "Busca concluída. Nenhum documento pendente encontrado."
+                    else "Busca concluída. ${documents.size} documento(s) na fila para revisar."
+            }}) {Text("Buscar")}
             if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if(message.isNotBlank()) Text(message,color=if(error)MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodySmall)
             if(documents.isNotEmpty()) {
