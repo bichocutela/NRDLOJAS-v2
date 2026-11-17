@@ -55,21 +55,24 @@ internal fun rememberOfficialProductImage(
             try {
                 val result = StoreProductImageRepository.shared.lookup(code, name, barcode)
                 if (!result.ean.isNullOrBlank()) resolvedEan = result.ean
-                val found = result.url
-                if (found != null) {
+                suspend fun display(url: String?): Boolean {
+                    if (url == null) return false
                     val loaded = context.imageLoader.execute(
-                        ImageRequest.Builder(context).data(found).size(512, 512).build()
+                        ImageRequest.Builder(context).data(url).size(512, 512).build()
                     )
-                    if (loaded is SuccessResult) {
-                        imageUrl = found
-                        break
-                    }
-                    // Retry an interrupted image download while this card stays visible.
-                    delay(60_000)
-                } else {
-                    val retryAt = result.retryAt ?: break // A confirmed miss needs no polling.
-                    delay((retryAt - System.currentTimeMillis()).coerceIn(1_000L, 60_000L))
+                    if (loaded !is SuccessResult) return false
+                    imageUrl = url
+                    return true
                 }
+                if (display(result.url)) break
+                val ean = listOf(barcode, result.ean.orEmpty(), code)
+                    .firstOrNull(com.example.data.promotions.Gtin::valid)
+                val secondary = com.example.data.promotions.PromofarmaImageRepository.get(context).lookup(ean)
+                if (display(secondary.url)) break
+                val retryAt = listOfNotNull(result.retryAt, secondary.retryAt,
+                    if (result.url != null || secondary.url != null) System.currentTimeMillis() + 60_000 else null)
+                    .minOrNull() ?: break
+                delay((retryAt - System.currentTimeMillis()).coerceIn(1_000L, 60_000L))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
