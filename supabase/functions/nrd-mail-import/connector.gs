@@ -1,5 +1,5 @@
-/* Versão interna de manutenção; não requer atualização do APK.
- * NRD — conector privado desta caixa Gmail. Não publique este projeto como aplicativo Web.
+/* NRD — conector desta caixa Gmail, acionado somente por solicitação.
+ * Publique o receptor somente com a validação da chave privada preservada.
  * 1. Cole este código em um projeto privado no script.google.com.
  * 2. Substitua appsscript.json pelo manifesto fornecido pelo NRD.
  * 3. Execute ativarNRD para remover o acionador antigo; a busca passa a depender do pedido no app.
