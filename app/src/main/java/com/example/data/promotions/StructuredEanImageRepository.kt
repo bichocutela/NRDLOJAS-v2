@@ -12,6 +12,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MediaType.Companion.toMediaType
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
@@ -31,7 +33,7 @@ internal class StructuredEanImageRepository(
 
     suspend fun lookup(source: String, ean: String?): PromofarmaImageRepository.Lookup = withContext(Dispatchers.IO) {
         val code = ean?.trim().orEmpty()
-        if (source !in listOf("raia", "mercadolivre", "cosmos") || !Gtin.valid(code)) return@withContext PromofarmaImageRepository.Lookup(null)
+        if (source !in listOf("raia", "mercadolivre", "cosmos", "carone", "mateus") || !Gtin.valid(code)) return@withContext PromofarmaImageRepository.Lookup(null)
         val key = "$source:$code"
         locks[(key.hashCode() and Int.MAX_VALUE) % locks.size].withLock {
             val entry = cache.getString(key, null)?.let { runCatching { JSONObject(it) }.getOrNull() }
@@ -60,6 +62,63 @@ internal class StructuredEanImageRepository(
             val bytes = boundedBytes(body)
             return bytes.toString(Charsets.UTF_8)
         }
+    }
+
+    private fun catalogResponse(request: Request): String? {
+        client.newCall(request).execute().use { response ->
+            if (response.code == 404) return null
+            if (!response.isSuccessful) throw IOException("Product catalog unavailable")
+            val target = response.request.url
+            if (target.scheme != "https" || target.host != request.url.host) throw IOException("Unexpected catalog redirect")
+            return boundedBytes(response.body ?: throw IOException("Empty catalog")).toString(Charsets.UTF_8)
+        }
+    }
+
+    private fun catalogImage(value: String, source: String): String? {
+        val url = value.toHttpUrlOrNull() ?: return null
+        if (url.scheme != "https" || url.username.isNotEmpty() || url.password.isNotEmpty()) return null
+        val valid = when (source) {
+            "carone" -> url.host in setOf("tezegw.vteximg.com.br", "tezegw.vtexassets.com") && url.encodedPath.startsWith("/arquivos/ids/")
+            "mateus" -> url.host == "ik.imagekit.io" && url.encodedPath.startsWith("/glm5kjz1tud/products/")
+            else -> false
+        }
+        return url.toString().takeIf { valid }
+    }
+
+    private fun caroneImage(ean: String): String? {
+        val url = "https://www.carone.com.br/api/catalog_system/pub/products/search".toHttpUrl().newBuilder()
+            .addQueryParameter("fq", "alternateIds_Ean:$ean").build()
+        val raw = catalogResponse(Request.Builder().url(url).header("Accept", "application/json").build()) ?: return null
+        val products = JSONArray(raw)
+        val matching = mutableListOf<JSONObject>()
+        for (p in 0 until products.length()) {
+            val items = products.optJSONObject(p)?.optJSONArray("items") ?: continue
+            for (i in 0 until items.length()) {
+                items.optJSONObject(i)?.takeIf { it.optString("ean").trim() == ean }?.let(matching::add)
+            }
+        }
+        val images = matching.singleOrNull()?.optJSONArray("images") ?: return null
+        return (0 until images.length()).firstNotNullOfOrNull { index ->
+            catalogImage(images.optJSONObject(index)?.optString("imageUrl").orEmpty(), "carone")
+        }
+    }
+
+    private fun mateusImage(ean: String): String? {
+        val body = JSONObject().put("facets", JSONArray()).put("params", "query=$ean&hitsPerPage=10&page=0")
+            .put("index", "SHOWCASE_catalog_product_api_index_PROD").put("service", "meilisearch")
+            .toString().toRequestBody("application/json".toMediaType())
+        val request = Request.Builder().url("https://app.mateusmais.com.br/api/products/internal/v1/service/")
+            .header("Accept", "application/json").post(body).build()
+        val raw = catalogResponse(request) ?: return null
+        val hits = JSONObject(raw).optJSONArray("hits") ?: throw IOException("Invalid product catalog")
+        val images = mutableSetOf<String>()
+        for (i in 0 until hits.length()) {
+            val product = hits.optJSONObject(i) ?: continue
+            // Search is fuzzy: even a numeric query can return different barcodes.
+            if (product.optString("barcode").trim() != ean) continue
+            catalogImage(product.optString("image"), "mateus")?.let(images::add)
+        }
+        return images.singleOrNull()
     }
 
     private fun cosmosImage(ean: String): String? {
@@ -101,6 +160,8 @@ internal class StructuredEanImageRepository(
 
     private fun fetch(source: String, ean: String): String? {
         if (source == "cosmos") return cosmosImage(ean)
+        if (source == "carone") return caroneImage(ean)
+        if (source == "mateus") return mateusImage(ean)
         val search = if (source == "raia") "https://www.drogaraia.com.br/search?w=$ean"
             else "https://lista.mercadolivre.com.br/$ean"
         val html = page(search, source) ?: return null

@@ -109,10 +109,10 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if isMaster() &&
         request.resource.data.keys().hasOnly(['order', 'enabled']) &&
-        request.resource.data.order is list && request.resource.data.order.size() <= 4 &&
-        request.resource.data.enabled is list && request.resource.data.enabled.size() <= 4 &&
-        request.resource.data.order.hasOnly(['promofarma', 'raia', 'mercadolivre', 'cosmos']) &&
-        request.resource.data.enabled.hasOnly(['promofarma', 'raia', 'mercadolivre', 'cosmos']);
+        request.resource.data.order is list && request.resource.data.order.size() <= 6 &&
+        request.resource.data.enabled is list && request.resource.data.enabled.size() <= 6 &&
+        request.resource.data.order.hasOnly(['promofarma', 'raia', 'mercadolivre', 'cosmos', 'carone', 'mateus']) &&
+        request.resource.data.enabled.hasOnly(['promofarma', 'raia', 'mercadolivre', 'cosmos', 'carone', 'mateus']);
       allow delete: if isMaster();
     }
     match /config/product_photos {
