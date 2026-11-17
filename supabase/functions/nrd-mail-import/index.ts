@@ -1,5 +1,6 @@
 import {createRemoteJWKSet,jwtVerify} from 'npm:jose@5.9.6';
 import {createHandler} from './handler.mjs';
+import {dispatchScan} from './dispatch.mjs';
 const jwks=createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
 const verify=async(token:string)=>{
  const {payload}=await jwtVerify(token,jwks,{algorithms:['RS256'],issuer:'https://securetoken.google.com/appcodigo-7f245',audience:'appcodigo-7f245'});
@@ -26,6 +27,12 @@ const db={
  requestScan:async()=>{
    const requestId=crypto.randomUUID();
    await rest('nrd_mail_settings?id=eq.true','PATCH',{scan_request_id:requestId});
+   const connector=(await rest('nrd_mail_settings?id=eq.true&select=connector_url,key_hash'))?.[0];
+   if(connector?.connector_url) EdgeRuntime.waitUntil(dispatchScan({url:connector.connector_url,
+     token:connector.key_hash,requestId}).catch(async()=>{
+       console.warn('MAIL_CONNECTOR_DISPATCH_FAILED');
+       await db.ack(requestId,true);
+     }));
    return requestId;
  },
  poll:async(row:Record<string,unknown>)=>{
