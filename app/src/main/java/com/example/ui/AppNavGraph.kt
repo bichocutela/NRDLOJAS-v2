@@ -121,6 +121,7 @@ fun AppNavGraph(
     val access by remember { com.example.data.RestrictedAccessRepository.observe() }.collectAsState(initial = com.example.data.RestrictedAccess(loading = true))
     val initialRole = remember(firebaseAuth) { managementRoleForEmail(firebaseAuth.currentUser?.email) }
     var isLoggedIn by remember { mutableStateOf(firebaseAuth.currentUser != null) }
+    var signedInEmail by remember(firebaseAuth) { mutableStateOf(firebaseAuth.currentUser?.email) }
     var userRole by remember { mutableStateOf(initialRole ?: "user") }
     val glassSoftStyle = LocalGlassSoftStyle.current
     val expressiveStyle = LocalExpressiveStyle.current
@@ -139,7 +140,8 @@ fun AppNavGraph(
 
     DisposableEffect(firebaseAuth) {
         val listener = FirebaseAuth.AuthStateListener { auth ->
-            val authenticatedRole = managementRoleForEmail(auth.currentUser?.email)
+            signedInEmail = auth.currentUser?.email
+            val authenticatedRole = managementRoleForEmail(signedInEmail)
             if (authenticatedRole != null) {
                 isLoggedIn = true
                 userRole = authenticatedRole
@@ -302,6 +304,7 @@ fun AppNavGraph(
                     viewModel = viewModel,
                     isLoggedIn = isLoggedIn,
                     userRole = userRole,
+                    signedInEmail = signedInEmail,
                     showMyProfile = access.profile,
                     showPromotions = access.promotions,
                     showPrices = access.prices,
@@ -769,6 +772,7 @@ fun LoginDrawerContent(
     viewModel: MainViewModel,
     isLoggedIn: Boolean,
     userRole: String,
+    signedInEmail: String?,
     showMyProfile: Boolean,
     showPromotions: Boolean,
     showPrices: Boolean,
@@ -979,7 +983,20 @@ fun LoginDrawerContent(
             }
         } else {
             Spacer(modifier = Modifier.height(8.dp))
-            Text(if (userRole == "mestre" || userRole == "admin") "Administrador" else "Usuário", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+            val loginName = signedInEmail
+                ?.takeIf { it.endsWith("@usuarios.nrdlojas.com") && userRole == "user" }
+                ?.substringBefore('@')
+                ?.replaceFirstChar { it.titlecase(java.util.Locale.ROOT) }
+            if (loginName != null) {
+                Text(
+                    text = "Olá, $loginName",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Cursive,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                Text(if (userRole == "mestre" || userRole == "admin") "Administrador" else "Usuário", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+            }
             Spacer(modifier = Modifier.height(12.dp))
             if (userRole == "mestre" || userRole == "admin") {
                 if (expressive) {
