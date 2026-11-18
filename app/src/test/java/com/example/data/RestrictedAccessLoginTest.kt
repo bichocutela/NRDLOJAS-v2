@@ -5,6 +5,14 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class RestrictedAccessLoginTest {
+    @Test fun onlyExistingManagementAccountsGetCatalogAndTabAccess() {
+        listOf("admin@nrdlojas.com", "mestre@nrdlojas.com", " ADMIN@nrdlojas.com ").forEach {
+            assertEquals(true, isManagementAccount(it))
+        }
+        listOf(null, "", "admin@usuarios.nrdlojas.com", "mestre@usuarios.nrdlojas.com", "user@example.com").forEach {
+            assertEquals(false, isManagementAccount(it))
+        }
+    }
     @Test fun managementAccountsKeepExistingAddress() {
         assertEquals("mestre@nrdlojas.com", RestrictedAccessRepository.loginEmail(" Mestre "))
         assertEquals("admin@nrdlojas.com", RestrictedAccessRepository.loginEmail("ADMIN"))

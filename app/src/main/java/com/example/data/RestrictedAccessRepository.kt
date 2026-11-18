@@ -203,7 +203,7 @@ object RestrictedAccessRepository {
         return TabAudience(value("profile"), value("promotions"), value("flyers"), value("prices"), if (tabs.has("stores")) value("stores") else "all")
     }
     suspend fun current(): RestrictedAccess {
-        if (FirebaseAuth.getInstance().currentUser?.email == "mestre@nrdlojas.com") return RestrictedAccess(enabled = true, profile = true, promotions = true, flyers = true, prices = true, stores = true)
+        if (isManagementAccount(FirebaseAuth.getInstance().currentUser?.email)) return RestrictedAccess(enabled = true, profile = true, promotions = true, flyers = true, prices = true, stores = true)
         return try {
             val data = PromotionControlClient.request(JSONObject().put("operation", "access"))
             RestrictedAccess(enabled = data.optBoolean("enabled"), profile = data.optBoolean("profile"), promotions = data.optBoolean("promotions"), flyers = data.optBoolean("flyers"), prices = data.optBoolean("prices"), stores = data.optBoolean("stores"), publicAccess = data.optBoolean("publicAccess"), publicLoading = false)

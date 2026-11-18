@@ -287,7 +287,7 @@ fun AppNavGraph(
                     showPrices = access.prices,
                     showFlyers = access.flyers,
                     showStores = access.stores,
-                    showTraining = trainingConfig?.visibleTo(isLoggedIn && userRole == "mestre") == true,
+                    showTraining = trainingConfig?.visibleTo(isLoggedIn && userRole in setOf("admin", "mestre")) == true,
                     onGoToTraining = { navController.navigate("training"); scope.launch { drawerState.close() } },
                     myProfilePhotoModel = drawerProfilePhotoModel,
                     myProfileName = drawerEmployeeProfile?.name,
@@ -371,7 +371,7 @@ fun AppNavGraph(
                         notificationProductCode = productCodeFromNotification,
                         onOpenDrawer = { scope.launch { drawerState.open() } },
                         canQuickEditBanner = isLoggedIn && userRole == "mestre",
-                        canQuickAddProduct = isLoggedIn && userRole == "mestre",
+                        canQuickAddProduct = isLoggedIn && userRole in setOf("admin", "mestre"),
                         canAccessProfile = access.profile,
                         canAccessPromotions = access.promotions,
                         onOpenProfileNotification = ::openProfileSection,
@@ -406,7 +406,7 @@ fun AppNavGraph(
                 }
                 composable("training") {
                     val config = trainingConfig
-                    if (config != null && config.visibleTo(isLoggedIn && userRole == "mestre")) {
+                    if (config != null && config.visibleTo(isLoggedIn && userRole in setOf("admin", "mestre"))) {
                         com.example.ui.training.TrainingScreen(config, { navController.popBackStack() })
                     } else {
                         Column(Modifier.fillMaxSize().padding(24.dp)) {

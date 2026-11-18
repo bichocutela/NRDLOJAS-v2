@@ -11,13 +11,19 @@ const { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc, writeBat
       await setDoc(doc(ctx.firestore(), 'restricted_access/bia'), { ...grant, login: 'bia', enabled: false });
       await setDoc(doc(ctx.firestore(), 'restricted_access/carla'), { ...grant, login: 'carla', profile: false, prices: true });
       await setDoc(doc(ctx.firestore(), 'work_schedules/2026-10'), { year: 2026, month: 10, employees: [] });
+      await setDoc(doc(ctx.firestore(), 'access_sessions/ana'), {authTime:7});
     });
     const master = env.authenticatedContext('master', { email: 'mestre@nrdlojas.com' }).firestore();
     const admin = env.authenticatedContext('admin', { email: 'admin@nrdlojas.com' }).firestore();
-    const ana = env.authenticatedContext('ana', { email: 'ana@usuarios.nrdlojas.com' }).firestore();
+    const ana = env.authenticatedContext('ana', { email: 'ana@usuarios.nrdlojas.com', auth_time:7 }).firestore();
     const bia = env.authenticatedContext('bia').firestore();
     const carla = env.authenticatedContext('carla').firestore();
     const publicDb = env.unauthenticatedContext().firestore();
+    await assertSucceeds(setDoc(doc(admin, 'products/admin-catalog-check'), {name:'Before',code:'fixture',searchCount:0}));
+    await assertSucceeds(updateDoc(doc(admin, 'products/admin-catalog-check'), {name:'After'}));
+    await assertFails(updateDoc(doc(ana, 'products/admin-catalog-check'), {name:'Unauthorized'}));
+    await assertSucceeds(updateDoc(doc(master, 'products/admin-catalog-check'), {name:'Master still works'}));
+    await assertSucceeds(deleteDoc(doc(admin, 'products/admin-catalog-check')));
     await assertFails(getDoc(doc(publicDb, 'restricted_access/ana')));
     await assertFails(getDoc(doc(publicDb, 'work_schedules/2026-10')));
     await assertSucceeds(getDoc(doc(ana, 'restricted_access/ana')));
@@ -30,6 +36,7 @@ const { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc, writeBat
     await assertFails(setDoc(doc(master, 'restricted_access/bad'), { ...grant, password: 'never-store-passwords' }));
     await assertSucceeds(getDocs(collection(master, 'restricted_access')));
     await assertSucceeds(getDoc(doc(master, 'work_schedules/2026-10')));
+    await assertSucceeds(getDoc(doc(admin, 'work_schedules/2026-10')));
     await assertSucceeds(getDoc(doc(ana, 'work_schedules/2026-10')));
     await assertFails(getDoc(doc(bia, 'work_schedules/2026-10')));
     await assertFails(getDoc(doc(carla, 'work_schedules/2026-10')));
@@ -44,6 +51,13 @@ const { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc, writeBat
     await assertSucceeds(setDoc(doc(master, 'config/restricted_access'), { publicAccess: false }));
     await assertFails(getDoc(doc(publicDb, 'work_schedules/2026-10')));
     await assertFails(getDoc(doc(ana, 'work_schedules/2026-10')));
+    await env.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'config/training'), {visibility:'TEST',revision:1,payload:'{}'});
+    });
+    await assertSucceeds(getDoc(doc(master, 'config/training')));
+    await assertSucceeds(getDoc(doc(admin, 'config/training')));
+    await assertFails(getDoc(doc(ana, 'config/training')));
+    await assertFails(setDoc(doc(admin, 'config/training'), {visibility:'ALL',revision:2,payload:'{}'}));
     const imageSources = { order: ['promofarma', 'raia', 'mercadolivre', 'cosmos', 'carone', 'mateus'], enabled: ['promofarma', 'raia', 'mercadolivre', 'cosmos', 'carone', 'mateus'] };
     await assertFails(setDoc(doc(publicDb, 'config/product_image_sources'), imageSources));
     await assertFails(setDoc(doc(admin, 'config/product_image_sources'), imageSources));
@@ -54,7 +68,9 @@ const { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc, writeBat
     await assertFails(updateDoc(doc(master, 'config/product_image_sources'), { endpoint: 'https://example.com' }));
     const photos = { photos: { '7891033777358': 'https://example.com/product.jpg' } };
     await assertFails(setDoc(doc(publicDb, 'config/product_photos'), photos));
-    await assertFails(setDoc(doc(admin, 'config/product_photos'), photos));
+    await assertSucceeds(setDoc(doc(admin, 'config/product_photos'), photos));
+    await assertFails(setDoc(doc(admin, 'config/product_photos'), {photos: 'invalid'}));
+    await assertFails(setDoc(doc(ana, 'config/product_photos'), photos));
     await assertSucceeds(setDoc(doc(master, 'config/product_photos'), photos));
     await assertSucceeds(getDoc(doc(publicDb, 'config/product_photos')));
     await assertSucceeds(setDoc(doc(master, 'config/product_photos'), { photos: { '7891033777358': '' } }));

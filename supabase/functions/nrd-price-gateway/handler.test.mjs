@@ -6,6 +6,16 @@ const secret = () => ({login:'synthetic-user',password:'synthetic-password'});
 const req = (body,token) => new Request('https://gateway.invalid',{method:'POST',body:JSON.stringify(body),headers:token?{'x-firebase-token':token}:{}});
 const input = {path:'Product/all',parameters:[['description','Açúcar & Café'],['productCategoryIds','1'],['productCategoryIds','2']]};
 const allow = async () => ({allowed:true,master:false});
+test('ADMIN can consult without a user grant but never receives Mestre-only capabilities',async()=>{
+ const admin=createAuthorizer({verify:async()=>({uid:'admin',email:'admin@nrdlojas.com'}),
+  document:async()=>{throw Error('management access must not depend on a user grant');},hash:async()=>''});
+ assert.deepEqual(await admin(req({},'admin')),{allowed:true,master:false});
+ const handler=createHandler({authorize:admin,credentials:secret,fetcher:async()=>{throw Error('must not contact source');}});
+ assert.equal((await handler(req({operation:'provider_status'},'admin'))).status,403);
+ assert.equal((await handler(req({path:'ProductGroup/all',parameters:[]},'admin'))).status,403);
+ const master=createAuthorizer({verify:async()=>({email:'mestre@nrdlojas.com'}),document:async()=>{},hash:async()=>''});
+ assert.deepEqual(await master(req({},'master')),{allowed:true,master:true});
+});
 test('legacy session is renewed when a centrally managed credential revision changes', async () => {
   const server = upstream(); let revision = 'vault:1';
   const handler = createHandler({ authorize: allow, fetcher: server.fetcher,

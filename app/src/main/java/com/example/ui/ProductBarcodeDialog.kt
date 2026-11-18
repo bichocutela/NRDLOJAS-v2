@@ -84,9 +84,9 @@ fun ProductBarcodeDialog(
     val resolvedPhoto = rememberOfficialProductImage(product.code, product.name, existingUrl = product.imageUrl)
     var photoUrl by remember(resolvedPhoto) { mutableStateOf(resolvedPhoto) }
     var showPhotoDialog by remember { mutableStateOf(false) }
-    val isMaster = managementRoleForEmail(
+    val canManageProduct = com.example.data.isManagementAccount(
         com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
-    ) == "mestre"
+    )
     var isPhotoSaving by remember { mutableStateOf(false) }
     var photoEditMessage by remember { mutableStateOf<String?>(null) }
     var pendingPhotoUrl by remember(product.code) { mutableStateOf<String?>(null) }
@@ -141,7 +141,7 @@ fun ProductBarcodeDialog(
     val photoPicker = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        if (uri != null && isMaster && !isPhotoSaving) {
+        if (uri != null && canManageProduct && !isPhotoSaving) {
             try {
                 context.contentResolver.takePersistableUriPermission(
                     uri,
@@ -387,7 +387,7 @@ fun ProductBarcodeDialog(
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.weight(1f))
-                            if (isMaster && onProductEdited != null) {
+                            if (canManageProduct && onProductEdited != null) {
                                 TextButton(
                                     onClick = {
                                         codeEditValue = product.code
@@ -405,7 +405,7 @@ fun ProductBarcodeDialog(
                                     )
                                 }
                             }
-                            if (isMaster && onProductDeleted != null) {
+                            if (canManageProduct && onProductDeleted != null) {
                                 TextButton(
                                     onClick = {
                                         deleteProductMessage = null
@@ -423,7 +423,7 @@ fun ProductBarcodeDialog(
                                     )
                                 }
                             }
-                            if (photoUrl != null || isMaster) {
+                            if (photoUrl != null || canManageProduct) {
                                 TextButton(
                                     onClick = { showPhotoDialog = true },
                                     contentPadding = PaddingValues(horizontal = 4.dp)
@@ -516,7 +516,7 @@ fun ProductBarcodeDialog(
             }
         }
 
-        if (showCodeEditDialog && isMaster && onProductEdited != null) {
+        if (showCodeEditDialog && canManageProduct && onProductEdited != null) {
             AlertDialog(
                 onDismissRequest = {
                     if (!isCodeSaving) {
@@ -627,7 +627,7 @@ fun ProductBarcodeDialog(
             )
         }
 
-        if (showDeleteProductDialog && isMaster && onProductDeleted != null) {
+        if (showDeleteProductDialog && canManageProduct && onProductDeleted != null) {
             AlertDialog(
                 onDismissRequest = {
                     if (!isDeletingProduct) {
@@ -705,7 +705,7 @@ fun ProductBarcodeDialog(
             )
         }
 
-        if (showPhotoDialog && (photoUrl != null || isMaster)) {
+        if (showPhotoDialog && (photoUrl != null || canManageProduct)) {
             var isPhotoLoading by remember(photoUrl, pendingPhotoUrl) {
                 mutableStateOf((pendingPhotoUrl ?: photoUrl) != null)
             }
@@ -782,7 +782,7 @@ fun ProductBarcodeDialog(
                 },
                 confirmButton = {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (isMaster) {
+                        if (canManageProduct) {
                             OutlinedButton(
                                 onClick = {
                                     photoEditMessage = null
@@ -872,7 +872,7 @@ fun ProductBarcodeDialog(
                                 Text("Colar Link")
                             }
                         }
-                        if (isMaster && (manualPhoto?.isNotBlank() == true || (manualPhoto == null && !product.imageUrl.isNullOrBlank()))) {
+                        if (canManageProduct && (manualPhoto?.isNotBlank() == true || (manualPhoto == null && !product.imageUrl.isNullOrBlank()))) {
                             TextButton(enabled = !isPhotoSaving, onClick = {
                                 isPhotoSaving = true
                                 coroutineScope.launch {

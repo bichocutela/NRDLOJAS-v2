@@ -7,7 +7,7 @@ export function createControlAuthorizer({verify,document,hash}) {
  return async req=>{
   const token=req.headers.get('x-firebase-token');
   const user=token?await verify(token):null;
-  if(user?.email==='mestre@nrdlojas.com')return {...denied,enabled:true,profile:true,promotions:true,flyers:true,prices:true,stores:true};
+  if(['mestre@nrdlojas.com','admin@nrdlojas.com'].includes(user?.email))return {...denied,enabled:true,profile:true,promotions:true,flyers:true,prices:true,stores:true};
   if(user?.email?.endsWith('@usuarios.nrdlojas.com')){
    const device=req.headers.get('x-device-session');
    if(!device||!/^[a-f0-9]{64}$/.test(device))return denied;

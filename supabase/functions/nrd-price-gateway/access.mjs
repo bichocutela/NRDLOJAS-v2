@@ -6,6 +6,7 @@ export function createAuthorizer({verify, document, hash}) {
     let identity = null;
     if (token) identity = await verify(token);
     if (identity?.email === 'mestre@nrdlojas.com') return result(true,true);
+    if (identity?.email === 'admin@nrdlojas.com') return result(true,false);
     if (identity?.email?.endsWith('@usuarios.nrdlojas.com')) {
       const deviceToken=req.headers.get('x-device-session');
       if(!deviceToken || !/^[a-f0-9]{64}$/.test(deviceToken))return result(false,false);

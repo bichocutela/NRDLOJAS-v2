@@ -21,6 +21,9 @@ service cloud.firestore {
     function isMaster() {
       return isSignedIn() && request.auth.token.email == 'mestre@nrdlojas.com';
     }
+    function isAdminAccount() {
+      return isSignedIn() && request.auth.token.email == 'admin@nrdlojas.com';
+    }
     function publicRestrictedAccess() {
       return exists(/databases/$(database)/documents/config/restricted_access) &&
         get(/databases/$(database)/documents/config/restricted_access).data.publicAccess == true;
@@ -34,7 +37,7 @@ service cloud.firestore {
       allow read, write: if false;
     }
     function canReadProfile() {
-      return publicRestrictedAccess() || isMaster() || (hasDeviceSession() &&
+      return publicRestrictedAccess() || isMaster() || isAdminAccount() || (hasDeviceSession() &&
         exists(/databases/$(database)/documents/restricted_access/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/restricted_access/$(request.auth.uid)).data.enabled == true &&
         get(/databases/$(database)/documents/restricted_access/$(request.auth.uid)).data.profile == true);
@@ -74,7 +77,7 @@ service cloud.firestore {
       allow delete: if isMaster();
     }
     match /config/training {
-      allow get: if isMaster() || resource.data.visibility == 'ALL';
+      allow get: if isMaster() || isAdminAccount() || resource.data.visibility == 'ALL';
       allow create, update: if isMaster() &&
         request.resource.data.keys().hasOnly(['visibility', 'revision', 'payload']) &&
         request.resource.data.visibility in ['OFF', 'TEST', 'ALL'] &&
@@ -117,7 +120,7 @@ service cloud.firestore {
     }
     match /config/product_photos {
       allow read: if true;
-      allow create, update: if isMaster() &&
+      allow create, update: if (isMaster() || isAdminAccount()) &&
         request.resource.data.keys().hasOnly(['photos']) && request.resource.data.photos is map;
       allow delete: if isMaster();
     }

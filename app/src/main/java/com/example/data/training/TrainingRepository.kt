@@ -19,7 +19,7 @@ object TrainingRepository {
         var gate: com.google.firebase.firestore.ListenerRegistration? = null
         val listener = FirebaseAuth.AuthStateListener {
             gate?.remove(); content?.remove(); trySend(null)
-            val master = isMaster()
+            val master = com.example.data.isManagementAccount(auth.currentUser?.email)
             // This public document contains only visibility. Its listener stays alive
             // while content is private, so enabling Todos also reaches existing sessions.
             gate = db.collection("config").document("training_access").addSnapshotListener { snapshot, gateError ->

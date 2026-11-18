@@ -1,5 +1,17 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+test('ADMIN reads every content tab without changing Mestre-only account and configuration permissions',async()=>{
+ const verify=async()=>({uid:'admin',email:'admin@nrdlojas.com'});
+ const authorizeAdmin=createControlAuthorizer({verify,document:async()=>{throw Error('no user grant required');},hash:async()=>''});
+ const headers={'x-firebase-token':'admin'};
+ const access=await authorizeAdmin(req({},headers));
+ for(const tab of ['profile','promotions','flyers','prices','stores'])assert.equal(access[tab],true);
+ const documents=new ControlDocuments({});documents.fields=async()=>encodeFields({});
+ const handler=createControlHandler({verify,authorize:authorizeAdmin,documents});
+ assert.equal((await handler(req({operation:'read',path:'config/promotion_stores'},headers))).status,200);
+ assert.equal((await handler(req({operation:'list'},headers))).status,403);
+ assert.equal((await handler(req({operation:'write',path:'config/restricted_access',data:{publicAccess:true},merge:false},headers))).status,403);
+});
 import {createControlHandler} from './handler.mjs';
 import {createControlAuthorizer} from './access.mjs';
 import {ControlDocuments,encodeFields,decodeFields} from './documents.mjs';
