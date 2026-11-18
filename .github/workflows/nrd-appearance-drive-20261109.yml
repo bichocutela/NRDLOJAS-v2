@@ -1,4 +1,4 @@
-name: Publish Friday 13 August 2027 backgrounds
+name: Publish Wednesday and Thursday Hortifruti through December 2026
 on:
   push:
     branches: [main]
@@ -61,15 +61,14 @@ jobs:
            }
            const themes=fields.appearanceThemeBackgrounds.mapValue.fields;
            for(const c of plan.campaigns){
-            assert(themes[c.theme],'Unknown theme '+c.theme);
             const values=themes[c.theme].arrayValue.values??=[];
-            const id='nrd-sexta13-20270813-'+c.theme;
-            const index=values.findIndex(x=>x.mapValue.fields.id?.stringValue===id);
-            const conflict=values.find(x=>x.mapValue.fields.startDate?.stringValue===plan.date&&x.mapValue.fields.isActive?.booleanValue===true&&x.mapValue.fields.id?.stringValue!==id);
-            assert(!conflict,'Existing same-day schedule requires review: '+c.theme);
-            const base=index<0?{}:values[index].mapValue.fields;
-            const entry={mapValue:{fields:{imageScale:num(1),imageOffsetX:num(0),imageOffsetY:num(0),imageStretchX:num(1),imageStretchY:num(1),...base,id:sv(id),label:sv('Sexta-feira 13 de Ofertas — Agosto 2027'),url:sv(drive(c.driveId)),isActive:{booleanValue:true},startDate:sv(plan.date),endDate:sv(plan.date)}}};
-            if(index<0)values.push(entry);else values[index]=entry;
+            const added=plan.days.map(day=>({mapValue:{fields:{
+             id:sv('nrd-horti-rec-'+day+'-'+c.theme),label:sv('Quarta e Quinta Hortifruti'),
+             url:sv(drive(c.driveId)),startDate:sv(day),endDate:sv(day),isActive:{booleanValue:true},
+             imageScale:num(1),imageOffsetX:num(0),imageOffsetY:num(0),imageStretchX:num(1),imageStretchY:num(1)
+            }}}));
+            const ids=new Set(added.map(x=>x.mapValue.fields.id.stringValue));
+            themes[c.theme].arrayValue.values=[...added,...values.filter(x=>!ids.has(x.mapValue.fields.id?.stringValue))];
            }
            fields.appearanceRevision={integerValue:String(Math.max(Date.now(),Number(before.fields.appearanceRevision?.integerValue||0)+1))};
            assert.deepEqual(unchanged(fields),unchanged(before.fields));
@@ -89,7 +88,7 @@ jobs:
            writeFileSync('.before-full.json',JSON.stringify(before));
            writeFileSync('appearance-backup-before.json',JSON.stringify({name:before.name,updateTime:before.updateTime,fields:Object.fromEntries(Object.entries(before.fields).filter(([k])=>k.startsWith('appearance')))},null,2));
            writeFileSync('.prepared.json',JSON.stringify({fields:Object.fromEntries(writable.map(k=>[k,out.fields[k]])),updateTime:before.updateTime}));
-           writeFileSync('migration-summary.json',JSON.stringify({replacements:out.changed,campaigns:plan.campaigns.length,date:plan.date,driveIntegrity:'24 SHA-256 matches'},null,2));
+           writeFileSync('migration-summary.json',JSON.stringify({replacements:out.changed,campaigns:plan.campaigns.length,days:plan.days,driveIntegrity:'8 SHA-256 matches'},null,2));
            console.log('Prepared:',out.changed,'URL replacements;',plan.campaigns.length,'campaigns; all public Drive hashes verified');
           }else if(process.argv[2]==='apply'){
            const t=await token(),before=JSON.parse(readFileSync('.before-full.json','utf8')),prepared=JSON.parse(readFileSync('.prepared.json','utf8'));
@@ -98,75 +97,12 @@ jobs:
            assert(r.ok,'Atomic Firestore update failed HTTP '+r.status);
            const after=await current(t);for(const key of writable)assert.deepEqual(after.fields[key],prepared.fields[key],'Readback mismatch '+key);
            assert.deepEqual(unchanged(after.fields),unchanged(before.fields),'Unrelated settings changed');
-           for(const c of plan.campaigns){const rows=after.fields.appearanceThemeBackgrounds.mapValue.fields[c.theme].arrayValue.values;const matches=rows.filter(x=>x.mapValue.fields.id?.stringValue==='nrd-sexta13-20270813-'+c.theme);assert.equal(matches.length,1);const f=matches[0].mapValue.fields;assert.equal(f.startDate.stringValue,plan.date);assert.equal(f.endDate.stringValue,plan.date);assert.equal(f.isActive.booleanValue,true);}
            writeFileSync('appearance-readback-after.json',JSON.stringify({updateTime:after.updateTime,fields:prepared.fields},null,2));
-           console.log('Published and read back:',plan.replacements.length,'Drive references;',plan.campaigns.length,'active banners scheduled only for',plan.date);
+           console.log('Published and read back:',plan.replacements.length,'Drive references;',plan.campaigns.length,'active banners scheduled only for',plan.days.join(', '));
           }else throw Error('Expected dry, prepare or apply');
           NRD_SCRIPT
           cat > publication-plan.json <<'NRD_PLAN'
-          {
-            "project": "appcodigo-7f245",
-            "date": "2027-08-13",
-            "replacements": [],
-            "campaigns": [
-              {
-                "theme": "multicolor",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-a9326301-084e-4ec3-af75-f5597d2591bd.png",
-                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-multicolor.png",
-                "driveId": "1AjnKE7qkxLStr9WIByfyqQyeh3RmDuZ0",
-                "sha256": "1facefdbea2f0198343d940db8ba64e0bb174515745b85f0aaebe3e7759ff7cc"
-              },
-              {
-                "theme": "red",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-1fbab9f6-7319-48fb-a5dc-1a678e064565.png",
-                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-red.png",
-                "driveId": "1mjJgcw7Gi7PQGnu6S9q4m9wmJFyyNjkl",
-                "sha256": "ae07935e07a1c150b13e1df02a6e0fa00a789920a99cef0092e516cc9b128a9e"
-              },
-              {
-                "theme": "gold",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-2ac473df-91f0-455a-8fe8-7a538f5db74f.png",
-                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-gold.png",
-                "driveId": "1nftqh9GCLQtDIs1YxDZhFkZgOzb4Es3b",
-                "sha256": "720018a5311069b4f711de52806de874b36e7fa1fabd9ad556d7479173ce15b8"
-              },
-              {
-                "theme": "green",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-77cb2001-8365-44ad-b9b7-d01a9ba51ea4.png",
-                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-green.png",
-                "driveId": "1mhg9Yzibfg_fuoXArJCSlrXHEp2Z8Kas",
-                "sha256": "46971fc1e8a717b21123f482a250aa9faa254efb51386955fbfedb81d7c32fd5"
-              },
-              {
-                "theme": "blue",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-522ecee6-7699-4a54-a030-9c4dbf616d5f.png",
-                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-blue.png",
-                "driveId": "1_8x1BV9j-cRuXCP_PnCrlMtrhWZuBYrm",
-                "sha256": "1bb63e8880c125ff997ebea428dd23ce691c35c58111f8c89e41f8c677392e3c"
-              },
-              {
-                "theme": "orange",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-76a5c8bf-4909-4d82-8a8c-10b83836eb30.png",
-                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-orange.png",
-                "driveId": "1Oojusm3Q-ZC4B-BQ5pr0zhXnnVVKH6GY",
-                "sha256": "348a88f46d8c49a372738f7670fdd09c716bdc00d373206ee5ef4f23a2e0a11f"
-              },
-              {
-                "theme": "glass",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-f141c04f-4656-4435-ac8a-730eb570e7b2.png",
-                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-glass.png",
-                "driveId": "1sYQkrelWSZ43noS1MIMgz0LeKRBIXjVs",
-                "sha256": "fc5282014a9aef3c6e311c6d14b64a6e8720c4410c2e23f19ed06248ab6d1556"
-              },
-              {
-                "theme": "expressive",
-                "path": "/workspace/scratch/4364807ed99b/generated_images/exec-d757c749-ba86-4a05-b5d5-c22de4d0262c.png",
-                "final": "/workspace/scratch/4364807ed99b/nrd-recovery/aug2027/sexta13-expressive.png",
-                "driveId": "19Y5fAgNR7u3SDjAuea-3FDn2KUi3u7UL",
-                "sha256": "ad5dbb4769b56f3165b0b611950ddf59c0cb7b4671adb614a2a38a01d3e86047"
-              }
-            ]
-          }
+          {"project": "appcodigo-7f245", "days": ["2026-11-18", "2026-11-19", "2026-11-25", "2026-11-26", "2026-12-02", "2026-12-03", "2026-12-09", "2026-12-10", "2026-12-16", "2026-12-17", "2026-12-23", "2026-12-24", "2026-12-30", "2026-12-31"], "replacements": [], "campaigns": [{"theme": "multicolor", "driveId": "1XQM_ePPYDLqXAOemoUUYoSzFxIgfMaVh", "sha256": "f2f69ea836284201faf2c0faf27303dfe3a719fa42d00ff9f3b0e311828f8407"}, {"theme": "red", "driveId": "1Hs4kfWjqSkEQk2ZThGQ9BJws91HItVaQ", "sha256": "4d982aa1f866f38873781d01710e138e93efd83f9caf131bea2bca63379ec148"}, {"theme": "gold", "driveId": "1OR9iN0HR8C6NdGklPPK0HGTz_IgyXi1s", "sha256": "e3e403a5e02eec39128ce2571b0d81a4f29549d0478b94baf4b0de726f5fbd2b"}, {"theme": "green", "driveId": "1BNkRuvhTfZ0BaJFV8GfW8CysTSlJ2eYZ", "sha256": "3ed46af7043f839377af0cee488c1316d24f2258858a930d49dd73cf5b35db78"}, {"theme": "blue", "driveId": "1ZUVKtXLLibdobZbW2SsQoIQGct10k3V2", "sha256": "948506d441bc671679cb2b7e4d7eb8ef09da40db30d15409040ed8e3d83fb15e"}, {"theme": "orange", "driveId": "1imhjWhbF2idsbjeS8hN1DOcgS8gG0fac", "sha256": "1765c589bdb4d86ac9651d9b97e84defdb6ee5b68fd9846adee78492d25346cb"}, {"theme": "glass", "driveId": "1ErLf8T3aQ8Bvv2q6w7KdtI26v4vKgMAH", "sha256": "7fca2fb46c14b3ac993fe75d81b88c85b3c50dfe0f93f81574b46c2e9ad60a78"}, {"theme": "expressive", "driveId": "1ksXLrX_VRk-W9CNIU3bSSkYb02Iu13p4", "sha256": "c8c74aaec08d4ead05e26761596bc38bc4f042c79ab6eb5a1118049051232049"}]}
           NRD_PLAN
       - name: Verify 8 public Friday-13 horror images and prepare dated schedules
         run: node publish.mjs prepare
