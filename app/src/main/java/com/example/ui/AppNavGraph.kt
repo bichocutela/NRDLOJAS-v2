@@ -232,6 +232,26 @@ fun AppNavGraph(
         scope.launch { viewModel.userPreferences.clearRestrictedNotifications() }
     }
 
+    // Release the NRD device reservation before clearing local state or navigating.
+    // Every explicit exit for Mestre-created users must use this same path.
+    suspend fun logoutNrdSession() {
+        try {
+            com.example.data.RestrictedAccessRepository.logout()
+            com.example.util.FcmTopicSubscription.reconcileMasterUpdates(isMaster = false)
+            clearPersonalSession()
+            isLoggedIn = false
+            userRole = "user"
+            drawerState.close()
+            navController.navigate("search") {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        } catch (error: Exception) {
+            android.widget.Toast.makeText(context, error.message ?: "Não foi possível sair. Tente novamente.", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
     fun openProfileSection(section: String) {
         if (!access.profile) return
         requestedProfileSection = section
@@ -304,21 +324,7 @@ fun AppNavGraph(
                     },
                     onLogout = {
                         scope.launch {
-                            try {
-                                com.example.data.RestrictedAccessRepository.logout()
-                                com.example.util.FcmTopicSubscription.reconcileMasterUpdates(isMaster = false)
-                                clearPersonalSession()
-                                isLoggedIn = false
-                                userRole = "user"
-                                drawerState.close()
-                                navController.navigate("search") {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            } catch (error: Exception) {
-                                android.widget.Toast.makeText(context, error.message ?: "Não foi possível sair. Tente novamente.", android.widget.Toast.LENGTH_LONG).show()
-                            }
+                            logoutNrdSession()
                         }
                     },
                     onGoToPromotions = {
@@ -452,10 +458,14 @@ fun AppNavGraph(
                             api = nossaGenteApi,
                             onNavigateBack = { navController.popBackStack() },
                             onLogout = {
-                                promotionsEnabled = false
-                                nossaGenteCredentialStore.setPromotionsEnabled(false)
-                                if (!profileEnabled) nossaGenteApi.logout()
-                                navController.navigateToSearch()
+                                if (firebaseAuth.currentUser?.email?.endsWith("@usuarios.nrdlojas.com") == true) {
+                                    scope.launch { logoutNrdSession() }
+                                } else {
+                                    promotionsEnabled = false
+                                    nossaGenteCredentialStore.setPromotionsEnabled(false)
+                                    if (!profileEnabled) nossaGenteApi.logout()
+                                    navController.navigateToSearch()
+                                }
                             },
                             showReactivateProfile = access.profile && !profileEnabled && nossaGenteApi.hasSession(),
                             onReactivateProfile = {
@@ -480,10 +490,14 @@ fun AppNavGraph(
                             focusRequestKey = profileFocusRequestKey,
                             onNavigateBack = { navController.popBackStack() },
                             onSignOut = {
-                                profileEnabled = false
-                                nossaGenteCredentialStore.setProfileEnabled(false)
-                                if (!promotionsEnabled) nossaGenteApi.logout()
-                                navController.navigate("search") { popUpTo("my_profile") { inclusive = true } }
+                                if (firebaseAuth.currentUser?.email?.endsWith("@usuarios.nrdlojas.com") == true) {
+                                    scope.launch { logoutNrdSession() }
+                                } else {
+                                    profileEnabled = false
+                                    nossaGenteCredentialStore.setProfileEnabled(false)
+                                    if (!promotionsEnabled) nossaGenteApi.logout()
+                                    navController.navigate("search") { popUpTo("my_profile") { inclusive = true } }
+                                }
                             }
                         )
                     }

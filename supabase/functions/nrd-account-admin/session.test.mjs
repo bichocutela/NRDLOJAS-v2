@@ -22,3 +22,16 @@ test('invalid, expired, disabled and unrelated identities cannot reserve',async(
 test('malformed capabilities and actions are rejected',async()=>{const f=fixture();assert.equal((await f.send('claim','short')).status,400);assert.equal((await f.send('delete')).status,400);assert.equal((await f.send('claim',a,'')).status,401);});
 test('contention or server failure never reports success',async()=>{assert.equal((await fixture({writeSession:async()=>false}).send()).status,503);assert.equal((await fixture({readSession:async()=>{throw Error();}}).send()).status,503);});
 test('failed logout keeps original reservation',async()=>{const f=fixture({deleteSession:async()=>{throw Error();}});await f.send();assert.equal((await f.send('release')).status,503);assert.equal((await f.send('claim',b)).status,409);});
+
+test('account can alternate devices after each explicit exit without recreating the account',async()=>{
+  const f=fixture();
+  for(const [current,next] of [[a,b],[b,a],[a,b]]) {
+    assert.equal((await f.send('claim',current)).status,200);
+    assert.equal((await f.send('claim',next)).status,409);
+    assert.equal((await f.send('release',current)).status,200);
+    assert.equal((await f.send('claim',next)).status,200);
+    // A delayed exit from the previous device cannot release the new owner.
+    assert.equal((await f.send('release',current)).status,409);
+    assert.equal((await f.send('claim',next)).status,200);
+  }
+});
