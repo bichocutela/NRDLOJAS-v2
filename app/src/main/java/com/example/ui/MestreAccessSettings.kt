@@ -40,6 +40,7 @@ internal fun MestreAccessSettings() {
         catch (_: Exception) { audienceLoadFailed = true; message = "Não foi possível carregar o público atual das abas. Atualize a tela antes de alterar." }
         finally { audienceLoading = false }
     }
+    HomePriceSearchAccessSetting()
     Text("Acesso às abas", style = MaterialTheme.typography.titleLarge)
     Text("Escolha o público de cada aba. VIP significa somente o Mestre e os logins cadastrados com aquela permissão.")
     listOf("Meu Perfil" to "profile", "Promoções" to "promotions", "Encartes" to "flyers", "Consultar Preços" to "prices", "Nossas Lojas" to "stores").forEach { (label, key) ->

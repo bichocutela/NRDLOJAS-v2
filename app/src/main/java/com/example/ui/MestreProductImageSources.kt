@@ -15,9 +15,13 @@ internal fun MestreProductImageSources() {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    var expanded by remember { mutableStateOf(false) }
     OutlinedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Fotos dos produtos", style = MaterialTheme.typography.titleMedium)
+            TextButton(onClick = { expanded = !expanded }) {
+                Text(if (expanded) "Fotos dos produtos ▴" else "Fotos dos produtos ▾", style = MaterialTheme.typography.titleMedium)
+            }
+            if (expanded) {
             Text("Sua foto salva tem prioridade. O Nordestão vem primeiro na busca automática. As fontes abaixo procuram somente pelo EAN exato.")
             draft.order.forEachIndexed { index, id ->
                 Row(Modifier.fillMaxWidth()) {
@@ -52,6 +56,7 @@ internal fun MestreProductImageSources() {
                 }
             }) { Text(if (busy) "Publicando…" else "Publicar fontes") }
             message?.let { Text(it) }
+            }
         }
     }
 }

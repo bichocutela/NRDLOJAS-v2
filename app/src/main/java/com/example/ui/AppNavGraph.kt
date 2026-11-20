@@ -375,12 +375,14 @@ fun AppNavGraph(
                     }
                 }
                 composable("search") {
+                    val homePriceSearch by remember { HomePriceSearchAccess.updates }.collectAsState(initial = false)
                     SearchScreen(
                         viewModel = viewModel,
                         notificationProductCode = productCodeFromNotification,
                         onOpenDrawer = { scope.launch { drawerState.open() } },
                         canQuickEditBanner = isLoggedIn && userRole == "mestre",
                         canQuickAddProduct = isLoggedIn && userRole in setOf("admin", "mestre"),
+                        canUseHomePriceSearch = (isLoggedIn && userRole in setOf("admin", "mestre")) || (isLoggedIn && homePriceSearch && access.prices),
                         canAccessProfile = access.profile,
                         canAccessPromotions = access.promotions,
                         onOpenProfileNotification = ::openProfileSection,

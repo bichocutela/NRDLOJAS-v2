@@ -382,6 +382,7 @@ fun SearchScreen(
     onOpenDrawer: () -> Unit = {},
     canQuickEditBanner: Boolean = false,
     canQuickAddProduct: Boolean = false,
+    canUseHomePriceSearch: Boolean = false,
     canAccessProfile: Boolean = false,
     canAccessPromotions: Boolean = false,
     onOpenProfileNotification: (String) -> Unit = {},
@@ -1444,10 +1445,10 @@ fun SearchScreen(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    if (canQuickAddProduct) {
+                    if (canUseHomePriceSearch) {
                         Box(Modifier.fillMaxWidth().heightIn(min = 360.dp).fillMaxHeight(0.88f)) {
                             AcpConsultationScreen(
-                                canConfigure = true,
+                                canConfigure = canQuickAddProduct,
                                 embeddedHomeSearch = true,
                                 onNavigateBack = { showProductSearchSheet = false }
                             )
