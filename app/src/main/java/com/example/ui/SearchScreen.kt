@@ -1442,6 +1442,15 @@ fun SearchScreen(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    if (canQuickAddProduct) {
+                        Box(Modifier.fillMaxWidth().heightIn(min = 360.dp).fillMaxHeight(0.88f)) {
+                            AcpConsultationScreen(
+                                canConfigure = true,
+                                embeddedHomeSearch = true,
+                                onNavigateBack = { showProductSearchSheet = false }
+                            )
+                        }
+                    } else {
                     Text("Pesquisar Produtos", style = MaterialTheme.typography.headlineSmall)
                     OutlinedTextField(
                         value = sheetQuery,
@@ -1461,6 +1470,7 @@ fun SearchScreen(
                         itemsIndexed(products, key = { _, item -> item.code }) { index, product ->
                             ProductCard(product, viewModel, index, appTheme, textPreferences, vibrateOnClick = vibrateOnClick, vibrator = vibrator)
                         }
+                    }
                     }
                 }
             }

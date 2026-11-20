@@ -10,6 +10,7 @@ import com.example.data.acp.AcpApi
  */
 @Composable
 internal fun AcpProductsExperience(
+    searchPlaceholder: String = "Faça sua busca",
     api: AcpApi,
     canAddToNrd: Boolean,
     appearance: AppearanceSettings,
@@ -22,6 +23,7 @@ internal fun AcpProductsExperience(
     onSessionExpired: () -> Unit
 ) {
     AcpProductsPanel(
+        searchPlaceholder = searchPlaceholder,
         api = api,
         canAddToNrd = canAddToNrd,
         appearance = appearance,

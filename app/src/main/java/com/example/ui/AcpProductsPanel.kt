@@ -85,6 +85,7 @@ private enum class AcpFeaturedSort(val label: String) {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 internal fun AcpProductsPanel(
+    searchPlaceholder: String = "Faça sua busca",
     api: AcpApi,
     canAddToNrd: Boolean,
     appearance: AppearanceSettings,
@@ -569,7 +570,7 @@ internal fun AcpProductsPanel(
                     refreshMessage = null
                     error = null
                 },
-                placeholder = { Text("Faça sua busca") },
+                placeholder = { Text(searchPlaceholder) },
                 supportingText = { Text("Código, código de barras ou descrição do produto") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {

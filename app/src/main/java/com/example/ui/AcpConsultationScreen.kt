@@ -45,6 +45,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun AcpConsultationScreen(
     canConfigure: Boolean,
+    embeddedHomeSearch: Boolean = false,
     onNavigateBack: () -> Unit,
     externalPdfUri: String? = null,
     externalPdfRequestKey: Long = 0L,
@@ -129,7 +130,7 @@ fun AcpConsultationScreen(
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
-                Box(
+                if (!embeddedHomeSearch) Box(
                     Modifier
                         .fillMaxWidth()
                         .padding(
@@ -239,6 +240,7 @@ fun AcpConsultationScreen(
                         }
                     } else if (authenticated) {
                         AcpProductsExperience(
+                            searchPlaceholder = if (embeddedHomeSearch) "Consultar Preços" else "Faça sua busca",
                             api = api,
                             canAddToNrd = canConfigure,
                             appearance = appearanceSettings,
