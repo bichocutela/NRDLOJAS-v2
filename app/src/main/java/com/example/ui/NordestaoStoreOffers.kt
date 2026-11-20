@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -199,8 +200,14 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             if (offer.discount > 50) {
-                                SurpriseOfferPoster(offer)
-                                OfferAdditionalDetails(offer, store.name, verifiedEan)
+                                Column(Modifier.fillMaxWidth().background(Color(0xFF263783))) {
+                                    SurpriseOfferPoster(offer)
+                                    CompositionLocalProvider(LocalContentColor provides Color.White) {
+                                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            OfferAdditionalDetails(offer, store.name, verifiedEan)
+                                        }
+                                    }
+                                }
                             } else {
                                 OfficialOfferPhoto(offer, Modifier.fillMaxWidth().height(180.dp))
                                 OfferPrice(offer)
@@ -316,6 +323,9 @@ private fun SurpriseOfferPoster(offer: NordestaoStoreOffer) {
                 )
             }
         }
+        // Replace the artwork's unreadable fine print with the live conditions below.
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+            .height(posterHeight * .078f).background(Color(0xFF263783)))
         Text(
             text = "${offer.discount}",
             color = Color.White,
