@@ -266,6 +266,7 @@ private fun SurpriseOfferPoster(offer: NordestaoStoreOffer) {
     val currency = remember { NumberFormat.getCurrencyInstance(Locale.forLanguageTag("pt-BR")) }
     BoxWithConstraints(Modifier.fillMaxWidth().aspectRatio(566f / 800f)) {
         val posterHeight = maxWidth * (800f / 566f)
+        val textScale = maxWidth.value / 566f
         Image(
             painter = painterResource(com.example.R.drawable.offer_surprise_template),
             contentDescription = "Template Oferta Surpresa do Dia",
@@ -275,22 +276,22 @@ private fun SurpriseOfferPoster(offer: NordestaoStoreOffer) {
         Text(
             text = offer.description,
             color = Color.White,
-            fontSize = 15.sp,
-            lineHeight = 18.sp,
+            fontSize = (29 * textScale).sp,
+            lineHeight = (32 * textScale).sp,
             fontWeight = FontWeight.Bold,
-            maxLines = 2,
+            maxLines = 4,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.offset(x = maxWidth * .06f, y = posterHeight * .275f)
                 .width(maxWidth * .45f)
         )
         OfficialOfferPhoto(
             offer,
-            Modifier.offset(x = maxWidth * .055f, y = posterHeight * .37f)
-                .width(maxWidth * .45f).height(posterHeight * .205f)
+            Modifier.offset(x = maxWidth * .055f, y = posterHeight * .455f)
+                .width(maxWidth * .45f).height(posterHeight * .20f)
         )
         if (offer.showPrice && offer.priceCents > 0L) {
             Column(
-                modifier = Modifier.offset(x = maxWidth * .06f, y = posterHeight * .585f)
+                modifier = Modifier.offset(x = maxWidth * .06f, y = posterHeight * .67f)
                     .width(maxWidth * .44f),
                 verticalArrangement = Arrangement.spacedBy(1.dp)
             ) {
@@ -298,7 +299,7 @@ private fun SurpriseOfferPoster(offer: NordestaoStoreOffer) {
                     Text(
                         currency.format(offer.originalPriceCents / 100.0),
                         color = Color.White,
-                        fontSize = 12.sp,
+                        fontSize = (21 * textScale).sp,
                         textDecoration = TextDecoration.LineThrough,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -307,8 +308,8 @@ private fun SurpriseOfferPoster(offer: NordestaoStoreOffer) {
                 Text(
                     currency.format(offer.priceCents / 100.0),
                     color = Color(0xFFFFE36E),
-                    fontSize = 19.sp,
-                    lineHeight = 22.sp,
+                    fontSize = (35 * textScale).sp,
+                    lineHeight = (39 * textScale).sp,
                     fontWeight = FontWeight.Black,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -318,13 +319,13 @@ private fun SurpriseOfferPoster(offer: NordestaoStoreOffer) {
         Text(
             text = "${offer.discount}",
             color = Color.White,
-            fontSize = 21.sp,
-            lineHeight = 22.sp,
+            fontSize = (86 * textScale).sp,
+            lineHeight = (90 * textScale).sp,
             fontWeight = FontWeight.Black,
             textAlign = TextAlign.Center,
             maxLines = 1,
-            modifier = Modifier.offset(x = maxWidth * .79f, y = posterHeight * .445f)
-                .width(maxWidth * .15f)
+            modifier = Modifier.offset(x = maxWidth * .59f, y = posterHeight * .485f)
+                .width(maxWidth * .235f)
         )
     }
 }
