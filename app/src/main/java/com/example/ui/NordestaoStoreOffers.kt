@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -22,15 +23,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
@@ -182,24 +187,25 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
                 tonalElevation = 6.dp
             ) {
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-                    SelectionContainer {
-                        Text(offer.description, style = MaterialTheme.typography.headlineSmall)
+                    if (offer.discount <= 50) {
+                        SelectionContainer {
+                            Text(offer.description, style = MaterialTheme.typography.headlineSmall)
+                        }
+                        Spacer(Modifier.height(12.dp))
                     }
-                    Spacer(Modifier.height(12.dp))
                     SelectionContainer {
                         Column(
                             Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            OfficialOfferPhoto(offer, Modifier.fillMaxWidth().height(180.dp))
-                            OfferPrice(offer)
-                            Text(offer.validity)
-                            if(offer.maxAmount > 0) Text("Quantidade máxima: ${NumberFormat.getNumberInstance(Locale.forLanguageTag("pt-BR")).format(offer.maxAmount)} un.")
-                            if(offer.conditions.isNotBlank()) Text(offer.conditions)
-                            if(offer.activationRequired) Text("Ative esta oferta no aplicativo Nordestão Pra Você antes da compra.")
-                            Text("Loja: ${store.name}")
-                            if(offer.code.isNotBlank()) Text("Código: ${offer.code}")
-                            Text("EAN: ${verifiedEan ?: "não disponível"}")
+                            if (offer.discount > 50) {
+                                SurpriseOfferPoster(offer)
+                                OfferAdditionalDetails(offer, store.name, verifiedEan)
+                            } else {
+                                OfficialOfferPhoto(offer, Modifier.fillMaxWidth().height(180.dp))
+                                OfferPrice(offer)
+                                OfferAdditionalDetails(offer, store.name, verifiedEan)
+                            }
                         }
                     }
                     Spacer(Modifier.height(12.dp))
@@ -237,6 +243,92 @@ fun NordestaoStoreOffersContent(store: NordestaoStore?, refresh: Int, onChooseSt
         }
     }
 }
+
+@Composable
+private fun OfferAdditionalDetails(offer: NordestaoStoreOffer, storeName: String, ean: String?) {
+    if (offer.discount > 50) {
+        Text("Detalhes da oferta", fontWeight = FontWeight.Bold)
+        Text(offer.description, fontWeight = FontWeight.SemiBold)
+    }
+    Text(offer.validity)
+    if (offer.maxAmount > 0) Text("Quantidade máxima: ${NumberFormat.getNumberInstance(Locale.forLanguageTag("pt-BR")).format(offer.maxAmount)} un.")
+    if (offer.conditions.isNotBlank()) Text(offer.conditions)
+    if (offer.discount > 50 && offer.cashback.isNotBlank()) Text(offer.cashback, fontWeight = FontWeight.Bold)
+    if (offer.activationRequired) Text("Ative esta oferta no aplicativo Nordestão Pra Você antes da compra.")
+    Text("Loja: $storeName")
+    if (offer.code.isNotBlank()) Text("Código: ${offer.code}")
+    Text("EAN: ${ean ?: "não disponível"}")
+}
+
+/** Renders each current 50%+ offer over the provided artwork, using live offer data. */
+@Composable
+private fun SurpriseOfferPoster(offer: NordestaoStoreOffer) {
+    val currency = remember { NumberFormat.getCurrencyInstance(Locale.forLanguageTag("pt-BR")) }
+    BoxWithConstraints(Modifier.fillMaxWidth().aspectRatio(566f / 800f)) {
+        val posterHeight = maxWidth * (800f / 566f)
+        Image(
+            painter = painterResource(com.example.R.drawable.offer_surprise_template),
+            contentDescription = "Template Oferta Surpresa do Dia",
+            contentScale = ContentScale.FillBounds,
+            modifier = Modifier.fillMaxSize()
+        )
+        Text(
+            text = offer.description,
+            color = Color.White,
+            fontSize = 15.sp,
+            lineHeight = 18.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.offset(x = maxWidth * .06f, y = posterHeight * .275f)
+                .width(maxWidth * .45f)
+        )
+        OfficialOfferPhoto(
+            offer,
+            Modifier.offset(x = maxWidth * .055f, y = posterHeight * .37f)
+                .width(maxWidth * .45f).height(posterHeight * .205f)
+        )
+        if (offer.showPrice && offer.priceCents > 0L) {
+            Column(
+                modifier = Modifier.offset(x = maxWidth * .06f, y = posterHeight * .585f)
+                    .width(maxWidth * .44f),
+                verticalArrangement = Arrangement.spacedBy(1.dp)
+            ) {
+                if (offer.originalPriceCents > offer.priceCents) {
+                    Text(
+                        currency.format(offer.originalPriceCents / 100.0),
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        textDecoration = TextDecoration.LineThrough,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Text(
+                    currency.format(offer.priceCents / 100.0),
+                    color = Color(0xFFFFE36E),
+                    fontSize = 19.sp,
+                    lineHeight = 22.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Text(
+            text = "${offer.discount}",
+            color = Color.White,
+            fontSize = 21.sp,
+            lineHeight = 22.sp,
+            fontWeight = FontWeight.Black,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            modifier = Modifier.offset(x = maxWidth * .79f, y = posterHeight * .445f)
+                .width(maxWidth * .15f)
+        )
+    }
+}
+
 @Composable
 private fun rememberVerifiedStoreOfferEan(
     offer: NordestaoStoreOffer,
