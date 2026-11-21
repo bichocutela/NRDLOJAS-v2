@@ -19,8 +19,17 @@ internal object HomePriceSearchAccess {
         }
         awaitClose { listener.remove() }
     }
+    fun userUpdates(uid: String) = callbackFlow<Boolean?> {
+        val listener = document().addSnapshotListener { value, error ->
+            trySend(if (error == null) (value?.get("users") as? Map<*, *>)?.get(uid) as? Boolean else false)
+        }
+        awaitClose { listener.remove() }
+    }
+    suspend fun saveUser(uid: String, enabled: Boolean) {
+        document().set(mapOf("users" to mapOf(uid to enabled)), com.google.firebase.firestore.SetOptions.merge()).await()
+    }
     suspend fun save(enabled: Boolean) {
-        document().set(mapOf("enabled" to enabled)).await()
+        document().set(mapOf("enabled" to enabled), com.google.firebase.firestore.SetOptions.merge()).await()
     }
 }
 
@@ -48,4 +57,26 @@ internal fun HomePriceSearchAccessSetting() {
             message?.let { Text(it) }
         }
     }
+}
+
+@Composable
+internal fun HomePriceSearchUserSetting(uid: String) {
+    val saved by remember(uid) { HomePriceSearchAccess.userUpdates(uid) }.collectAsState(initial = null)
+    var draft by remember(uid, saved) { mutableStateOf(saved == true) }
+    var busy by remember(uid) { mutableStateOf(false) }
+    var message by remember(uid) { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    Row {
+        Checkbox(checked = draft, enabled = !busy, onCheckedChange = { draft = it })
+        Text("Consultar Preços na busca inicial", Modifier.padding(top = 12.dp))
+    }
+    TextButton(enabled = !busy && (saved == null || draft != saved), onClick = {
+        busy = true
+        scope.launch {
+            try { HomePriceSearchAccess.saveUser(uid, draft); message = "Acesso à busca inicial salvo." }
+            catch (_: Exception) { message = "Não foi possível salvar. Tente novamente." }
+            finally { busy = false }
+        }
+    }) { Text("Salvar acesso à busca inicial") }
+    message?.let { Text(it) }
 }

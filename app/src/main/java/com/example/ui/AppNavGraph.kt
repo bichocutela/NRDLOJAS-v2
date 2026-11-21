@@ -375,6 +375,8 @@ fun AppNavGraph(
                     }
                 }
                 composable("search") {
+                    val priceSearchUid = firebaseAuth.currentUser?.uid.orEmpty()
+                    val personalHomePriceSearch by remember(priceSearchUid) { HomePriceSearchAccess.userUpdates(priceSearchUid) }.collectAsState(initial = null)
                     val homePriceSearch by remember { HomePriceSearchAccess.updates }.collectAsState(initial = false)
                     SearchScreen(
                         viewModel = viewModel,
@@ -382,7 +384,7 @@ fun AppNavGraph(
                         onOpenDrawer = { scope.launch { drawerState.open() } },
                         canQuickEditBanner = isLoggedIn && userRole == "mestre",
                         canQuickAddProduct = isLoggedIn && userRole in setOf("admin", "mestre"),
-                        canUseHomePriceSearch = (isLoggedIn && userRole in setOf("admin", "mestre")) || (isLoggedIn && homePriceSearch && access.prices),
+                        canUseHomePriceSearch = (isLoggedIn && userRole in setOf("admin", "mestre")) || (isLoggedIn && homePriceSearch && personalHomePriceSearch == true && access.prices),
                         canAccessProfile = access.profile,
                         canAccessPromotions = access.promotions,
                         onOpenProfileNotification = ::openProfileSection,

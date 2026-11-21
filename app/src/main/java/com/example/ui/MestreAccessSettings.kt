@@ -278,6 +278,7 @@ private fun AccountHistoryCard(account: AccessAccount, expanded: Boolean, busy: 
                 Row { Checkbox(flyers, { flyers = it }, enabled = !busy); Text("Encartes", Modifier.padding(top = 12.dp)) }
                 Row { Checkbox(prices, { prices = it }, enabled = !busy); Text("Consultar Preços", Modifier.padding(top = 12.dp)) }
                 Row { Checkbox(stores, { stores = it }, enabled = !busy); Text("Nossas Lojas", Modifier.padding(top = 12.dp)) }
+                HomePriceSearchUserSetting(account.uid)
                 Button(enabled = !busy, onClick = { onSave(profile, promotions, flyers, prices, stores) }) { Text("Salvar permissões") }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(enabled = !busy, onClick = onDelete) { Text("Excluir", color = MaterialTheme.colorScheme.error) }
