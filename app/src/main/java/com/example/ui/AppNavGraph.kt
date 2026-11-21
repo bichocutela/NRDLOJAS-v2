@@ -678,15 +678,12 @@ private fun DrawerActionButton(
                         } else {
                             MaterialTheme.colorScheme.primaryContainer
                         },
-                        contentColor = if (emphasized) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        }
+                        contentColor = expressiveFunctionIconColor(label)
                     ) {
                         Icon(
                             icon,
                             contentDescription = null,
+                            tint = expressiveFunctionIconColor(label),
                             modifier = Modifier
                                 .padding(if (profile.compact) 6.dp else 7.dp)
                                 .size(if (profile.compact) 17.dp else 19.dp)

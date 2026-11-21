@@ -858,7 +858,7 @@ private fun DashboardMetricCard(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = expressiveFunctionIconColor(title),
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.height(6.dp))
@@ -900,7 +900,7 @@ private fun DashboardQuickAction(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = expressiveFunctionIconColor(title),
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
