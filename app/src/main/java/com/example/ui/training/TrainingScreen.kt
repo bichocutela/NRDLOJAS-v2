@@ -113,13 +113,14 @@ internal fun TrainingDisplay(text: String, image: String, customer: Boolean) {
 
 @Composable
 internal fun KeyboardBlock(rows: List<List<String>>, config: TrainingConfig, color: Color, modifier: Modifier, onPress: (String) -> Unit, numeric: Boolean = false) {
+    val hapticView = androidx.compose.ui.platform.LocalView.current
     Column(modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
         rows.forEachIndexed { index, row ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 row.forEach { id ->
                     val key = config.keys.firstOrNull { it.id == id }
                     val background = if (numeric && index == 0) Color(0xFFF2D464) else color
-                    Button(onClick = { onPress(id) }, enabled = !key?.label.isNullOrBlank(), modifier = Modifier.weight(1f).heightIn(min = 60.dp),
+                    Button(onClick = { hapticView.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP); onPress(id) }, enabled = !key?.label.isNullOrBlank(), modifier = Modifier.weight(1f).heightIn(min = 60.dp),
                         shape = RoundedCornerShape(6.dp), contentPadding = PaddingValues(3.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = background, contentColor = if (numeric && index > 0) Color.White else Color(0xFF15202B))) {
                         Text(key?.label.orEmpty(), fontSize = 9.sp, lineHeight = 11.sp, fontWeight = FontWeight.Bold)
