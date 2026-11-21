@@ -67,9 +67,10 @@ internal fun rememberOfficialProductImage(
                 if (!result.ean.isNullOrBlank()) resolvedEan = result.ean
                 suspend fun display(url: String?): Boolean {
                     if (url == null) return false
-                    val loaded = context.imageLoader.execute(
-                        ImageRequest.Builder(context).data(url).size(512, 512).build()
-                    )
+                    val loaded = try {
+                        context.imageLoader.execute(ImageRequest.Builder(context).data(url).size(512, 512).build())
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { return false }
                     if (loaded !is SuccessResult) return false
                     imageUrl = url
                     return true
