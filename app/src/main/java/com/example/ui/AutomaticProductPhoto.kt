@@ -51,10 +51,19 @@ internal fun rememberOfficialProductImage(
     }
     var imageUrl by remember(code, barcode, name, registered, policy) { mutableStateOf(registered) }
     LaunchedEffect(code, barcode, name, registered, policy) {
-        if (registered != null) return@LaunchedEffect
+        if (registered != null) {
+            val loaded = try {
+                context.imageLoader.execute(ImageRequest.Builder(context).data(registered).size(512, 512).build()) is SuccessResult
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { false }
+            if (loaded) return@LaunchedEffect
+            imageUrl = null
+        }
         while (isActive) {
             try {
-                val result = StoreProductImageRepository.shared.lookup(code, name, barcode)
+                val result = try { StoreProductImageRepository.shared.lookup(code, name, barcode) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { StoreProductImageRepository.Lookup(null, System.currentTimeMillis() + 60_000, barcode.takeIf(com.example.data.promotions.Gtin::valid)) }
                 if (!result.ean.isNullOrBlank()) resolvedEan = result.ean
                 suspend fun display(url: String?): Boolean {
                     if (url == null) return false

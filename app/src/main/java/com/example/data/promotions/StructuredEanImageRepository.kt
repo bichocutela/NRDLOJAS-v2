@@ -34,7 +34,7 @@ internal class StructuredEanImageRepository(
     suspend fun lookup(source: String, ean: String?): PromofarmaImageRepository.Lookup = withContext(Dispatchers.IO) {
         val code = ean?.trim().orEmpty()
         if (source !in listOf("raia", "mercadolivre", "cosmos", "carone", "mateus") || !Gtin.valid(code)) return@withContext PromofarmaImageRepository.Lookup(null)
-        val key = "$source:$code"
+        val key = if (source == "cosmos") "cosmos_v2:$code" else "$source:$code"
         locks[(key.hashCode() and Int.MAX_VALUE) % locks.size].withLock {
             val entry = cache.getString(key, null)?.let { runCatching { JSONObject(it) }.getOrNull() }
             if (entry != null && entry.optLong("expires") > now()) return@withLock PromofarmaImageRepository.Lookup(
@@ -44,7 +44,7 @@ internal class StructuredEanImageRepository(
             val image = try { slots.withPermit { fetch(source, code) } }
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { transient = true; unavailableUntil[source] = now() + 300_000; null }
-            val until = now() + when { transient -> 300_000L; image == null -> 7 * 86_400_000L; else -> 30 * 86_400_000L }
+            val until = now() + when { transient -> 300_000L; image == null -> if (source == "cosmos") 86_400_000L else 7 * 86_400_000L; else -> 30 * 86_400_000L }
             cache.edit().putString(key, JSONObject().put("url", image.orEmpty()).put("expires", until)
                 .put("retryAt", if (transient) until else 0).toString()).apply()
             PromofarmaImageRepository.Lookup(image, until.takeIf { transient })
