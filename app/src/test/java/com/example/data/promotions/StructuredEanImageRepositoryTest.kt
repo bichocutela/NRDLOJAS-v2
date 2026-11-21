@@ -91,9 +91,14 @@ class StructuredEanImageRepositoryTest {
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("fixture")
                 .body(png.toResponseBody(null)).build()
         }.build()
-        val expected = "https://cdn-cosmos.bluesoft.com.br/products/$ean"
-        assertEquals(expected, StructuredEanImageRepository(context, http).lookup("cosmos", ean).url)
-        assertEquals(expected, StructuredEanImageRepository(context, http).lookup("cosmos", ean).url)
+        val actual = StructuredEanImageRepository(context, http).lookup("cosmos", ean).url
+        assertNotNull(actual)
+        val uri = android.net.Uri.parse(actual)
+        assertEquals("file", uri.scheme)
+        val file = java.io.File(uri.path!!)
+        assertEquals("$ean.png", file.name)
+        assertArrayEquals(png, file.readBytes())
+        assertEquals(actual, StructuredEanImageRepository(context, http).lookup("cosmos", ean).url)
         assertEquals(1, requests)
     }
 
