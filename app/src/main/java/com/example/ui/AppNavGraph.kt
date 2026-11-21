@@ -805,6 +805,11 @@ fun LoginDrawerContent(
     var expandedCategory by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val categoryPreferences = remember(context) { context.getSharedPreferences("drawer_preferences", android.content.Context.MODE_PRIVATE) }
+    val categoryPreferenceKey = "categories_expanded_" + (signedInEmail ?: "guest")
+    var categoriesExpanded by remember(categoryPreferenceKey) {
+        mutableStateOf(categoryPreferences.getBoolean(categoryPreferenceKey, true))
+    }
     com.example.util.UpdateAvailabilityState.initialize(context)
     val drawerUpdateAvailable by com.example.util.UpdateAvailabilityState.available.collectAsState()
     val remoteHomeSettings by FirebaseService.observeHomeSettings().collectAsState(initial = RemoteHomeSettings())
@@ -1060,14 +1065,33 @@ fun LoginDrawerContent(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        if (expressive) {
-            DrawerSectionLabel("Categorias", Icons.Default.Category)
-        } else {
-            Text("Categorias", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.Start))
-            Spacer(modifier = Modifier.height(6.dp))
+        TextButton(
+            onClick = {
+                categoriesExpanded = !categoriesExpanded
+                categoryPreferences.edit().putBoolean(categoryPreferenceKey, categoriesExpanded).apply()
+            },
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+        ) {
+            Icon(Icons.Default.Category, contentDescription = null, tint = expressiveFunctionIconColor("Categorias"))
+            Spacer(Modifier.width(10.dp))
+            Text("Categorias", modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+                style = MaterialTheme.typography.titleMedium)
+            Icon(
+                if (categoriesExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = if (categoriesExpanded) "Recolher categorias" else "Expandir categorias"
+            )
         }
-        activeCategoryNames.forEach { categoryName ->
-            CategoryItem(categoryName, viewModel, expandedCategory == categoryName) { expandedCategory = if (expandedCategory == categoryName) null else categoryName }
+        androidx.compose.animation.AnimatedVisibility(
+            visible = categoriesExpanded,
+            enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(250)) + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(250)) + androidx.compose.animation.fadeOut()
+        ) {
+            Column {
+                activeCategoryNames.forEach { categoryName ->
+                    CategoryItem(categoryName, viewModel, expandedCategory == categoryName) { expandedCategory = if (expandedCategory == categoryName) null else categoryName }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
