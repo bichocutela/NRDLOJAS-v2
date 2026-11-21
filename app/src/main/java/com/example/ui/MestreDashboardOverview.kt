@@ -13,6 +13,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.ManageAccounts
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.ImageSearch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddBox
 import androidx.compose.material.icons.filled.Backup
@@ -407,15 +413,15 @@ internal fun MestreSettingsHub(
         onClick = onOpenWorkSchedule
     )
     Spacer(modifier = Modifier.height(6.dp))
-    PanelAreaCard(title = "Cadastros e Acessos", description = "Criar login e escolher as abas permitidas", icon = Icons.Default.Settings, onClick = onOpenAccess)
+    PanelAreaCard(title = "Cadastros e Acessos", description = "Criar login e escolher as abas permitidas", icon = Icons.Default.ManageAccounts, onClick = onOpenAccess)
     Spacer(modifier = Modifier.height(6.dp))
-    PanelAreaCard(title = "Logins", description = "Testar e trocar os acessos de Ofertas, Sistema e Sistema Tech", icon = Icons.Default.Settings, onClick = onOpenLogins)
+    PanelAreaCard(title = "Logins", description = "Testar e trocar os acessos de Ofertas, Sistema e Sistema Tech", icon = Icons.Default.Key, onClick = onOpenLogins)
     Spacer(modifier = Modifier.height(6.dp))
-    PanelAreaCard(title = "Atualização do aplicativo", description = "Escolher a versão mínima permitida", icon = Icons.Default.Settings, onClick = onOpenUpdates)
+    PanelAreaCard(title = "Atualização do aplicativo", description = "Escolher a versão mínima permitida", icon = Icons.Default.SystemUpdate, onClick = onOpenUpdates)
     Spacer(modifier = Modifier.height(6.dp))
-    PanelAreaCard(title = "Habilitar lojas", description = "Habilitar lojas e publicar documentos Visual Mix de promoções", icon = Icons.Default.Settings, onClick = onOpenPromotionStores)
+    PanelAreaCard(title = "Habilitar lojas", description = "Habilitar lojas e publicar documentos Visual Mix de promoções", icon = Icons.Default.Storefront, onClick = onOpenPromotionStores)
     Spacer(modifier = Modifier.height(6.dp))
-    PanelAreaCard(title = "PWA", description = "Mostrar ou ocultar Promoções e Consultar Preços na versão web", icon = Icons.Default.Settings, onClick = onOpenPwa)
+    PanelAreaCard(title = "PWA", description = "Mostrar ou ocultar Promoções e Consultar Preços na versão web", icon = Icons.Default.Language, onClick = onOpenPwa)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -937,7 +943,22 @@ private fun PanelAreaCard(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = if (expressive) when (icon) {
+                    Icons.Default.Home -> Color(0xFF1565C0)
+                    Icons.Default.Palette -> Color(0xFF8E24AA)
+                    Icons.Default.CreditCard -> Color(0xFF00897B)
+                    Icons.Default.Waves -> Color(0xFF00ACC1)
+                    Icons.Default.ImageSearch -> Color(0xFF5E35B1)
+                    Icons.Default.Notifications -> Color(0xFFFF8F00)
+                    Icons.Default.NewReleases -> Color(0xFFE53935)
+                    Icons.Default.CalendarMonth -> Color(0xFF2E7D32)
+                    Icons.Default.ManageAccounts -> Color(0xFF3949AB)
+                    Icons.Default.Key -> Color(0xFFEF6C00)
+                    Icons.Default.SystemUpdate -> Color(0xFF00838F)
+                    Icons.Default.Storefront -> Color(0xFF43A047)
+                    Icons.Default.Language -> Color(0xFF1E88E5)
+                    else -> MaterialTheme.colorScheme.primary
+                } else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(26.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))

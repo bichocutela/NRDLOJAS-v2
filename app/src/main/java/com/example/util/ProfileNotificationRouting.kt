@@ -22,6 +22,9 @@ object ProfileNotificationRouting {
     }
 
     fun iconRes(type: String): Int = when (type) {
+        "NEW_TRAINING" -> R.drawable.ic_notification_training
+        "NEW_ENCARTE" -> R.drawable.ic_notification_flyer
+        "NEW_MAIL_DOCUMENTS" -> R.drawable.ic_notification_document_done
         "NEW_PRODUCT" -> R.drawable.ic_notification_product_added
         "CODE_CHANGED" -> R.drawable.ic_notification_code_changed
         "SUGGESTION_FIXED" -> R.drawable.ic_notification_suggestion_fixed

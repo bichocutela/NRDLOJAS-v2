@@ -1581,7 +1581,16 @@ fun SearchScreen(
                                     Icon(
                                         painter = painterResource(ProfileNotificationRouting.iconRes(notification.type)),
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint = if (com.example.ui.theme.LocalExpressiveStyle.current.enabled) when (notification.type) {
+                                            "NEW_TRAINING" -> Color(0xFF7B1FA2)
+                                            "NEW_ENCARTE" -> Color(0xFF1976D2)
+                                            "NEW_MAIL_DOCUMENTS" -> Color(0xFF00897B)
+                                            "APP_UPDATE" -> Color(0xFF0097A7)
+                                            "PROMOTION_UPDATED", "STORE_OFFER_ALERT" -> Color(0xFFE53935)
+                                            "NEW_PRODUCT", "CODE_CHANGED" -> Color(0xFF388E3C)
+                                            "SCHEDULE_INSERTED", "SCHEDULE_CHANGED", "TODAY_OFF", "TOMORROW_OFF" -> Color(0xFFEF6C00)
+                                            else -> MaterialTheme.colorScheme.primary
+                                        } else MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(24.dp)
                                     )
                                     Column(modifier = Modifier.weight(1f)) {

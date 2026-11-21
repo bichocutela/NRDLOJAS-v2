@@ -170,7 +170,7 @@ object NotificationHelper {
         val pendingIntent = appUpdatePendingIntent(context, versionTag)
 
         val builder = NotificationCompat.Builder(context, "app_update")
-            .setSmallIcon(R.drawable.ic_notification_default)
+            .setSmallIcon(R.drawable.ic_notification_app_update)
             .setLargeIcon(largeIconForNotification(context))
             .setContentTitle("Atualização disponível")
             .setContentText("A versão $versionTag está disponível. Toque para baixar agora.")
