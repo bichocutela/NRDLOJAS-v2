@@ -26,6 +26,7 @@ internal class StructuredEanImageRepository(
     private val client: OkHttpClient = OkHttpClient.Builder().callTimeout(15, TimeUnit.SECONDS).build(),
     private val now: () -> Long = System::currentTimeMillis
 ) {
+    private val imageDirectory = java.io.File(context.applicationContext.filesDir, "verified_cosmos_images")
     private val cache = context.applicationContext.getSharedPreferences("structured_ean_images_v1", Context.MODE_PRIVATE)
     private val locks = Array(32) { Mutex() }
     private val slots = Semaphore(2)
@@ -34,7 +35,7 @@ internal class StructuredEanImageRepository(
     suspend fun lookup(source: String, ean: String?): PromofarmaImageRepository.Lookup = withContext(Dispatchers.IO) {
         val code = ean?.trim().orEmpty()
         if (source !in listOf("raia", "mercadolivre", "cosmos", "carone", "mateus") || !Gtin.valid(code)) return@withContext PromofarmaImageRepository.Lookup(null)
-        val key = if (source == "cosmos") "cosmos_v2:$code" else "$source:$code"
+        val key = if (source == "cosmos") "cosmos_v3:$code" else "$source:$code"
         locks[(key.hashCode() and Int.MAX_VALUE) % locks.size].withLock {
             val entry = cache.getString(key, null)?.let { runCatching { JSONObject(it) }.getOrNull() }
             if (entry != null && entry.optLong("expires") > now()) return@withLock PromofarmaImageRepository.Lookup(
@@ -132,7 +133,22 @@ internal class StructuredEanImageRepository(
             val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
             android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
             if (bounds.outWidth !in 1..10000 || bounds.outHeight !in 1..10000) throw IOException("Invalid image")
-            return url
+            // Display the validated bytes, avoiding a second download with missing MIME metadata.
+            if (!imageDirectory.exists() && !imageDirectory.mkdirs()) throw IOException("Image cache unavailable")
+            val extension = when {
+                bytes[0] == 0x89.toByte() -> "png"
+                bytes[0] == 0xff.toByte() -> "jpg"
+                String(bytes, 0, 3, Charsets.US_ASCII) == "GIF" -> "gif"
+                else -> "webp"
+            }
+            val target = java.io.File(imageDirectory, "$ean.$extension")
+            val temporary = java.io.File(imageDirectory, "$ean.tmp")
+            temporary.writeBytes(bytes)
+            if (!temporary.renameTo(target)) {
+                temporary.delete()
+                throw IOException("Could not save verified image")
+            }
+            return android.net.Uri.fromFile(target).toString()
         }
     }
 
